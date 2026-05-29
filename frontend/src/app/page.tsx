@@ -38,6 +38,7 @@ export default function HomePage() {
   const [title, setTitle] = useState("");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -62,11 +63,13 @@ export default function HomePage() {
     e.preventDefault();
     if (!title.trim() || !query.trim()) return;
     setCreating(true);
+    setCreateError(null);
     try {
       const session = await api.sessions.create(title.trim(), query.trim()) as Session;
       router.push(`/session/${session.id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setCreateError(err?.message || "Failed to create session — is the backend online?");
     } finally {
       setCreating(false);
     }
@@ -158,9 +161,13 @@ export default function HomePage() {
                 disabled={creating || !title.trim() || !query.trim()}
                 className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground font-medium py-2.5 rounded-md flex items-center justify-center gap-2 text-sm transition-colors"
               >
-                {creating ? "Creating…" : "Create session"}
-                {!creating && <ArrowRight className="w-3.5 h-3.5" />}
+                {creating ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating…</> : <>Create session <ArrowRight className="w-3.5 h-3.5" /></>}
               </button>
+              {createError && (
+                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2 mt-1">
+                  {createError}
+                </p>
+              )}
             </form>
           </div>
 
