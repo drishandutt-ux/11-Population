@@ -1,0 +1,42 @@
+# ── Python ──────────────────────────────────────────────
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+
+# ── Environment & secrets ────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+
+# ── Database ─────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── LightRAG / KG data ───────────────────────────────────
+backend/lightrag_data/
+
+# ── Node / Next.js ───────────────────────────────────────
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── OS ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
