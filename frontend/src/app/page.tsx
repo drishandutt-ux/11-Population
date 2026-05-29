@@ -5,6 +5,33 @@ import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
 import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb } from "lucide-react";
 
+function ElevenLogo({ className = "h-9 w-9" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" className={className} aria-label="11 Population">
+      <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="4.5" fill="none" />
+      <text
+        x="40" y="37"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="26"
+        fontWeight="800"
+        fill="currentColor"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >11</text>
+      <text
+        x="40" y="59"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="7"
+        fontWeight="700"
+        fill="currentColor"
+        letterSpacing="2.8"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >MINDS™</text>
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -46,43 +73,42 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="px-8 py-4 flex items-center justify-between border-b border-border/50">
-        <div className="flex items-center">
-          {/* mix-blend-mode:screen dissolves the dark logo background into the app background */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="11 Population"
-            style={{ mixBlendMode: "screen" }}
-            className="h-14 w-auto object-contain select-none"
-          />
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+
+      {/* ── Header ── */}
+      <header className="px-8 py-3.5 flex items-center justify-between border-b border-border/50 shrink-0">
+        <div className="flex items-center gap-2.5 text-primary">
+          <ElevenLogo className="h-9 w-9" />
+          <span className="text-base font-semibold text-foreground tracking-tight">11 Population</span>
         </div>
         <span className="text-xs text-muted-foreground">Multi-agent simulation</span>
       </header>
 
-      <div className="flex-1 max-w-2xl mx-auto w-full px-6 py-16">
-        {/* Hero */}
-        <div className="mb-14">
-          <p className="text-xs text-primary uppercase tracking-widest mb-5 font-medium">Multi-Agent Simulation Platform</p>
+      {/* ── Body: two columns ── */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* Left — Hero */}
+        <div className="flex-1 flex flex-col justify-center px-12 py-8 border-r border-border/40">
+          <p className="text-[10px] text-primary uppercase tracking-widest mb-4 font-semibold">
+            Multi-Agent Simulation Platform
+          </p>
           <h1 className="text-4xl font-semibold text-foreground leading-tight mb-4">
             Simulate how real people<br />
             <span className="text-primary">think, react, and decide</span>
           </h1>
-          <p className="text-muted-foreground text-sm leading-relaxed max-w-lg mb-8">
+          <p className="text-muted-foreground text-sm leading-relaxed max-w-md mb-8">
             Spawn a diverse population of AI agents with distinct backgrounds, biases, and expertise.
-            Feed them any context — then watch them debate, challenge, and converge. Get a structured
-            report grounded in real simulated discourse.
+            Feed them any context — watch them debate, challenge, and converge. Get a structured report
+            grounded in real simulated discourse.
           </p>
 
-          {/* Use-case chips */}
-          <div className="grid grid-cols-2 gap-2.5">
+          {/* Use-case grid */}
+          <div className="grid grid-cols-2 gap-2.5 max-w-md">
             {[
-              { icon: <FlaskConical className="w-3.5 h-3.5" />, label: "Product testing", detail: "Will real users adopt this?" },
-              { icon: <TrendingUp className="w-3.5 h-3.5" />,  label: "Market & stock signals", detail: "Predict sentiment before it moves" },
-              { icon: <Brain className="w-3.5 h-3.5" />,       label: "Behavioural prediction", detail: "Model how populations respond" },
-              { icon: <Lightbulb className="w-3.5 h-3.5" />,   label: "Strategy stress-testing", detail: "Find the flaws before launch" },
+              { icon: <FlaskConical className="w-3.5 h-3.5" />, label: "Product testing",         detail: "Will real users adopt this?" },
+              { icon: <TrendingUp  className="w-3.5 h-3.5" />, label: "Market & stock signals",  detail: "Predict sentiment before it moves" },
+              { icon: <Brain       className="w-3.5 h-3.5" />, label: "Behavioural prediction",  detail: "Model how populations respond" },
+              { icon: <Lightbulb  className="w-3.5 h-3.5" />, label: "Strategy stress-testing", detail: "Find the flaws before launch" },
             ].map(({ icon, label, detail }) => (
               <div
                 key={label}
@@ -98,31 +124,33 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Create Session Form */}
-        <div className="mb-14">
-          <div className="border border-border rounded-lg p-6 bg-card/30">
-            <h2 className="text-sm font-medium text-foreground mb-5 flex items-center gap-2">
+        {/* Right — Form + sessions */}
+        <div className="w-[420px] shrink-0 flex flex-col px-8 py-8 overflow-y-auto">
+
+          {/* New session form */}
+          <div className="border border-border rounded-lg p-5 bg-card/30 shrink-0">
+            <h2 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
               <Plus className="w-3.5 h-3.5 text-primary" />
               New session
             </h2>
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleCreate} className="space-y-3.5">
               <div>
-                <label className="block text-xs text-muted-foreground mb-1.5 uppercase tracking-wide">Title</label>
+                <label className="block text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wide">Title</label>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. AI startup idea validation"
-                  className="w-full bg-muted/50 border border-border rounded-md px-3.5 py-2.5 text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/60 focus:border-primary/40 text-sm"
+                  className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/60 focus:border-primary/40 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1.5 uppercase tracking-wide">Query / hypothesis</label>
+                <label className="block text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wide">Query / hypothesis</label>
                 <textarea
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="What should the population simulate? e.g. 'Would Gen Z adopt a subscription model for home-cooked meal kits?' or 'How will retail investors react to a Fed rate cut?' or 'Is our B2B pricing strategy competitive?'"
+                  placeholder="e.g. 'Would Gen Z adopt a subscription model for home-cooked meal kits?' or 'How will retail investors react to a Fed rate cut?'"
                   rows={4}
-                  className="w-full bg-muted/50 border border-border rounded-md px-3.5 py-2.5 text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/60 focus:border-primary/40 text-sm resize-none"
+                  className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/60 focus:border-primary/40 text-sm resize-none"
                 />
               </div>
               <button
@@ -135,94 +163,83 @@ export default function HomePage() {
               </button>
             </form>
           </div>
-        </div>
 
-        {/* Recent Sessions */}
-        {sessions.length > 0 && (
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-4">Recent sessions</p>
-            <div className="space-y-2">
-              {sessions.map((s) => {
-                const isConfirming = confirmDeleteId === s.id;
-                const isDeleting = deletingId === s.id;
-                return (
-                  <div
-                    key={s.id}
-                    className={`w-full border rounded-md px-4 py-3.5 text-left transition-all group cursor-pointer ${
-                      isConfirming
-                        ? "border-red-500/40 bg-red-500/5"
-                        : "border-border/60 hover:border-primary/30 hover:bg-muted/30"
-                    }`}
-                    onClick={() => {
-                      if (!isConfirming) router.push(`/session/${s.id}`);
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      {/* Left: title + query */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2.5 mb-0.5">
-                          <span className="font-medium text-foreground text-sm truncate">{s.title}</span>
-                          <StatusDot status={s.status} />
+          {/* Recent sessions */}
+          {sessions.length > 0 && (
+            <div className="mt-6 flex-1 min-h-0 flex flex-col">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3 shrink-0">Recent sessions</p>
+              <div className="space-y-1.5 overflow-y-auto flex-1">
+                {sessions.map((s) => {
+                  const isConfirming = confirmDeleteId === s.id;
+                  const isDeleting = deletingId === s.id;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`w-full border rounded-md px-3.5 py-3 text-left transition-all group cursor-pointer ${
+                        isConfirming
+                          ? "border-red-500/40 bg-red-500/5"
+                          : "border-border/60 hover:border-primary/30 hover:bg-muted/30"
+                      }`}
+                      onClick={() => { if (!isConfirming) router.push(`/session/${s.id}`); }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-foreground text-xs truncate">{s.title}</span>
+                            <StatusDot status={s.status} />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate">{s.query}</p>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{s.query}</p>
-                      </div>
-
-                      {/* Right: meta / confirm delete */}
-                      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {isConfirming ? (
-                          <>
-                            <span className="text-xs text-red-400 font-medium">Delete?</span>
-                            <button
-                              onClick={() => handleDelete(s.id)}
-                              disabled={isDeleting}
-                              className="flex items-center gap-1 text-xs bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
-                            >
-                              {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                              Yes, delete
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border/50 hover:border-border transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              {s.agent_count > 0 && (
+                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {isConfirming ? (
+                            <>
+                              <span className="text-xs text-red-400 font-medium">Delete?</span>
+                              <button
+                                onClick={() => handleDelete(s.id)}
+                                disabled={isDeleting}
+                                className="flex items-center gap-1 text-xs bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                              >
+                                {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded border border-border/50 hover:border-border transition-colors"
+                              >
+                                No
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                {s.agent_count > 0 && (
+                                  <span className="flex items-center gap-1">
+                                    <Users className="w-3 h-3" />{s.agent_count}
+                                  </span>
+                                )}
                                 <span className="flex items-center gap-1">
-                                  <Users className="w-3 h-3" />
-                                  {s.agent_count}
+                                  <Clock className="w-3 h-3" />
+                                  {new Date(s.created_at).toLocaleDateString()}
                                 </span>
-                              )}
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {new Date(s.created_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => setConfirmDeleteId(s.id)}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
-                              title="Delete session"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
+                              </div>
+                              <button
+                                onClick={() => setConfirmDeleteId(s.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      <footer className="px-8 py-4 border-t border-border/40 text-center">
-        <p className="text-xs text-muted-foreground/50">11 Population &mdash; multi-agent simulation platform</p>
-      </footer>
     </div>
   );
 }
@@ -242,7 +259,7 @@ function StatusDot({ status }: { status: string }) {
     simulating: "simulating", paused: "paused", complete: "complete", error: "error",
   };
   return (
-    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors[status] || colors.created}`} />
       {labels[status] || status}
     </span>
