@@ -13,16 +13,19 @@ def _build_url() -> str:
     SQLAlchemy async needs   postgresql+asyncpg://...
     Fall back to local SQLite when DATABASE_URL is not set.
     """
-    raw = os.environ.get("DATABASE_URL", "")
+    raw = os.environ.get("DATABASE_URL", "").strip()
     if raw:
         if raw.startswith("postgres://"):
             raw = raw.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif raw.startswith("postgresql://"):
+        elif raw.startswith("postgresql://") and "+asyncpg" not in raw:
             raw = raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+        print(f"[database] Using PostgreSQL: {raw[:40]}...")
         return raw
-    # Local dev: SQLite
+    # Local dev / fallback: SQLite
     db_path = os.path.join(os.path.dirname(__file__), "..", "..", "eleven_minds.db")
-    return f"sqlite+aiosqlite:///{os.path.abspath(db_path)}"
+    url = f"sqlite+aiosqlite:///{os.path.abspath(db_path)}"
+    print(f"[database] No DATABASE_URL — using SQLite: {url}")
+    return url
 
 
 DATABASE_URL = _build_url()

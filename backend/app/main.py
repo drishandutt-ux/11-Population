@@ -10,7 +10,12 @@ from app.api.v1 import sessions, ingestion, simulation, agents, reports
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await create_tables()
+    try:
+        await create_tables()
+        print("[startup] Database tables ready.")
+    except Exception as e:
+        print(f"[startup] WARNING: create_tables() failed: {e}")
+        print("[startup] App will start anyway — DB errors will surface per-request.")
     yield
 
 
