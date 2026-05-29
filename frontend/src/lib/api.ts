@@ -138,9 +138,12 @@ export type Post = {
 };
 
 export type WSEvent =
-  | { type: "agent_spawned"; agent: Partial<Agent> }
+  | { type: "agent_spawned"; agent: Partial<Agent>; index?: number; total?: number }
+  | { type: "agents_ready"; count: number }
+  | { type: "spawn_error"; error: string }
   | { type: "simulation_started"; agent_count: number }
   | { type: "post_created"; post: Post; agent: Partial<Agent> }
   | { type: "like_added"; post_id: string; agent_id: string; new_likes: number }
-  | { type: "kg_updated"; new_entities: string[]; new_relations: string[] }
+  | { type: "kg_updated"; new_entities: string[]; new_relations: string[][] }
+  | { type: "ingest_complete"; source: string }
   | { type: "simulation_complete"; message: string };

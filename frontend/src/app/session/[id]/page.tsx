@@ -167,7 +167,7 @@ export default function SessionPage() {
         const ev = event as any;
         const newEnts: string[] = ev.new_entities || [];
         const newRels: string[][] = ev.new_relations || [];
-        if (newEnts.length > 0) setKgEntities((prev) => [...new Set([...prev, ...newEnts])]);
+        if (newEnts.length > 0) setKgEntities((prev) => Array.from(new Set([...prev, ...newEnts])));
         if (newRels.length > 0) setKgRelations((prev) => [...prev, ...newRels]);
         if (newEnts.length > 0 || newRels.length > 0) {
           setKgActivity((prev) => [
@@ -183,7 +183,7 @@ export default function SessionPage() {
         refreshSession();
       }
     });
-    return unsub;
+    return () => { unsub(); };
   }, [id, refreshSession]);
 
   async function handleSpawn(count: number, opts?: SpawnOptions) {
