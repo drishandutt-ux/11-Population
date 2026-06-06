@@ -22,6 +22,9 @@ build/
 # ── LightRAG / KG data ───────────────────────────────────
 backend/lightrag_data/
 
+# ── Generated test artifacts ─────────────────────────────
+backend/tests/artifacts/
+
 # ── Node / Next.js ───────────────────────────────────────
 node_modules/
 .next/

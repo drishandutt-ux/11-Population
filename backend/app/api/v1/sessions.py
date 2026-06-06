@@ -91,6 +91,31 @@ async def get_session_posts(session_id: str, db: AsyncSession = Depends(get_db))
     ]
 
 
+@router.get("/{session_id}/dials")
+async def get_session_dials(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Population-level aggregation of the 112 dials across this session's agents.
+
+    Powers the psychographic dashboard: per-dial distributions, group means,
+    a market-research scorecard, and a stance x dial heatmap.
+    """
+    from app.services.agents.dial_analytics import aggregate_dials
+
+    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    agents_result = await db.execute(
+        select(SpawnedAgent).where(SpawnedAgent.session_id == session_id)
+    )
+    agents = agents_result.scalars().all()
+
+    agg = aggregate_dials(agents)
+    agg["session_id"] = session_id
+    agg["query"] = session.query
+    return agg
+
+
 @router.post("/{session_id}/opinions")
 async def generate_agent_opinions(session_id: str, db: AsyncSession = Depends(get_db)):
     """Use a single Claude call to generate a crisp one-liner verdict per agent."""
