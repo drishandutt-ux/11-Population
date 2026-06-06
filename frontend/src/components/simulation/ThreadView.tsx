@@ -152,8 +152,9 @@ export default function ThreadView({
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {agentList.map((agent) => {
                 const firstPost = agentFirstPost[agent.id];
-                const opinion = firstPost
-                  ? stripMarkdown(firstPost.content).slice(0, 120) + (firstPost.content.length > 120 ? "…" : "")
+                const raw = firstPost?.content || "";
+                const opinion = firstPost && raw
+                  ? stripMarkdown(raw).slice(0, 120) + (raw.length > 120 ? "…" : "")
                   : null;
 
                 return (
