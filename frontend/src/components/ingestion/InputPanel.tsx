@@ -71,6 +71,59 @@ function isImageFile(filename: string) {
   return /\.(jpe?g|png|gif|webp|bmp|tiff?)$/i.test(filename);
 }
 
+function categoryBadge(key: string): string {
+  switch (key) {
+    case "product_testing":      return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+    case "market_signals":       return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+    case "behavioural_prediction": return "bg-purple-500/15 text-purple-300 border-purple-500/30";
+    case "strategy_stress_test": return "bg-red-500/15 text-red-300 border-red-500/30";
+    default:                     return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+  }
+}
+
+function paperInline(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "<strong class='text-foreground/90 font-semibold'>$1</strong>")
+    .replace(/\*([^*\n]+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code class='text-primary/80 bg-primary/8 px-1 rounded text-[10px]'>$1</code>");
+}
+
+function PaperContent({ text }: { text: string }) {
+  return (
+    <div className="space-y-1.5">
+      {text.split("\n").map((line, i) => {
+        if (line.startsWith("# ")) {
+          return <h1 key={i} className="text-base font-bold text-foreground mt-2 mb-1">{line.slice(2)}</h1>;
+        }
+        if (line.startsWith("## ")) {
+          return <h2 key={i} className="text-xs font-semibold text-foreground/90 mt-4 mb-1 pb-1 border-b border-border/30">{line.slice(3)}</h2>;
+        }
+        if (line.startsWith("### ")) {
+          return <h3 key={i} className="text-[11px] font-semibold text-foreground/80 mt-2">{line.slice(4)}</h3>;
+        }
+        if (/^[-•*]\s/.test(line)) {
+          return (
+            <div key={i} className="flex gap-2 text-[11px] text-foreground/70 leading-relaxed pl-2">
+              <span className="text-muted-foreground/40 shrink-0 mt-0.5">·</span>
+              <span dangerouslySetInnerHTML={{ __html: paperInline(line.replace(/^[-•*]\s/, "")) }} />
+            </div>
+          );
+        }
+        if (/^-{3,}$/.test(line.trim())) {
+          return <hr key={i} className="border-border/30 my-3" />;
+        }
+        if (!line.trim()) {
+          return <div key={i} className="h-1" />;
+        }
+        return (
+          <p key={i} className="text-[11px] text-foreground/70 leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: paperInline(line) }} />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function InputPanel({ session, onIngested, onGoToAgents }: Props) {
   const [tab, setTab]                       = useState<IngestTab>("text");
   const [text, setText]                     = useState("");
@@ -85,9 +138,12 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
   const fileRef = useRef<HTMLInputElement>(null);
 
   // LLM Search state
-  const [llmQuery, setLlmQuery]           = useState(session.query);
-  const [llmModel, setLlmModel]           = useState<LLMModel>("claude");
-  const [llmContextFile, setLlmContextFile] = useState<File | null>(null);
+  const [llmQuery, setLlmQuery]               = useState(session.query);
+  const [llmModel, setLlmModel]               = useState<LLMModel>("claude");
+  const [llmContextFile, setLlmContextFile]   = useState<File | null>(null);
+  const [llmState, setLlmState]               = useState<"idle" | "generating" | "preview">("idle");
+  const [generatedPaper, setGeneratedPaper]   = useState<string | null>(null);
+  const [paperCategory, setPaperCategory]     = useState<{ key: string; label: string } | null>(null);
   const llmFileRef = useRef<HTMLInputElement>(null);
 
   // ── File management ─────────────────────────────────────────────────────────
@@ -152,10 +208,33 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
         await api.ingest.youtube(session.id, ytUrl);
         setSuccess("YouTube video queued — extracting transcript, visuals, comments & metadata…");
       } else if (tab === "llm-search") {
-        if (!llmQuery.trim()) throw new Error("Enter a research query");
-        setIngestProgress("Categorising query & generating research paper…");
-        await api.ingest.llmSearch(session.id, { query: llmQuery, llm: llmModel, contextFile: llmContextFile });
-        setSuccess("Research paper queued — AI is generating it now (30–60 seconds)…");
+        if (llmState === "preview" && generatedPaper) {
+          // Step 2: ingest the already-generated paper as text
+          setIngestProgress("Ingesting research paper into knowledge graph…");
+          await api.ingest.text(session.id, generatedPaper);
+          setSuccess("Research paper ingested — building knowledge graph…");
+        } else {
+          // Step 1: generate the paper and show preview (early return — no navigation)
+          if (!llmQuery.trim()) throw new Error("Enter a research query");
+          setLlmState("generating");
+          setIngestProgress("Categorising query & generating research paper with Claude…");
+          let isGenerating = true;
+          try {
+            const result = await (api.ingest as any).llmGenerate(session.id, {
+              query: llmQuery,
+              llm: llmModel,
+              contextFile: llmContextFile,
+            }) as { paper: string; category: string; category_label: string };
+            setGeneratedPaper(result.paper);
+            setPaperCategory({ key: result.category, label: result.category_label });
+            setLlmState("preview");
+            isGenerating = false;
+          } catch (e) {
+            if (isGenerating) setLlmState("idle");
+            throw e;
+          }
+          return; // don't call onIngested / onGoToAgents yet
+        }
       } else {
         if (selectedFiles.length === 0) throw new Error("Select at least one file");
         let done = 0;
@@ -202,10 +281,10 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
 
   const canSubmit =
     !loading &&
-    (tab === "text"       ? text.trim().length > 0
-    : tab === "youtube"   ? ytUrl.trim().length > 0
-    : tab === "llm-search" ? llmQuery.trim().length > 0
-    :                        selectedFiles.length > 0);
+    (tab === "text"        ? text.trim().length > 0
+    : tab === "youtube"    ? ytUrl.trim().length > 0
+    : tab === "llm-search" ? (llmState === "preview" || llmQuery.trim().length > 0)
+    :                         selectedFiles.length > 0);
 
   const hasImages = selectedFiles.some((f) => isImageFile(f.name));
 
@@ -415,7 +494,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
             )}
 
             {/* ── LLM Search ── */}
-            {tab === "llm-search" && (
+            {tab === "llm-search" && llmState !== "preview" && (
               <div className="space-y-4">
 
                 {/* Model selector */}
@@ -458,9 +537,10 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
                   <textarea
                     value={llmQuery}
                     onChange={(e) => setLlmQuery(e.target.value)}
+                    disabled={llmState === "generating"}
                     placeholder="What should the AI research?"
                     rows={5}
-                    className="w-full bg-muted/40 border border-border/60 rounded-md px-3.5 py-3 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+                    className="w-full bg-muted/40 border border-border/60 rounded-md px-3.5 py-3 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none disabled:opacity-50"
                   />
                 </div>
 
@@ -508,28 +588,80 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
                 </div>
 
                 {/* What you'll get */}
-                <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 space-y-2">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">What you'll get</p>
-                  <div className="space-y-1.5 text-xs text-muted-foreground/80">
-                    {[
-                      ["🔍", "Query auto-categorised", "into Product / Market / Behavioural / Strategy"],
-                      ["📄", "Full research paper", "1,500+ words, category-specific framework"],
-                      ["📊", "Data & benchmarks",   "real numbers, historical analogues, risk estimates"],
-                      ["🧠", "Ingested into KG",    "agents will debate and cite it directly"],
-                    ].map(([icon, label, detail]) => (
-                      <div key={label} className="flex items-start gap-1.5">
-                        <span className="text-sm leading-none mt-0.5 shrink-0">{icon}</span>
-                        <div>
-                          <span className="font-medium text-foreground/80">{label}</span>
-                          <span className="text-muted-foreground/55"> — {detail}</span>
+                {llmState === "idle" && (
+                  <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">What you'll get</p>
+                    <div className="space-y-1.5 text-xs text-muted-foreground/80">
+                      {[
+                        ["🔍", "Query auto-categorised", "into Product / Market / Behavioural / Strategy"],
+                        ["📄", "Full research paper",    "1,500+ words, category-specific framework"],
+                        ["📊", "Data & benchmarks",      "real numbers, historical analogues, risk estimates"],
+                        ["🧠", "Ingested into KG",       "agents will debate and cite it directly"],
+                      ].map(([icon, label, detail]) => (
+                        <div key={label} className="flex items-start gap-1.5">
+                          <span className="text-sm leading-none mt-0.5 shrink-0">{icon}</span>
+                          <div>
+                            <span className="font-medium text-foreground/80">{label}</span>
+                            <span className="text-muted-foreground/55"> — {detail}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 pt-1">
+                      Generation takes 20–40 seconds. You'll review the paper before it's ingested.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground/40 pt-1">
-                    Paper generation takes 30–60 seconds. Progress shown in the status indicator.
-                  </p>
+                )}
+
+                {/* Generating state — inline progress indicator */}
+                {llmState === "generating" && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-5 flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      {[0,1,2,3,4].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"
+                          style={{ animationDelay: `${i * 100}ms`, animationDuration: "800ms" }}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-xs text-primary/80 font-medium">Generating research paper…</p>
+                    <p className="text-[10px] text-muted-foreground/50 text-center">
+                      Claude is categorising your query and writing a comprehensive analysis. This takes 20–40 seconds.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── LLM Search Preview ── */}
+            {tab === "llm-search" && llmState === "preview" && generatedPaper && (
+              <div className="space-y-3">
+                {/* Header row */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => { setLlmState("idle"); setGeneratedPaper(null); setPaperCategory(null); }}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                  >
+                    ← Edit query
+                  </button>
+                  {paperCategory && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${categoryBadge(paperCategory.key)}`}>
+                      {paperCategory.label}
+                    </span>
+                  )}
                 </div>
+
+                {/* Paper content */}
+                <div className="rounded-lg border border-border/50 bg-muted/10 overflow-y-auto max-h-[420px]">
+                  <div className="px-5 py-4 space-y-2">
+                    <PaperContent text={generatedPaper} />
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground/40 text-center">
+                  Review the paper above — click below to ingest it into the knowledge graph.
+                </p>
               </div>
             )}
 
@@ -556,7 +688,9 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
               {loading
                 ? (ingestProgress || "Ingesting…")
                 : tab === "llm-search"
-                  ? "Generate Research Paper →"
+                  ? llmState === "preview"
+                    ? "Ingest into Knowledge Graph →"
+                    : "Generate Research Paper →"
                   : tab === "document"
                     ? selectedFiles.length > 1
                       ? `Ingest ${selectedFiles.length} files →`

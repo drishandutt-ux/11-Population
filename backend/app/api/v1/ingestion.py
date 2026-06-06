@@ -126,6 +126,39 @@ async def ingest_youtube(
     return {"status": "ingesting", "url": body.url, "session_id": session_id}
 
 
+@router.post("/{session_id}/ingest/llm-search/generate")
+async def generate_llm_paper(
+    session_id: str,
+    query: str = Form(...),
+    llm: str = Form(default="claude"),
+    context_file: Optional[UploadFile] = File(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a research paper and return it to the frontend (no ingestion yet)."""
+    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    context_text = ""
+    if context_file and context_file.filename:
+        raw = await context_file.read()
+        try:
+            context_text = parse_document(raw, context_file.filename or "")
+        except Exception as e:
+            print(f"[llm_search/generate] Context file parse failed: {e}")
+
+    from app.services.ingestion.llm_search import categorize_query, generate_research_paper, CATEGORIES
+    category = await categorize_query(query)
+    paper = await generate_research_paper(query, category, context_text)
+
+    return {
+        "paper": paper,
+        "category": category,
+        "category_label": CATEGORIES.get(category, "Research"),
+    }
+
+
 @router.post("/{session_id}/ingest/llm-search")
 async def ingest_llm_search(
     session_id: str,

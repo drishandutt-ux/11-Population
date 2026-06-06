@@ -175,7 +175,7 @@ async def generate_research_paper(query: str, category: str, context: str = "") 
 
     response = await client.messages.create(
         model=settings.model_orchestration,
-        max_tokens=4096,
+        max_tokens=3000,
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
