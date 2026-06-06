@@ -99,13 +99,13 @@ export default function ReportChat({
 
   const currentAgentColor = selectedAgent?.avatar_color ?? "#6366f1";
 
-  // ── Layout: report exists → top report panel + bottom chat ─────────────────
+  // ── Layout: report exists → report left + chat right ──────────────────────
   if (reportContent || isGeneratingReport) {
     return (
-      <div className="h-full flex flex-col min-h-0">
-        {/* Report document panel */}
-        <div className="flex flex-col min-h-0" style={{ flex: "0 0 62%" }}>
-          {/* Report header */}
+      <div className="h-full flex flex-row min-h-0 overflow-hidden">
+        {/* LEFT: Report document */}
+        <div className="flex flex-col min-h-0 flex-1 min-w-0">
+          {/* Report toolbar */}
           <div className="px-5 py-2.5 border-b border-border/40 flex items-center justify-between shrink-0 no-print">
             <div className="flex items-center gap-2">
               <FileText className="w-3.5 h-3.5 text-primary" />
@@ -144,25 +144,25 @@ export default function ReportChat({
           </div>
 
           {/* Report body */}
-          <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5">
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-6">
             {isGeneratingReport && !reportContent ? (
               <div className="flex items-center justify-center h-full gap-3 text-muted-foreground/60">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">Generating report from all agents and sources…</span>
               </div>
             ) : (
-              <div id="report-printable">
+              <div id="report-printable" className="max-w-2xl">
                 <ReportDocument content={reportContent!} />
               </div>
             )}
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="shrink-0 border-t border-border/40 no-print" />
+        {/* Vertical divider */}
+        <div className="shrink-0 border-l border-border/40 no-print" />
 
-        {/* Q&A chat panel */}
-        <div className="flex flex-col min-h-0 no-print" style={{ flex: "0 0 38%" }}>
+        {/* RIGHT: Chat panel */}
+        <div className="w-96 shrink-0 flex flex-col min-h-0 no-print">
           <ChatPanel
             mode={mode}
             setMode={setMode}
