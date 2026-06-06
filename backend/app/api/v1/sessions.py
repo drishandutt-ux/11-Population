@@ -91,6 +91,97 @@ async def get_session_posts(session_id: str, db: AsyncSession = Depends(get_db))
     ]
 
 
+@router.post("/{session_id}/opinions")
+async def generate_agent_opinions(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Use a single Claude call to generate a crisp one-liner verdict per agent."""
+    import json, anthropic
+    from app.models.post import PostType
+    from app.core.config import get_settings
+
+    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    agents_result = await db.execute(
+        select(SpawnedAgent).where(SpawnedAgent.session_id == session_id)
+    )
+    agents = agents_result.scalars().all()
+    if not agents:
+        return {"opinions": {}}
+
+    posts_result = await db.execute(
+        select(SimulationPost)
+        .where(SimulationPost.session_id == session_id)
+        .where(SimulationPost.type != PostType.LIKE)
+        .where(SimulationPost.content.isnot(None))
+        .order_by(SimulationPost.round_num.asc())
+    )
+    posts = posts_result.scalars().all()
+    if not posts:
+        return {"opinions": {}}
+
+    # Group posts by agent (latest round first, up to 3 posts, 400 chars each)
+    posts_by_agent: dict[str, list[str]] = {}
+    for p in posts:
+        if p.content:
+            posts_by_agent.setdefault(p.agent_id, []).append(p.content[:400])
+
+    agent_blocks = []
+    for agent in agents:
+        excerpts = posts_by_agent.get(agent.id, [])
+        if not excerpts:
+            continue
+        combined = " … ".join(excerpts[-3:])[:900]
+        agent_blocks.append(
+            f'ID:{agent.id} | {agent.name} | {agent.role} | stance:{agent.stance}\n'
+            f'Posts: {combined}'
+        )
+
+    if not agent_blocks:
+        return {"opinions": {}}
+
+    settings = get_settings()
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+    response = await client.messages.create(
+        model=settings.model_fast,
+        max_tokens=1200,
+        messages=[{
+            "role": "user",
+            "content": (
+                f'Write a KPI verdict label for each agent in a research simulation.\n\n'
+                f'Session query: "{session.query}"\n\n'
+                f'Rules:\n'
+                f'- One line per agent, 10-15 words MAX\n'
+                f'- A direct, opinionated answer to the query from that agent\'s unique perspective\n'
+                f'- Specific (include numbers/positions where the agent gave them)\n'
+                f'- No "I think", no hedging, no restating the question\n'
+                f'- Feels like a Bloomberg terminal KPI, not a sentence from their post\n\n'
+                f'Bad: "The regulatory environment is complex and may affect valuations"\n'
+                f'Good: "$180 fair value; FSD optionality unjustified at current regulatory risk"\n\n'
+                f'Respond ONLY with valid JSON: {{"agent_id": "verdict"}}\n\n'
+                f'AGENTS:\n' + "\n\n".join(agent_blocks)
+            ),
+        }],
+    )
+
+    raw = response.content[0].text.strip()
+    # Strip markdown fences if model wraps in ```json
+    if "```" in raw:
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    raw = raw.strip()
+
+    try:
+        opinions = json.loads(raw)
+    except Exception:
+        opinions = {}
+
+    return {"opinions": opinions}
+
+
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))

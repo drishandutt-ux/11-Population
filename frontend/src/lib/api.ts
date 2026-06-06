@@ -21,6 +21,7 @@ export const api = {
     get: (id: string) => request(`/sessions/${id}`),
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
     posts: (id: string) => request(`/sessions/${id}/posts`),
+    opinions: (id: string) => request(`/sessions/${id}/opinions`, { method: "POST" }),
   },
   ingest: {
     text: (sessionId: string, text: string) =>

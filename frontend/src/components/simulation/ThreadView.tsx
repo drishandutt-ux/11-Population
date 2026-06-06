@@ -13,18 +13,9 @@ interface Props {
   pendingSimulation?: boolean;
   onMakeReport?: () => void;
   isGeneratingReport?: boolean;
+  agentOpinions?: Record<string, string>;
 }
 
-function stripMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "$1")
-    .replace(/\*(.+?)\*/g, "$1")
-    .replace(/`(.+?)`/g, "$1")
-    .replace(/^[\-•\*]\s+/gm, "")
-    .replace(/^\d+\.\s+/gm, "")
-    .replace(/\n+/g, " ")
-    .trim();
-}
 
 export default function ThreadView({
   posts,
@@ -33,6 +24,7 @@ export default function ThreadView({
   pendingSimulation = false,
   onMakeReport,
   isGeneratingReport = false,
+  agentOpinions = {},
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -152,16 +144,15 @@ export default function ThreadView({
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {agentList.map((agent) => {
                 const firstPost = agentFirstPost[agent.id];
-                const raw = firstPost?.content || "";
-                const opinion = firstPost && raw
-                  ? stripMarkdown(raw).slice(0, 120) + (raw.length > 120 ? "…" : "")
-                  : null;
+                // Prefer Claude-generated one-liner verdict; fall back to first-post excerpt
+                const verdict = agentOpinions[agent.id] || null;
+                const hasPosted = !!firstPost;
 
                 return (
                   <button
                     key={agent.id}
                     onClick={() => firstPost && scrollToPost(firstPost.id)}
-                    disabled={!firstPost}
+                    disabled={!hasPosted}
                     className="w-full text-left p-2.5 rounded-lg border border-border/30 bg-card/30 hover:bg-card/60 hover:border-border/60 transition-all disabled:opacity-40 disabled:cursor-default group"
                   >
                     {/* Agent header */}
@@ -180,11 +171,18 @@ export default function ThreadView({
                       </span>
                     </div>
 
-                    {/* Opinion or placeholder */}
-                    {opinion ? (
-                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed line-clamp-3 group-hover:text-muted-foreground/90 transition-colors">
-                        {opinion}
+                    {/* Verdict, placeholder, or "forming" */}
+                    {verdict ? (
+                      <p className="text-[11px] text-foreground/80 leading-snug font-medium group-hover:text-foreground transition-colors">
+                        {verdict}
                       </p>
+                    ) : hasPosted ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" />
+                        <span className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: "200ms" }} />
+                        <span className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: "400ms" }} />
+                        <span className="text-[10px] text-muted-foreground/50 ml-0.5">summarising…</span>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <span className="w-1 h-1 rounded-full bg-muted-foreground/30 animate-pulse" />

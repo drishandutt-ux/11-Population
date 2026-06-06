@@ -64,6 +64,10 @@ export default function SessionPage() {
   const [reportContent, setReportContent] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
+  // Agent opinion KPIs — generated once we have enough posts, refreshed on completion
+  const [agentOpinions, setAgentOpinions] = useState<Record<string, string>>({});
+  const opinionsLoadedRef = useRef(false);
+
   const postCountRef = useRef(0);
 
   const refreshSession = useCallback(async () => {
@@ -181,10 +185,25 @@ export default function SessionPage() {
 
       } else if (event.type === "simulation_complete") {
         refreshSession();
+        // Refresh opinions with final posts
+        api.sessions.opinions(id)
+          .then((d: any) => { if (d.opinions) setAgentOpinions(d.opinions); })
+          .catch(() => {});
       }
     });
     return () => { unsub(); };
   }, [id, refreshSession]);
+
+  // First-time opinion generation: fire once we have at least one post per agent
+  useEffect(() => {
+    if (opinionsLoadedRef.current) return;
+    if (posts.length >= Math.max(agents.length, 3) && agents.length > 0) {
+      opinionsLoadedRef.current = true;
+      api.sessions.opinions(id)
+        .then((d: any) => { if (d.opinions) setAgentOpinions(d.opinions); })
+        .catch(() => {});
+    }
+  }, [posts.length, agents.length, id]);
 
   async function handleSpawn(count: number, opts?: SpawnOptions) {
     setIsSpawning(true);
@@ -316,6 +335,7 @@ export default function SessionPage() {
             pendingSimulation={pendingSimRounds !== null}
             onMakeReport={handleMakeReport}
             isGeneratingReport={isGeneratingReport}
+            agentOpinions={agentOpinions}
           />
         )}
         {activeTab === "kg" && (
