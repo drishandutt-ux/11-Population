@@ -96,6 +96,18 @@ export const api = {
       }),
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
   },
+  presets: {
+    list: () => request<AgentPreset[]>("/presets"),
+    save: (sessionId: string, name: string) =>
+      request("/presets", { method: "POST", body: JSON.stringify({ session_id: sessionId, name }) }),
+    delete: (presetId: string) =>
+      request(`/presets/${presetId}`, { method: "DELETE" }),
+    apply: (sessionId: string, presetId: string) =>
+      request(`/sessions/${sessionId}/apply-preset`, {
+        method: "POST",
+        body: JSON.stringify({ preset_id: presetId }),
+      }),
+  },
 };
 
 export type Session = {
@@ -156,6 +168,13 @@ export type Post = {
   parent_id: string | null;
   likes: number;
   round_num: number;
+};
+
+export type AgentPreset = {
+  id: string;
+  name: string;
+  agent_count: number;
+  created_at: string;
 };
 
 export type WSEvent =

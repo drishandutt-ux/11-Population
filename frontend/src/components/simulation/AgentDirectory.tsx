@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Agent, AgentDials, SpawnOptions } from "@/lib/api";
+import { useState, useRef, useEffect } from "react";
+import { Agent, AgentDials, AgentPreset, SpawnOptions, api } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, Upload, X, ChevronDown, ChevronUp, BarChart2, FileText,
+  Bookmark, Trash2,
 } from "lucide-react";
 
 interface Props {
@@ -20,6 +21,7 @@ interface Props {
   onStartSimulation: (maxRounds: number) => void;
   onGoToThread: () => void;
   onGoToReport: () => void;
+  onApplyPreset: (presetId: string) => void;
 }
 
 const STANCE_ORDER = ["direct", "indirect", "neutral"] as const;
@@ -267,6 +269,7 @@ export default function AgentDirectory({
   onStartSimulation,
   onGoToThread,
   onGoToReport,
+  onApplyPreset,
 }: Props) {
   const [agentCount, setAgentCount] = useState(15);
   const [maxRounds, setMaxRounds] = useState(15);
@@ -275,6 +278,48 @@ export default function AgentDirectory({
   const [indirectPct, setIndirectPct] = useState(33);
   const [docContext, setDocContext] = useState("");
   const [search, setSearch] = useState("");
+
+  // Preset state
+  const [presets, setPresets] = useState<AgentPreset[]>([]);
+  const [isSaveForm, setIsSaveForm] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    api.presets.list()
+      .then((p) => setPresets(p as AgentPreset[]))
+      .catch(() => {});
+  }, []);
+
+  async function handleSavePreset() {
+    if (!saveName.trim() || isSaving) return;
+    setIsSaving(true);
+    try {
+      const preset = await api.presets.save(sessionId, saveName.trim()) as AgentPreset;
+      setPresets((prev) => [preset, ...prev]);
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setIsSaveForm(false);
+        setSaveName("");
+      }, 1800);
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeletePreset(presetId: string) {
+    setPresets((prev) => prev.filter((p) => p.id !== presetId));
+    try {
+      await api.presets.delete(presetId);
+    } catch {
+      // re-fetch on failure
+      api.presets.list().then((p) => setPresets(p as AgentPreset[])).catch(() => {});
+    }
+  }
 
   const neutralPct = Math.max(0, 100 - directPct - indirectPct);
   const overflowPct = directPct + indirectPct > 100;
@@ -320,6 +365,45 @@ export default function AgentDirectory({
               Define your audience, tune the stance mix, and optionally upload survey data to seed psychological profiles.
             </p>
           </div>
+
+          {/* Saved lineups */}
+          {presets.length > 0 && (
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Bookmark className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Saved Lineups
+                </span>
+              </div>
+              <div className="space-y-2">
+                {presets.map((preset) => (
+                  <div
+                    key={preset.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/40 bg-muted/30"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">{preset.name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {preset.agent_count} agents · {new Date(preset.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onApplyPreset(preset.id)}
+                      className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      Load
+                    </button>
+                    <button
+                      onClick={() => handleDeletePreset(preset.id)}
+                      className="shrink-0 text-muted-foreground/50 hover:text-red-400 transition-colors p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Profile query */}
           <div className="glass rounded-2xl p-5 space-y-4">
@@ -615,12 +699,57 @@ export default function AgentDirectory({
           </div>
         )}
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search agents by name or role…"
-          className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
-        />
+        {/* Save lineup row */}
+        <div className="flex items-center gap-2">
+          {!isSaveForm ? (
+            <>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search agents by name or role…"
+                className="flex-1 bg-muted border border-border rounded-xl px-4 py-2.5 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+              />
+              <button
+                onClick={() => { setIsSaveForm(true); setSaveName(""); }}
+                className="shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-2.5 rounded-xl border border-border/60 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+              >
+                <Bookmark className="w-3.5 h-3.5" />
+                Save Lineup
+              </button>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center gap-2 glass rounded-xl px-3 py-2">
+              <Bookmark className="w-3.5 h-3.5 text-primary shrink-0" />
+              <input
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Name this lineup…"
+                className="flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground focus:outline-none"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") handleSavePreset(); if (e.key === "Escape") setIsSaveForm(false); }}
+              />
+              {saveSuccess ? (
+                <span className="text-xs text-green-400 shrink-0">Saved!</span>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSavePreset}
+                    disabled={!saveName.trim() || isSaving}
+                    className="shrink-0 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-40 transition-colors px-1"
+                  >
+                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setIsSaveForm(false)}
+                    className="shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         {STANCE_ORDER.map((stance) => {
           const group = filtered.filter((a) => a.stance === stance);

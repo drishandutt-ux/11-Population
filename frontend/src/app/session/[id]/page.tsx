@@ -219,6 +219,20 @@ export default function SessionPage() {
     }
   }
 
+  async function handleApplyPreset(presetId: string) {
+    setIsSpawning(true);
+    setSpawnProgress(null);
+    setSpawnError(null);
+    setAgents([]);
+    setAgentsMap({});
+    try {
+      await api.presets.apply(id, presetId);
+    } catch (e: any) {
+      setIsSpawning(false);
+      setSpawnError(e.message || "Failed to load lineup");
+    }
+  }
+
   async function handleStartSimulation(rounds?: number) {
     const r = rounds ?? maxRounds;
     setMaxRounds(r);
@@ -325,6 +339,7 @@ export default function SessionPage() {
             onStartSimulation={(rounds) => handleStartSimulation(rounds)}
             onGoToThread={() => setActiveTab("simulation")}
             onGoToReport={() => setActiveTab("report")}
+            onApplyPreset={handleApplyPreset}
           />
         )}
         {activeTab === "simulation" && (
