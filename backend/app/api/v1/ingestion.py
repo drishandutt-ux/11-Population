@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -123,3 +124,46 @@ async def ingest_youtube(
 
     background_tasks.add_task(_ingest_yt)
     return {"status": "ingesting", "url": body.url, "session_id": session_id}
+
+
+@router.post("/{session_id}/ingest/llm-search")
+async def ingest_llm_search(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    query: str = Form(...),
+    llm: str = Form(default="claude"),
+    context_file: Optional[UploadFile] = File(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Parse optional context document now (before background task) so we hold the bytes
+    context_text = ""
+    if context_file and context_file.filename:
+        raw = await context_file.read()
+        try:
+            context_text = parse_document(raw, context_file.filename or "")
+        except Exception as e:
+            print(f"[llm_search] Context file parse failed: {e}")
+
+    session.status = SessionStatus.INGESTING
+    await db.commit()
+
+    async def _run():
+        from app.services.ingestion.llm_search import categorize_query, generate_research_paper
+        try:
+            category = await categorize_query(query)
+            paper = await generate_research_paper(query, category, context_text)
+        except Exception as e:
+            print(f"[llm_search] Generation failed: {e}")
+            paper = (
+                f"LLM Search query: {query}\n\n"
+                "(Research paper generation failed — agents will discuss based on the query alone.)"
+            )
+        await _ingest_chunks(session_id, paper, "LLM Search")
+
+    background_tasks.add_task(_run)
+    return {"status": "ingesting", "session_id": session_id}

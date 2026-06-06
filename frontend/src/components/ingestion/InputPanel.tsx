@@ -4,10 +4,11 @@ import { useState, useRef } from "react";
 import { api, Session } from "@/lib/api";
 import {
   Type, Upload, Youtube, CheckCircle, Loader2, X, Plus,
-  FileText, FileSpreadsheet, FileImage, FileCode, Presentation,
+  FileText, FileSpreadsheet, FileImage, FileCode, Presentation, Sparkles,
 } from "lucide-react";
 
-type IngestTab = "text" | "document" | "youtube";
+type IngestTab = "text" | "document" | "youtube" | "llm-search";
+type LLMModel = "claude" | "gemini" | "openai";
 
 interface Props {
   session: Session;
@@ -83,6 +84,12 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
   const [error, setError]                   = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // LLM Search state
+  const [llmQuery, setLlmQuery]           = useState(session.query);
+  const [llmModel, setLlmModel]           = useState<LLMModel>("claude");
+  const [llmContextFile, setLlmContextFile] = useState<File | null>(null);
+  const llmFileRef = useRef<HTMLInputElement>(null);
+
   // ── File management ─────────────────────────────────────────────────────────
 
   function addFiles(incoming: File[]) {
@@ -144,6 +151,11 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
         if (!ytUrl.trim()) throw new Error("Enter a YouTube URL");
         await api.ingest.youtube(session.id, ytUrl);
         setSuccess("YouTube video queued — extracting transcript, visuals, comments & metadata…");
+      } else if (tab === "llm-search") {
+        if (!llmQuery.trim()) throw new Error("Enter a research query");
+        setIngestProgress("Categorising query & generating research paper…");
+        await api.ingest.llmSearch(session.id, { query: llmQuery, llm: llmModel, contextFile: llmContextFile });
+        setSuccess("Research paper queued — AI is generating it now (30–60 seconds)…");
       } else {
         if (selectedFiles.length === 0) throw new Error("Select at least one file");
         let done = 0;
@@ -182,16 +194,18 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
   }
 
   const tabs: { key: IngestTab; label: string; icon: React.ReactNode }[] = [
-    { key: "text",     label: "Text",    icon: <Type    className="w-3.5 h-3.5" /> },
-    { key: "document", label: "File",    icon: <Upload  className="w-3.5 h-3.5" /> },
-    { key: "youtube",  label: "YouTube", icon: <Youtube className="w-3.5 h-3.5" /> },
+    { key: "text",       label: "Text",       icon: <Type     className="w-3.5 h-3.5" /> },
+    { key: "document",   label: "File",       icon: <Upload   className="w-3.5 h-3.5" /> },
+    { key: "youtube",    label: "YouTube",    icon: <Youtube  className="w-3.5 h-3.5" /> },
+    { key: "llm-search", label: "LLM Search", icon: <Sparkles className="w-3.5 h-3.5" /> },
   ];
 
   const canSubmit =
     !loading &&
-    (tab === "text"     ? text.trim().length > 0
-    : tab === "youtube" ? ytUrl.trim().length > 0
-    :                     selectedFiles.length > 0);
+    (tab === "text"       ? text.trim().length > 0
+    : tab === "youtube"   ? ytUrl.trim().length > 0
+    : tab === "llm-search" ? llmQuery.trim().length > 0
+    :                        selectedFiles.length > 0);
 
   const hasImages = selectedFiles.some((f) => isImageFile(f.name));
 
@@ -400,6 +414,125 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
               </div>
             )}
 
+            {/* ── LLM Search ── */}
+            {tab === "llm-search" && (
+              <div className="space-y-4">
+
+                {/* Model selector */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Select AI Model</p>
+                  <div className="flex gap-2">
+                    {(
+                      [
+                        { id: "claude",  label: "Claude",  sub: "by Anthropic", active: true  },
+                        { id: "gemini",  label: "Gemini",  sub: "by Google",    active: false },
+                        { id: "openai",  label: "GPT-4o",  sub: "by OpenAI",    active: false },
+                      ] as { id: LLMModel; label: string; sub: string; active: boolean }[]
+                    ).map((m) => (
+                      <button
+                        key={m.id}
+                        disabled={!m.active}
+                        onClick={() => m.active && setLlmModel(m.id)}
+                        title={m.active ? undefined : "Coming soon — API key not configured"}
+                        className={`flex-1 px-3 py-2.5 rounded-lg border text-left transition-all ${
+                          !m.active
+                            ? "border-border/20 opacity-35 cursor-not-allowed"
+                            : llmModel === m.id
+                              ? "border-primary/60 bg-primary/8 text-primary"
+                              : "border-border/50 hover:border-border/80 text-muted-foreground"
+                        }`}
+                      >
+                        <div className="text-xs font-semibold leading-none mb-0.5">{m.label}</div>
+                        <div className="text-[10px] text-muted-foreground/50">{m.sub}</div>
+                        {!m.active && (
+                          <div className="text-[9px] text-muted-foreground/35 mt-0.5">Coming soon</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Research query */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Research Query</p>
+                  <textarea
+                    value={llmQuery}
+                    onChange={(e) => setLlmQuery(e.target.value)}
+                    placeholder="What should the AI research?"
+                    rows={5}
+                    className="w-full bg-muted/40 border border-border/60 rounded-md px-3.5 py-3 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+                  />
+                </div>
+
+                {/* Optional context doc */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">
+                    Context Document <span className="normal-case text-muted-foreground/40">(optional)</span>
+                  </p>
+                  {llmContextFile ? (
+                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/50 bg-muted/20">
+                      <span className="shrink-0">{fileIcon(llmContextFile.name)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{llmContextFile.name}</p>
+                        <p className="text-[10px] text-muted-foreground/55">
+                          {(llmContextFile.size / 1024).toFixed(1)} KB · used as AI context
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setLlmContextFile(null); if (llmFileRef.current) llmFileRef.current.value = ""; }}
+                        className="text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => llmFileRef.current?.click()}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-dashed border-border/50 text-xs text-muted-foreground/60 hover:text-foreground hover:border-primary/40 transition-all"
+                    >
+                      <Upload className="w-3 h-3" />
+                      Attach a document for context
+                    </button>
+                  )}
+                  <input
+                    ref={llmFileRef}
+                    type="file"
+                    accept={ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) setLlmContextFile(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+
+                {/* What you'll get */}
+                <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 space-y-2">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">What you'll get</p>
+                  <div className="space-y-1.5 text-xs text-muted-foreground/80">
+                    {[
+                      ["🔍", "Query auto-categorised", "into Product / Market / Behavioural / Strategy"],
+                      ["📄", "Full research paper", "1,500+ words, category-specific framework"],
+                      ["📊", "Data & benchmarks",   "real numbers, historical analogues, risk estimates"],
+                      ["🧠", "Ingested into KG",    "agents will debate and cite it directly"],
+                    ].map(([icon, label, detail]) => (
+                      <div key={label} className="flex items-start gap-1.5">
+                        <span className="text-sm leading-none mt-0.5 shrink-0">{icon}</span>
+                        <div>
+                          <span className="font-medium text-foreground/80">{label}</span>
+                          <span className="text-muted-foreground/55"> — {detail}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/40 pt-1">
+                    Paper generation takes 30–60 seconds. Progress shown in the status indicator.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* ── Feedback ── */}
             {error && (
               <p className="text-xs text-red-400 flex items-center gap-1.5">
@@ -422,13 +555,15 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {loading
                 ? (ingestProgress || "Ingesting…")
-                : tab === "document"
-                  ? selectedFiles.length > 1
-                    ? `Ingest ${selectedFiles.length} files →`
-                    : selectedFiles.length === 1 && isImageFile(selectedFiles[0].name)
-                      ? "Analyse image & ingest →"
-                      : "Ingest into knowledge graph →"
-                  : "Ingest into knowledge graph →"
+                : tab === "llm-search"
+                  ? "Generate Research Paper →"
+                  : tab === "document"
+                    ? selectedFiles.length > 1
+                      ? `Ingest ${selectedFiles.length} files →`
+                      : selectedFiles.length === 1 && isImageFile(selectedFiles[0].name)
+                        ? "Analyse image & ingest →"
+                        : "Ingest into knowledge graph →"
+                    : "Ingest into knowledge graph →"
               }
             </button>
 

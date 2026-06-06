@@ -41,6 +41,16 @@ export const api = {
         body: form,
       }).then((r) => r.json());
     },
+    llmSearch: (sessionId: string, data: { query: string; llm: string; contextFile?: File | null }) => {
+      const form = new FormData();
+      form.append("query", data.query);
+      form.append("llm", data.llm);
+      if (data.contextFile) form.append("context_file", data.contextFile);
+      return fetch(`${BASE}/api/v1/sessions/${sessionId}/ingest/llm-search`, {
+        method: "POST",
+        body: form,
+      }).then((r) => r.json());
+    },
   },
   simulation: {
     spawnAgents: (sessionId: string, count: number, opts?: SpawnOptions) =>
