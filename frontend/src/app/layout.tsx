@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "11 Population",
+  title: "11 Minds Population",
   description: "Multi-agent simulation — test products, strategies, predictions, and human behaviour",
 };
 

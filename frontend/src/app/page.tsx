@@ -5,33 +5,6 @@ import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
 import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb } from "lucide-react";
 
-function ElevenLogo({ className = "h-9 w-9" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" className={className} aria-label="11 Population">
-      <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="4.5" fill="none" />
-      <text
-        x="40" y="37"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fontSize="26"
-        fontWeight="800"
-        fill="currentColor"
-        fontFamily="ui-sans-serif, system-ui, sans-serif"
-      >11</text>
-      <text
-        x="40" y="59"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fontSize="7"
-        fontWeight="700"
-        fill="currentColor"
-        letterSpacing="2.8"
-        fontFamily="ui-sans-serif, system-ui, sans-serif"
-      >MINDS™</text>
-    </svg>
-  );
-}
-
 export default function HomePage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -80,9 +53,8 @@ export default function HomePage() {
 
       {/* ── Header ── */}
       <header className="px-8 py-3.5 flex items-center justify-between border-b border-border/50 shrink-0">
-        <div className="flex items-center gap-2.5 text-primary">
-          <ElevenLogo className="h-9 w-9" />
-          <span className="text-base font-semibold text-foreground tracking-tight">11 Population</span>
+        <div className="flex items-center">
+          <span className="text-base font-semibold text-foreground tracking-tight">11 Minds Population</span>
         </div>
         <span className="text-xs text-muted-foreground">Multi-agent simulation</span>
       </header>
@@ -91,39 +63,61 @@ export default function HomePage() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* Left — Hero */}
-        <div className="flex-1 flex flex-col justify-center px-12 py-8 border-r border-border/40">
-          <p className="text-[10px] text-primary uppercase tracking-widest mb-4 font-semibold">
-            Multi-Agent Simulation Platform
-          </p>
-          <h1 className="text-4xl font-semibold text-foreground leading-tight mb-4">
-            Simulate how real people<br />
-            <span className="text-primary">think, react, and decide</span>
-          </h1>
-          <p className="text-muted-foreground text-sm leading-relaxed max-w-md mb-8">
-            Spawn a diverse population of AI agents with distinct backgrounds, biases, and expertise.
-            Feed them any context — watch them debate, challenge, and converge. Get a structured report
-            grounded in real simulated discourse.
-          </p>
+        <div className="flex-1 flex flex-col px-12 py-8 border-r border-border/40 overflow-hidden">
+          <div className="shrink-0">
+            <p className="text-[10px] text-primary uppercase tracking-widest mb-4 font-semibold">
+              Multi-Agent Simulation Platform
+            </p>
+            <h1 className="text-4xl font-semibold text-foreground leading-tight mb-4">
+              Simulate how real people<br />
+              <span className="text-primary">think, react, and decide</span>
+            </h1>
+            <p className="text-muted-foreground text-sm leading-relaxed max-w-md mb-7">
+              Spawn a diverse population of AI agents with distinct backgrounds, biases, and expertise.
+              Feed them any context — watch them debate, challenge, and converge. Get a structured report
+              grounded in real simulated discourse.
+            </p>
 
-          {/* Use-case grid */}
-          <div className="grid grid-cols-2 gap-2.5 max-w-md">
-            {[
-              { icon: <FlaskConical className="w-3.5 h-3.5" />, label: "Product testing",         detail: "Will real users adopt this?" },
-              { icon: <TrendingUp  className="w-3.5 h-3.5" />, label: "Market & stock signals",  detail: "Predict sentiment before it moves" },
-              { icon: <Brain       className="w-3.5 h-3.5" />, label: "Behavioural prediction",  detail: "Model how populations respond" },
-              { icon: <Lightbulb  className="w-3.5 h-3.5" />, label: "Strategy stress-testing", detail: "Find the flaws before launch" },
-            ].map(({ icon, label, detail }) => (
-              <div
-                key={label}
-                className="flex items-start gap-2.5 border border-border/50 rounded-lg px-3.5 py-3 bg-muted/15"
-              >
-                <span className="text-primary mt-0.5 shrink-0">{icon}</span>
-                <div>
-                  <p className="text-xs font-medium text-foreground">{label}</p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">{detail}</p>
+            {/* Use-case grid */}
+            <div className="grid grid-cols-2 gap-2.5 max-w-md">
+              {[
+                { icon: <FlaskConical className="w-3.5 h-3.5" />, label: "Product testing",         detail: "Will real users adopt this?" },
+                { icon: <TrendingUp  className="w-3.5 h-3.5" />, label: "Market & stock signals",  detail: "Predict sentiment before it moves" },
+                { icon: <Brain       className="w-3.5 h-3.5" />, label: "Behavioural prediction",  detail: "Model how populations respond" },
+                { icon: <Lightbulb  className="w-3.5 h-3.5" />, label: "Strategy stress-testing", detail: "Find the flaws before launch" },
+              ].map(({ icon, label, detail }) => (
+                <div
+                  key={label}
+                  className="flex items-start gap-2.5 border border-border/50 rounded-lg px-3.5 py-3 bg-muted/15"
+                >
+                  <span className="text-primary mt-0.5 shrink-0">{icon}</span>
+                  <div>
+                    <p className="text-xs font-medium text-foreground">{label}</p>
+                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">{detail}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          {/* Illustration — edges feathered so it melts into the background */}
+          <div className="relative mt-6 flex-1 min-h-[160px] overflow-hidden">
+            <img
+              src="/minds-network.png"
+              alt="A diverse population of AI minds reasoning through a shared neural network"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+              style={{
+                maskImage:
+                  "linear-gradient(to right, transparent 0%, #000 13%, #000 87%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 11%, #000 85%, transparent 100%)",
+                WebkitMaskImage:
+                  "linear-gradient(to right, transparent 0%, #000 13%, #000 87%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 11%, #000 85%, transparent 100%)",
+                maskComposite: "intersect",
+                WebkitMaskComposite: "source-in",
+              }}
+            />
+            <p className="absolute bottom-1 left-1 text-[11px] font-medium text-muted-foreground/80 tracking-wide">
+              Diverse minds · distinct reasoning · one simulation
+            </p>
           </div>
         </div>
 
