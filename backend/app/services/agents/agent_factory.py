@@ -1,6 +1,7 @@
 import json
 import uuid
 import random
+import asyncio
 from app.core.config import get_settings
 from app.services.agents.profiles import AgentProfile, AVATAR_COLORS
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
@@ -17,6 +18,15 @@ DIALS_SCHEMA = """{
   "product": {"ease":0,"reward_clarity":0,"shareability":0,"delight":0,"usefulness":0,"memorability":0,"clarity":0,"confidence":0,"satisfaction":0,"emotional_fit":0},
   "composite": {"human_resonance":0,"product_emotional_fit":0,"retention_potential":0,"share_potential":0,"desire_trust":0,"habit_potential":0,"virality_potential":0,"product_humanity":0,"emotional_risk":0,"adoption_readiness":0}
 }"""
+
+# Agents are generated in batches so a large population never exceeds the model's
+# output token limit (one giant call truncates the JSON → unterminated-string errors).
+_BATCH_SIZE = 10
+
+_SYSTEM_PROMPT = """You are an expert behavioral psychologist and simulation designer. You create deeply realistic
+human personas for multi-agent debate simulations. Each agent gets a full psychological dial profile (112 values, all integers 0-10)
+that reflects their emotional state, motivations, habits, trust patterns, friction points, identity fit,
+commercial intent, product experience, and composite readiness scores — all relative to the topic being debated."""
 
 
 async def generate_agents(
@@ -37,32 +47,20 @@ async def generate_agents(
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    # Calculate counts from percentages
+    # ── Population-level distribution ──────────────────────────────────────────
     direct_count = max(1, round(count * direct_pct / 100))
     indirect_count = max(1, round(count * indirect_pct / 100))
     neutral_count = max(0, count - direct_count - indirect_count)
-    # Adjust for rounding
     total = direct_count + indirect_count + neutral_count
     if total < count:
         neutral_count += count - total
     elif total > count:
         neutral_count = max(0, neutral_count - (total - count))
 
-    # How many of the population are "high-humanity" (emotion-led, not expert)
     humanity = max(0, min(100, humanity))
     humanity_coverage = max(0, min(100, humanity_coverage))
     humanized_count = round(count * humanity_coverage / 100) if humanity > 0 else 0
     humanized_count = max(0, min(count, humanized_count))
-
-    if humanized_count > 0:
-        humanity_block = f"""
-HUMANITY / EMOTIONAL REGISTER (critical):
-- Exactly {humanized_count} of the {count} agents must be HIGH-HUMANITY everyday people — set their "humanity" field to {humanity}. These agents react from EMOTION and gut feeling, NOT expert analysis. For them: push sentiment dials WIDE and INTENSE (strong joy / anger / fear / anxiety / hope / love / frustration as fits the persona), keep trust.credibility and trust.authority LOW (they don't cite data or defer to authority), and keep composite analytical scores modest. They are plain-spoken, can be biased or inconsistent, and value how they FEEL over being correct.
-- The remaining {count - humanized_count} agents are analytical/expert — set their "humanity" field to 0: evidence-driven, measured, higher credibility/authority.
-- Spread humanity across stances (a high-humanity agent can still be direct/indirect/neutral).
-"""
-    else:
-        humanity_block = '\n- Set the "humanity" field to 0 for every agent (all analytical/expert register).\n'
 
     profile_context = ""
     if profile_query:
@@ -71,12 +69,17 @@ HUMANITY / EMOTIONAL REGISTER (critical):
     if doc_context:
         profile_context += f"\nSURVEY / PROFILE DATA (translate to dial values):\n{doc_context[:8000]}\n"
 
-    system = """You are an expert behavioral psychologist and simulation designer. You create deeply realistic
-human personas for multi-agent debate simulations. Each agent gets a full psychological dial profile (112 values, all integers 0-10)
-that reflects their emotional state, motivations, habits, trust patterns, friction points, identity fit,
-commercial intent, product experience, and composite readiness scores — all relative to the topic being debated."""
+    def _humanity_block(batch_count: int, humanized: int) -> str:
+        if humanized > 0 and humanity > 0:
+            return f"""
+HUMANITY / EMOTIONAL REGISTER (critical):
+- Exactly {humanized} of the {batch_count} agents must be HIGH-HUMANITY everyday people — set their "humanity" field to {humanity}. These agents react from EMOTION and gut feeling, NOT expert analysis. For them: push sentiment dials WIDE and INTENSE (strong joy / anger / fear / anxiety / hope / love / frustration as fits the persona), keep trust.credibility and trust.authority LOW (they don't cite data or defer to authority), and keep composite analytical scores modest. They are plain-spoken, can be biased or inconsistent, and value how they FEEL over being correct.
+- The remaining {batch_count - humanized} agents are analytical/expert — set their "humanity" field to 0: evidence-driven, measured, higher credibility/authority.
+- Spread humanity across stances (a high-humanity agent can still be direct/indirect/neutral)."""
+        return '\n- Set the "humanity" field to 0 for every agent (all analytical/expert register).'
 
-    prompt = f"""Create {count} diverse agent personas to debate and analyze this topic:
+    def _build_prompt(batch_count: int, d: int, i: int, n: int, h: int) -> str:
+        return f"""Create {batch_count} diverse agent personas to debate and analyze this topic:
 
 QUERY: {query}
 
@@ -84,11 +87,12 @@ KNOWLEDGE CONTEXT:
 {kg_summary[:2500]}
 {profile_context}
 Generate exactly:
-- {direct_count} DIRECT agents: domain experts, practitioners directly in this field
-- {indirect_count} INDIRECT agents: adjacent-field experts who bring cross-domain perspective
-- {neutral_count} NEUTRAL agents: skeptics, journalists, general public, contrarians
-{humanity_block}
-Return a JSON array with exactly {count} objects. Each object MUST have ALL of these keys:
+- {d} DIRECT agents: domain experts, practitioners directly in this field
+- {i} INDIRECT agents: adjacent-field experts who bring cross-domain perspective
+- {n} NEUTRAL agents: skeptics, journalists, general public, contrarians
+{_humanity_block(batch_count, h)}
+
+Return a JSON array with exactly {batch_count} objects. Each object MUST have ALL of these keys:
 {{
   "name": "Full Name",
   "age": <integer 25-65>,
@@ -121,43 +125,146 @@ DIALS INSTRUCTIONS:
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
-    response = await client.messages.create(
-        model=settings.model_orchestration,
-        max_tokens=16000,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
+    # ── Build per-agent slots (stance + humanity flag), shuffled so the humanized
+    #    subset and stances are spread evenly across batches ─────────────────────
+    slots: list[tuple[str, bool]] = (
+        [("direct", False)] * direct_count
+        + [("indirect", False)] * indirect_count
+        + [("neutral", False)] * neutral_count
     )
+    order = list(range(len(slots)))
+    random.shuffle(order)
+    for j in order[:humanized_count]:
+        slots[j] = (slots[j][0], True)
+    random.shuffle(slots)
 
-    raw = response.content[0].text.strip()
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    raw = raw.strip().rstrip("```").strip()
+    batches = [slots[k:k + _BATCH_SIZE] for k in range(0, len(slots), _BATCH_SIZE)]
 
-    agent_dicts = json.loads(raw)
-    profiles = []
-    used_colors = []
+    async def _gen_batch(batch: list[tuple[str, bool]]) -> list[dict]:
+        bcount = len(batch)
+        if bcount == 0:
+            return []
+        d = sum(1 for s, _ in batch if s == "direct")
+        i = sum(1 for s, _ in batch if s == "indirect")
+        n = sum(1 for s, _ in batch if s == "neutral")
+        h = sum(1 for _, hf in batch if hf)
+        try:
+            response = await client.messages.create(
+                model=settings.model_orchestration,
+                max_tokens=12000,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h)}],
+            )
+            return _parse_agents_json(response.content[0].text)
+        except Exception as e:
+            print(f"[agent_factory] batch generation failed ({bcount} agents): {type(e).__name__}: {e}")
+            return []
+
+    batch_results = await asyncio.gather(*[_gen_batch(b) for b in batches])
+    agent_dicts = [d for batch in batch_results for d in batch]
+
+    if not agent_dicts:
+        raise RuntimeError(
+            "Agent generation produced no valid personas — the model output could not be parsed "
+            "(check the ANTHROPIC_API_KEY and try again)."
+        )
+
+    # ── Build AgentProfile objects ─────────────────────────────────────────────
+    profiles: list[AgentProfile] = []
+    used_colors: list[str] = []
     for d in agent_dicts:
+        if not isinstance(d, dict) or not d.get("name"):
+            continue
         color = random.choice([c for c in AVATAR_COLORS if c not in used_colors] or AVATAR_COLORS)
         used_colors.append(color)
-        profiles.append(
-            AgentProfile(
-                id=str(uuid.uuid4()),
-                session_id=session_id,
-                name=d["name"],
-                age=int(d.get("age", 35)),
-                role=d["role"],
-                background=d["background"],
-                stance=d["stance"],
-                correlation=d["correlation"],
-                personality=d.get("personality", []),
-                debate_style=d.get("debate_style", "thoughtful"),
-                energy=round(random.uniform(0.3, 1.0), 2),
-                avatar_color=color,
-                dials=d.get("dials", {}),
-                humanity=int(d.get("humanity", 0) or 0),
+        stance = d.get("stance", "neutral")
+        if stance not in ("direct", "indirect", "neutral"):
+            stance = "neutral"
+        try:
+            profiles.append(
+                AgentProfile(
+                    id=str(uuid.uuid4()),
+                    session_id=session_id,
+                    name=str(d.get("name", "Unnamed")),
+                    age=int(d.get("age", 35) or 35),
+                    role=str(d.get("role", "Participant")),
+                    background=str(d.get("background", "")),
+                    stance=stance,
+                    correlation=str(d.get("correlation", "")),
+                    personality=d.get("personality", []) or [],
+                    debate_style=str(d.get("debate_style", "thoughtful")),
+                    energy=round(random.uniform(0.3, 1.0), 2),
+                    avatar_color=color,
+                    dials=d.get("dials", {}) or {},
+                    humanity=int(d.get("humanity", 0) or 0),
+                )
             )
-        )
+        except Exception as e:
+            print(f"[agent_factory] skipping malformed agent: {type(e).__name__}: {e}")
+            continue
+
     return profiles
+
+
+def _parse_agents_json(raw: str) -> list[dict]:
+    """Parse the model's JSON array of agents, tolerating truncated/partial output
+    by salvaging the complete top-level objects that were emitted."""
+    if not raw:
+        return []
+    raw = raw.strip()
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        parts = raw.split("```")
+        if len(parts) >= 2:
+            raw = parts[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    raw = raw.strip().rstrip("`").strip()
+
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return [d for d in data if isinstance(d, dict)]
+        if isinstance(data, dict):
+            return [data]
+        return []
+    except Exception:
+        # Truncated or malformed — salvage every complete {...} object
+        return _salvage_objects(raw)
+
+
+def _salvage_objects(raw: str) -> list[dict]:
+    """Walk the string and json.loads each balanced top-level {...} block, skipping
+    a truncated final object. Quote/escape aware so braces inside strings are ignored."""
+    objs: list[dict] = []
+    depth = 0
+    start = None
+    in_str = False
+    esc = False
+    for idx, ch in enumerate(raw):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = idx
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    try:
+                        obj = json.loads(raw[start:idx + 1])
+                        if isinstance(obj, dict):
+                            objs.append(obj)
+                    except Exception:
+                        pass
+                    start = None
+    return objs

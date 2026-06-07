@@ -209,15 +209,15 @@ This is the product's crown jewel. Code: `backend/app/services/agents/{profiles,
 **How dial values are set:** not random and not algorithmic — they are **LLM-chosen per agent**, tuned relative to the query topic, kept consistent with the agent's background/stance/personality, with `composite` instructed to be logically derived from the other groups. There is **no code-side validation** of the 0–10 range or schema completeness — it is enforced only by prompt instruction (missing dials fall back to `{}`).
 
 ### 7.3 Agent creation flow — `agent_factory.generate_agents(...)`
-A whole population is created in **one batched LLM call** (there is no per-agent function). Parameters: `session_id, query, count, profile_query="", direct_pct=33, indirect_pct=33, neutral_pct=34, doc_context=""`.
+The population is generated in **batches of ~10 personas per LLM call** (`_BATCH_SIZE`), run concurrently — a single call for a large population (e.g. 50 agents × 112 dials) overflows the model's output-token limit and truncates the JSON. Parameters: `session_id, query, count, profile_query="", direct_pct=33, indirect_pct=33, neutral_pct=34, doc_context="", humanity=0, humanity_coverage=0`.
 
 Steps:
 1. Pull knowledge-graph context for the query (`query_rag`, hybrid mode), truncated to 2500 chars, to ground the personas in the ingested material.
 2. Compute exact per-stance counts from the percentages (each stance gets ≥1; neutral absorbs rounding drift so they sum to `count`). **This deterministic split is the diversity-enforcement mechanism** — the LLM is told exactly how many experts vs. adjacent vs. skeptics to produce.
 3. Optionally append an **audience profile** instruction (`profile_query`) and **survey/profile data** (`doc_context`, first 8000 chars) to translate into dial values.
 4. Prompt Claude (system = "expert behavioral psychologist and simulation designer") for a JSON array of exactly `count` agents, each with all fields + the full `DIALS_SCHEMA`.
-5. Model: **`model_orchestration`** (defaults to `claude-haiku-4-5-20251001`), `max_tokens=16000`.
-6. Parse JSON (strip markdown fences), build `AgentProfile` objects with fresh UUIDs, de-duplicated colors, and randomized energy.
+5. Build per-agent **slots** (stance + humanity flag), shuffled so the humanized subset and stances spread evenly, then chunk into batches of ≤10 and call Claude (**`model_orchestration`**, `max_tokens=12000`) for each batch concurrently via `asyncio.gather`.
+6. Parse each batch with `_parse_agents_json` — a **salvage parser** that recovers every complete `{...}` object even if the output is truncated, so a partial response still yields agents instead of zero. Build `AgentProfile` objects with fresh UUIDs, de-duplicated colors, and randomized energy. If *all* batches fail, raise a clear error (surfaced as `spawn_error`) rather than a cryptic JSON exception.
 
 ### 7.4 Post generation — `agent_runner.generate_post(...)`
 When an agent posts, its persona is assembled into a first-person system prompt and Claude writes the post text.
@@ -583,6 +583,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-06-07** — Fixed **large-population spawning**: agent generation is now **batched** (~10 personas/call, run concurrently) so big counts no longer overflow `max_tokens` and truncate the JSON (which caused "Unterminated string" spawn errors). Added a salvage parser (`_parse_agents_json`) that recovers complete agents from partial output, and a clear error if generation fully fails.
 - **2026-06-07** — Hardened **report & agent chat**: LLM failures now return a friendly message (HTTP 200) via `friendly_llm_error` instead of a 500; the frontend API client got a 120 s timeout with clear network/timeout errors (no more silent "Failed to fetch"/endless spinner); assistant chat replies now render markdown instead of raw text.
 - **2026-06-07** — Fixed **YouTube transcript extraction**: forced the `android` yt-dlp player client (`_with_client`) on all calls because YouTube's default client returned zero captions/formats (transcripts were silently empty); bumped `yt-dlp` to `2025.10.14`.
 - **2026-06-07** — Added **Humanity & Coverage** spawn-time controls (§7.7). A coverage% subset of the population now reasons emotionally (gut-driven, low-citation) instead of like experts; sentiment is the primary driver of agent voice; dial generation is pushed for greater diversity; agent cards surface a "% human" badge + dominant-emotion chips. Adds `SpawnedAgent.humanity` (with a non-destructive startup migration) and `humanity`/`humanity_coverage` params on `POST /spawn-agents`.
