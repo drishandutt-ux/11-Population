@@ -18,6 +18,8 @@ class SpawnAgentsRequest(BaseModel):
     indirect_pct: int = 33
     neutral_pct: int = 34
     doc_context: str = ""
+    humanity: int = 0           # 0 = expert/analytical, 100 = fully human/emotional
+    humanity_coverage: int = 0  # % of the population the humanity setting applies to
 
 
 class SimulateRequest(BaseModel):
@@ -50,6 +52,7 @@ async def spawn_agents(
         _spawn_agents_task,
         session_id, body.count,
         body.profile_query, body.direct_pct, body.indirect_pct, body.neutral_pct, body.doc_context,
+        body.humanity, body.humanity_coverage,
     )
     return {"status": "spawning", "count": body.count}
 
@@ -62,6 +65,8 @@ async def _spawn_agents_task(
     indirect_pct: int = 33,
     neutral_pct: int = 34,
     doc_context: str = "",
+    humanity: int = 0,
+    humanity_coverage: int = 0,
 ):
     from app.core.database import AsyncSessionLocal
     from app.core.redis_client import publish, session_channel
@@ -83,6 +88,8 @@ async def _spawn_agents_task(
             indirect_pct=indirect_pct,
             neutral_pct=neutral_pct,
             doc_context=doc_context,
+            humanity=humanity,
+            humanity_coverage=humanity_coverage,
         )
 
         async with AsyncSessionLocal() as db:
@@ -101,6 +108,7 @@ async def _spawn_agents_task(
                     energy=p.energy,
                     avatar_color=p.avatar_color,
                     dials=p.dials or {},
+                    humanity=getattr(p, "humanity", 0) or 0,
                 )
                 db.add(agent_row)
                 await db.commit()
@@ -120,6 +128,7 @@ async def _spawn_agents_task(
                         "energy": p.energy,
                         "avatar_color": p.avatar_color,
                         "dials": p.dials or {},
+                        "humanity": getattr(p, "humanity", 0) or 0,
                     },
                     "index": i,
                     "total": len(profiles),

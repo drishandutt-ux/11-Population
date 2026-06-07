@@ -5,10 +5,16 @@ from app.models.agent import SpawnedAgent
 import anthropic
 
 
-def _dials_to_behavioral_guidance(dials: dict) -> str:
-    """Translate the agent's psychological dials into concrete behavioral instructions for the LLM."""
-    if not dials:
+def _dials_to_behavioral_guidance(dials: dict, humanity: int = 0) -> str:
+    """Translate the agent's psychological dials into concrete behavioral instructions for the LLM.
+
+    humanity (0-100) shifts the agent from analytical/expert toward emotional, gut-driven and
+    plain-spoken — leading with sentiment over logic. >=40 enables 'human mode', >=66 is intense."""
+    human_mode = humanity >= 40
+    very_human = humanity >= 66
+    if not dials and not human_mode:
         return ""
+    dials = dials or {}
 
     sentiment = dials.get("sentiment", {})
     motivation = dials.get("motivation", {})
@@ -104,6 +110,22 @@ def _dials_to_behavioral_guidance(dials: dict) -> str:
     if shame >= 7:
         rules.append("You carry some shame around this topic — a past failure or complicity. It makes you defensive or over-compensating.")
 
+    love = sentiment.get("love", 5)
+    if love >= 7:
+        rules.append("You feel real affection and loyalty here — you get protective and warm about what you love, and take attacks on it personally.")
+
+    anticipation = sentiment.get("anticipation", 5)
+    if anticipation >= 7:
+        rules.append("You're forward-looking and restless — you talk about what's coming next and run ahead of the conversation.")
+
+    guilt = sentiment.get("guilt", 5)
+    if guilt >= 7:
+        rules.append("You feel a pull of guilt or responsibility about this — it makes you earnest, self-critical, and quick to caveat your own role.")
+
+    surprise = sentiment.get("surprise", 5)
+    if surprise >= 8:
+        rules.append("You react with visible surprise and emphasis — 'wait, really?', 'that's wild' — your reactions are unfiltered.")
+
     # --- Motivation: what drives engagement ---
     urgency = motivation.get("urgency", 5)
     if urgency >= 8:
@@ -148,10 +170,10 @@ def _dials_to_behavioral_guidance(dials: dict) -> str:
 
     # --- Trust: credibility signals ---
     credibility = trust_dials.get("credibility", 5)
-    if credibility >= 8:
+    if credibility >= 8 and not human_mode:
         rules.append("You cite sources, statistics, and credentials. Backing claims with evidence is how you argue.")
-    elif credibility <= 2:
-        rules.append("You argue from personal experience and intuition — you rarely cite sources or defer to authority.")
+    elif credibility <= 2 or human_mode:
+        rules.append("You argue from personal experience and gut intuition — you rarely cite sources or defer to authority.")
 
     transparency = trust_dials.get("transparency", 5)
     if transparency >= 8:
@@ -159,17 +181,35 @@ def _dials_to_behavioral_guidance(dials: dict) -> str:
     elif transparency <= 2:
         rules.append("You're guarded — you don't show your full reasoning or admit your priors.")
 
-    if not rules:
+    human_block = ""
+    if human_mode:
+        human_lines = [
+            "You are an ORDINARY PERSON reacting from the gut — NOT an analyst or expert. Lead with how you FEEL about this, not with data, logic, or frameworks.",
+            "Use plain, everyday language. No jargon, no statistics, no citations, no bullet-point structure — talk like a real person venting or sharing online.",
+            "It is completely fine to be biased, emotional, inconsistent, or even plain wrong. Do NOT retreat into balanced, hedged expert-speak.",
+        ]
+        if very_human:
+            human_lines.append("Keep it short, blunt and raw. Your feelings matter far more to you than being correct, thorough, or sophisticated.")
+        human_block = (
+            "\n\nYOU ARE HUMAN, NOT AN EXPERT — this overrides the above:\n"
+            + "\n".join(f"- {l}" for l in human_lines)
+        )
+
+    if not rules and not human_block:
         return ""
 
-    return (
-        "\n\nYour psychological make-up — let this shape HOW you communicate, not just WHAT you say:\n"
-        + "\n".join(f"- {r}" for r in rules)
-    )
+    guidance = ""
+    if rules:
+        guidance = (
+            "\n\nYour psychological make-up — let your EMOTIONS (sentiment) drive HOW you communicate, not just WHAT you say:\n"
+            + "\n".join(f"- {r}" for r in rules)
+        )
+    return guidance + human_block
 
 
 def _build_system_prompt(agent: SpawnedAgent) -> str:
     personality = ", ".join(agent.personality) if agent.personality else "thoughtful"
+    humanity = getattr(agent, "humanity", 0) or 0
     prompt = f"""You are {agent.name}, a {agent.age}-year-old {agent.role}.
 
 Background: {agent.background}
@@ -180,9 +220,15 @@ Your personality: {personality}
 Your debate style: {agent.debate_style}
 Your stance type: {agent.stance} ({"a domain expert" if agent.stance == "direct" else "an adjacent-field perspective" if agent.stance == "indirect" else "a neutral/skeptical observer"})"""
 
-    prompt += _dials_to_behavioral_guidance(agent.dials or {})
+    prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
 
-    prompt += """
+    if humanity >= 40:
+        prompt += """
+
+Stay fully in character as a REAL, EMOTIONAL human being — not an expert panel. React with feeling and instinct, in casual everyday language like a Reddit comment. Lead with emotion over logic and keep it to 1-2 short paragraphs.
+Do NOT break character. Do NOT sound like an analyst or a report. Do NOT mention you are an AI."""
+    else:
+        prompt += """
 
 Stay fully in character. Express genuine opinions shaped by your background and psychological profile. Be specific and substantive.
 Keep responses conversational — as if posting on Reddit. 1-3 paragraphs max.

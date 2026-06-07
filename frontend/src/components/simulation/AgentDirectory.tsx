@@ -6,7 +6,7 @@ import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, Upload, X, ChevronDown, ChevronUp, BarChart2, FileText,
-  Bookmark, Trash2, Clock,
+  Bookmark, Trash2, Clock, Heart,
 } from "lucide-react";
 
 interface Props {
@@ -130,6 +130,13 @@ function DialViewer({ dials }: { dials: AgentDials }) {
 function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean }) {
   const [showDials, setShowDials] = useState(false);
   const hasDials = agent.dials && Object.keys(agent.dials).length > 0;
+  const humanity = agent.humanity ?? 0;
+  const topSentiments = agent.dials?.sentiment
+    ? (Object.entries(agent.dials.sentiment) as [string, number][])
+        .filter(([, v]) => v >= 6)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+    : [];
 
   return (
     <div
@@ -157,11 +164,32 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
         </div>
       </div>
 
-      <span className={`inline-flex text-xs px-1.5 py-0.5 rounded border mb-2 ${stanceColor(agent.stance)}`}>
-        {agent.stance}
-      </span>
+      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+        <span className={`inline-flex text-xs px-1.5 py-0.5 rounded border ${stanceColor(agent.stance)}`}>
+          {agent.stance}
+        </span>
+        {humanity > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border border-pink-500/30 text-pink-300 bg-pink-500/10">
+            <Heart className="w-2.5 h-2.5" /> {humanity}% human
+          </span>
+        )}
+      </div>
 
-      <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{agent.background}</p>
+      <p className="text-xs text-muted-foreground line-clamp-2 mb-2.5">{agent.background}</p>
+
+      {topSentiments.length > 0 && (
+        <div className="flex gap-1 flex-wrap mb-3">
+          {topSentiments.map(([k, v]) => (
+            <span
+              key={k}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20"
+              title="Dominant sentiment dial"
+            >
+              {toLabel(k)} {v}
+            </span>
+          ))}
+        </div>
+      )}
 
       {agent.personality && agent.personality.length > 0 && (
         <div className="flex gap-1 flex-wrap mb-3">
@@ -294,6 +322,8 @@ export default function AgentDirectory({
   const [directPct, setDirectPct] = useState(33);
   const [indirectPct, setIndirectPct] = useState(33);
   const [docContext, setDocContext] = useState("");
+  const [humanity, setHumanity] = useState(50);          // 0 = expert, 100 = fully human
+  const [humanityCoverage, setHumanityCoverage] = useState(60); // % of agents it applies to
   const [search, setSearch] = useState("");
 
   // Preset state
@@ -368,6 +398,8 @@ export default function AgentDirectory({
       indirect_pct: indirectPct,
       neutral_pct: neutralPct,
       doc_context: docContext,
+      humanity,
+      humanity_coverage: humanityCoverage,
     });
   }
 
@@ -376,6 +408,7 @@ export default function AgentDirectory({
     const dCnt = Math.max(1, Math.round(agentCount * directPct / 100));
     const iCnt = Math.max(1, Math.round(agentCount * indirectPct / 100));
     const nCnt = Math.max(0, agentCount - dCnt - iCnt);
+    const humanizedCount = humanity > 0 ? Math.round(agentCount * humanityCoverage / 100) : 0;
 
     return (
       <div className="h-full overflow-y-auto px-6 py-8">
@@ -517,6 +550,53 @@ export default function AgentDirectory({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Humanity + Coverage */}
+          <div className="glass rounded-2xl p-5 space-y-5">
+            <div className="flex items-center gap-2">
+              <Heart className="w-3.5 h-3.5 text-pink-400" />
+              <span className="text-xs font-medium text-muted-foreground">Humanity</span>
+              <span className="text-[10px] text-muted-foreground/50 ml-auto">feeling over logic</span>
+            </div>
+
+            {/* Humanity intensity */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-pink-400 font-medium">Intensity</span>
+                <span className="text-pink-400 font-bold">{humanity === 0 ? "Off" : `${humanity}%`}</span>
+              </div>
+              <input
+                type="range" min={0} max={100} step={5}
+                value={humanity}
+                onChange={(e) => setHumanity(+e.target.value)}
+                className="w-full accent-pink-500 cursor-pointer h-1.5"
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>0 · expert &amp; logical</span>
+                <span>100 · human &amp; emotional</span>
+              </div>
+            </div>
+
+            {/* Coverage */}
+            <div className={`space-y-2 transition-opacity ${humanity === 0 ? "opacity-40 pointer-events-none" : ""}`}>
+              <div className="flex justify-between text-xs">
+                <span className="text-pink-300 font-medium">Coverage</span>
+                <span className="text-pink-300 font-bold">{humanityCoverage}%</span>
+              </div>
+              <input
+                type="range" min={0} max={100} step={5}
+                value={humanityCoverage}
+                onChange={(e) => setHumanityCoverage(+e.target.value)}
+                className="w-full accent-pink-400 cursor-pointer h-1.5"
+              />
+            </div>
+
+            <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
+              {humanity === 0
+                ? "All agents stay analytical experts — citations, frameworks, measured tone."
+                : `≈ ${humanizedCount} of ${agentCount} agents will be emotion-led: more human, gut-driven, less expert, leaning on their sentiment dials over logic. The rest stay analytical.`}
+            </p>
           </div>
 
           {/* Agent count + Max rounds */}
@@ -706,7 +786,7 @@ export default function AgentDirectory({
             <div className="flex gap-3 shrink-0">
               {!isPendingSimulation && (
                 <button
-                  onClick={() => onSpawn(agentCount)}
+                  onClick={handleSpawnClick}
                   className="text-sm border border-border text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg transition-all"
                 >
                   Re-spawn

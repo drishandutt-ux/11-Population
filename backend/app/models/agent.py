@@ -28,4 +28,6 @@ class SpawnedAgent(Base):
     energy: Mapped[float] = mapped_column(Float, default=0.5)
     avatar_color: Mapped[str] = mapped_column(String(7), default="#6366f1")
     dials: Mapped[dict] = mapped_column(JSON, nullable=True, default=None)
+    # 0 = pure expert/analytical; higher = more human, emotional, gut-driven, less logical.
+    humanity: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -150,6 +150,7 @@ export type Agent = {
   energy: number;
   avatar_color: string;
   dials?: AgentDials;
+  humanity?: number; // 0 = expert/analytical, 100 = fully human/emotional
 };
 
 export type SpawnOptions = {
@@ -158,6 +159,8 @@ export type SpawnOptions = {
   indirect_pct?: number;
   neutral_pct?: number;
   doc_context?: string;
+  humanity?: number;          // 0-100 intensity
+  humanity_coverage?: number; // 0-100 % of agents it applies to
 };
 
 export type Post = {

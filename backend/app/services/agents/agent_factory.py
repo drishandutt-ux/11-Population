@@ -28,6 +28,8 @@ async def generate_agents(
     indirect_pct: int = 33,
     neutral_pct: int = 34,
     doc_context: str = "",
+    humanity: int = 0,
+    humanity_coverage: int = 0,
 ) -> list[AgentProfile]:
     settings = get_settings()
     rag = await get_lightrag(session_id)
@@ -45,6 +47,22 @@ async def generate_agents(
         neutral_count += count - total
     elif total > count:
         neutral_count = max(0, neutral_count - (total - count))
+
+    # How many of the population are "high-humanity" (emotion-led, not expert)
+    humanity = max(0, min(100, humanity))
+    humanity_coverage = max(0, min(100, humanity_coverage))
+    humanized_count = round(count * humanity_coverage / 100) if humanity > 0 else 0
+    humanized_count = max(0, min(count, humanized_count))
+
+    if humanized_count > 0:
+        humanity_block = f"""
+HUMANITY / EMOTIONAL REGISTER (critical):
+- Exactly {humanized_count} of the {count} agents must be HIGH-HUMANITY everyday people — set their "humanity" field to {humanity}. These agents react from EMOTION and gut feeling, NOT expert analysis. For them: push sentiment dials WIDE and INTENSE (strong joy / anger / fear / anxiety / hope / love / frustration as fits the persona), keep trust.credibility and trust.authority LOW (they don't cite data or defer to authority), and keep composite analytical scores modest. They are plain-spoken, can be biased or inconsistent, and value how they FEEL over being correct.
+- The remaining {count - humanized_count} agents are analytical/expert — set their "humanity" field to 0: evidence-driven, measured, higher credibility/authority.
+- Spread humanity across stances (a high-humanity agent can still be direct/indirect/neutral).
+"""
+    else:
+        humanity_block = '\n- Set the "humanity" field to 0 for every agent (all analytical/expert register).\n'
 
     profile_context = ""
     if profile_query:
@@ -69,7 +87,7 @@ Generate exactly:
 - {direct_count} DIRECT agents: domain experts, practitioners directly in this field
 - {indirect_count} INDIRECT agents: adjacent-field experts who bring cross-domain perspective
 - {neutral_count} NEUTRAL agents: skeptics, journalists, general public, contrarians
-
+{humanity_block}
 Return a JSON array with exactly {count} objects. Each object MUST have ALL of these keys:
 {{
   "name": "Full Name",
@@ -80,6 +98,7 @@ Return a JSON array with exactly {count} objects. Each object MUST have ALL of t
   "correlation": "1 sentence: how they relate to the topic",
   "personality": ["trait1", "trait2", "trait3"],
   "debate_style": "1 sentence describing how they argue",
+  "humanity": <integer 0-100>,
   "dials": {DIALS_SCHEMA}
 }}
 
@@ -97,6 +116,8 @@ DIALS INSTRUCTIONS:
 - composite: aggregate derived scores (compute from other dials logically)
 - Make dials CONSISTENT with the agent's background, role, stance, and personality
 - Direct agents should have higher credibility/authority; neutral agents higher confusion/ambiguity friction
+- MAXIMIZE DIVERSITY: use the FULL 0-10 range ACROSS the population. Do NOT cluster values around 5. Make some agents intensely emotional (8-10 on several sentiment dials) and others cold and flat (0-2). Two agents discussing the same topic should have visibly DIFFERENT emotional and motivational profiles — no two agents should feel the same.
+- SENTIMENT IS PRIMARY: the sentiment group is the strongest driver of how an agent speaks. Give every agent a distinct emotional signature — a couple of dominant emotions that run hot (7-10) and others that are clearly low — rather than a flat, even spread.
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -136,6 +157,7 @@ Return ONLY the JSON array, no markdown, no explanation."""
                 energy=round(random.uniform(0.3, 1.0), 2),
                 avatar_color=color,
                 dials=d.get("dials", {}),
+                humanity=int(d.get("humanity", 0) or 0),
             )
         )
     return profiles

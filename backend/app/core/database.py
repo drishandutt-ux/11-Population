@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text
 import os
 
 
@@ -47,3 +48,19 @@ async def get_db() -> AsyncSession:
 async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _ensure_columns()
+
+
+async def _ensure_columns():
+    """Non-destructive, idempotent migrations: add columns that may be missing on
+    tables that pre-date a model change. Each runs in its own transaction so a
+    'duplicate column' failure on one doesn't abort the others."""
+    migrations = [
+        "ALTER TABLE spawned_agents ADD COLUMN humanity INTEGER DEFAULT 0",
+    ]
+    for ddl in migrations:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(ddl))
+        except Exception:
+            pass  # column already exists (fresh DB just created it)
