@@ -385,7 +385,9 @@ function ChatPanel({
                   }
                 </div>
                 <div className={`rounded-xl px-3 py-2 max-w-2xl border border-border/40 bg-muted/20 ${isUser ? "rounded-tr-sm" : "rounded-tl-sm"}`}>
-                  <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  {isUser
+                    ? <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    : <MessageContent text={msg.content} />}
                 </div>
               </div>
             );
@@ -434,6 +436,53 @@ function ChatPanel({
       </div>
     </div>
   );
+}
+
+// ── Chat message renderer (markdown-lite for assistant replies) ────────────────
+
+function renderInlineChat(text: string): string {
+  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, "<strong class='font-semibold text-foreground'>$1</strong>")
+    .replace(/`([^`]+?)`/g, "<code class='px-1 py-0.5 rounded bg-muted text-[11px] font-mono'>$1</code>")
+    .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>");
+}
+
+function MessageContent({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const out: React.ReactNode[] = [];
+  let bullets: string[] = [];
+
+  const flushBullets = () => {
+    if (bullets.length) {
+      out.push(
+        <ul key={`u${out.length}`} className="list-disc pl-4 space-y-0.5">
+          {bullets.map((b, j) => (
+            <li key={j} dangerouslySetInnerHTML={{ __html: renderInlineChat(b) }} />
+          ))}
+        </ul>
+      );
+      bullets = [];
+    }
+  };
+
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line || /^-{3,}$/.test(line)) { flushBullets(); return; }
+    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      flushBullets();
+      out.push(<p key={`h${out.length}`} className="font-semibold text-foreground">{heading[1].replace(/[*#]/g, "").trim()}</p>);
+      return;
+    }
+    const bullet = line.match(/^[-*•]\s+(.*)$/) || line.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet) { bullets.push(bullet[1]); return; }
+    flushBullets();
+    out.push(<p key={`p${out.length}`} dangerouslySetInnerHTML={{ __html: renderInlineChat(line) }} />);
+  });
+  flushBullets();
+
+  return <div className="text-xs text-foreground/90 leading-relaxed space-y-1.5">{out}</div>;
 }
 
 // ── Report document renderer ──────────────────────────────────────────────────

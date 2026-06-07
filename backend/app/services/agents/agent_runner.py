@@ -304,10 +304,15 @@ async def chat_as_agent(agent: SpawnedAgent, message: str, history: list[dict], 
 
     messages = list(history) + [{"role": "user", "content": message}]
 
-    response = await client.messages.create(
-        model=settings.model_agents,
-        max_tokens=800,
-        system=system,
-        messages=messages,
-    )
-    return response.content[0].text.strip()
+    try:
+        response = await client.messages.create(
+            model=settings.model_agents,
+            max_tokens=800,
+            system=system,
+            messages=messages,
+        )
+        return response.content[0].text.strip()
+    except Exception as e:
+        from app.core.llm_errors import friendly_llm_error
+        print(f"[chat_as_agent] LLM call failed for agent {agent.id}: {type(e).__name__}: {e}")
+        return friendly_llm_error(e)

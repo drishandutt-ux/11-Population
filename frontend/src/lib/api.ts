@@ -1,15 +1,31 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}/api/v1${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000); // 2 min — LLM calls can be slow
+  try {
+    const res = await fetch(`${BASE}/api/v1${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Request failed (${res.status})${text ? `: ${text.slice(0, 300)}` : ""}`);
+    }
+    return res.json();
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error("The request timed out — the model may be busy. Please try again.");
+    }
+    if (e instanceof TypeError) {
+      // fetch() network-level failure ("Failed to fetch"): server unreachable, CORS, or dropped connection
+      throw new Error("Couldn't reach the server. It may be restarting — please try again in a moment.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 // Sessions
