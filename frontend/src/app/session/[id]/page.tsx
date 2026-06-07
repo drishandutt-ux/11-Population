@@ -54,6 +54,8 @@ export default function SessionPage() {
   const [isSpawning, setIsSpawning] = useState(false);
   const [spawnProgress, setSpawnProgress] = useState<{ current: number; total: number } | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
+  const [spawnStartTime, setSpawnStartTime] = useState<number | null>(null);
+  const [spawnCount, setSpawnCount] = useState<number>(0);
 
   // Simulation config
   const [maxRounds, setMaxRounds] = useState(15);
@@ -209,6 +211,8 @@ export default function SessionPage() {
     setIsSpawning(true);
     setSpawnProgress(null);
     setSpawnError(null);
+    setSpawnStartTime(Date.now());
+    setSpawnCount(count);
     setAgents([]);
     setAgentsMap({});
     try {
@@ -223,6 +227,8 @@ export default function SessionPage() {
     setIsSpawning(true);
     setSpawnProgress(null);
     setSpawnError(null);
+    setSpawnStartTime(Date.now());
+    setSpawnCount(0); // unknown until first agent_spawned event reports the total
     setAgents([]);
     setAgentsMap({});
     try {
@@ -334,6 +340,8 @@ export default function SessionPage() {
             isSpawning={isSpawning}
             spawnProgress={spawnProgress}
             spawnError={spawnError}
+            spawnStartTime={spawnStartTime}
+            spawnCount={spawnCount}
             isPendingSimulation={pendingSimRounds !== null}
             onSpawn={(count, opts) => handleSpawn(count, opts)}
             onStartSimulation={(rounds) => handleStartSimulation(rounds)}

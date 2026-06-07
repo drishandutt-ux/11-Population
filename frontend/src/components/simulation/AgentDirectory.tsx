@@ -6,7 +6,7 @@ import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, Upload, X, ChevronDown, ChevronUp, BarChart2, FileText,
-  Bookmark, Trash2,
+  Bookmark, Trash2, Clock,
 } from "lucide-react";
 
 interface Props {
@@ -16,6 +16,8 @@ interface Props {
   isSpawning: boolean;
   spawnProgress: { current: number; total: number } | null;
   spawnError: string | null;
+  spawnStartTime?: number | null;
+  spawnCount?: number;
   isPendingSimulation?: boolean;
   onSpawn: (count: number, opts?: SpawnOptions) => void;
   onStartSimulation: (maxRounds: number) => void;
@@ -25,6 +27,19 @@ interface Props {
 }
 
 const STANCE_ORDER = ["direct", "indirect", "neutral"] as const;
+
+// ── Spawn ETA model ──────────────────────────────────────────────────────────
+// Agents are generated in one Claude call (all personas + 112 dials each), so the
+// cost scales with agent count. These constants drive the "expected time" KPI.
+const SPAWN_ETA_BASE_SEC = 10;        // RAG query + model warmup + first tokens
+const SPAWN_ETA_PER_AGENT_SEC = 3.2;  // each agent adds personas + dials to the JSON
+
+function fmtDuration(totalSec: number) {
+  const s = Math.max(0, Math.round(totalSec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m > 0 ? `${m}:${r.toString().padStart(2, "0")}` : `${r}s`;
+}
 
 // ── Dial category config ─────────────────────────────────────────────────────
 const DIAL_CATEGORIES: { key: keyof AgentDials; label: string; color: string; bar: string }[] = [
@@ -264,6 +279,8 @@ export default function AgentDirectory({
   isSpawning,
   spawnProgress,
   spawnError,
+  spawnStartTime,
+  spawnCount,
   isPendingSimulation = false,
   onSpawn,
   onStartSimulation,
@@ -285,6 +302,15 @@ export default function AgentDirectory({
   const [saveName, setSaveName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Live clock that drives the spawn elapsed / ETA timer
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isSpawning) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [isSpawning]);
 
   useEffect(() => {
     api.presets.list()
@@ -566,7 +592,25 @@ export default function AgentDirectory({
 
   // ── Phase 2: Spawning in progress ─────────────────────────────────────────
   if (isSpawning) {
-    const pct = spawnProgress ? Math.round((spawnProgress.current / spawnProgress.total) * 100) : 0;
+    const plannedCount =
+      spawnProgress?.total ?? (spawnCount && spawnCount > 0 ? spawnCount : 15);
+    const estTotalSec = Math.round(
+      SPAWN_ETA_BASE_SEC + SPAWN_ETA_PER_AGENT_SEC * plannedCount
+    );
+    const elapsedSec = spawnStartTime ? Math.max(0, (now - spawnStartTime) / 1000) : 0;
+    const remainingSec = Math.max(0, estTotalSec - elapsedSec);
+    const overdue = elapsedSec > estTotalSec + 1;
+
+    const realPct = spawnProgress
+      ? Math.round((spawnProgress.current / spawnProgress.total) * 100)
+      : 0;
+    // Before the first agent_spawned event we're inside the single long Claude
+    // call — show time-based progress capped below 100% so the bar is visibly
+    // alive without ever falsely signalling completion.
+    const timePct =
+      estTotalSec > 0 ? Math.min(92, Math.round((elapsedSec / estTotalSec) * 100)) : 0;
+    const pct = spawnProgress ? realPct : timePct;
+
     return (
       <div className="h-full overflow-y-auto px-6 py-6">
         <div className="max-w-4xl mx-auto mb-6">
@@ -577,7 +621,7 @@ export default function AgentDirectory({
                 <span className="font-semibold text-foreground">Spawning agents with psychological profiles…</span>
               </div>
               <span className="text-sm text-muted-foreground">
-                {spawnProgress?.current ?? 0} / {spawnProgress?.total ?? "?"} agents
+                {spawnProgress?.current ?? 0} / {spawnProgress?.total ?? plannedCount} agents
               </span>
             </div>
             <div className="w-full bg-muted rounded-full h-2">
@@ -586,8 +630,33 @@ export default function AgentDirectory({
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground/60 mt-2">
-              Generating 112 psychological dials per agent — this takes a moment…
+
+            {/* Timer KPIs */}
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="bg-muted/50 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">
+                  <Clock className="w-3 h-3" /> Elapsed
+                </div>
+                <div className="text-lg font-bold text-foreground tabular-nums">{fmtDuration(elapsedSec)}</div>
+              </div>
+              <div className="bg-muted/50 rounded-lg px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">Est. total</div>
+                <div className="text-lg font-bold text-foreground tabular-nums">~{fmtDuration(estTotalSec)}</div>
+              </div>
+              <div className="bg-muted/50 rounded-lg px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">
+                  {overdue ? "Status" : "Remaining"}
+                </div>
+                <div className={`text-lg font-bold tabular-nums ${overdue ? "text-yellow-400" : "text-primary"}`}>
+                  {overdue ? "Finishing…" : `~${fmtDuration(remainingSec)}`}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground/60 mt-3">
+              {overdue
+                ? "Taking a little longer than usual — generating 112 psychological dials per agent…"
+                : "Generating 112 psychological dials per agent — this takes a moment…"}
             </p>
           </div>
         </div>
