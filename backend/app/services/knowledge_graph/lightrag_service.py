@@ -102,8 +102,8 @@ Rules: entities = 1-4 words, 5-12 entities, 3-8 relations. No markdown, just JSO
                         existing_relations.add(t)
                         new_relations.append(list(r))
 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[lightrag.insert_chunks] extraction failed for session {session_id}: {type(e).__name__}: {e}")
 
         kg["chunks"].extend(chunks)
         kg["chunks"] = kg["chunks"][-200:]

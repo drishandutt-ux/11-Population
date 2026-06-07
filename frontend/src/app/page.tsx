@@ -115,9 +115,6 @@ export default function HomePage() {
                 WebkitMaskComposite: "source-in",
               }}
             />
-            <p className="absolute bottom-1 left-1 text-[11px] font-medium text-muted-foreground/80 tracking-wide">
-              Diverse minds · distinct reasoning · one simulation
-            </p>
           </div>
         </div>
 
