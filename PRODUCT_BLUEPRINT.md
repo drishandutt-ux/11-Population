@@ -321,7 +321,7 @@ All four ingestion sources funnel into a shared core: `chunk_text` → `insert_c
 - **Chunking — `text_processor.chunk_text`:** splits cleaned text into ~1200-char chunks with 200-char overlap, preferring sentence boundaries; empty/whitespace → no chunks.
 - **Text:** pasted text ingested directly.
 - **Document — `document_parser.parse_document`:** routes by extension. Supports plain text (`.txt .md .rst .log .rtf`), `.pdf` (pypdf), `.docx` (python-docx), spreadsheets (`.xlsx .xls .csv .tsv .ods`), `.pptx`, data/markup (`.json .xml .html .svg`), and **images** (`.jpg .png .gif .webp .bmp .tiff …`) which are sent to **Claude Vision** for an exhaustive description (charts, text, data points). Unknown extensions fall back to UTF-8.
-- **YouTube — `youtube_extractor.extract_youtube`:** runs `yt-dlp` to assemble a rich document: metadata (title/channel/views/likes/chapters), **transcript** (YouTube captions first via VTT parse with dedup, falling back to **faster-whisper** audio transcription), **thumbnail** Vision analysis, **5 key video frames** extracted via `ffmpeg` and described by Vision, and the **top ~20 comments**. Returns one concatenated text document. (Heavy: needs `ffmpeg`; can take 1–3 minutes.)
+- **YouTube — `youtube_extractor.extract_youtube`:** runs `yt-dlp` to assemble a rich document: metadata (title/channel/views/likes/chapters), **transcript** (YouTube captions first via VTT parse with dedup, falling back to **faster-whisper** audio transcription), **thumbnail** Vision analysis, **5 key video frames** extracted via `ffmpeg` and described by Vision, and the **top ~20 comments**. Returns one concatenated text document. (Heavy: needs `ffmpeg`; can take 1–3 minutes.) **All yt-dlp calls force the `android` player client** (`_with_client`) — YouTube's default client no longer exposes captions/formats to yt-dlp, so without this the transcript silently comes back empty.
 - **LLM Search — `llm_search.py`:** manufactures source material when the user has none. `categorize_query` classifies the query into one of the four categories (via `model_fast`, defaults to `strategy_stress_test`); `generate_research_paper` produces a dense, section-structured "research paper" (≥1,500 words, via `model_orchestration`) optionally grounded in an uploaded context doc. The UI uses a **generate → preview → ingest** flow (`/ingest/llm-search/generate` returns the paper for preview; the previewed paper is then ingested as text).
 
 ---
@@ -510,6 +510,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 - **Model defaults ≠ docs** — `.env.example` advertises Opus/Sonnet but code defaults to Haiku 4.5 everywhere.
 - **Build-path version drift** — Dockerfile pins Python 3.11; nixpacks (Railway's actual path) uses Python 3.9. Validate ML wheels (faster-whisper) on 3.9.
 - **YouTube ingestion is heavy** — needs `ffmpeg`, downloads media, and can take 1–3 minutes; it falls back gracefully (captions → Whisper → placeholder).
+- **YouTube extraction tracks yt-dlp/YouTube changes** — YouTube periodically breaks yt-dlp (caption/format access, bot checks). The code forces the `android` player client to keep captions working; if videos stop extracting, bump `yt-dlp` and re-verify the player client. Extraction failures are caught per-step and (at the endpoint) fall back to a placeholder, so a broken extractor shows as an *empty result, not a UI error*.
 
 ---
 
@@ -582,6 +583,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-06-07** — Fixed **YouTube transcript extraction**: forced the `android` yt-dlp player client (`_with_client`) on all calls because YouTube's default client returned zero captions/formats (transcripts were silently empty); bumped `yt-dlp` to `2025.10.14`.
 - **2026-06-07** — Added **Humanity & Coverage** spawn-time controls (§7.7). A coverage% subset of the population now reasons emotionally (gut-driven, low-citation) instead of like experts; sentiment is the primary driver of agent voice; dial generation is pushed for greater diversity; agent cards surface a "% human" badge + dominant-emotion chips. Adds `SpawnedAgent.humanity` (with a non-destructive startup migration) and `humanity`/`humanity_coverage` params on `POST /spawn-agents`.
 - **2026-06-07** — Removed the landing hero tagline; hardened KG ingestion (extraction failures now logged, not swallowed) and added `backend/tests/kg_ingestion_test.py`.
 - **2026-06-07** — Initial blueprint authored.

@@ -19,6 +19,25 @@ import tempfile
 from typing import Any, Optional
 
 
+# YouTube's default web/ios player clients stopped exposing captions and many
+# formats to yt-dlp (they now require a PO token), which silently breaks
+# transcript extraction. The `android` client still serves captions/formats,
+# so we force it on every yt-dlp call. `web` is kept as a fallback.
+_YT_PLAYER_CLIENTS = ["android", "web"]
+
+
+def _with_client(opts: dict) -> dict:
+    """Inject the working YouTube player client(s) into a yt-dlp options dict,
+    merging with any existing extractor_args.youtube settings."""
+    opts = dict(opts)
+    extractor_args = dict(opts.get("extractor_args") or {})
+    youtube_args = dict(extractor_args.get("youtube") or {})
+    youtube_args.setdefault("player_client", _YT_PLAYER_CLIENTS)
+    extractor_args["youtube"] = youtube_args
+    opts["extractor_args"] = extractor_args
+    return opts
+
+
 async def extract_youtube(url: str) -> str:
     return await asyncio.to_thread(_extract_sync, url)
 
@@ -70,7 +89,7 @@ def _get_metadata(url: str) -> dict[str, Any]:
     import yt_dlp
 
     ydl_opts = {"quiet": True, "skip_download": True, "no_warnings": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with yt_dlp.YoutubeDL(_with_client(ydl_opts)) as ydl:
         info = ydl.extract_info(url, download=False)
 
     duration = info.get("duration") or 0
@@ -155,7 +174,7 @@ def _get_transcript(url: str, tmpdir: str, meta: dict) -> dict:
                 "outtmpl": sub_out + ".%(ext)s",
                 "no_warnings": True,
             }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(_with_client(ydl_opts)) as ydl:
                 ydl.download([url])
 
             vtt_files = [f for f in os.listdir(tmpdir) if f.endswith(".vtt")]
@@ -176,7 +195,7 @@ def _get_transcript(url: str, tmpdir: str, meta: dict) -> dict:
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "wav", "preferredquality": "0"}],
             "quiet": True,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(_with_client(ydl_opts)) as ydl:
             ydl.download([url])
 
         wav_files = [f for f in os.listdir(tmpdir) if f.endswith(".wav")]
@@ -313,7 +332,7 @@ def _analyse_key_frames(url: str, tmpdir: str, duration: int, claude, model: str
         "socket_timeout": 30,
     }
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(_with_client(ydl_opts)) as ydl:
             ydl.download([url])
     except Exception as e:
         print(f"[yt] Video download for frames failed: {e}")
@@ -393,7 +412,7 @@ def _get_comments(url: str) -> list[dict]:
             "extractor_args": {"youtube": {"comment_sort": ["top"], "max_comments": ["40,20"]}},
             "no_warnings": True,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(_with_client(ydl_opts)) as ydl:
             info = ydl.extract_info(url, download=False)
 
         raw = sorted(
