@@ -135,6 +135,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
   const [ingestProgress, setIngestProgress] = useState<string | null>(null);
   const [success, setSuccess]               = useState<string | null>(null);
   const [error, setError]                   = useState<string | null>(null);
+  const [ingestedSources, setIngestedSources] = useState<{ kind: string; label: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // LLM Search state
@@ -193,6 +194,10 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
+  function recordSource(kind: string, label: string) {
+    setIngestedSources((prev) => [...prev, { kind, label }]);
+  }
+
   async function submit() {
     setLoading(true);
     setError(null);
@@ -202,19 +207,28 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
       if (tab === "text") {
         if (!text.trim()) throw new Error("Enter some text first");
         await api.ingest.text(session.id, text);
-        setSuccess("Text ingested — building knowledge graph…");
+        const preview = text.trim().replace(/\s+/g, " ").slice(0, 60);
+        recordSource("Text", preview + (text.trim().length > 60 ? "…" : ""));
+        setText("");
+        setSuccess("Text added to the knowledge graph.");
       } else if (tab === "youtube") {
         if (!ytUrl.trim()) throw new Error("Enter a YouTube URL");
         await api.ingest.youtube(session.id, ytUrl);
-        setSuccess("YouTube video queued — extracting transcript, visuals, comments & metadata…");
+        recordSource("YouTube", ytUrl.trim());
+        setYtUrl("");
+        setSuccess("YouTube video queued — extracting transcript, visuals, comments & metadata in the background.");
       } else if (tab === "llm-search") {
         if (llmState === "preview" && generatedPaper) {
           // Step 2: ingest the already-generated paper as text
           setIngestProgress("Ingesting research paper into knowledge graph…");
           await api.ingest.text(session.id, generatedPaper);
-          setSuccess("Research paper ingested — building knowledge graph…");
+          recordSource("LLM Search", paperCategory?.label ? `Research paper · ${paperCategory.label}` : "Research paper");
+          setLlmState("idle");
+          setGeneratedPaper(null);
+          setPaperCategory(null);
+          setSuccess("Research paper added to the knowledge graph.");
         } else {
-          // Step 1: generate the paper and show preview (early return — no navigation)
+          // Step 1: generate the paper and show preview (early return — nothing ingested yet)
           if (!llmQuery.trim()) throw new Error("Enter a research query");
           setLlmState("generating");
           setIngestProgress("Categorising query & generating research paper with Claude…");
@@ -233,7 +247,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
             if (isGenerating) setLlmState("idle");
             throw e;
           }
-          return; // don't call onIngested / onGoToAgents yet
+          return; // paper generated — wait for the user to review & ingest
         }
       } else {
         if (selectedFiles.length === 0) throw new Error("Select at least one file");
@@ -245,25 +259,26 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
               : `Ingesting "${file.name}"…`
           );
           await api.ingest.document(session.id, file);
+          recordSource(isImageFile(file.name) ? "Image" : "File", file.name);
           done++;
         }
         const imgCount = selectedFiles.filter((f) => isImageFile(f.name)).length;
         if (selectedFiles.length === 1) {
           setSuccess(
             isImageFile(selectedFiles[0].name)
-              ? `"${selectedFiles[0].name}" analysed via Vision AI — ingesting…`
-              : `"${selectedFiles[0].name}" ingested — building knowledge graph…`
+              ? `"${selectedFiles[0].name}" analysed via Vision AI and added to the knowledge graph.`
+              : `"${selectedFiles[0].name}" added to the knowledge graph.`
           );
         } else {
           setSuccess(
-            `${selectedFiles.length} files ingested` +
+            `${selectedFiles.length} files added to the knowledge graph` +
             (imgCount > 0 ? ` (${imgCount} via Vision AI)` : "") +
-            " — building knowledge graph…"
+            "."
           );
         }
+        clearFiles();
       }
       onIngested();
-      setTimeout(() => onGoToAgents(), 1400);
     } catch (e: any) {
       setError(e.message || "Failed to ingest");
     } finally {
@@ -285,6 +300,12 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
     : tab === "youtube"    ? ytUrl.trim().length > 0
     : tab === "llm-search" ? (llmState === "preview" || llmQuery.trim().length > 0)
     :                         selectedFiles.length > 0);
+
+  const canContinue =
+    ingestedSources.length > 0 ||
+    session.status === "ready" ||
+    session.status === "simulating" ||
+    session.status === "complete";
 
   const hasImages = selectedFiles.some((f) => isImageFile(f.name));
 
@@ -665,6 +686,30 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
               </div>
             )}
 
+            {/* ── Ingested sources ── */}
+            {ingestedSources.length > 0 && (
+              <div className="rounded-lg border border-border/50 bg-muted/15 px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
+                    Ingested sources ({ingestedSources.length})
+                  </p>
+                  <span className="text-[10px] text-muted-foreground/45">merged into one knowledge graph</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {ingestedSources.map((s, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 max-w-full text-[11px] text-foreground/80 bg-muted/40 border border-border/50 rounded px-2 py-1"
+                    >
+                      <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span className="text-muted-foreground/55 shrink-0">{s.kind}</span>
+                      <span className="truncate max-w-[220px]">{s.label}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* ── Feedback ── */}
             {error && (
               <p className="text-xs text-red-400 flex items-center gap-1.5">
@@ -674,7 +719,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
             {success && (
               <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/8 border border-emerald-500/20 rounded-md px-3.5 py-2.5">
                 <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>{success} — redirecting to Agents…</span>
+                <span>{success}</span>
               </div>
             )}
 
@@ -701,13 +746,26 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
               }
             </button>
 
-            {(session.status === "ready" || session.status === "simulating" || session.status === "complete") && (
-              <button
-                onClick={onGoToAgents}
-                className="w-full border border-primary/30 text-primary hover:bg-primary/8 font-medium py-2 rounded-md text-xs transition-colors"
-              >
-                Skip — go to Agents →
-              </button>
+            {canContinue && (
+              <>
+                {ingestedSources.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground/50 text-center">
+                    Add more sources above, or continue to spawn agents when you're ready.
+                  </p>
+                )}
+                <button
+                  onClick={onGoToAgents}
+                  className="w-full bg-primary/15 hover:bg-primary/25 border border-primary/40 text-primary font-semibold py-2.5 rounded-md flex items-center justify-center gap-2 text-sm transition-colors"
+                >
+                  Continue to Agents
+                  {ingestedSources.length > 0 && (
+                    <span className="text-primary/60 font-normal">
+                      · {ingestedSources.length} source{ingestedSources.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  <span aria-hidden>→</span>
+                </button>
+              </>
             )}
           </div>
         </div>
