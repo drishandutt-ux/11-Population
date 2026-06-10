@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, Session, Agent, Post, WSEvent, SpawnOptions } from "@/lib/api";
+import { api, Session, Agent, Post, WSEvent, SpawnOptions, SimMode } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
@@ -58,9 +58,10 @@ export default function SessionPage() {
   const [spawnCount, setSpawnCount] = useState<number>(0);
 
   // Simulation config
-  const [maxRounds, setMaxRounds] = useState(15);
+  const [intensity, setIntensity] = useState(2);
+  const [simMode, setSimMode] = useState<SimMode>("fast");
   // If user clicks "Start" while ingestion is still running, queue the start
-  const [pendingSimRounds, setPendingSimRounds] = useState<number | null>(null);
+  const [pendingSim, setPendingSim] = useState<{ intensity: number; mode: SimMode } | null>(null);
 
   // Report split-screen state
   const [reportContent, setReportContent] = useState<string | null>(null);
@@ -96,12 +97,12 @@ export default function SessionPage() {
   useEffect(() => {
     if (
       session?.status === "ready" &&
-      pendingSimRounds !== null &&
+      pendingSim !== null &&
       agents.length > 0
     ) {
-      const rounds = pendingSimRounds;
-      setPendingSimRounds(null);
-      handleStartSimulation(rounds);
+      const p = pendingSim;
+      setPendingSim(null);
+      handleStartSimulation(p.intensity, p.mode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.status, agents.length]);
@@ -143,6 +144,21 @@ export default function SessionPage() {
         const idx = (event as any).index ?? 0;
         const total = (event as any).total ?? 1;
         setSpawnProgress({ current: idx + 1, total });
+
+      } else if (event.type === "agents_spawned_batch") {
+        const incoming = (event.agents as Agent[]) || [];
+        setAgents((prev) => {
+          const seen = new Set(prev.map((a) => a.id));
+          const merged = prev.slice();
+          for (const a of incoming) if (!seen.has(a.id)) merged.push(a);
+          return merged;
+        });
+        setAgentsMap((prev) => {
+          const next = { ...prev };
+          for (const a of incoming) next[a.id] = a;
+          return next;
+        });
+        setSpawnProgress({ current: event.spawned, total: event.total });
 
       } else if (event.type === "agents_ready") {
         setIsSpawning(false);
@@ -239,23 +255,25 @@ export default function SessionPage() {
     }
   }
 
-  async function handleStartSimulation(rounds?: number) {
-    const r = rounds ?? maxRounds;
-    setMaxRounds(r);
+  async function handleStartSimulation(nextIntensity?: number, nextMode?: SimMode) {
+    const it = nextIntensity ?? intensity;
+    const md = nextMode ?? simMode;
+    setIntensity(it);
+    setSimMode(md);
     // If session is still ingesting, queue the start — it will auto-fire when ready
     if (session?.status === "ingesting") {
-      setPendingSimRounds(r);
+      setPendingSim({ intensity: it, mode: md });
       setActiveTab("simulation"); // go to thread so user sees the waiting state
       return;
     }
     try {
-      await api.simulation.start(id, r);
+      await api.simulation.start(id, it, md);
       setActiveTab("simulation");
       refreshSession();
     } catch (e: any) {
       // 409 = backend says still ingesting — queue it
       if (e?.status === 409 || e?.message?.includes("ingesting")) {
-        setPendingSimRounds(r);
+        setPendingSim({ intensity: it, mode: md });
         setActiveTab("simulation");
       } else {
         console.error("Start simulation failed:", e);
@@ -300,7 +318,7 @@ export default function SessionPage() {
         </div>
         <div className="ml-auto">
           {session && (
-            <SimulationControls sessionId={id} status={session.status} maxRounds={maxRounds} onUpdate={refreshSession} />
+            <SimulationControls sessionId={id} status={session.status} intensity={intensity} mode={simMode} onUpdate={refreshSession} />
           )}
         </div>
       </header>
@@ -342,9 +360,9 @@ export default function SessionPage() {
             spawnError={spawnError}
             spawnStartTime={spawnStartTime}
             spawnCount={spawnCount}
-            isPendingSimulation={pendingSimRounds !== null}
+            isPendingSimulation={pendingSim !== null}
             onSpawn={(count, opts) => handleSpawn(count, opts)}
-            onStartSimulation={(rounds) => handleStartSimulation(rounds)}
+            onStartSimulation={(it, md) => handleStartSimulation(it, md)}
             onGoToThread={() => setActiveTab("simulation")}
             onGoToReport={() => setActiveTab("report")}
             onApplyPreset={handleApplyPreset}
@@ -355,7 +373,7 @@ export default function SessionPage() {
             posts={posts}
             agentsMap={agentsMap}
             sessionStatus={session?.status || "created"}
-            pendingSimulation={pendingSimRounds !== null}
+            pendingSimulation={pendingSim !== null}
             onMakeReport={handleMakeReport}
             isGeneratingReport={isGeneratingReport}
             agentOpinions={agentOpinions}

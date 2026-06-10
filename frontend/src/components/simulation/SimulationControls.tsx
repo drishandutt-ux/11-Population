@@ -1,17 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, SimMode } from "@/lib/api";
 import { Pause, Square, Loader2, Play } from "lucide-react";
 
 interface Props {
   sessionId: string;
   status: string;
-  maxRounds: number;
+  intensity: number;
+  mode: SimMode;
   onUpdate: () => void;
 }
 
-export default function SimulationControls({ sessionId, status, maxRounds, onUpdate }: Props) {
+export default function SimulationControls({ sessionId, status, intensity, mode, onUpdate }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function act(fn: () => Promise<any>) {
@@ -37,7 +38,7 @@ export default function SimulationControls({ sessionId, status, maxRounds, onUpd
     return (
       <div className="flex items-center gap-2">
         <button
-          onClick={() => act(() => api.simulation.start(sessionId, maxRounds))}
+          onClick={() => act(() => api.simulation.start(sessionId, intensity, mode))}
           disabled={loading}
           className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg transition-all"
         >

@@ -85,10 +85,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ count, ...opts }),
       }),
-    start: (sessionId: string, maxRounds: number) =>
+    start: (sessionId: string, intensity: number, mode: SimMode = "fast") =>
       request(`/sessions/${sessionId}/simulate/start`, {
         method: "POST",
-        body: JSON.stringify({ max_rounds: maxRounds }),
+        body: JSON.stringify({ intensity, mode }),
       }),
     pause: (sessionId: string) =>
       request(`/sessions/${sessionId}/simulate/pause`, { method: "POST" }),
@@ -169,7 +169,10 @@ export type Agent = {
   humanity?: number; // 0 = expert/analytical, 100 = fully human/emotional
 };
 
+export type SimMode = "fast" | "pro";
+
 export type SpawnOptions = {
+  mode?: SimMode;             // "fast" = pre-built bank (instant); "pro" = LLM-curated (Sonnet)
   profile_query?: string;
   direct_pct?: number;
   indirect_pct?: number;
@@ -198,6 +201,7 @@ export type AgentPreset = {
 
 export type WSEvent =
   | { type: "agent_spawned"; agent: Partial<Agent>; index?: number; total?: number }
+  | { type: "agents_spawned_batch"; agents: Partial<Agent>[]; spawned: number; total: number }
   | { type: "agents_ready"; count: number }
   | { type: "spawn_error"; error: string }
   | { type: "simulation_started"; agent_count: number }

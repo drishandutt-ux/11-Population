@@ -16,7 +16,9 @@ async def publish(channel: str, event: dict[str, Any]):
 
 
 def subscribe(channel: str) -> asyncio.Queue:
-    q: asyncio.Queue = asyncio.Queue(maxsize=200)
+    # Generous buffer so 1000-agent bursts (batched spawns, per-phase posts/likes)
+    # don't overflow and silently drop live events before the socket drains them.
+    q: asyncio.Queue = asyncio.Queue(maxsize=4000)
     _subscribers.setdefault(channel, []).append(q)
     return q
 

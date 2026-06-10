@@ -1,13 +1,32 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Agent, AgentDials, AgentPreset, SpawnOptions, api } from "@/lib/api";
+import { Agent, AgentDials, AgentPreset, SpawnOptions, SimMode, api } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, Upload, X, ChevronDown, ChevronUp, BarChart2, FileText,
-  Bookmark, Trash2, Clock, Heart,
+  Bookmark, Trash2, Clock, Heart, Rocket, Brain, AlertTriangle, MessageSquare, ThumbsUp, Swords, Reply,
 } from "lucide-react";
+
+// ── Activity ladder (mirrors backend orchestrator._build_phases) ──────────────
+const LADDER = ["comment", "like", "debate", "reply"] as const;
+function buildPhases(intensity: number): string[] {
+  const phases: string[] = [];
+  for (let k = 0; k < intensity; k++) {
+    phases.push(k < 4 ? LADDER[k] : (k - 4) % 2 === 0 ? "debate" : "reply");
+  }
+  return phases;
+}
+const INTENSITY_STEPS: { level: number; label: string; adds: string }[] = [
+  { level: 1, label: "1 post each", adds: "Every agent posts once" },
+  { level: 2, label: "+ 1 reaction", adds: "Each agent also likes a post" },
+  { level: 3, label: "+ 1 debate", adds: "Each agent also rebuts someone" },
+  { level: 4, label: "+ 1 reply", adds: "Each agent also replies to someone" },
+  { level: 5, label: "+ more debate", adds: "Another debate round per agent" },
+  { level: 6, label: "+ more replies", adds: "Another reply round per agent" },
+];
+const MAX_INTENSITY = 6;
 
 interface Props {
   agents: Agent[];
@@ -20,7 +39,7 @@ interface Props {
   spawnCount?: number;
   isPendingSimulation?: boolean;
   onSpawn: (count: number, opts?: SpawnOptions) => void;
-  onStartSimulation: (maxRounds: number) => void;
+  onStartSimulation: (intensity: number, mode: SimMode) => void;
   onGoToThread: () => void;
   onGoToReport: () => void;
   onApplyPreset: (presetId: string) => void;
@@ -29,10 +48,12 @@ interface Props {
 const STANCE_ORDER = ["direct", "indirect", "neutral"] as const;
 
 // ── Spawn ETA model ──────────────────────────────────────────────────────────
-// Agents are generated in one Claude call (all personas + 112 dials each), so the
-// cost scales with agent count. These constants drive the "expected time" KPI.
-const SPAWN_ETA_BASE_SEC = 10;        // RAG query + model warmup + first tokens
-const SPAWN_ETA_PER_AGENT_SEC = 3.2;  // each agent adds personas + dials to the JSON
+// FAST samples the pre-built bank (near-instant). PRO curates each persona with the
+// LLM in concurrent batches, so its cost scales with agent count.
+function spawnEtaSec(mode: SimMode, count: number) {
+  if (mode === "fast") return Math.max(2, Math.round(count * 0.004)); // bulk insert + batched stream
+  return Math.round(10 + count * 0.55); // Sonnet curation in bounded-concurrency batches
+}
 
 function fmtDuration(totalSec: number) {
   const s = Math.max(0, Math.round(totalSec));
@@ -299,6 +320,40 @@ function ProfileDocUpload({
   );
 }
 
+// ── Mode toggle (Fast / Pro) ──────────────────────────────────────────────────
+function ModeToggle({
+  mode, onChange, compact = false,
+}: { mode: SimMode; onChange: (m: SimMode) => void; compact?: boolean }) {
+  const opts: { key: SimMode; label: string; desc: string; icon: React.ReactNode }[] = [
+    { key: "fast", label: "Fast", desc: "Instant spawn · pre-built agents · quick posts", icon: <Rocket className="w-4 h-4" /> },
+    { key: "pro", label: "Pro", desc: "Deeply curated agents · smarter posts · Sonnet", icon: <Brain className="w-4 h-4" /> },
+  ];
+  return (
+    <div className={`grid grid-cols-2 ${compact ? "gap-1.5" : "gap-2"}`}>
+      {opts.map((o) => {
+        const active = mode === o.key;
+        return (
+          <button
+            key={o.key}
+            onClick={() => onChange(o.key)}
+            className={`text-left rounded-xl border transition-all ${compact ? "px-3 py-2" : "px-4 py-3"} ${
+              active
+                ? "border-primary/60 bg-primary/10 ring-1 ring-primary/30"
+                : "border-border/50 bg-muted/30 hover:border-border"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={active ? "text-primary" : "text-muted-foreground"}>{o.icon}</span>
+              <span className={`font-semibold text-sm ${active ? "text-foreground" : "text-muted-foreground"}`}>{o.label}</span>
+            </div>
+            {!compact && <p className="text-[11px] text-muted-foreground/70 mt-1 leading-snug">{o.desc}</p>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function AgentDirectory({
   agents,
@@ -316,8 +371,9 @@ export default function AgentDirectory({
   onGoToReport,
   onApplyPreset,
 }: Props) {
-  const [agentCount, setAgentCount] = useState(15);
-  const [maxRounds, setMaxRounds] = useState(15);
+  const [agentCount, setAgentCount] = useState(50);
+  const [intensity, setIntensity] = useState(2);
+  const [mode, setMode] = useState<SimMode>("fast");
   const [profileQuery, setProfileQuery] = useState("");
   const [directPct, setDirectPct] = useState(33);
   const [indirectPct, setIndirectPct] = useState(33);
@@ -393,6 +449,7 @@ export default function AgentDirectory({
 
   function handleSpawnClick() {
     onSpawn(agentCount, {
+      mode,
       profile_query: profileQuery.trim(),
       direct_pct: directPct,
       indirect_pct: indirectPct,
@@ -402,6 +459,13 @@ export default function AgentDirectory({
       humanity_coverage: humanityCoverage,
     });
   }
+
+  const phases = buildPhases(intensity);
+  const postPhases = phases.filter((p) => p !== "like").length;
+  const likePhases = phases.length - postPhases;
+  const estPosts = agentCount * postPhases;
+  const estReactions = agentCount * likePhases;
+  const proHeavy = mode === "pro" && agentCount > 150;
 
   // ── Phase 1: No agents yet ────────────────────────────────────────────────
   if (!hasAgents && !isSpawning) {
@@ -423,6 +487,27 @@ export default function AgentDirectory({
             <p className="text-sm text-muted-foreground">
               Define your audience, tune the stance mix, and optionally upload survey data to seed psychological profiles.
             </p>
+          </div>
+
+          {/* Mode */}
+          <div className="glass rounded-2xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Mode</span>
+              <span className="text-[10px] text-muted-foreground/50">
+                {mode === "fast" ? "speed first" : "quality first"}
+              </span>
+            </div>
+            <ModeToggle mode={mode} onChange={setMode} />
+            {mode === "pro" && (
+              <div className="flex items-start gap-2 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>
+                  Pro curates every agent with Sonnet and runs the debate on Sonnet too — far richer, but
+                  <strong className="text-amber-200"> noticeably slower and more costly</strong>
+                  {agentCount > 150 ? ` at ${agentCount} agents (several minutes + significant API spend).` : "."}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Saved lineups */}
@@ -599,56 +684,80 @@ export default function AgentDirectory({
             </p>
           </div>
 
-          {/* Agent count + Max rounds */}
+          {/* Agent count + Intensity */}
           <div className="glass rounded-2xl p-5 space-y-5">
             {/* Agent count */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Number of agents</span>
-                <span className="text-3xl font-bold text-primary">{agentCount}</span>
+                <input
+                  type="number" min={1} max={1000}
+                  value={agentCount}
+                  onChange={(e) => setAgentCount(Math.max(1, Math.min(1000, +e.target.value || 0)))}
+                  className="w-24 text-right text-3xl font-bold text-primary bg-transparent focus:outline-none tabular-nums"
+                />
               </div>
               <input
-                type="range" min={5} max={50} step={1}
-                value={agentCount}
+                type="range" min={5} max={1000} step={5}
+                value={Math.min(agentCount, 1000)}
                 onChange={(e) => setAgentCount(+e.target.value)}
                 className="w-full accent-purple-500 cursor-pointer"
               />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>5 (quick)</span>
-                <span>25 (balanced)</span>
-                <span>50 (deep)</span>
+              <div className="flex gap-1.5 flex-wrap">
+                {[10, 50, 100, 250, 500, 1000].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setAgentCount(n)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
+                      agentCount === n
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : "border-border/50 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
               </div>
             </div>
 
             <div className="border-t border-border/40" />
 
-            {/* Max simulation rounds */}
+            {/* Activity intensity */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-muted-foreground">Max simulation rounds</span>
+                  <span className="text-xs text-muted-foreground">Activity intensity</span>
                   <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                    ~{maxRounds * 3} posts total
+                    ≈ {estPosts.toLocaleString()} posts{estReactions > 0 ? ` + ${estReactions.toLocaleString()} reactions` : ""}
                   </p>
                 </div>
-                <span className="text-3xl font-bold text-primary">{maxRounds}</span>
+                <span className="text-3xl font-bold text-primary tabular-nums">L{intensity}</span>
               </div>
               <input
-                type="range" min={3} max={50} step={1}
-                value={maxRounds}
-                onChange={(e) => setMaxRounds(+e.target.value)}
+                type="range" min={1} max={MAX_INTENSITY} step={1}
+                value={intensity}
+                onChange={(e) => setIntensity(+e.target.value)}
                 className="w-full accent-teal-500 cursor-pointer"
               />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>3 (fast)</span>
-                <span>15 (standard)</span>
-                <span>50 (deep)</span>
+              <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px]">
+                {INTENSITY_STEPS.slice(0, intensity).map((s) => {
+                  const icon =
+                    s.level === 1 ? <MessageSquare className="w-3 h-3 text-blue-400" />
+                    : s.level === 2 ? <ThumbsUp className="w-3 h-3 text-pink-400" />
+                    : s.level % 2 === 1 ? <Swords className="w-3 h-3 text-orange-400" />
+                    : <Reply className="w-3 h-3 text-emerald-400" />;
+                  return (
+                    <div key={s.level} className="contents">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">{icon}<span className="text-foreground/80 font-medium">{s.label}</span></span>
+                      <span className="text-muted-foreground/60 self-center">{s.adds}</span>
+                    </div>
+                  );
+                })}
               </div>
+              <p className="text-[10px] text-muted-foreground/50">
+                Every agent is guaranteed to act at each level — higher = more posts, debates and replies per agent.
+              </p>
             </div>
-
-            <p className="text-[10px] text-muted-foreground/50">
-              Each agent gets a unique background, debate style, and 112 psychological dial values.
-            </p>
           </div>
 
           {spawnError && (
@@ -662,8 +771,8 @@ export default function AgentDirectory({
             onClick={handleSpawnClick}
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-all text-base"
           >
-            <Sparkles className="w-5 h-5" />
-            Spawn {agentCount} Agents
+            {mode === "fast" ? <Rocket className="w-5 h-5" /> : <Brain className="w-5 h-5" />}
+            Spawn {agentCount.toLocaleString()} Agents · {mode === "fast" ? "Fast" : "Pro"}
           </button>
         </div>
       </div>
@@ -674,9 +783,7 @@ export default function AgentDirectory({
   if (isSpawning) {
     const plannedCount =
       spawnProgress?.total ?? (spawnCount && spawnCount > 0 ? spawnCount : 15);
-    const estTotalSec = Math.round(
-      SPAWN_ETA_BASE_SEC + SPAWN_ETA_PER_AGENT_SEC * plannedCount
-    );
+    const estTotalSec = spawnEtaSec(mode, plannedCount);
     const elapsedSec = spawnStartTime ? Math.max(0, (now - spawnStartTime) / 1000) : 0;
     const remainingSec = Math.max(0, estTotalSec - elapsedSec);
     const overdue = elapsedSec > estTotalSec + 1;
@@ -741,9 +848,14 @@ export default function AgentDirectory({
           </div>
         </div>
 
+        {agents.length > 60 && (
+          <div className="max-w-4xl mx-auto mb-3 text-[11px] text-muted-foreground/60 text-center">
+            Showing the latest 60 of {agents.length.toLocaleString()} agents as they stream in…
+          </div>
+        )}
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {agents.map((agent, i) => (
-            <AgentCard key={agent.id} agent={agent} animate={i === agents.length - 1} />
+          {agents.slice(-60).map((agent, i, arr) => (
+            <AgentCard key={agent.id} agent={agent} animate={i === arr.length - 1} />
           ))}
         </div>
       </div>
@@ -754,6 +866,41 @@ export default function AgentDirectory({
   return (
     <div className="h-full overflow-y-auto px-6 py-6">
       <div className="max-w-4xl mx-auto space-y-6">
+
+        {/* Simulation settings (mode + intensity) */}
+        {!isSimulating && !isComplete && (
+          <div className="glass rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Run settings</span>
+              <span className="text-[10px] text-muted-foreground/50">
+                {agents.length.toLocaleString()} agents · ≈ {estPosts.toLocaleString()} posts{estReactions > 0 ? ` + ${estReactions.toLocaleString()} reactions` : ""}
+              </span>
+            </div>
+            <ModeToggle mode={mode} onChange={setMode} compact />
+            {mode === "pro" && agents.length > 150 && (
+              <div className="flex items-start gap-2 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>Pro runs the debate on Sonnet — expect several minutes and significant API cost at {agents.length.toLocaleString()} agents.</span>
+              </div>
+            )}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Activity intensity</span>
+                <span className="text-sm font-bold text-primary tabular-nums">L{intensity} · {INTENSITY_STEPS[Math.min(intensity, MAX_INTENSITY) - 1]?.label}</span>
+              </div>
+              <input
+                type="range" min={1} max={MAX_INTENSITY} step={1}
+                value={intensity}
+                onChange={(e) => setIntensity(+e.target.value)}
+                className="w-full accent-teal-500 cursor-pointer h-1.5"
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground/60">
+                <span>L1 · one post each</span>
+                <span>L{MAX_INTENSITY} · post + react + debates + replies</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!isSimulating && !isComplete && (
           <div className={`glass rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 ${
@@ -793,7 +940,7 @@ export default function AgentDirectory({
                 </button>
               )}
               <button
-                onClick={() => onStartSimulation(maxRounds)}
+                onClick={() => onStartSimulation(intensity, mode)}
                 disabled={isPendingSimulation}
                 className={`flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all ${
                   isPendingSimulation
@@ -903,6 +1050,8 @@ export default function AgentDirectory({
         {STANCE_ORDER.map((stance) => {
           const group = filtered.filter((a) => a.stance === stance);
           if (group.length === 0) return null;
+          const CAP = 60;
+          const shown = group.slice(0, CAP);
           return (
             <div key={stance}>
               <h3 className="text-xs text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -912,10 +1061,15 @@ export default function AgentDirectory({
                 {group.length} agent{group.length !== 1 ? "s" : ""}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {group.map((agent) => (
+                {shown.map((agent) => (
                   <AgentCard key={agent.id} agent={agent} />
                 ))}
               </div>
+              {group.length > CAP && (
+                <p className="text-[11px] text-muted-foreground/60 mt-3">
+                  +{(group.length - CAP).toLocaleString()} more {stance} agents{search ? " (refine your search to see specific agents)" : ""}
+                </p>
+              )}
             </div>
           );
         })}

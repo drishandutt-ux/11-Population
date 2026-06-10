@@ -45,6 +45,16 @@ export default function ThreadView({
     }
   }
 
+  // At 1000-agent scale, cap the DOM: render the latest top-level posts and
+  // prioritise agents who have already posted in the opinions sidebar.
+  const MAX_THREAD = 400;
+  const MAX_OPINIONS = 150;
+  const visibleTop = topLevel.length > MAX_THREAD ? topLevel.slice(-MAX_THREAD) : topLevel;
+  const sortedAgents = [...agentList].sort(
+    (a, b) => (agentFirstPost[b.id] ? 1 : 0) - (agentFirstPost[a.id] ? 1 : 0)
+  );
+  const visibleAgents = sortedAgents.slice(0, MAX_OPINIONS);
+
   function scrollToPost(postId: string) {
     document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -118,7 +128,12 @@ export default function ThreadView({
             </div>
           ) : (
             <div className="px-5 py-4 max-w-2xl mx-auto">
-              {topLevel.map((post) => (
+              {topLevel.length > MAX_THREAD && (
+                <p className="text-[11px] text-muted-foreground/60 text-center mb-3">
+                  Showing the latest {MAX_THREAD} of {topLevel.length.toLocaleString()} top-level posts.
+                </p>
+              )}
+              {visibleTop.map((post) => (
                 <div key={post.id} id={`post-${post.id}`}>
                   <PostCard
                     post={post}
@@ -139,10 +154,15 @@ export default function ThreadView({
             <div className="px-3 pt-3 pb-2 border-b border-border/30 shrink-0">
               <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
                 Agent Opinions
+                {agentList.length > MAX_OPINIONS && (
+                  <span className="ml-1 normal-case font-normal text-muted-foreground/40">
+                    · top {MAX_OPINIONS} of {agentList.length.toLocaleString()}
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-              {agentList.map((agent) => {
+              {visibleAgents.map((agent) => {
                 const firstPost = agentFirstPost[agent.id];
                 // Prefer Claude-generated one-liner verdict; fall back to first-post excerpt
                 const verdict = agentOpinions[agent.id] || null;

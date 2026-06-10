@@ -37,8 +37,8 @@ Repository: `11-minds-army` (the product is branded **"11 Minds Population"**; "
 You pose a question (e.g. *"Would Gen Z adopt a subscription model for home-cooked meal kits?"* or *"How will retail investors react to a Fed rate cut?"*). You feed it source material — pasted text, uploaded documents, a YouTube video, or an AI-generated research paper. The system then:
 
 1. **Builds a knowledge graph** from your sources (entities + relations extracted by Claude).
-2. **Spawns a "population"** of diverse AI personas — typically 5–50 agents — each with a distinct background, role, debate style, and a **112-dimensional psychological profile** ("dials").
-3. **Runs a live, Reddit-style debate** where these agents comment, reply, challenge, and "like" each other across multiple rounds, grounded in the knowledge graph. Their discussion feeds *back* into the graph.
+2. **Spawns a "population"** of diverse AI personas — anywhere from a handful up to **1,000 agents** — each with a distinct background, role, debate style, and a **112-dimensional psychological profile** ("dials"). Two **modes** trade speed for depth: **Fast** samples a pre-built agent bank instantly (no LLM at spawn); **Pro** curates each persona with Claude Sonnet.
+3. **Runs a live, Reddit-style debate** where these agents comment, react, challenge, and reply, grounded in the knowledge graph. The debate is driven by an **activity intensity** (every agent is guaranteed at least one post; higher levels add a reaction, then a debate, then a reply — per agent). Their discussion feeds *back* into the graph.
 4. **Distills the debate** into (a) a structured executive **report** with a direct answer, confidence level, and KPI grid; and (b) a synthetic **market-research dashboard** that scores the population on adoption readiness, purchase intent, willingness-to-pay, virality, retention, churn risk, and more.
 
 Everything streams live to the browser over a WebSocket: agents pop in as they're created, posts appear as they're written, and the knowledge graph grows node-by-node in real time.
@@ -85,7 +85,7 @@ The session UI is a five-tab workspace (**Ingest → Agents → Thread → Graph
 
 1. **Create a session.** From the landing page, give it a *title* and a *query/hypothesis*. Status: `created`.
 2. **Ingest sources** (Ingest tab). Add one or more of: pasted **text**, an uploaded **document** (PDF, Word, Excel, PowerPoint, CSV, images via Vision, etc.), a **YouTube** URL (transcript + thumbnail/frame analysis + comments), or an **AI-generated research paper** (LLM Search). Each ingest extracts entities/relations into the knowledge graph; status flips `ingesting` → `ready`. Live `kg_updated` events stream nodes into the Graph tab.
-3. **Spawn the population** (Agents tab). Tune the *audience profile* (free text, plus an optional survey/CSV that Claude translates into dial values), the *stance split* (Direct / Indirect / Neutral percentages), the *agent count* (5–50), and *max rounds* (3–50). Hit **Spawn**. A live progress dashboard shows elapsed/ETA while agents are generated and pop into the roster. Lineups can be **saved as presets** and reloaded later.
+3. **Spawn the population** (Agents tab). Pick a **mode** (Fast / Pro). Tune the *audience profile* (free text, plus an optional survey/CSV that Claude translates into dial values), the *stance split* (Direct / Indirect / Neutral percentages), the *agent count* (1–1000), and the *activity intensity*. Hit **Spawn**. Fast spawns are near-instant (the pre-built bank); Pro streams agents in as Sonnet curates them. Lineups can be **saved as presets** and reloaded later.
 4. **Run the simulation** (Thread tab). Start the debate. Posts stream in live — threaded, with replies and "debate" rebuttals flagged. A sidebar shows a one-line **verdict** per agent. You can **Pause / Resume / Stop** from the header.
 5. **Watch the graph** (Graph tab, any time). An SVG knowledge graph grows in real time with a live activity feed; click any node to inspect its relations and source mentions.
 6. **Generate the report** (Report tab). One click produces a structured executive briefing (Direct Answer + Confidence, Question, Source Materials, Discussion, Key Metrics KPI grid, Outcome). You can then **chat** with the report or **talk to individual agents**, **regenerate**, or **Save as PDF**.
@@ -208,8 +208,16 @@ This is the product's crown jewel. Code: `backend/app/services/agents/{profiles,
 
 **How dial values are set:** not random and not algorithmic — they are **LLM-chosen per agent**, tuned relative to the query topic, kept consistent with the agent's background/stance/personality, with `composite` instructed to be logically derived from the other groups. There is **no code-side validation** of the 0–10 range or schema completeness — it is enforced only by prompt instruction (missing dials fall back to `{}`).
 
-### 7.3 Agent creation flow — `agent_factory.generate_agents(...)`
-The population is generated in **batches of ~10 personas per LLM call** (`_BATCH_SIZE`), run concurrently — a single call for a large population (e.g. 50 agents × 112 dials) overflows the model's output-token limit and truncates the JSON. Parameters: `session_id, query, count, profile_query="", direct_pct=33, indirect_pct=33, neutral_pct=34, doc_context="", humanity=0, humanity_coverage=0`.
+### 7.3 Agent creation flow — two paths (Fast bank vs Pro LLM)
+
+There are **two spawn paths**, chosen by `mode`:
+
+- **Fast (default)** — `seed_bank.sample_bank(...)` samples a **pre-built, topic-agnostic agent bank** (no LLM call, instant). The bank is generated **procedurally** (no API key needed) into `backend/app/data/agent_bank.json` — ~500 diverse personas, each with the full 112-dial profile spread across the 0–10 range for visible diversity. Sampling honors the requested count (with replacement + light dial jitter above the bank size), the stance split, and humanity/coverage. Personas are generic; they become topic-aware only when they post.
+- **Pro** — `agent_factory.generate_agents(... mode="pro")` curates every persona with the LLM on the **Sonnet** tier and a deeper prompt (explicitly spread intelligence/expertise/articulacy/emotion — some sharp authorities, some out of their depth). Generated in **batches of ~10 personas per call** (`_BATCH_SIZE`), bounded by a **`spawn_concurrency` semaphore** (default 8) so a 1000-agent spawn (100 batches) doesn't fire 100 concurrent calls and trip rate limits. Parameters: `session_id, query, count, profile_query="", direct_pct=33, indirect_pct=33, neutral_pct=34, doc_context="", humanity=0, humanity_coverage=0, mode="pro"`.
+
+Either path returns `AgentProfile` objects; the spawn task then **bulk-inserts** the whole population in one transaction and streams it to the UI in **batched `agents_spawned_batch` events** (~40 agents/event) — replacing the old per-agent commit + 0.3 s sleep + per-agent event, which made 1000-agent spawns impossibly slow and overflowed the WS queue.
+
+The legacy LLM flow (Pro) in detail:
 
 Steps:
 1. Pull knowledge-graph context for the query (`query_rag`, hybrid mode), truncated to 2500 chars, to ground the personas in the ingested material.
@@ -238,14 +246,16 @@ Pure functions (no I/O) that roll a population's dials into the **"population di
 
 This is what reframes the simulation as a **synthetic market-research panel**. Exposed via `GET /sessions/{id}/dials`.
 
-### 7.6 The two-model pipeline
+### 7.6 The model pipeline (Fast Haiku / Pro Sonnet)
 | Role | Setting | Default | Used for |
 |---|---|---|---|
-| Orchestration | `MODEL_ORCHESTRATION` | `claude-haiku-4-5-20251001` | population generation, report writing, YouTube Vision, synthetic-paper generation |
-| Agents | `MODEL_AGENTS` | `claude-haiku-4-5-20251001` | each debate post + agent chat |
+| Orchestration | `MODEL_ORCHESTRATION` | `claude-haiku-4-5-20251001` | Fast-mode is irrelevant here; report writing, YouTube Vision, synthetic-paper generation |
+| Agents | `MODEL_AGENTS` | `claude-haiku-4-5-20251001` | **Fast-mode** debate posts + agent chat |
 | Fast | `MODEL_FAST` | `claude-haiku-4-5-20251001` | KG entity extraction, KG query, query classification, per-agent opinion verdicts |
+| **Pro orchestration** | `MODEL_PRO_ORCHESTRATION` | `claude-sonnet-4-6` | **Pro-mode** persona curation (`generate_agents`) |
+| **Pro agents** | `MODEL_PRO_AGENTS` | `claude-sonnet-4-6` | **Pro-mode** debate posts |
 
-> Note: `.env.example` *advertises* Opus/Sonnet for the first two tiers, but the **code defaults all three to Haiku 4.5**. Unless overridden by env vars, everything runs on Haiku.
+The mode → model mapping lives on `Settings`: `agent_model(mode)`, `orchestration_model(mode)`, `sim_concurrency(mode)`. **Fast** routes posts to Haiku at high concurrency; **Pro** routes persona curation *and* posts to Sonnet at lower concurrency (richer, slower, pricier). `MODEL_FAST` (KG/classification) is unaffected by mode.
 
 ### 7.7 Humanity & Coverage (spawn-time controls)
 
@@ -267,23 +277,31 @@ Two population controls on the Agents page tune how *human vs. expert* the popul
 
 ## 8. The simulation engine
 
-Code: `backend/app/services/simulation/orchestrator.py` + `thread_manager.py`. Entry point: `run_simulation(session_id, max_rounds)`.
+Code: `backend/app/services/simulation/orchestrator.py` + `thread_manager.py`. Entry point: `run_simulation(session_id, intensity, mode)`.
 
-### 8.1 The round loop
-1. Load the session (for its `query`) and **all** its agents; publish `simulation_started {agent_count}`. Pre-load the KG.
-2. For each `round_num` in `range(max_rounds)` (0-indexed):
-   - **Status checkpoint:** re-read status; break if `paused`/`complete`/missing.
-   - Fetch all posts; build KG context (cached, no LLM call — `get_kg_context_string`, 60 entities/40 relations) and a thread transcript.
-   - **Energy-weighted selection (with replacement):** pick a batch of agents where `batch_size = min(max(3, n//2), n)`, weighted by each agent's `energy`. Higher-energy agents post more.
-   - **Concurrency:** run all selected agents' contributions **simultaneously** via `asyncio.gather`.
-   - If any task signals a stop (returned `False`), break. Sleep 0.3s between rounds.
-3. After the loop: only if status is still `simulating`, set `complete` and publish `simulation_complete {message}`. (If the user paused, it does not force-complete.)
+### 8.1 The phase engine (intensity ladder)
 
-### 8.2 A single agent's turn — `_agent_post_task`
-- Re-check status before and after generation (so a mid-flight pause discards the post).
-- **Choose an action** via `_choose_action` (energy-scaled probabilities): with an empty thread → always `comment`; otherwise roughly `debate` (`r < 0.12 × energy`), `reply` (`< 0.38`), `like` (`< 0.52`), else `comment`.
-- **`like`:** increment a random recent post's like counter via `add_like`, publish `like_added`. (Likes never create a post row; `PostType.LIKE` exists but is not used by the orchestrator.)
-- **`reply`/`debate`:** pick a random recent post by a *different* agent as the parent; generate text via `generate_post`; persist via `create_post`; **fire-and-forget** `update_graph_from_post` (so the post enriches the KG without blocking); publish `post_created` with the full embedded agent profile.
+The simulation is no longer an open-ended, energy-weighted round loop where some agents might never post. It is a **deterministic, coverage-guaranteed phase engine**: every agent is guaranteed to act at least once, and `intensity` adds one bundled action *per agent* per level. `_build_phases(intensity)` expands the ladder:
+
+| Intensity | Phases (each phase = one action by **every** agent) |
+|---|---|
+| 1 | `comment` |
+| 2 | `comment`, `like` |
+| 3 | `comment`, `like`, `debate` |
+| 4 | `comment`, `like`, `debate`, `reply` |
+| ≥5 | …then alternating `debate`, `reply` ("and more like that") |
+
+The run:
+1. Load the session `query` and **all** agents; publish `simulation_started {agent_count}`; warm the KG cache. Start a **status watcher** (see below).
+2. For each phase (in order): snapshot the thread + KG context **once** (shared by all agents in the phase), then run **every agent's action concurrently**, bounded by a `sim_concurrency(mode)` semaphore (**Fast ≈ 48, Pro ≈ 12** parallel LLM calls). This guarantees one comment per agent at intensity 1 (e.g. 1000 comments for 1000 agents), then a like each, then a debate each, etc.
+3. After the phases: only if status is still `simulating`, set `complete` and publish `simulation_complete {message}`.
+
+**Status watcher (`_StatusWatcher`):** a single background coroutine polls session status once a second and exposes an in-memory `stopped` flag. The thousands of per-agent tasks check that flag instead of each hitting the DB — at 1000-agent scale the old per-task status reads (2 DB reads/agent/round) would have been thousands of round-trips. Pause/Stop still take effect within ~1 s.
+
+### 8.2 A single agent's turn — `_agent_action`
+- **`like`** (no LLM): increment a random recent post by a *different* agent via `add_like`, publish `like_added`. (Likes never create a post row.)
+- **`comment` / `debate` / `reply`** (one LLM call on the mode's agent model): for debate/reply, pick a random recent post by a *different* agent as the parent (falling back to a top-level `comment` if the thread is still empty); generate text via `generate_post(... mode=mode)`; persist via `create_post`; publish `post_created` with the full embedded agent profile.
+- **KG enrichment is throttled + sampled:** only a `kg_sim_sample` fraction (default 15%) of posts enrich the KG, and those run through a `kg_sim_concurrency` semaphore (default 6) as fire-and-forget tasks — so per-post extraction never saturates the API mid-run at scale.
 
 ### 8.3 Threading & ordering — `thread_manager.py`
 - `build_thread_context(posts, agents)` renders the transcript as `[name | role]: content` lines, indenting replies with `> `, skipping likes.
@@ -370,8 +388,8 @@ FastAPI 0.115 on uvicorn; SQLAlchemy 2.0 async (`aiosqlite` / `asyncpg`); pydant
 **Simulation** (`/sessions`)
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/sessions/{id}/spawn-agents` | Wipe + generate a population (`{count, profile_query, direct_pct, indirect_pct, neutral_pct, doc_context, humanity, humanity_coverage}`; background). |
-| POST | `/sessions/{id}/simulate/start` | Start the debate (`{max_rounds}`). 409 if still ingesting; 400 if no agents. |
+| POST | `/sessions/{id}/spawn-agents` | Wipe + build a population (`{count (1–1000), mode ("fast"\|"pro"), profile_query, direct_pct, indirect_pct, neutral_pct, doc_context, humanity, humanity_coverage}`; background). Fast samples the bank; Pro curates via Sonnet. |
+| POST | `/sessions/{id}/simulate/start` | Start the debate (`{intensity (1–20), mode ("fast"\|"pro")}`). 409 if still ingesting; 400 if no agents. |
 | POST | `/sessions/{id}/simulate/pause` | Status → `paused`. |
 | POST | `/sessions/{id}/simulate/stop` | Status → `complete`. |
 
@@ -402,7 +420,8 @@ All JSON, `type`-tagged, published to channel `session:{id}`:
 
 | Event | Payload | Emitted when |
 |---|---|---|
-| `agent_spawned` | `{agent, index, total}` | each agent created (spawn or preset) |
+| `agent_spawned` | `{agent, index, total}` | each agent created (apply-preset path) |
+| `agents_spawned_batch` | `{agents[], spawned, total}` | a chunk (~40) of a freshly spawned population (Fast/Pro spawn) |
 | `agents_ready` | `{count}` | population complete |
 | `spawn_error` | `{error}` | spawn failed |
 | `ingest_complete` | `{source}` | an ingest finished |
@@ -427,7 +446,7 @@ Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 wi
 
 ### 13.3 Components
 - **`ingestion/InputPanel`** — the four ingestion modes (Text / File drag-drop / YouTube / LLM Search with generate→preview→ingest), with an "ingested sources" tracker and a "Continue to Agents" gate.
-- **`simulation/AgentDirectory`** — the most complex component; three phases: **(1) spawn config** (audience profile + survey upload, stance sliders, **Humanity + Coverage sliders (§7.7)**, count, rounds, presets), **(2) live spawn dashboard** (elapsed/ETA KPIs, agents popping in), **(3) ready/simulating/complete** roster grouped by stance. Includes `AgentCard` (stance pill, **"% human" badge**, **dominant-emotion chips**) + a **`DialViewer`** that renders all 9 dial groups as collapsible bars.
+- **`simulation/AgentDirectory`** — the most complex component; three phases: **(1) spawn config** (a **Fast/Pro mode toggle** with a Pro cost/time warning, audience profile + survey upload, stance sliders, **Humanity + Coverage sliders (§7.7)**, **agent count up to 1000** via slider + number input + quick-pick chips, an **activity-intensity ladder** with a live "≈ N posts + M reactions" estimate, presets), **(2) live spawn dashboard** (mode-aware elapsed/ETA KPIs, agents streaming in via `agents_spawned_batch` — only the latest 60 cards are rendered at scale), **(3) ready/simulating/complete** roster grouped by stance (capped at 60 cards/stance with a "+N more" note) plus a compact **run-settings card** (mode + intensity) shown before Start. Includes `AgentCard` (stance pill, **"% human" badge**, **dominant-emotion chips**) + a **`DialViewer`** that renders all 9 dial groups as collapsible bars.
 - **`simulation/ThreadView` + `PostCard`** — the live, threaded debate feed (auto-scroll, debate flags, like counts, markdown rendering) + a per-agent **opinions** sidebar.
 - **`simulation/SimulationControls`** — header Pause/Resume/Stop (Start lives in AgentDirectory).
 - **`knowledge-graph/KGPanel`** — SVG node-graph (ring layout, live "new entity" flashes) + live activity feed + click-to-inspect entity detail panel.
@@ -478,6 +497,13 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 | `MODEL_ORCHESTRATION` | backend | Heavy-reasoning model tier | `claude-haiku-4-5-20251001` |
 | `MODEL_AGENTS` | backend | Per-post model tier | `claude-haiku-4-5-20251001` |
 | `MODEL_FAST` | backend | KG/classification/verdict tier | `claude-haiku-4-5-20251001` |
+| `MODEL_PRO_ORCHESTRATION` | backend | Pro-mode persona curation | `claude-sonnet-4-6` |
+| `MODEL_PRO_AGENTS` | backend | Pro-mode debate posts | `claude-sonnet-4-6` |
+| `SPAWN_CONCURRENCY` | backend | Parallel Pro persona-generation batches | `8` |
+| `SIM_CONCURRENCY_FAST` | backend | Parallel Haiku posts per phase | `48` |
+| `SIM_CONCURRENCY_PRO` | backend | Parallel Sonnet posts per phase | `12` |
+| `KG_SIM_CONCURRENCY` | backend | Parallel KG-from-post enrichments mid-run | `6` |
+| `KG_SIM_SAMPLE` | backend | Fraction of posts that enrich the KG mid-run | `0.15` |
 | `REDIS_URL` | backend | **Unused** (vestigial) | `redis://localhost:6379` |
 | `PORT` | both | Runtime port (Railway-injected) | 8000 / 3000 |
 | `NEXT_PUBLIC_API_URL` | frontend | REST base (build-time inlined) | `http://localhost:8000` |
@@ -501,6 +527,8 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 - **Agent chat history is process-local and unbounded** (in-memory dict, never persisted, lost on restart).
 
 **Behavioral subtleties worth knowing:**
+- **Fast vs Pro tradeoffs:** Fast personas come from a **topic-agnostic** bank — they are diverse and instant but generic, becoming topic-aware only at post time. Pro personas are query-curated on Sonnet (richer) but spawning is slow and, at high counts, **costly**: Pro is *allowed* up to 1000 agents but a 1000-agent Pro debate is many minutes of Sonnet calls and significant API spend (the UI warns about this).
+- **The bank is committed & procedural:** `app/data/agent_bank.json` ships in the repo, generated with a fixed seed by `seed_bank.build_bank()` (no API key). Regenerate it by deleting the file (it rebuilds on next Fast spawn) or re-running the builder. Above the bank size, Fast sampling draws with replacement + small dial jitter, so very large Fast populations contain near-duplicates.
 - **Dial asymmetry:** the LLM populates all 112 dials, but the behavioral rule engine reads only 4 of 9 groups (sentiment/motivation/friction/trust); the other 5 feed analytics only.
 - **Humanity is spawn-time & not carried by presets (yet):** the Humanity/Coverage controls (§7.7) only affect newly spawned agents — existing agents keep `humanity = 0`, and saved presets do not yet persist the per-agent humanity value.
 - **No dial validation** — the 0–10 integer range and schema completeness are enforced by prompt only, not code.
@@ -548,9 +576,10 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 │   │   ├── models/                  # session, agent, post, report, preset (ORM)
 │   │   ├── api/v1/                  # sessions, ingestion, simulation, agents,
 │   │   │                            #   reports, presets routers
+│   │   ├── data/agent_bank.json     # pre-built persona bank (Fast mode; committed)
 │   │   └── services/
 │   │       ├── agents/              # profiles, agent_factory, agent_runner,
-│   │       │                        #   dial_analytics
+│   │       │                        #   seed_bank (Fast bank), dial_analytics
 │   │       ├── simulation/          # orchestrator, thread_manager, report_generator
 │   │       ├── ingestion/           # text_processor, document_parser,
 │   │       │                        #   youtube_extractor, llm_search
@@ -583,6 +612,11 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-06-10** — **Scaled to 1000 agents + added Fast/Pro modes + replaced rounds with an intensity ladder.**
+  - **Fast vs Pro modes** everywhere. **Fast** (default) samples a new **pre-built, procedurally-generated agent bank** (`seed_bank.py` → committed `app/data/agent_bank.json`, ~500 diverse personas with full 112 dials) — spawning is **instant, no LLM, no API key** (verified: **1000 agents in ~0.4 s**). **Pro** curates personas *and* runs the debate on **Claude Sonnet** (`MODEL_PRO_*`) for far richer output; the UI warns about the time/cost, especially past 150 agents.
+  - **Agent count raised from 50 → 1000** (UI slider + number input + quick-pick chips; backend clamps to 1000). Spawn now **bulk-inserts** the population in one transaction and streams it in **batched `agents_spawned_batch` events** (~40/event), replacing the old per-agent commit + 0.3 s sleep + per-agent event (which made big spawns take minutes and overflowed the WS queue). Pro batch generation is bounded by `SPAWN_CONCURRENCY`.
+  - **Simulation rewritten as a coverage-guaranteed phase engine.** "Max rounds" → **activity intensity**: L1 = one post per agent (guaranteed), L2 +1 reaction, L3 +1 debate, L4 +1 reply, then more. Each phase runs every agent concurrently bounded by `SIM_CONCURRENCY_FAST` (48) / `SIM_CONCURRENCY_PRO` (12). An in-memory **status watcher** replaces thousands of per-agent DB status reads; KG-from-post enrichment is **sampled (15%) + concurrency-bounded (6)** so it never saturates the API mid-run.
+  - WS subscriber queue raised to 4000; thread/roster/opinion rendering capped for 1000-scale (latest 400 posts, 60 cards/stance, top 150 opinions). New config: `MODEL_PRO_ORCHESTRATION`, `MODEL_PRO_AGENTS`, `SPAWN_CONCURRENCY`, `SIM_CONCURRENCY_FAST`, `SIM_CONCURRENCY_PRO`, `KG_SIM_CONCURRENCY`, `KG_SIM_SAMPLE`. *(Note: live debate posts still require a valid `ANTHROPIC_API_KEY`; the configured key currently returns 401, so the post-generation path could not be verified end-to-end — Fast spawn and the engine's control flow were.)*
 - **2026-06-07** — Fixed **large-population spawning**: agent generation is now **batched** (~10 personas/call, run concurrently) so big counts no longer overflow `max_tokens` and truncate the JSON (which caused "Unterminated string" spawn errors). Added a salvage parser (`_parse_agents_json`) that recovers complete agents from partial output, and a clear error if generation fully fails.
 - **2026-06-07** — Hardened **report & agent chat**: LLM failures now return a friendly message (HTTP 200) via `friendly_llm_error` instead of a 500; the frontend API client got a 120 s timeout with clear network/timeout errors (no more silent "Failed to fetch"/endless spinner); assistant chat replies now render markdown instead of raw text.
 - **2026-06-07** — Fixed **YouTube transcript extraction**: forced the `android` yt-dlp player client (`_with_client`) on all calls because YouTube's default client returned zero captions/formats (transcripts were silently empty); bumped `yt-dlp` to `2025.10.14`.
@@ -592,4 +626,4 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ---
 
-*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-06-07.*
+*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-06-10.*

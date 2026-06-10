@@ -40,8 +40,13 @@ async def generate_agents(
     doc_context: str = "",
     humanity: int = 0,
     humanity_coverage: int = 0,
+    mode: str = "pro",
 ) -> list[AgentProfile]:
+    """Curate a population with the LLM. This is the PRO path (FAST mode samples the
+    pre-built bank instead — see seed_bank.sample_bank). Pro uses the Sonnet tier and a
+    deeper prompt that pushes a wide spread of expertise, intelligence and emotion."""
     settings = get_settings()
+    gen_model = settings.orchestration_model(mode)
     rag = await get_lightrag(session_id)
     kg_summary = await query_rag(rag, query, mode="hybrid")
 
@@ -78,6 +83,15 @@ HUMANITY / EMOTIONAL REGISTER (critical):
 - Spread humanity across stances (a high-humanity agent can still be direct/indirect/neutral)."""
         return '\n- Set the "humanity" field to 0 for every agent (all analytical/expert register).'
 
+    pro_depth_block = ""
+    if mode == "pro":
+        pro_depth_block = """
+PRO DEPTH (curate carefully — these agents will reason on a stronger model):
+- Spread INTELLIGENCE and EXPERTISE widely: include a few genuinely sharp domain authorities, several competent middle-of-the-road voices, and a few who are plainly out of their depth, confused, or simply wrong. Not everyone should sound smart.
+- Spread ARTICULACY and REGISTER: some precise and rigorous, some rambling, some blunt and plain-spoken, some performatively confident while shallow.
+- Make backgrounds SPECIFIC and textured (a real-sounding career arc, a concrete stake), not generic. Give each a believable reason to hold the view they hold.
+- Reactions should range from measured and evidence-led to impulsive, defensive, or emotionally reactive — match each to the persona's dials."""
+
     def _build_prompt(batch_count: int, d: int, i: int, n: int, h: int) -> str:
         return f"""Create {batch_count} diverse agent personas to debate and analyze this topic:
 
@@ -91,6 +105,7 @@ Generate exactly:
 - {i} INDIRECT agents: adjacent-field experts who bring cross-domain perspective
 - {n} NEUTRAL agents: skeptics, journalists, general public, contrarians
 {_humanity_block(batch_count, h)}
+{pro_depth_block}
 
 Return a JSON array with exactly {batch_count} objects. Each object MUST have ALL of these keys:
 {{
@@ -140,6 +155,10 @@ Return ONLY the JSON array, no markdown, no explanation."""
 
     batches = [slots[k:k + _BATCH_SIZE] for k in range(0, len(slots), _BATCH_SIZE)]
 
+    # Bound how many persona-generation batches hit the API at once, so a 1000-agent
+    # spawn (100 batches) doesn't fire 100 concurrent calls and trip rate limits.
+    sem = asyncio.Semaphore(max(1, settings.spawn_concurrency))
+
     async def _gen_batch(batch: list[tuple[str, bool]]) -> list[dict]:
         bcount = len(batch)
         if bcount == 0:
@@ -148,17 +167,18 @@ Return ONLY the JSON array, no markdown, no explanation."""
         i = sum(1 for s, _ in batch if s == "indirect")
         n = sum(1 for s, _ in batch if s == "neutral")
         h = sum(1 for _, hf in batch if hf)
-        try:
-            response = await client.messages.create(
-                model=settings.model_orchestration,
-                max_tokens=12000,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h)}],
-            )
-            return _parse_agents_json(response.content[0].text)
-        except Exception as e:
-            print(f"[agent_factory] batch generation failed ({bcount} agents): {type(e).__name__}: {e}")
-            return []
+        async with sem:
+            try:
+                response = await client.messages.create(
+                    model=gen_model,
+                    max_tokens=12000,
+                    system=_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h)}],
+                )
+                return _parse_agents_json(response.content[0].text)
+            except Exception as e:
+                print(f"[agent_factory] batch generation failed ({bcount} agents): {type(e).__name__}: {e}")
+                return []
 
     batch_results = await asyncio.gather(*[_gen_batch(b) for b in batches])
     agent_dicts = [d for batch in batch_results for d in batch]

@@ -33,9 +33,30 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     lightrag_data_dir: str = "./lightrag_data"
 
+    # ── Fast tier (default) — Haiku everywhere ──────────────────────────────
     model_orchestration: str = "claude-haiku-4-5-20251001"
     model_agents: str = "claude-haiku-4-5-20251001"
     model_fast: str = "claude-haiku-4-5-20251001"
+
+    # ── Pro tier — Sonnet for deeper persona curation + smarter posts ───────
+    model_pro_orchestration: str = "claude-sonnet-4-6"
+    model_pro_agents: str = "claude-sonnet-4-6"
+
+    # ── Concurrency (sized so 1000 agents stay fast without rate-limiting) ──
+    spawn_concurrency: int = 8        # parallel persona-generation batches (Pro spawn)
+    sim_concurrency_fast: int = 48    # parallel Haiku posts per phase
+    sim_concurrency_pro: int = 12     # parallel Sonnet posts per phase (slower/pricier)
+    kg_sim_concurrency: int = 6       # parallel KG-from-post enrichments during a run
+    kg_sim_sample: float = 0.15       # fraction of posts that enrich the KG mid-run
+
+    def agent_model(self, mode: str) -> str:
+        return self.model_pro_agents if mode == "pro" else self.model_agents
+
+    def orchestration_model(self, mode: str) -> str:
+        return self.model_pro_orchestration if mode == "pro" else self.model_orchestration
+
+    def sim_concurrency(self, mode: str) -> int:
+        return self.sim_concurrency_pro if mode == "pro" else self.sim_concurrency_fast
 
 
 @lru_cache

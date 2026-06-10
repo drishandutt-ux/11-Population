@@ -237,6 +237,14 @@ Do NOT break character. Do NOT mention you are an AI."""
     return prompt
 
 
+_PRO_POST_DIRECTIVE = """
+
+PRO MODE — write at full depth:
+- Stay precisely calibrated to your psychological profile. If you're a genuine expert, be rigorous and specific; if you're out of your depth, let the confusion show; if you're emotional, let feeling lead.
+- Engage concretely with what others actually said — name it, quote it, build on or tear into it. No generic both-sides hedging.
+- Sound like a distinct human being, not a balanced panel summary."""
+
+
 async def generate_post(
     agent: SpawnedAgent,
     query: str,
@@ -244,9 +252,11 @@ async def generate_post(
     kg_context: str,
     post_type: str = "comment",
     reply_to_content: Optional[str] = None,
+    mode: str = "fast",
 ) -> str:
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    is_pro = mode == "pro"
 
     if post_type == "reply" and reply_to_content:
         user_msg = f"""The original topic/query: {query}
@@ -285,10 +295,14 @@ Thread discussion so far:
 
 Share your perspective on this topic as {agent.name}. Start a new thread or add a top-level comment."""
 
+    system_prompt = _build_system_prompt(agent)
+    if is_pro:
+        system_prompt += _PRO_POST_DIRECTIVE
+
     response = await client.messages.create(
-        model=settings.model_agents,
-        max_tokens=600,
-        system=_build_system_prompt(agent),
+        model=settings.agent_model(mode),
+        max_tokens=850 if is_pro else 600,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_msg}],
     )
     return response.content[0].text.strip()
