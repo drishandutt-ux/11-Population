@@ -178,7 +178,8 @@ export default function SessionPage() {
         setPosts((prev) => [...prev, event.post]);
         setAgentsMap((prev) => ({ ...prev, [fullAgent.id]: fullAgent }));
         postCountRef.current += 1;
-        setActiveTab((cur) => cur === "simulation" ? cur : "simulation");
+        // Note: we intentionally do NOT switch tabs here. Posts keep streaming into
+        // the Thread tab regardless of where the user is, so they can browse freely.
 
       } else if (event.type === "like_added") {
         setPosts((prev) =>

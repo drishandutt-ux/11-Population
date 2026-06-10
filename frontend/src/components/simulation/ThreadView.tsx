@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Agent, Post } from "@/lib/api";
 import PostCard from "./PostCard";
 import { stanceColor } from "@/lib/utils";
-import { MessageSquare, FileText, Loader2, Clock } from "lucide-react";
+import { MessageSquare, FileText, Loader2, Clock, ArrowDown } from "lucide-react";
 
 interface Props {
   posts: Post[];
@@ -27,9 +27,29 @@ export default function ThreadView({
   agentOpinions = {},
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Stick to the bottom only while the user is already there; if they scroll up to
+  // read, new posts must NOT yank them back down.
+  const stickRef = useRef(true);
+  const [atBottom, setAtBottom] = useState(true);
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const near = dist < 150;
+    stickRef.current = near;
+    setAtBottom(near);
+  }
+
+  function jumpToLatest() {
+    stickRef.current = true;
+    setAtBottom(true);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (stickRef.current) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [posts.length]);
 
   const topLevel = posts.filter((p) => !p.parent_id && p.type !== "like" && p.content);
@@ -91,7 +111,8 @@ export default function ThreadView({
       {/* Body: thread left + opinions right */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Thread scroll area */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 relative min-h-0">
+          <div className="absolute inset-0 overflow-y-auto" ref={scrollRef} onScroll={handleScroll}>
           {!hasContent ? (
             <div className="h-full flex items-center justify-center text-center p-12">
               {pendingSimulation ? (
@@ -145,6 +166,16 @@ export default function ThreadView({
               ))}
               <div ref={bottomRef} />
             </div>
+          )}
+          </div>
+
+          {hasContent && !atBottom && (
+            <button
+              onClick={jumpToLatest}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all"
+            >
+              <ArrowDown className="w-3.5 h-3.5" /> Jump to latest
+            </button>
           )}
         </div>
 
