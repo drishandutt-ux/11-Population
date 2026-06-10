@@ -289,7 +289,16 @@ export default function SessionPage() {
       const result = await api.report.query(id, REPORT_PROMPT) as { answer: string };
       setReportContent(result.answer);
     } catch (e: any) {
+      // Never fail silently — surface the reason in the report panel so the button
+      // is never a no-op. A thrown 404 means the session was wiped (no persistence).
       console.error("Report generation failed:", e);
+      const msg = e?.message || "Unknown error";
+      const sessionGone = /not found|404/i.test(msg);
+      setReportContent(
+        sessionGone
+          ? "## Report unavailable\n\nThis session no longer exists on the server. This demo has **no persistent storage**, so sessions are wiped whenever the backend restarts or redeploys.\n\nPlease start a **new session** and re-run the simulation."
+          : `## Report generation failed\n\n${msg}\n\nPlease try again — the model may be busy or the backend may be restarting.`
+      );
     } finally {
       setIsGeneratingReport(false);
     }
