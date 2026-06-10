@@ -310,7 +310,7 @@ The run:
 ### 8.2 A single agent's turn — `_agent_action`
 - **`like`** (no LLM): increment a random recent post by a *different* agent via `add_like`, publish `like_added`. (Likes never create a post row.)
 - **`comment` / `debate` / `reply`** (one LLM call on the mode's agent model): for debate/reply, pick a random recent post by a *different* agent as the parent (falling back to a top-level `comment` if the thread is still empty); generate text via `generate_post(... mode=mode)`; persist via `create_post`; publish `post_created` with the full embedded agent profile.
-- **KG enrichment is throttled + sampled:** only a `kg_sim_sample` fraction (default 15%) of posts enrich the KG, and those run through a `kg_sim_concurrency` semaphore (default 6) as fire-and-forget tasks — so per-post extraction never saturates the API mid-run at scale.
+- **KG enrichment is adaptive:** the per-post KG-update probability is `min(1.0, kg_sim_max_updates / agent_count)` — so any run of **≤ `kg_sim_max_updates` agents (default 120) feeds EVERY post back into the graph** (small/Pro runs capture the whole debate), and only larger populations throttle (e.g. 1000 agents → ~12%) so per-post extraction never saturates the API at scale. Updates run through a `kg_sim_concurrency` semaphore (default 6) as fire-and-forget tasks. *(Earlier this was a flat 15%, which made the KG look empty on small Pro runs — 15% of a handful of posts rounds to zero.)*
 
 ### 8.3 Threading & ordering — `thread_manager.py`
 - `build_thread_context(posts, agents)` renders the transcript as `[name | role]: content` lines, indenting replies with `> `, skipping likes.
@@ -522,7 +522,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 | `SIM_CONCURRENCY_FAST` | backend | Parallel Haiku posts per phase | `48` |
 | `SIM_CONCURRENCY_PRO` | backend | Parallel Sonnet posts per phase | `12` |
 | `KG_SIM_CONCURRENCY` | backend | Parallel KG-from-post enrichments mid-run | `6` |
-| `KG_SIM_SAMPLE` | backend | Fraction of posts that enrich the KG mid-run | `0.15` |
+| `KG_SIM_MAX_UPDATES` | backend | KG-enriching posts per phase before throttling; runs ≤ this capture every post | `120` |
 | `SUPABASE_URL` | backend | AI Agent Pulse monitoring Supabase URL (all 3 required to enable) | `""` (disabled) |
 | `SUPABASE_SERVICE_KEY` | backend | Supabase service-role key for `execution_logs` inserts | `""` (disabled) |
 | `PULSE_PROJECT_ID` | backend | `project_registry` UUID for this project | `""` (disabled) |
@@ -635,6 +635,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-06-10** — **Fixed the knowledge graph staying sparse on Pro/small runs.** The mid-simulation KG enrichment used a flat 15% post sample (tuned for 1000-agent Fast runs), which on a small Pro run (5–50 agents) rounded to ~0 posts — so the debate never reached the graph. Made it **adaptive**: `min(1.0, KG_SIM_MAX_UPDATES / agent_count)`, so any run ≤120 agents now feeds **every** post into the KG and only large runs throttle. Replaces `KG_SIM_SAMPLE` with `KG_SIM_MAX_UPDATES` (default 120).
 - **2026-06-10** — **Fixed the "Generate Report" button doing nothing on failure.** `handleMakeReport` swallowed thrown errors (only `console.error`), so a 404 (e.g. a wiped session) left the button spinning then blank. It now surfaces the reason in the report panel — and a "Session not found" 404 shows a clear "this session was reset (no persistent storage) — start a new one" message. (LLM errors already returned a friendly HTTP 200 that rendered; only the thrown-error path was silent.)
 - **2026-06-10** — **Added a "no database" notice to the landing page.** The deployment runs without persistent storage (ephemeral SQLite, no volume), so sessions vanish on restart/redeploy and stale ones 404 with "Session not found". The landing page now warns users up-front to treat each session as temporary. (Durable fix remains: add a Railway Postgres plugin + a volume for `LIGHTRAG_DATA_DIR` — see §15.4.)
 - **2026-06-10** — **Onboarded the project to AI Agent Pulse monitoring (direct-to-Supabase, no n8n).** Added `app/core/monitoring.py`: every Anthropic call now logs its **exact** token usage (`response.usage`, not an estimate) straight into the Pulse `execution_logs` Supabase table — `tracked_messages_create` wraps the 9 async calls, `record_usage_sync` covers the 2 Vision paths. Cost is computed by the table's trigger from `llm_pricing`. Fully no-op unless `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`/`PULSE_PROJECT_ID` are set; fire-and-forget so it never blocks or breaks a request. See §12.4.

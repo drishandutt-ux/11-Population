@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     sim_concurrency_fast: int = 48    # parallel Haiku posts per phase
     sim_concurrency_pro: int = 12     # parallel Sonnet posts per phase (slower/pricier)
     kg_sim_concurrency: int = 6       # parallel KG-from-post enrichments during a run
-    kg_sim_sample: float = 0.15       # fraction of posts that enrich the KG mid-run
+    kg_sim_max_updates: int = 120     # target KG-enriching posts per phase; runs <= this capture EVERY post, only larger runs throttle
 
     def agent_model(self, mode: str) -> str:
         return self.model_pro_agents if mode == "pro" else self.model_agents

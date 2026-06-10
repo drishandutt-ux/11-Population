@@ -225,7 +225,10 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
             return
 
         agents_by_id = {a.id: a for a in db_agents}
-        print(f"[orchestrator] {len(db_agents)} agents loaded")
+        # Adaptive KG enrichment: small/Pro runs feed EVERY post back into the graph;
+        # only large populations throttle (so 1000 agents don't fire 1000 extractions/phase).
+        kg_sample = min(1.0, settings.kg_sim_max_updates / max(1, len(db_agents)))
+        print(f"[orchestrator] {len(db_agents)} agents loaded (kg_sample={kg_sample:.2f})")
 
         await publish(session_channel(session_id), {
             "type": "simulation_started",
@@ -260,7 +263,7 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
                             session_id=session_id, query=query,
                             thread_context=thread_context, kg_context=kg_context,
                             posts=posts, round_num=round_num, mode=mode,
-                            watcher=watcher, kg_sem=kg_sem, kg_sample=settings.kg_sim_sample,
+                            watcher=watcher, kg_sem=kg_sem, kg_sample=kg_sample,
                         )
                     except Exception as e:
                         print(f"[orchestrator] {agent.name} action failed: {e}")
