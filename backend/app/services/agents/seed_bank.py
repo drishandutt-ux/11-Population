@@ -280,17 +280,33 @@ def _jitter_dials(dials: dict, rng: random.Random) -> dict:
 
 
 def _humanize(dials: dict, humanity: int, rng: random.Random) -> dict:
-    """Push a persona toward the emotional/everyday register (mirrors agent_factory)."""
+    """Push a persona toward the emotional register, graded by the humanity band so the
+    dials match the sentiment-vs-logic mix the behavioral engine will enforce at post time
+    ([20,50) logic-led, [50,60) balanced, [60,70) defends feeling, [70,100] pure reaction)."""
     out = copy.deepcopy(dials)
+    if humanity < 20:
+        return out  # below the sentimental threshold — keep the analytical dials
     trust = out.setdefault("trust", {})
-    trust["credibility"] = rng.randint(0, 3)
-    trust["authority"] = rng.randint(0, 3)
     sentiment = out.setdefault("sentiment", {})
-    for k in rng.sample(["anger", "fear", "anxiety", "hope", "love", "frustration", "joy"], 2):
-        sentiment[k] = rng.randint(7, 10)
     comp = out.setdefault("composite", {})
-    comp["human_resonance"] = rng.randint(7, 10)
-    comp["product_humanity"] = rng.randint(6, 10)
+
+    if humanity >= 70:
+        trust["credibility"], trust["authority"] = rng.randint(0, 2), rng.randint(0, 2)
+        boost = 3
+    elif humanity >= 60:
+        trust["credibility"], trust["authority"] = rng.randint(0, 3), rng.randint(0, 3)
+        boost = 2
+    elif humanity >= 50:
+        trust["credibility"], trust["authority"] = rng.randint(3, 5), rng.randint(2, 5)
+        boost = 2
+    else:  # 20-49 — logic stays in control
+        trust["credibility"], trust["authority"] = rng.randint(4, 7), rng.randint(3, 6)
+        boost = 1
+
+    for k in rng.sample(["anger", "fear", "anxiety", "hope", "love", "frustration", "joy"], boost):
+        sentiment[k] = rng.randint(7, 10)
+    comp["human_resonance"] = rng.randint(7, 10) if humanity >= 50 else rng.randint(5, 8)
+    comp["product_humanity"] = rng.randint(6, 10) if humanity >= 50 else rng.randint(4, 7)
     return out
 
 

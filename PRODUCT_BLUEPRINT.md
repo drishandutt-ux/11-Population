@@ -261,15 +261,24 @@ The mode → model mapping lives on `Settings`: `agent_model(mode)`, `orchestrat
 
 Two population controls on the Agents page tune how *human vs. expert* the population reasons — added to counter the tendency for every agent to sound like an analyst:
 
-- **Humanity (0–100)** — intensity of the emotional/everyday register. `0` = pure expert (cites data, measured, analytical); higher = more human, gut-driven, plain-spoken, and led by sentiment over logic. Code thresholds: `≥40` enables "human mode", `≥66` is intense.
-- **Coverage (0–100)** — what percentage of the spawned population the Humanity setting applies to; the rest stay analytical. UI defaults: Humanity `50`, Coverage `60`.
+- **Humanity (0–100)** — a graduated **sentiment-vs-logic register**, not a binary switch. `agent_runner._humanity_band` maps the value to five distinct bands, each with its own hard behavioral directive so moving the dial visibly changes how an agent argues:
+
+  | Band | Range | Register |
+  |---|---|---|
+  | **expert** | `[0, 20)` | Pure logic — cites data, measured, analytical. |
+  | **tempered** | `[20, 50)` | Logic leads and stays in control, but feelings color tone, word choice and emphasis. Still cites if credible. |
+  | **balanced** | `[50, 60)` | Weighs feeling and logic 50/50 and names both out loud. |
+  | **defensive** | `[60, 70)` | Feelings decide the position *first*; logic is then marshaled to **defend that feeling at any cost** (motivated reasoning — never concedes). |
+  | **reactive** | `[70, 100]` | Purely emotional — here to feel, judge and react; ignores logical arguments and reacts to how they *feel*; short, raw, no citations. |
+
+- **Coverage (0–100)** — what percentage of the spawned population the Humanity setting applies to; the rest stay pure-expert (`humanity = 0`). UI defaults: Humanity `50`, Coverage `60`.
 
 **How it works (spawn-time, persisted per agent):**
-- `agent_factory.generate_agents(... humanity, humanity_coverage)` computes a humanized subset (`round(count × coverage/100)`) and instructs the LLM to make those agents emotion-led — **sentiment dials wide and intense, `trust.credibility`/`authority` low, composite analytical scores modest** — and to set each agent's `humanity` field accordingly (others `0`). It also pushes the model to **spread dials across the full 0–10 range** so the population is visibly diverse (no clustering at 5), with **sentiment treated as the primary driver** of each agent's voice.
-- The value persists on `SpawnedAgent.humanity` and flows back through the agents API and the `agent_spawned` event.
-- At post time, `agent_runner._build_system_prompt` reads `humanity`: for humanized agents it **suppresses the "cite sources/credentials" expert rule**, leads with the sentiment rules, and appends a strong *"you are a real, emotional person, not an expert — lead with feeling, drop jargon/citations, keep it short"* directive (stronger at `≥66`).
+- Both spawn paths compute a humanized subset (`round(count × coverage/100)`) and set each agent's `humanity` field to the slider value (others `0`). **Fast** (`seed_bank._humanize`) **grades the dials by band** — credibility/authority stay moderate for *tempered* and drop progressively toward *reactive*, with 1–3 sentiment dials boosted hot accordingly. **Pro** (`agent_factory.generate_agents`) instructs the LLM to make the subset emotion-led (sentiment wide/intense, credibility/authority low) and to spread dials across the full 0–10 range, with sentiment as the primary driver of voice.
+- The value persists on `SpawnedAgent.humanity` and flows back through the agents API and the spawn events.
+- At post time, `agent_runner._build_system_prompt` reads `humanity`, resolves the **band**, and appends that band's directive (table above). The "cite sources/credentials" expert rule is allowed only below `50` (logic-led bands); `reactive` explicitly forces gut/personal argument; and the closing instruction tightens with the band (e.g. *reactive* → "1–2 short sentences, react from the gut").
 
-**Surfacing it in the UI:** the Agents page shows the two sliders with a live preview (*"≈ N of M agents will be emotion-led…"*); each agent card shows a **"% human" badge** (when humanized) and **dominant-emotion chips** (its top sentiment dials ≥6, e.g. *Curiosity 9 · Trust 8*) so dial diversity is visible at a glance.
+**Surfacing it in the UI:** the Agents page shows the two sliders with a **live band chip** under the intensity slider (e.g. *"Defensive — defends their feelings with logic at any cost"*) and a preview (*"≈ N of M agents will be defensive — …"*); each agent card shows a **"% human" badge** (when humanized) and **dominant-emotion chips** (its top sentiment dials ≥6, e.g. *Curiosity 9 · Trust 8*).
 
 > Humanity is **orthogonal to stance** — a `direct` expert can still be high-humanity (a passionate practitioner who argues from emotion). It is applied **at spawn**, so changing the sliders requires a re-spawn to take effect.
 
@@ -612,6 +621,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-06-10** — **Made the Humanity dial graduated & far more impactful.** Replaced the old binary humanity thresholds (`≥40` human, `≥66` intense) with a **5-band sentiment-vs-logic scale** (`agent_runner._humanity_band`): expert `[0,20)`, **tempered** `[20,50)` (logic leads, feeling colors), **balanced** `[50,60)` (50/50), **defensive** `[60,70)` (feelings decide, logic defends them at any cost), **reactive** `[70,100]` (pure gut — ignores logic, just judges/reacts, 1–2 lines). Each band has its own hard directive, so the dial now visibly changes behavior as it moves. The credibility/citation rule is gated to `<50`; Fast-bank `_humanize` grades the spawned dials by band; the Agents page shows a live band chip under the slider.
 - **2026-06-10** — **Scaled to 1000 agents + added Fast/Pro modes + replaced rounds with an intensity ladder.**
   - **Fast vs Pro modes** everywhere. **Fast** (default) samples a new **pre-built, procedurally-generated agent bank** (`seed_bank.py` → committed `app/data/agent_bank.json`, ~500 diverse personas with full 112 dials) — spawning is **instant, no LLM, no API key** (verified: **1000 agents in ~0.4 s**). **Pro** curates personas *and* runs the debate on **Claude Sonnet** (`MODEL_PRO_*`) for far richer output; the UI warns about the time/cost, especially past 150 agents.
   - **Agent count raised from 50 → 1000** (UI slider + number input + quick-pick chips; backend clamps to 1000). Spawn now **bulk-inserts** the population in one transaction and streams it in **batched `agents_spawned_batch` events** (~40/event), replacing the old per-agent commit + 0.3 s sleep + per-agent event (which made big spawns take minutes and overflowed the WS queue). Pro batch generation is bounded by `SPAWN_CONCURRENCY`.

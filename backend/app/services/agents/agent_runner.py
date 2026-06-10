@@ -5,14 +5,56 @@ from app.models.agent import SpawnedAgent
 import anthropic
 
 
+def _humanity_band(humanity: int) -> str:
+    """Map the humanity dial (0-100) to a sentiment-vs-logic register band.
+
+    [0,20) expert · [20,50) tempered · [50,60) balanced · [60,70) defensive · [70,100] reactive.
+    The bands get progressively more emotional and less logic-driven."""
+    if humanity >= 70:
+        return "reactive"
+    if humanity >= 60:
+        return "defensive"
+    if humanity >= 50:
+        return "balanced"
+    if humanity >= 20:
+        return "tempered"
+    return "expert"
+
+
+# Each band is a hard, distinct register so the humanity dial visibly changes behavior as it moves.
+_HUMANITY_DIRECTIVES = {
+    "tempered": (
+        "\n\nYOUR REGISTER — LOGIC LEADS, FEELING COLORS IT:\n"
+        "- You reason things through and stay in control of your emotions, but your feelings about this clearly tint your tone, word choice and what you choose to emphasise.\n"
+        "- You're a bit sentimental and will openly admit how it makes you feel — yet logic still has the final say in what you actually conclude."
+    ),
+    "balanced": (
+        "\n\nYOUR REGISTER — FEELING AND LOGIC, 50/50:\n"
+        "- Weigh how you FEEL about this and what the LOGIC says in equal measure, and name both out loud ('part of me feels…, but rationally…').\n"
+        "- Neither side fully wins — you sit in the tension between gut and reason and let both visibly shape your take."
+    ),
+    "defensive": (
+        "\n\nYOUR REGISTER — FEELINGS DECIDE, LOGIC DEFENDS (this overrides the analytical guidance above):\n"
+        "- Your emotional reaction sets your position FIRST. Then you marshal whatever logic, facts and arguments you can find to DEFEND that feeling — at any cost.\n"
+        "- You will NOT be argued out of how you feel. Counter-evidence makes you dig in and rationalise harder, never concede. The conclusion is emotional; the justification is logical."
+    ),
+    "reactive": (
+        "\n\nYOUR REGISTER — PURELY EMOTIONAL (this overrides everything above):\n"
+        "- You are NOT here to analyse or reason — you're here to FEEL, judge and react. Your gut alone decides your position.\n"
+        "- No frameworks, no data, no citations, no weighing pros and cons. When someone makes a logical case, you react to how it makes you FEEL, not to the argument itself.\n"
+        "- Keep it short, raw and reactive — a line or two. Snap judgments and hot takes. Being right means nothing to you; how you feel means everything."
+    ),
+}
+
+
 def _dials_to_behavioral_guidance(dials: dict, humanity: int = 0) -> str:
     """Translate the agent's psychological dials into concrete behavioral instructions for the LLM.
 
-    humanity (0-100) shifts the agent from analytical/expert toward emotional, gut-driven and
-    plain-spoken — leading with sentiment over logic. >=40 enables 'human mode', >=66 is intense."""
-    human_mode = humanity >= 40
-    very_human = humanity >= 66
-    if not dials and not human_mode:
+    humanity (0-100) shifts the agent along a sentiment-vs-logic scale via _humanity_band:
+    20+ logic-led but sentimental, 50 balanced, 60 defends feelings with logic, 70+ pure reaction."""
+    band = _humanity_band(humanity)
+    emotional = band != "expert"
+    if not dials and not emotional:
         return ""
     dials = dials or {}
 
@@ -168,11 +210,11 @@ def _dials_to_behavioral_guidance(dials: dict, humanity: int = 0) -> str:
     if social_risk >= 7:
         rules.append("You're aware of social consequences. You avoid saying things that might make you look bad in the room.")
 
-    # --- Trust: credibility signals ---
+    # --- Trust: credibility signals (gated by humanity band) ---
     credibility = trust_dials.get("credibility", 5)
-    if credibility >= 8 and not human_mode:
+    if credibility >= 8 and humanity < 50:
         rules.append("You cite sources, statistics, and credentials. Backing claims with evidence is how you argue.")
-    elif credibility <= 2 or human_mode:
+    elif credibility <= 2 or band == "reactive":
         rules.append("You argue from personal experience and gut intuition — you rarely cite sources or defer to authority.")
 
     transparency = trust_dials.get("transparency", 5)
@@ -181,19 +223,7 @@ def _dials_to_behavioral_guidance(dials: dict, humanity: int = 0) -> str:
     elif transparency <= 2:
         rules.append("You're guarded — you don't show your full reasoning or admit your priors.")
 
-    human_block = ""
-    if human_mode:
-        human_lines = [
-            "You are an ORDINARY PERSON reacting from the gut — NOT an analyst or expert. Lead with how you FEEL about this, not with data, logic, or frameworks.",
-            "Use plain, everyday language. No jargon, no statistics, no citations, no bullet-point structure — talk like a real person venting or sharing online.",
-            "It is completely fine to be biased, emotional, inconsistent, or even plain wrong. Do NOT retreat into balanced, hedged expert-speak.",
-        ]
-        if very_human:
-            human_lines.append("Keep it short, blunt and raw. Your feelings matter far more to you than being correct, thorough, or sophisticated.")
-        human_block = (
-            "\n\nYOU ARE HUMAN, NOT AN EXPERT — this overrides the above:\n"
-            + "\n".join(f"- {l}" for l in human_lines)
-        )
+    human_block = _HUMANITY_DIRECTIVES.get(band, "")
 
     if not rules and not human_block:
         return ""
@@ -222,11 +252,22 @@ Your stance type: {agent.stance} ({"a domain expert" if agent.stance == "direct"
 
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
 
-    if humanity >= 40:
+    band = _humanity_band(humanity)
+    if band == "reactive":
         prompt += """
 
-Stay fully in character as a REAL, EMOTIONAL human being — not an expert panel. React with feeling and instinct, in casual everyday language like a Reddit comment. Lead with emotion over logic and keep it to 1-2 short paragraphs.
-Do NOT break character. Do NOT sound like an analyst or a report. Do NOT mention you are an AI."""
+Stay fully in character as a raw, emotional person — NOT an expert. React from the gut in 1-2 short sentences, like a quick Reddit reply. Lead with feeling, skip the analysis entirely.
+Do NOT break character. Do NOT sound like an analyst. Do NOT mention you are an AI."""
+    elif band in ("defensive", "balanced"):
+        prompt += """
+
+Stay fully in character as a real, emotional human — not an expert panel. Lead with how you FEEL, then back it up. Casual, everyday language like a Reddit comment, 1-2 short paragraphs.
+Do NOT break character. Do NOT sound like a report. Do NOT mention you are an AI."""
+    elif band == "tempered":
+        prompt += """
+
+Stay fully in character. Reason it through, but let your feelings clearly color your tone and emphasis. Conversational, like a Reddit comment, 1-2 paragraphs.
+Do NOT break character. Do NOT mention you are an AI."""
     else:
         prompt += """
 

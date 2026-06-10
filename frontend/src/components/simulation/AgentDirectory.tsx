@@ -28,6 +28,16 @@ const INTENSITY_STEPS: { level: number; label: string; adds: string }[] = [
 ];
 const MAX_INTENSITY = 6;
 
+// ── Humanity register bands (mirrors backend agent_runner._humanity_band) ─────
+function humanityBand(h: number): { label: string; desc: string; color: string } {
+  if (h >= 70) return { label: "Reactive", desc: "pure gut — here to judge & react, logic ignored", color: "text-rose-400" };
+  if (h >= 60) return { label: "Defensive", desc: "defends their feelings with logic at any cost", color: "text-orange-400" };
+  if (h >= 50) return { label: "Balanced", desc: "50 / 50 feeling and logic", color: "text-amber-400" };
+  if (h >= 20) return { label: "Tempered", desc: "a bit sentimental, but logic stays in control", color: "text-teal-400" };
+  if (h > 0) return { label: "Mostly logical", desc: "barely sentimental — analytical below 20%", color: "text-sky-400" };
+  return { label: "Off", desc: "pure analytical experts", color: "text-muted-foreground" };
+}
+
 interface Props {
   agents: Agent[];
   sessionId: string;
@@ -466,6 +476,7 @@ export default function AgentDirectory({
   const estPosts = agentCount * postPhases;
   const estReactions = agentCount * likePhases;
   const proHeavy = mode === "pro" && agentCount > 150;
+  const hBand = humanityBand(humanity);
 
   // ── Phase 1: No agents yet ────────────────────────────────────────────────
   if (!hasAgents && !isSpawning) {
@@ -659,8 +670,14 @@ export default function AgentDirectory({
               />
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>0 · expert &amp; logical</span>
-                <span>100 · human &amp; emotional</span>
+                <span>100 · pure emotion</span>
               </div>
+              {humanity > 0 && (
+                <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-2.5 py-1.5">
+                  <span className={`text-[11px] font-semibold ${hBand.color}`}>{hBand.label}</span>
+                  <span className="text-[10px] text-muted-foreground/70 leading-snug">{hBand.desc}</span>
+                </div>
+              )}
             </div>
 
             {/* Coverage */}
@@ -680,7 +697,7 @@ export default function AgentDirectory({
             <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
               {humanity === 0
                 ? "All agents stay analytical experts — citations, frameworks, measured tone."
-                : `≈ ${humanizedCount} of ${agentCount} agents will be emotion-led: more human, gut-driven, less expert, leaning on their sentiment dials over logic. The rest stay analytical.`}
+                : `≈ ${humanizedCount} of ${agentCount} agents will be ${hBand.label.toLowerCase()} — ${hBand.desc}. The rest stay analytical experts.`}
             </p>
           </div>
 
