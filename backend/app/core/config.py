@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     model_pro_orchestration: str = "claude-sonnet-4-6"
     model_pro_agents: str = "claude-sonnet-4-6"
 
+    # ── AI Agent Pulse monitoring — direct-to-Supabase usage logging (no n8n) ──
+    # All three must be set to enable logging; otherwise it's a silent no-op.
+    supabase_url: str = ""            # Monitoring Supabase project URL
+    supabase_service_key: str = ""    # service-role key (bypasses RLS for server-side inserts)
+    pulse_project_id: str = ""        # project_registry UUID for this project
+
     # ── Concurrency (sized so 1000 agents stay fast without rate-limiting) ──
     spawn_concurrency: int = 8        # parallel persona-generation batches (Pro spawn)
     sim_concurrency_fast: int = 48    # parallel Haiku posts per phase

@@ -122,6 +122,7 @@ async def generate_agent_opinions(session_id: str, db: AsyncSession = Depends(ge
     import json, anthropic
     from app.models.post import PostType
     from app.core.config import get_settings
+    from app.core.monitoring import tracked_messages_create
 
     result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
     session = result.scalar_one_or_none()
@@ -169,7 +170,10 @@ async def generate_agent_opinions(session_id: str, db: AsyncSession = Depends(ge
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    response = await client.messages.create(
+    response = await tracked_messages_create(
+        client,
+        session_id=session_id,
+        label="opinions",
         model=settings.model_fast,
         max_tokens=1200,
         messages=[{

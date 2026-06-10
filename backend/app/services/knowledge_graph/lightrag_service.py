@@ -8,6 +8,7 @@ import asyncio
 from typing import Tuple
 import anthropic
 from app.core.config import get_settings
+from app.core.monitoring import tracked_messages_create
 
 _kg_cache: dict = {}
 _locks: dict = {}
@@ -73,7 +74,10 @@ Rules: entities = 1-4 words, 5-12 entities, 3-8 relations. No markdown, just JSO
         new_entities: list = []
         new_relations: list = []
         try:
-            response = await client.messages.create(
+            response = await tracked_messages_create(
+                client,
+                session_id=session_id,
+                label="kg_extract",
                 model=settings.model_fast,
                 max_tokens=600,
                 messages=[{"role": "user", "content": prompt}],
@@ -138,7 +142,10 @@ SOURCE EXCERPTS:
 Give a direct, insightful answer grounded in the knowledge graph."""
 
     try:
-        response = await client.messages.create(
+        response = await tracked_messages_create(
+            client,
+            session_id=session_id,
+            label="kg_query",
             model=settings.model_fast,
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],

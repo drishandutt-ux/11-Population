@@ -441,6 +441,15 @@ All JSON, `type`-tagged, published to channel `session:{id}`:
 | `simulation_complete` | `{message}` | all rounds done |
 | `ping` | — | 30s keepalive |
 
+### 12.4 Usage monitoring — AI Agent Pulse (direct-to-Supabase, no n8n)
+
+Optional integration that reports **exact LLM token usage and cost** to the shared **AI Agent Pulse** monitoring dashboard. Pulse's standard onboarding assumes a project runs **in n8n** (an n8n "Token Logger" workflow scrapes token *estimates* from the n8n execution API). 11 Minds calls the Anthropic SDK directly, so it instead logs **its own exact usage straight to Supabase**.
+
+- **Code:** `backend/app/core/monitoring.py`. `tracked_messages_create(client, *, session_id, label, **kwargs)` wraps every **async** `messages.create` (9 call sites: `post`, `chat`, `spawn`, `report`, `kg_extract`, `kg_query`, `opinions`, `llm_classify`, `llm_paper`); `record_usage_sync(...)` covers the 2 **synchronous** Vision paths (`youtube_vision`, `doc_vision`). The `label` is stored as `execution_id` so the dashboard shows *what kind* of call it was; `session_id` is the `AnalysisSession.id`.
+- **Exact, not estimated:** it reads `response.usage.input_tokens` / `output_tokens` directly off the SDK response, then **fire-and-forgets** a row to `POST {SUPABASE_URL}/rest/v1/execution_logs` (PostgREST). It never sends `cost_usd` — the table's `calculate_cost()` trigger computes it from `llm_pricing` on insert.
+- **Safe & opt-in:** a complete **no-op** unless `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and `PULSE_PROJECT_ID` are all set; every failure is swallowed (logging never blocks or breaks a request).
+- **Onboarding (replaces Pulse's n8n "Step 3"):** (1) register the project in `project_registry`; (2) add `llm_pricing` rows for **every model string this app uses** — `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`, and `claude-opus-4-5` (document image Vision) — or cost stays NULL and the model surfaces in `pricing_gaps`; (3) set the three env vars. Steps 1, 2 and 4 (verify) are unchanged.
+
 ---
 
 ## 13. Frontend reference
@@ -513,6 +522,9 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 | `SIM_CONCURRENCY_PRO` | backend | Parallel Sonnet posts per phase | `12` |
 | `KG_SIM_CONCURRENCY` | backend | Parallel KG-from-post enrichments mid-run | `6` |
 | `KG_SIM_SAMPLE` | backend | Fraction of posts that enrich the KG mid-run | `0.15` |
+| `SUPABASE_URL` | backend | AI Agent Pulse monitoring Supabase URL (all 3 required to enable) | `""` (disabled) |
+| `SUPABASE_SERVICE_KEY` | backend | Supabase service-role key for `execution_logs` inserts | `""` (disabled) |
+| `PULSE_PROJECT_ID` | backend | `project_registry` UUID for this project | `""` (disabled) |
 | `REDIS_URL` | backend | **Unused** (vestigial) | `redis://localhost:6379` |
 | `PORT` | both | Runtime port (Railway-injected) | 8000 / 3000 |
 | `NEXT_PUBLIC_API_URL` | frontend | REST base (build-time inlined) | `http://localhost:8000` |
@@ -581,6 +593,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 │   │   ├── core/
 │   │   │   ├── config.py            # pydantic-settings; .env bootstrap; model tiers
 │   │   │   ├── database.py          # async SQLAlchemy engine (SQLite/Postgres)
+│   │   │   ├── monitoring.py        # AI Agent Pulse — direct-to-Supabase usage logging
 │   │   │   └── redis_client.py      # IN-PROCESS pub/sub (not Redis)
 │   │   ├── models/                  # session, agent, post, report, preset (ORM)
 │   │   ├── api/v1/                  # sessions, ingestion, simulation, agents,
@@ -621,6 +634,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-06-10** — **Onboarded the project to AI Agent Pulse monitoring (direct-to-Supabase, no n8n).** Added `app/core/monitoring.py`: every Anthropic call now logs its **exact** token usage (`response.usage`, not an estimate) straight into the Pulse `execution_logs` Supabase table — `tracked_messages_create` wraps the 9 async calls, `record_usage_sync` covers the 2 Vision paths. Cost is computed by the table's trigger from `llm_pricing`. Fully no-op unless `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`/`PULSE_PROJECT_ID` are set; fire-and-forget so it never blocks or breaks a request. See §12.4.
 - **2026-06-10** — **Stopped the live thread from hijacking navigation.** `post_created` no longer force-switches the user to the Thread tab on every post (you can now browse Agents/Graph/Report while the debate streams). ThreadView auto-scroll now **sticks to the bottom only when you're already there** — scrolling up to read is no longer yanked back down — with a floating **"Jump to latest"** button when scrolled away.
 - **2026-06-10** — **Made the Humanity dial graduated & far more impactful.** Replaced the old binary humanity thresholds (`≥40` human, `≥66` intense) with a **5-band sentiment-vs-logic scale** (`agent_runner._humanity_band`): expert `[0,20)`, **tempered** `[20,50)` (logic leads, feeling colors), **balanced** `[50,60)` (50/50), **defensive** `[60,70)` (feelings decide, logic defends them at any cost), **reactive** `[70,100]` (pure gut — ignores logic, just judges/reacts, 1–2 lines). Each band has its own hard directive, so the dial now visibly changes behavior as it moves. The credibility/citation rule is gated to `<50`; Fast-bank `_humanize` grades the spawned dials by band; the Agents page shows a live band chip under the slider.
 - **2026-06-10** — **Scaled to 1000 agents + added Fast/Pro modes + replaced rounds with an intensity ladder.**

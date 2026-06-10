@@ -1,4 +1,5 @@
 from app.core.config import get_settings
+from app.core.monitoring import tracked_messages_create
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
 from app.services.simulation.thread_manager import get_posts, build_thread_context
 from app.models.agent import SpawnedAgent
@@ -63,7 +64,10 @@ async def answer_report_query(
 Use ALL of the above — the full transcript, every agent's actual statements, and the knowledge graph — to produce your answer. Reference specific agents by name. Do not say "some agents" — name them. Extract every relevant metric or data point that appeared in the discussion."""
 
     try:
-        response = await client.messages.create(
+        response = await tracked_messages_create(
+            client,
+            session_id=session_id,
+            label="report",
             model=settings.model_orchestration,
             max_tokens=4000,
             system=system,

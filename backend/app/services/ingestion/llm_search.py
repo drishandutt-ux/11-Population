@@ -1,5 +1,6 @@
 import anthropic
 from app.core.config import get_settings
+from app.core.monitoring import tracked_messages_create
 
 settings = get_settings()
 
@@ -144,7 +145,9 @@ SYSTEM_PROMPTS: dict[str, str] = {
 async def categorize_query(query: str) -> str:
     """Return one of the four category keys for the given query."""
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    response = await client.messages.create(
+    response = await tracked_messages_create(
+        client,
+        label="llm_classify",
         model=settings.model_fast,
         max_tokens=20,
         messages=[{
@@ -173,7 +176,9 @@ async def generate_research_paper(query: str, category: str, context: str = "") 
     if context:
         user_message += f"\n\nAdditional Context Documents:\n{context}"
 
-    response = await client.messages.create(
+    response = await tracked_messages_create(
+        client,
+        label="llm_paper",
         model=settings.model_orchestration,
         max_tokens=3000,
         system=system_prompt,

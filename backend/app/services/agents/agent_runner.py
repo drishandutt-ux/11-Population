@@ -1,6 +1,7 @@
 import json
 from typing import Optional
 from app.core.config import get_settings
+from app.core.monitoring import tracked_messages_create
 from app.models.agent import SpawnedAgent
 import anthropic
 
@@ -340,7 +341,10 @@ Share your perspective on this topic as {agent.name}. Start a new thread or add 
     if is_pro:
         system_prompt += _PRO_POST_DIRECTIVE
 
-    response = await client.messages.create(
+    response = await tracked_messages_create(
+        client,
+        session_id=getattr(agent, "session_id", None),
+        label="post",
         model=settings.agent_model(mode),
         max_tokens=850 if is_pro else 600,
         system=system_prompt,
@@ -360,7 +364,10 @@ async def chat_as_agent(agent: SpawnedAgent, message: str, history: list[dict], 
     messages = list(history) + [{"role": "user", "content": message}]
 
     try:
-        response = await client.messages.create(
+        response = await tracked_messages_create(
+            client,
+            session_id=getattr(agent, "session_id", None),
+            label="chat",
             model=settings.model_agents,
             max_tokens=800,
             system=system,

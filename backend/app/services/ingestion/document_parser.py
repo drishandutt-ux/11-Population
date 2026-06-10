@@ -12,6 +12,9 @@ Document parser — supports:
 from __future__ import annotations
 import io
 import os
+import time
+
+from app.core.monitoring import record_usage_sync
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +308,7 @@ def _parse_image_vision(content: bytes, filename: str) -> str:
         return f"[Image: {filename}] (ANTHROPIC_API_KEY not set — skipped vision analysis)"
 
     client = anthropic.Anthropic(api_key=api_key)
+    _pulse_t0 = time.time()
     message = client.messages.create(
         model="claude-opus-4-5",
         max_tokens=2048,
@@ -326,6 +330,7 @@ def _parse_image_vision(content: bytes, filename: str) -> str:
         ],
     )
 
+    record_usage_sync(response=message, model="claude-opus-4-5", label="doc_vision", started_at=_pulse_t0)
     analysis = message.content[0].text if message.content else "(no response)"
     return f"[Image Analysis — {filename}]\n\n{analysis}"
 

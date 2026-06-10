@@ -3,6 +3,7 @@ import uuid
 import random
 import asyncio
 from app.core.config import get_settings
+from app.core.monitoring import tracked_messages_create
 from app.services.agents.profiles import AgentProfile, AVATAR_COLORS
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
 import anthropic
@@ -169,7 +170,10 @@ Return ONLY the JSON array, no markdown, no explanation."""
         h = sum(1 for _, hf in batch if hf)
         async with sem:
             try:
-                response = await client.messages.create(
+                response = await tracked_messages_create(
+                    client,
+                    session_id=session_id,
+                    label="spawn",
                     model=gen_model,
                     max_tokens=12000,
                     system=_SYSTEM_PROMPT,

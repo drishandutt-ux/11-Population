@@ -16,7 +16,10 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from typing import Any, Optional
+
+from app.core.monitoring import record_usage_sync
 
 
 # YouTube's default web/ios player clients stopped exposing captions and many
@@ -287,6 +290,7 @@ def _analyse_thumbnail(url: str, claude, model: str) -> str:
         ext = url.lower().split("?")[0].rsplit(".", 1)[-1]
         media_type = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
 
+        _pulse_t0 = time.time()
         response = claude.messages.create(
             model=model,
             max_tokens=400,
@@ -304,6 +308,7 @@ def _analyse_thumbnail(url: str, claude, model: str) -> str:
                 ],
             }],
         )
+        record_usage_sync(response=response, model=model, label="youtube_vision", started_at=_pulse_t0)
         return response.content[0].text.strip()
     except Exception as e:
         print(f"[yt] Thumbnail Vision failed: {e}")
@@ -375,6 +380,7 @@ def _analyse_key_frames(url: str, tmpdir: str, duration: int, claude, model: str
         ts = f"{m}:{s:02d}"
 
         try:
+            _pulse_t0 = time.time()
             response = claude.messages.create(
                 model=model,
                 max_tokens=200,
@@ -390,6 +396,7 @@ def _analyse_key_frames(url: str, tmpdir: str, duration: int, claude, model: str
                     ],
                 }],
             )
+            record_usage_sync(response=response, model=model, label="youtube_vision", started_at=_pulse_t0)
             results.append((ts, response.content[0].text.strip()))
         except Exception as e:
             print(f"[yt] Frame Vision {i} failed: {e}")
