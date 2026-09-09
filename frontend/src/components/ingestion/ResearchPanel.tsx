@@ -17,6 +17,21 @@ interface Props {
   onToggleExclude: (item: EvidenceItem) => Promise<void>;
 }
 
+/** Model-produced fields can arrive in the wrong shape (a string where a list was asked for).
+ *  Never let that crash the panel. */
+function asList<T = any>(v: any): T[] {
+  if (Array.isArray(v)) return v;
+  if (v == null || v === "") return [];
+  return [v as T];
+}
+function asStrList(v: any): string[] {
+  return asList(v).map((x) => (typeof x === "string" ? x : typeof x === "object" && x ? (x.text || x.name || JSON.stringify(x)) : String(x))).filter(Boolean);
+}
+function asNum(v: any): number {
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   queued: "queued", running: "researching…", stopping: "stopping…", finalising: "building the brief…", complete: "complete", stopped: "stopped", interrupted: "interrupted", error: "failed",
 };
@@ -120,17 +135,21 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
     return c;
   }, [items]);
 
+  const briefGroups = useMemo(() => asList<any>(run?.brief?.groups).filter((g) => g && typeof g === "object"), [run?.brief]);
   const stance = useMemo(() => {
     const b = run?.brief;
-    if (!b || !b.groups?.length) return null;
-    return { f: b.overall_for_pct || 0, a: b.overall_against_pct || 0, m: b.overall_mixed_pct || 0 };
-  }, [run?.brief]);
+    if (!b || briefGroups.length === 0) return null;
+    return { f: asNum(b.overall_for_pct), a: asNum(b.overall_against_pct), m: asNum(b.overall_mixed_pct) };
+  }, [run?.brief, briefGroups]);
 
   const visible = items.filter((i) => filter === "all" || (filter === "on" ? i.on_topic : i.source_class === (filter === "web" ? "web" : "social")));
   const elapsed = run?.started_at ? Math.max(0, Math.floor(((run.finished_at ? new Date(run.finished_at).getTime() : now) - new Date(run.started_at).getTime()) / 1000)) : 0;
   const budget = run?.budget || {};
-  const subqs: { id: string; text: string; kind: string }[] = run?.frame?.sub_questions || [];
-  const covered = new Set<string>(run?.covered || []);
+  const subqs: { id: string; text: string; kind: string }[] = asList<any>(run?.frame?.sub_questions).filter((q) => q && typeof q === "object").map((q, k) => ({ id: q.id || `q${k + 1}`, text: q.text || String(q), kind: q.kind || "" }));
+  const covered = new Set<string>(asStrList(run?.covered));
+  const lookalikes = asStrList(run?.frame?.lookalikes);
+  const verdicts = asList<any>(run?.verdicts).filter((v) => v && typeof v === "object");
+  const recs = asList<any>(run?.recommendations).filter((r) => r && typeof r === "object");
 
   async function act(fn: () => Promise<void>) {
     setBusy(true);
@@ -183,7 +202,7 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
                   <span className={covered.has(q.id) ? "text-foreground/80" : "text-muted-foreground/80"}>{q.text} <span className="text-[9px] text-muted-foreground/40">{q.kind}</span></span>
                 </div>
               ))}
-              {run.frame.lookalikes?.length > 0 && <p className="text-[10px] text-muted-foreground/50 mt-1.5">Excluding look-alikes: {run.frame.lookalikes.join(", ")}</p>}
+              {lookalikes.length > 0 && <p className="text-[10px] text-muted-foreground/50 mt-1.5">Excluding look-alikes: {lookalikes.join(", ")}</p>}
             </div>
           ) : (
             <p className="text-[11px] text-muted-foreground/70 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Framing the question…</p>
@@ -203,14 +222,14 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
         </div>
 
         {/* Verdicts */}
-        {run.verdicts?.length > 0 && (
+        {verdicts.length > 0 && (
           <div className="rounded-lg border border-border/60 p-4 space-y-1.5">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Judge</p>
-            {run.verdicts.slice(-6).map((v: any, k: number) => (
+            {verdicts.slice(-6).map((v: any, k: number) => (
               <div key={k} className="text-[10px] leading-snug">
                 <span className={`px-1 rounded border mr-1 ${v.source === "web" ? "border-sky-500/30 text-sky-300" : "border-orange-500/30 text-orange-300"}`}>{v.source} r{v.round}</span>
                 <span className="text-foreground/75">{v.on_topic}/{v.read} on-topic · {v.reason}</span>
-                {v.missing?.length > 0 && <span className="text-yellow-400/80"> Missing: {v.missing.join("; ")}</span>}
+                {asStrList(v.missing).length > 0 && <span className="text-yellow-400/80"> Missing: {asStrList(v.missing).join("; ")}</span>}
               </div>
             ))}
           </div>
@@ -266,34 +285,38 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
         </div>
 
         {/* Brief + recommendations */}
-        {run.brief && run.brief.groups?.length > 0 && (
+        {run.brief && (briefGroups.length > 0 || run.brief.summary) && (
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
             <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-1.5">Evidence brief</p>
-            <p className="text-xs text-foreground/85 leading-relaxed mb-2">{run.brief.summary}</p>
+            <p className="text-xs text-foreground/85 leading-relaxed mb-2">{String(run.brief.summary || "")}</p>
             <div className="space-y-1.5">
-              {run.brief.groups.map((g: any, k: number) => (
-                <div key={k} className="text-[11px]">
-                  <span className="font-medium text-foreground/90">{g.name}</span>
-                  <span className={`ml-1.5 text-[9px] px-1 rounded border ${g.stance === "for" ? "border-emerald-500/30 text-emerald-300" : g.stance === "against" ? "border-red-500/30 text-red-300" : "border-border text-muted-foreground"}`}>{g.stance} · ~{g.share_pct}%</span>
-                  {g.arguments?.length > 0 && <span className="text-muted-foreground/75"> — {g.arguments.slice(0, 2).join("; ")}</span>}
-                  {g.quotes?.[0] && <p className="text-[10px] text-muted-foreground/60 italic mt-0.5">“{g.quotes[0]}”</p>}
-                </div>
-              ))}
+              {briefGroups.map((g: any, k: number) => {
+                const args = asStrList(g.arguments);
+                const quotes = asStrList(g.quotes);
+                return (
+                  <div key={k} className="text-[11px]">
+                    <span className="font-medium text-foreground/90">{String(g.name || "Group")}</span>
+                    <span className={`ml-1.5 text-[9px] px-1 rounded border ${g.stance === "for" ? "border-emerald-500/30 text-emerald-300" : g.stance === "against" ? "border-red-500/30 text-red-300" : "border-border text-muted-foreground"}`}>{String(g.stance || "mixed")} · ~{asNum(g.share_pct)}%</span>
+                    {args.length > 0 && <span className="text-muted-foreground/75"> — {args.slice(0, 2).join("; ")}</span>}
+                    {quotes[0] && <p className="text-[10px] text-muted-foreground/60 italic mt-0.5">“{quotes[0]}”</p>}
+                  </div>
+                );
+              })}
             </div>
-            {run.brief.gaps?.length > 0 && <p className="text-[10px] text-yellow-400/80 mt-2">Gaps: {run.brief.gaps.join("; ")}</p>}
+            {asStrList(run.brief.gaps).length > 0 && <p className="text-[10px] text-yellow-400/80 mt-2">Gaps: {asStrList(run.brief.gaps).join("; ")}</p>}
           </div>
         )}
-        {run.recommendations && run.recommendations.length > 0 && (
+        {recs.length > 0 && (
           <div className="rounded-lg border border-border/60 p-4">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-2 flex items-center gap-1"><FlaskConical className="w-3 h-3" /> Recommended tools</p>
             <div className="space-y-2">
-              {run.recommendations.map((r: any, k: number) => (
+              {recs.map((r: any, k: number) => (
                 <div key={k} className="flex items-start gap-2 text-[11px]">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded border border-primary/40 text-primary shrink-0 mt-0.5">{Math.round((r.confidence || 0) * 100)}%</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border border-primary/40 text-primary shrink-0 mt-0.5">{Math.round(asNum(r.confidence) * 100)}%</span>
                   <div className="min-w-0">
-                    <span className="font-medium text-foreground/90">{r.label || r.tool}</span>
-                    <span className="text-muted-foreground/75"> — {r.reason}</span>
-                    {r.spec_summary && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{r.spec_summary}{r.variants?.length ? ` · Variants: ${r.variants.join(" vs ")}` : ""}{r.price_anchors?.length ? ` · Prices: ${r.price_anchors.join(", ")}` : ""}</p>}
+                    <span className="font-medium text-foreground/90">{String(r.label || r.tool || "")}</span>
+                    <span className="text-muted-foreground/75"> — {String(r.reason || "")}</span>
+                    {r.spec_summary && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{String(r.spec_summary)}{asStrList(r.variants).length ? ` · Variants: ${asStrList(r.variants).join(" vs ")}` : ""}{asStrList(r.price_anchors).length ? ` · Prices: ${asStrList(r.price_anchors).join(", ")}` : ""}</p>}
                   </div>
                 </div>
               ))}

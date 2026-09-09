@@ -154,6 +154,36 @@ def test_schemas_are_valid_and_analyze_parses_tool_use(monkeypatch):
     jsonschema.validate(out, pln.PLAN_SCHEMA)
 
 
+def test_coerce_recovers_pseudo_xml_and_wrong_shapes():
+    """Production stored a brief whose 'groups' was pseudo-XML text and 'key_facts' a string
+    (max_tokens hit mid-structure). coerce() must turn that into the schema's shapes."""
+    from app.services.evidence import llm, brief as br
+    bad = {
+        "summary": "s",
+        "key_facts": "22% of catch (reddit)\n£2.1m fund (council)",
+        "groups": '\n<item>\n<parameter name="name">Index purists &amp; overlap critics</parameter>\n<parameter name="stance">against</parameter>\n<parameter name="share_pct">40</parameter>\n<parameter name="arguments">overlap</parameter>\n</item>\n<item>\n<parameter name="name">Cash-drag sceptics</parameter>\n<parameter name="stance">mixed</parameter>',
+        "overall_for_pct": "35%", "overall_against_pct": None, "gaps": None, "source_mix": 3,
+    }
+    out = llm.coerce(br.BRIEF_SCHEMA, bad)
+    assert out["key_facts"] == ["22% of catch (reddit)", "£2.1m fund (council)"]
+    assert [g["name"] for g in out["groups"]] == ["Index purists & overlap critics", "Cash-drag sceptics"]
+    assert out["groups"][0]["stance"] == "against" and out["groups"][0]["share_pct"] == 40 and out["groups"][0]["arguments"] == ["overlap"]
+    assert out["groups"][1]["stance"] == "mixed" and out["groups"][1]["quotes"] == []
+    assert out["overall_for_pct"] == 35 and out["overall_against_pct"] == 0 and out["gaps"] == [] and out["source_mix"] == "3"
+    # brief_for_prompt must not crash on the raw broken row either
+    assert "Index purists" in br.brief_for_prompt(bad)
+
+
+def test_analyze_raises_on_truncation(monkeypatch):
+    from app.services.evidence import llm, plan as pln
+
+    async def fake_create(client, *, session_id=None, label="", **kw):
+        return types.SimpleNamespace(content=[types.SimpleNamespace(type="tool_use", name="record", input={"web_queries": "a"})], stop_reason="max_tokens")
+    monkeypatch.setattr(llm, "tracked_messages_create", fake_create)
+    with pytest.raises(llm.LlmTruncated):
+        asyncio.run(llm.analyze(pln.PLAN_SCHEMA, "s", "u"))
+
+
 # ── the loop end to end (mocked network + LLM) on SQLite via the API ────────
 
 @pytest.fixture

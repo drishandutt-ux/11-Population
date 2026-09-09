@@ -69,11 +69,18 @@ async def _emit(session_id: str, event: dict):
     await publish(session_channel(session_id), event)
 
 
+def _safe_brief(b):
+    if b is None:
+        return None
+    from .brief import normalise_brief
+    return normalise_brief(b)
+
+
 def _run_payload(run: ResearchRun) -> dict:
     return {
         "id": run.id, "session_id": run.session_id, "status": run.status, "question": run.question, "sources": run.sources,
         "frame": run.frame, "plan": run.plan, "verdicts": run.verdicts or [], "covered": run.covered or [], "budget": run.budget or {},
-        "brief": run.brief, "recommendations": run.recommendations, "note": run.note,
+        "brief": _safe_brief(run.brief), "recommendations": [r for r in (run.recommendations or []) if isinstance(r, dict)] if isinstance(run.recommendations, list) else None, "note": run.note,
         "started_at": _iso(run.started_at),
         "finished_at": _iso(run.finished_at),
     }

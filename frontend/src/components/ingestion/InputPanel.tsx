@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { api, Session, ResearchState, EvidenceItem } from "@/lib/api";
 import ResearchPanel from "./ResearchPanel";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import {
   Type, Upload, Youtube, CheckCircle, Loader2, X, Plus,
   FileText, FileSpreadsheet, FileImage, FileCode, Presentation, Sparkles, Search,
@@ -359,6 +360,7 @@ export default function InputPanel({
           <div className="p-5 space-y-4">
             {/* ── Research (auto web + Reddit evidence) ── */}
             {tab === "research" && (
+              <ErrorBoundary label="The research panel">
               <ResearchPanel
                 sessionId={session.id}
                 state={research}
@@ -368,6 +370,7 @@ export default function InputPanel({
                 onAddSubQuestion={onResearchSubQuestion ?? (async () => {})}
                 onToggleExclude={onEvidenceToggle ?? (async () => {})}
               />
+              </ErrorBoundary>
             )}
 
             {/* ── Text ── */}

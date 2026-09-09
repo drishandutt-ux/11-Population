@@ -12,7 +12,7 @@ from app.core import database as dbm
 from app.models.evidence import Evidence
 
 from .frame import frame_for_prompt
-from .llm import analyze, arr, enum, i, obj, s
+from .llm import LlmTruncated, analyze, arr, coerce, enum, i, obj, s
 
 BRIEF_SCHEMA = obj({
     "summary": s("3-5 sentences: what the evidence establishes about the question, with the responsible bodies and dates"),
@@ -60,6 +60,16 @@ def _render(rows: list[Evidence]) -> str:
     return "\n\n".join(parts)
 
 
+def normalise_brief(b) -> dict:
+    """Any stored/served brief passes through the schema coercion (old rows may hold the model's
+    malformed nested output). Preserves evidence_count."""
+    if not isinstance(b, dict):
+        return empty_brief()
+    out = coerce(BRIEF_SCHEMA, b)
+    out["evidence_count"] = int(b.get("evidence_count") or 0)
+    return out
+
+
 async def build_brief(session_id: str, question: str, frame: Optional[dict]) -> dict:
     rows = await load_on_topic(session_id)
     if not rows:
@@ -67,15 +77,25 @@ async def build_brief(session_id: str, question: str, frame: Optional[dict]) -> 
     web = sum(1 for r in rows if r.source_class == "web")
     social = len(rows) - web
     comments = sum(len((r.structured or {}).get("public_comments") or []) for r in rows)
-    try:
-        b = await analyze(
-            BRIEF_SCHEMA, SYSTEM,
-            f"Question: {question}\n" + (f"\nResearch frame:\n{frame_for_prompt(frame)}\n" if frame else "") + f"\nEvidence ({web} web pages, {social} Reddit posts, {comments} comments):\n\n{_render(rows)}",
-            session_id=session_id, label="research_brief", max_tokens=4000,
-        )
-    except Exception as e:  # noqa: BLE001
-        print(f"[research] brief failed: {type(e).__name__}: {e}")
-        return empty_brief(f"Brief generation failed: {type(e).__name__}")
+    head = f"Question: {question}\n" + (f"\nResearch frame:\n{frame_for_prompt(frame)}\n" if frame else "")
+    # Nested array-of-object output is the model's weak spot: give it room, and if it still
+    # truncates, retry once on the top half of the evidence.
+    for attempt, subset in enumerate((rows, rows[: max(8, len(rows) // 2)])):
+        try:
+            b = await analyze(
+                BRIEF_SCHEMA, SYSTEM,
+                head + f"\nEvidence ({web} web pages, {social} Reddit posts, {comments} comments):\n\n{_render(subset)}",
+                session_id=session_id, label="research_brief", max_tokens=8000,
+            )
+            break
+        except LlmTruncated as e:
+            print(f"[research] brief truncated (attempt {attempt + 1}): {e}")
+            b = None
+        except Exception as e:  # noqa: BLE001
+            print(f"[research] brief failed: {type(e).__name__}: {e}")
+            return empty_brief(f"Brief generation failed: {type(e).__name__}")
+    if b is None:
+        return empty_brief("Brief generation was cut short twice; try Run again with fewer sources.")
     b["evidence_count"] = len(rows)
     b["source_mix"] = b.get("source_mix") or f"{web} web pages, {social} Reddit posts, {comments} comments"
     return b
@@ -83,6 +103,7 @@ async def build_brief(session_id: str, question: str, frame: Optional[dict]) -> 
 
 def brief_for_prompt(b: Optional[dict], max_chars: int = 3500) -> str:
     """Compact text for persona spawning and agent context."""
+    b = normalise_brief(b) if b else None
     if not b or not b.get("groups") and not b.get("key_facts"):
         return ""
     lines = ["OBSERVED PUBLIC EVIDENCE (real sources and real people, gathered for this question):", b.get("summary", "")]

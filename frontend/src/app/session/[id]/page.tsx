@@ -11,6 +11,7 @@ import SimulationControls from "@/components/simulation/SimulationControls";
 import KGPanel from "@/components/knowledge-graph/KGPanel";
 import ReportChat from "@/components/report/ReportChat";
 import AgentDirectory from "@/components/simulation/AgentDirectory";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 type Tab = "ingest" | "agents" | "simulation" | "kg" | "report";
 type OpinionsStatus = "idle" | "loading" | "done" | "error";
@@ -442,8 +443,9 @@ export default function SessionPage() {
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* Tab content — each tab is isolated so one bad payload can't blank the whole session */}
       <div className="flex-1 overflow-hidden min-h-0">
+        <ErrorBoundary label="This tab">
         {activeTab === "ingest" && session && (
           <InputPanel
             session={session}
@@ -510,6 +512,7 @@ export default function SessionPage() {
             onClearReport={() => setReportContent(null)}
           />
         )}
+        </ErrorBoundary>
       </div>
     </div>
   );

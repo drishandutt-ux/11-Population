@@ -59,7 +59,7 @@ async def recommend_tools(session_id: str, question: str, frame: Optional[dict],
             SCHEMA, SYSTEM,
             f"Question: {question}\n" + (f"\nResearch frame:\n{frame_for_prompt(frame)}\n" if frame else "") + (f"\n{brief_for_prompt(brief, 3000)}\n" if brief else "")
             + "\nAvailable tools:\n" + "\n".join(f"- {k}: {v}" for k, v in TOOLS.items()),
-            session_id=session_id, label="research_recommend", max_tokens=2000,
+            session_id=session_id, label="research_recommend", max_tokens=4000,
         )
         raw = r.get("recommendations", [])
         if isinstance(raw, dict):
