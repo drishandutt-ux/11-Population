@@ -112,6 +112,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(dbm, "engine", eng)
     monkeypatch.setattr(dbm, "AsyncSessionLocal", async_sessionmaker(eng, expire_on_commit=False))
     monkeypatch.setattr(dbm, "_sqlite", True)
+    monkeypatch.setattr(auth_mod, "_role_cache", {})   # roles are per-DB; never leak between tests
 
     async def _get_db():
         async with dbm.AsyncSessionLocal() as s:
@@ -175,6 +176,39 @@ def test_websocket_rejects_bad_token_and_foreign_session(auth_on, client):
     # Owner connects fine and receives the keepalive/ping loop (we just check accept)
     with client.websocket_connect(f"/ws/{sid}?token={_token('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')}") as ws:
         assert ws is not None
+
+
+def test_public_config_and_me(auth_on, client):
+    cfg = client.get("/api/v1/config").json()
+    assert cfg["auth"]["enabled"] is True and cfg["auth"]["supabase_url"] == PROJECT and cfg["auth"]["anon_key"] == "anon"
+    assert client.get("/api/v1/me").status_code == 401
+    a = {"Authorization": f"Bearer {_token('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')}"}
+    me = client.get("/api/v1/me", headers=a).json()
+    assert me["email"] == "a@x.com"
+
+
+def test_first_user_is_admin_and_admin_sees_everything(auth_on, client):
+    a = {"Authorization": f"Bearer {_token('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')}"}
+    b = {"Authorization": f"Bearer {_token('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', email='b@x.com')}"}
+    # First /me creates the first profile → admin; the second user is a member
+    assert client.get("/api/v1/me", headers=a).json()["role"] == "admin"
+    assert client.get("/api/v1/me", headers=b).json()["role"] == "member"
+    sid_b = client.post("/api/v1/sessions", json={"title": "B's", "query": "q"}, headers=b).json()["id"]
+    # Member cannot use admin routes; admin can, and can read the member's session
+    assert client.get("/api/v1/admin/users", headers=b).status_code == 403
+    users = client.get("/api/v1/admin/users", headers=a).json()
+    assert {u["email"]: u["role"] for u in users} == {"a@x.com": "admin", "b@x.com": "member"}
+    assert client.get(f"/api/v1/sessions/{sid_b}", headers=a).status_code == 200
+    everyone = client.get("/api/v1/sessions?scope=all", headers=a).json()
+    assert [s["owner_email"] for s in everyone] == ["b@x.com"]
+    assert client.get("/api/v1/sessions", headers=a).json() == []          # own list stays own
+    assert client.get("/api/v1/sessions?scope=all", headers=b).json()[0]["id"] == sid_b  # member: scope ignored, still own
+    # Promote / demote with last-admin protection
+    bid = [u["id"] for u in users if u["email"] == "b@x.com"][0]
+    aid = [u["id"] for u in users if u["email"] == "a@x.com"][0]
+    assert client.patch(f"/api/v1/admin/users/{aid}/role", json={"role": "member"}, headers=a).status_code == 400
+    assert client.patch(f"/api/v1/admin/users/{bid}/role", json={"role": "admin"}, headers=a).json()["role"] == "admin"
+    assert client.get("/api/v1/me", headers=b).json()["role"] == "admin"
 
 
 def test_dev_mode_api_needs_no_token(auth_off, client):

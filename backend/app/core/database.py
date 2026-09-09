@@ -58,7 +58,7 @@ async def create_tables():
     Postgres (production): run Alembic migrations (`backend/alembic/`) — the schema is
     versioned and the Supabase project is stamped at the current head.
     SQLite (local dev / tests): create_all + the idempotent column adds below."""
-    import app.models.kg  # noqa: F401 — make sure every model is registered on Base
+    import app.models.kg, app.models.profile  # noqa: F401 — make sure every model is registered on Base
     if _sqlite:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

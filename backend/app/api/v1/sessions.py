@@ -27,6 +27,8 @@ class SessionResponse(BaseModel):
     agent_count: int
     created_at: datetime
     updated_at: datetime
+    owner_email: Optional[str] = None   # only populated for admins listing ?scope=all
+    is_mine: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -48,13 +50,30 @@ async def create_session(body: CreateSessionRequest, user: AuthUser = Depends(ge
 
 
 @router.get("", response_model=list[SessionResponse])
-async def list_sessions(user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    q = select(AnalysisSession).order_by(AnalysisSession.created_at.desc()).limit(50)
-    # With auth on, only the caller's sessions; in dev mode everything (rows have no owner).
-    if not user.is_dev:
+async def list_sessions(
+    scope: str = "mine",
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The caller's sessions. Admins may pass `?scope=all` to see every user's, with owner_email."""
+    q = select(AnalysisSession).order_by(AnalysisSession.created_at.desc()).limit(200)
+    everyone = scope == "all" and user.is_admin
+    if not user.is_dev and not everyone:
         q = q.where(AnalysisSession.user_id == user.id)
-    result = await db.execute(q)
-    return result.scalars().all()
+    rows = (await db.execute(q)).scalars().all()
+    if not everyone:
+        return rows
+    from app.models.profile import Profile
+    owners = {str(p.id).replace("-", ""): p.email for p in (await db.execute(select(Profile))).scalars().all()}
+    return [
+        {
+            "id": r.id, "title": r.title, "query": r.query, "status": r.status, "agent_count": r.agent_count,
+            "created_at": r.created_at, "updated_at": r.updated_at,
+            "owner_email": owners.get(str(r.user_id).replace("-", ""), None) if r.user_id else None,
+            "is_mine": str(r.user_id).replace("-", "") == str(user.id).replace("-", "") if r.user_id else False,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/{session_id}", response_model=SessionResponse)

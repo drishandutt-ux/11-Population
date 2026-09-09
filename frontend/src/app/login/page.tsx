@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, LogIn, Mail, UserPlus } from "lucide-react";
-import { authEnabled, supabase } from "@/lib/supabase";
+import { getClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 
 type Mode = "signin" | "signup" | "magic";
@@ -11,7 +11,7 @@ type Mode = "signin" | "signup" | "magic";
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const { user, loading } = useAuth();
+  const { user, loading, enabled } = useAuth();
   const next = params.get("next") || "/";
 
   const [mode, setMode] = useState<Mode>("signin");
@@ -26,17 +26,21 @@ function LoginForm() {
     if (!loading && user) router.replace(next.startsWith("/") ? next : "/");
   }, [user, loading, next, router]);
 
-  if (!authEnabled) {
+  if (loading) {
+    return <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />;
+  }
+  if (!enabled) {
     return (
-      <div className="max-w-sm text-center text-sm text-muted-foreground">
-        Sign-in is not configured for this deployment (no <code>NEXT_PUBLIC_SUPABASE_URL</code>). The app runs without accounts.
+      <div className="max-w-sm text-center text-sm text-muted-foreground space-y-2">
+        <p>Sign-in is not available: the backend has no Supabase project configured (<code>APP_SUPABASE_URL</code>) and the frontend build has no <code>NEXT_PUBLIC_SUPABASE_URL</code>.</p>
+        <button onClick={() => router.replace("/")} className="text-primary text-xs">Continue without an account</button>
       </div>
     );
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const c = supabase();
+    const c = await getClient();
     if (!c || busy) return;
     setBusy(true);
     setError(null);
@@ -83,7 +87,11 @@ function LoginForm() {
           {mode === "signup" ? <UserPlus className="w-4 h-4 text-primary" /> : mode === "magic" ? <Mail className="w-4 h-4 text-primary" /> : <LogIn className="w-4 h-4 text-primary" />}
           {title}
         </h1>
-        <p className="text-xs text-muted-foreground mb-5">Your sessions, populations and reports are private to your account.</p>
+        <p className="text-xs text-muted-foreground mb-5">
+          {mode === "signup"
+            ? "Your sessions, populations and reports are private to your account. The first account to register becomes the admin."
+            : "Your sessions, populations and reports are private to your account."}
+        </p>
 
         <form onSubmit={submit} className="space-y-3.5">
           <div>

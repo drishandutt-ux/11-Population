@@ -36,6 +36,11 @@ class AuthUser:
     id: str
     email: Optional[str] = None
     is_dev: bool = False
+    role: str = "member"
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin" or self.is_dev
 
 
 class AuthError(HTTPException):
@@ -47,6 +52,8 @@ class AuthError(HTTPException):
 _jwks_client: Optional[PyJWKClient] = None
 _user_cache: dict[str, tuple[float, AuthUser]] = {}   # token -> (expires_at, user); HS256 path only
 _USER_CACHE_TTL = 60.0
+_role_cache: dict[str, tuple[float, str]] = {}        # user id -> (expires_at, role)
+_ROLE_CACHE_TTL = 60.0
 
 
 def _clean(v: str) -> str:
@@ -137,14 +144,68 @@ def _bearer(request: Request) -> Optional[str]:
     return None
 
 
+def forget_role(user_id: str) -> None:
+    _role_cache.pop(str(user_id).replace("-", ""), None)
+
+
+async def _lookup_role(user_id: str) -> str:
+    """Role from `profiles` (cached 60 s). Unknown user → member."""
+    key = str(user_id).replace("-", "")
+    hit = _role_cache.get(key)
+    now = time.time()
+    if hit and hit[0] > now:
+        return hit[1]
+    role = "member"
+    try:
+        from sqlalchemy import select
+        from app.core.database import AsyncSessionLocal
+        from app.models.profile import Profile
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(select(Profile).where(Profile.id == user_id))).scalar_one_or_none()
+            if row and row.role:
+                role = row.role
+    except Exception as e:  # noqa: BLE001 — a missing profiles table must not lock users out
+        print(f"[auth] role lookup failed for {user_id}: {type(e).__name__}: {e}")
+    _role_cache[key] = (now + _ROLE_CACHE_TTL, role)
+    return role
+
+
+async def with_role(user: AuthUser) -> AuthUser:
+    if user.is_dev:
+        return user
+    return AuthUser(id=user.id, email=user.email, is_dev=False, role=await _lookup_role(user.id))
+
+
+async def ensure_profile(user: AuthUser, db) -> None:
+    """On Postgres the sign-up trigger creates the profile. On SQLite dev (no trigger) — or if a
+    user somehow predates the trigger — create it here; the first profile ever becomes admin."""
+    if user.is_dev:
+        return
+    from sqlalchemy import select, func
+    from app.models.profile import Profile
+    row = (await db.execute(select(Profile).where(Profile.id == user.id))).scalar_one_or_none()
+    if row:
+        return
+    count = (await db.execute(select(func.count()).select_from(Profile))).scalar_one()
+    db.add(Profile(id=user.id, email=user.email, display_name=(user.email or "").split("@")[0], role="admin" if count == 0 else "member"))
+    await db.commit()
+    forget_role(user.id)
+
+
 async def get_current_user(request: Request) -> AuthUser:
-    """FastAPI dependency: the signed-in user, or the fixed dev user when auth is off."""
+    """FastAPI dependency: the signed-in user (with role), or the fixed dev user when auth is off."""
     if not auth_enabled():
-        return AuthUser(id=DEV_USER_ID, email="dev@localhost", is_dev=True)
+        return AuthUser(id=DEV_USER_ID, email="dev@localhost", is_dev=True, role="admin")
     token = _bearer(request)
     if not token:
         raise AuthError()
-    return await verify_token(token)
+    return await with_role(await verify_token(token))
+
+
+async def require_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
 
 
 async def user_from_ws_token(token: Optional[str]) -> Optional[AuthUser]:
@@ -154,7 +215,7 @@ async def user_from_ws_token(token: Optional[str]) -> Optional[AuthUser]:
     if not token:
         return None
     try:
-        return await verify_token(token)
+        return await with_role(await verify_token(token))
     except HTTPException:
         return None
 
@@ -174,8 +235,10 @@ async def get_owned_session(session_id: str, user: AuthUser, db):
 
 
 def owns(session, user: AuthUser) -> bool:
-    """A row with no owner (created before auth existed, or in dev mode) belongs to whoever is signed in
-    only when auth is off; with auth on, ownerless rows are invisible."""
+    """Admins see everything. Otherwise: a row with no owner (created before auth existed, or in dev
+    mode) is visible only when auth is off; with auth on, ownerless rows are invisible."""
+    if user.is_admin:
+        return True
     owner = getattr(session, "user_id", None)
     if owner is None:
         return not auth_enabled()

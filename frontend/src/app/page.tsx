@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
-import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut } from "lucide-react";
+import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 export default function HomePage() {
@@ -15,11 +15,12 @@ export default function HomePage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const { user, enabled: authOn, signOut } = useAuth();
+  const { user, me, enabled: authOn, signOut } = useAuth();
+  const [scope, setScope] = useState<"mine" | "all">("mine");
 
   useEffect(() => {
-    api.sessions.list().then((s) => setSessions(s as Session[])).catch(() => {});
-  }, []);
+    api.sessions.list(scope).then((s) => setSessions(s as Session[])).catch(() => {});
+  }, [scope]);
 
   async function handleDelete(id: string) {
     setDeletingId(id);
@@ -62,6 +63,15 @@ export default function HomePage() {
           <span className="text-xs text-muted-foreground">Multi-agent simulation</span>
           {authOn && user && (
             <div className="flex items-center gap-2 pl-4 border-l border-border/50">
+              {me?.is_admin && (
+                <button
+                  onClick={() => router.push("/admin")}
+                  className="flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-primary/40 text-primary bg-primary/10 hover:bg-primary/20"
+                  title="Manage users"
+                >
+                  <ShieldCheck className="w-3 h-3" /> Admin
+                </button>
+              )}
               <span className="text-xs text-foreground/80 max-w-[220px] truncate" title={user.email ?? ""}>{user.email}</span>
               <button
                 onClick={() => { signOut().then(() => router.replace("/login")); }}
@@ -181,7 +191,22 @@ export default function HomePage() {
           {/* Recent sessions */}
           {sessions.length > 0 && (
             <div className="mt-6 flex-1 min-h-0 flex flex-col">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3 shrink-0">Recent sessions</p>
+              <div className="flex items-center justify-between mb-3 shrink-0">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Recent sessions</p>
+                {me?.is_admin && (
+                  <div className="flex bg-muted rounded p-0.5 gap-0.5">
+                    {(["mine", "all"] as const).map((sc) => (
+                      <button
+                        key={sc}
+                        onClick={() => setScope(sc)}
+                        className={`text-[10px] px-2 py-0.5 rounded ${scope === sc ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {sc === "mine" ? "Mine" : "All users"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="space-y-1.5 overflow-y-auto flex-1">
                 {sessions.map((s) => {
                   const isConfirming = confirmDeleteId === s.id;
@@ -203,6 +228,9 @@ export default function HomePage() {
                             <StatusDot status={s.status} />
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{s.query}</p>
+                          {scope === "all" && s.owner_email && (
+                            <p className="text-[10px] text-primary/70 truncate mt-0.5">{s.is_mine ? "you" : s.owner_email}</p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                           {isConfirming ? (

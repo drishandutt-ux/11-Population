@@ -46,10 +46,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // Sessions
 export const api = {
+  me: () => request<Me>("/me"),
+  admin: {
+    users: () => request<AdminUser[]>("/admin/users"),
+    setRole: (userId: string, role: "admin" | "member") =>
+      request(`/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  },
   sessions: {
     create: (title: string, query: string) =>
       request("/sessions", { method: "POST", body: JSON.stringify({ title, query }) }),
-    list: () => request("/sessions"),
+    list: (scope: "mine" | "all" = "mine") => request<Session[]>(`/sessions${scope === "all" ? "?scope=all" : ""}`),
     get: (id: string) => request(`/sessions/${id}`),
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
     posts: (id: string) => request(`/sessions/${id}/posts`),
@@ -154,6 +160,20 @@ export type Session = {
   agent_count: number;
   created_at: string;
   updated_at: string;
+  owner_email?: string | null; // admins listing everyone's sessions
+  is_mine?: boolean | null;
+};
+
+export type Me = { id: string; email: string | null; role: "admin" | "member"; is_admin: boolean };
+
+export type AdminUser = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  role: "admin" | "member";
+  created_at: string;
+  sessions: number;
+  is_you: boolean;
 };
 
 export type DialCategory = {
