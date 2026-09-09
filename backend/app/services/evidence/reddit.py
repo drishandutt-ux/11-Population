@@ -67,26 +67,72 @@ async def _json_httpx(path: str) -> Any:
         raise RedditBlocked("Reddit returned a non-JSON page (login or block page)")
 
 
-async def _json_browser(path: str) -> Any:
-    from playwright.async_api import async_playwright  # type: ignore
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+class _RedditBrowser:
+    """One headless Chromium per process, parked on reddit.com, reused for every JSON fetch.
+    Launching a browser per call was slow (~2 s each) and drew 403s on comment fetches; one
+    warm page behaves like a normal visitor. Fetches are serialised by a lock; any failure
+    tears the browser down so the next call starts clean."""
+
+    def __init__(self):
+        self._pw = None
+        self._browser = None
+        self._page = None
+        self._lock = asyncio.Lock()
+        self.last_used = 0.0
+
+    async def _ensure(self):
+        if self._page is not None:
+            return
+        from playwright.async_api import async_playwright  # type: ignore
+        self._pw = await async_playwright().start()
+        self._browser = await self._pw.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+        ctx = await self._browser.new_context(user_agent=UA, locale="en-GB")
+        self._page = await ctx.new_page()
+        await self._page.goto("https://www.reddit.com/", wait_until="domcontentloaded", timeout=25_000)
+        await self._page.wait_for_timeout(1200)
+
+    async def close(self):
         try:
-            ctx = await browser.new_context(user_agent=UA, locale="en-GB")
-            page = await ctx.new_page()
-            await page.goto("https://www.reddit.com/", wait_until="domcontentloaded", timeout=25_000)
-            await page.wait_for_timeout(1200)
-            out = await page.evaluate("""async (p) => { const r = await fetch(p, {headers: {accept: 'application/json'}, credentials: 'include'}); const t = await r.text(); return {status: r.status, text: t.slice(0, 3000000)}; }""", path)
-        finally:
-            await browser.close()
-    if out["status"] in (403, 429):
-        raise RedditBlocked(f"Reddit blocked the browser fetch ({out['status']})")
-    if out["status"] != 200:
-        raise RuntimeError(f"Reddit {path.split('?')[0]} → HTTP {out['status']} (browser)")
-    try:
-        return json.loads(out["text"])
-    except Exception:  # noqa: BLE001
-        raise RedditBlocked("Reddit returned a non-JSON page (browser)")
+            if self._browser:
+                await self._browser.close()
+            if self._pw:
+                await self._pw.stop()
+        except Exception:  # noqa: BLE001
+            pass
+        self._pw = self._browser = self._page = None
+
+    async def fetch(self, path: str) -> Any:
+        async with self._lock:
+            try:
+                await self._ensure()
+                out = await self._page.evaluate(
+                    """async (p) => { const r = await fetch(p, {headers: {accept: 'application/json'}, credentials: 'include'}); const t = await r.text(); return {status: r.status, text: t.slice(0, 3000000)}; }""",
+                    path,
+                )
+            except Exception:
+                await self.close()
+                raise
+            import time as _t
+            self.last_used = _t.time()
+        if out["status"] in (403, 429):
+            raise RedditBlocked(f"Reddit blocked the browser fetch ({out['status']})")
+        if out["status"] != 200:
+            raise RuntimeError(f"Reddit {path.split('?')[0]} → HTTP {out['status']} (browser)")
+        try:
+            return json.loads(out["text"])
+        except Exception:  # noqa: BLE001
+            raise RedditBlocked("Reddit returned a non-JSON page (browser)")
+
+
+_browser = _RedditBrowser()
+
+
+async def _json_browser(path: str) -> Any:
+    return await _browser.fetch(path)
+
+
+async def close_browser():
+    await _browser.close()
 
 
 async def reddit_json(path: str) -> Any:
@@ -97,7 +143,11 @@ async def reddit_json(path: str) -> Any:
             import playwright  # type: ignore # noqa: F401
         except Exception:
             raise e
-        return await _json_browser(path)
+        try:
+            return await _json_browser(path)
+        except RedditBlocked:
+            await asyncio.sleep(2.5)   # a burst of fetches trips Reddit briefly; one calm retry
+            return await _json_browser(path)
 
 
 def split_subreddit(query: str) -> tuple[Optional[str], str]:
