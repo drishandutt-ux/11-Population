@@ -1,7 +1,8 @@
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.database import create_tables
 from app.core.redis_client import subscribe, unsubscribe, session_channel
@@ -28,6 +29,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception):
+    """Return JSON 500s from inside the middleware stack so CORS headers are attached. Without
+    this, an unhandled error reached the browser with no CORS headers and showed up as
+    "Couldn't reach the server" instead of the real message."""
+    import traceback
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
+    return JSONResponse(status_code=500, content={"detail": f"Server error: {type(exc).__name__}: {str(exc)[:300]}"})
+
 
 app.include_router(sessions.router, prefix="/api/v1")
 app.include_router(ingestion.router, prefix="/api/v1")
@@ -78,11 +89,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 @app.get("/health")
 async def health():
+    """Liveness + an honest database check: runs SELECT 1 so a bad DATABASE_URL shows here
+    (`database_ok: false` + the driver's message) instead of as 500s on every request."""
     from app.core.auth import auth_enabled, project_url
-    from app.core.database import _sqlite
+    from app.core.database import _sqlite, AsyncSessionLocal
+    from sqlalchemy import text
+    db_ok, db_error = True, None
+    try:
+        async with AsyncSessionLocal() as db:
+            await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=8)
+    except Exception as e:  # noqa: BLE001
+        db_ok, db_error = False, f"{type(e).__name__}: {str(e)[:200]}"
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
         "auth": "supabase" if auth_enabled() else "off (dev)",
         "auth_issuer": (project_url() + "/auth/v1") if auth_enabled() else None,
         "database": "sqlite" if _sqlite else "postgres",
+        "database_ok": db_ok,
+        "database_error": db_error,
     }
