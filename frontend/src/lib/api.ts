@@ -299,4 +299,5 @@ export type WSEvent =
   | { type: "research_budget"; run_id: string; budget: Record<string, number> }
   | { type: "research_brief"; run_id: string; brief: any }
   | { type: "research_complete"; run_id: string; status: string; note: string; budget: Record<string, number>; covered: string[]; recommendations: any[] }
-  | { type: "research_error"; run_id: string; error: string };
+  | { type: "research_error"; run_id: string; error: string }
+  | { type: "research_status"; run_id: string; status: string; note?: string };

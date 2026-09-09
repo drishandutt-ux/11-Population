@@ -274,6 +274,54 @@ def test_research_loop_end_to_end(client, monkeypatch):
     assert client.post(f"/api/v1/sessions/{sid}/research/stop").json()["stopped"] is False
 
 
+def test_stop_mid_run_still_builds_brief(client, monkeypatch):
+    """Stop while the Reddit attempt is fetching comments: the run ends 'stopped', keeps what it
+    gathered, and still produces a brief + recommendations for persona formation."""
+    _mock_pipeline(monkeypatch)
+    from app.services.evidence import loop
+    stopped_during_comments = {"n": 0}
+
+    async def slow_comments(post, n):
+        stopped_during_comments["n"] += 1
+        await asyncio.sleep(0.3)
+        return [rd.SocialComment("u/c", "We lose 22% of our catch to that zone and nobody asked us.", 30, "2026-08-05T00:00:00+00:00")]
+
+    async def many_posts(q):
+        return [rd.ReadPost(f"p{i}", f"Wind farm off Portland thread {i}", author="u/a", author_title="r/Dorset", published_at="2026-08-05T00:00:00+00:00", url=f"https://www.reddit.com/r/Dorset/comments/p{i}/x/", likes=40, comment_count=12, payload={"title": "Wind farm", "body": "", "kind": "text"}) for i in range(6)], "Read 6"
+
+    async def all_on_topic(question, platform, query, tried, posts, min_on_topic, **kw):
+        return judge_social.JudgeResult([judge_social.PostVerdict(0.9, True) for _ in posts], len(posts), False, "refined query", "ok", "test")
+
+    monkeypatch.setattr(loop, "reddit_comments", slow_comments)
+    monkeypatch.setattr(loop, "search_reddit", many_posts)
+    monkeypatch.setattr(loop, "judge_posts", all_on_topic)
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": True}).json()["id"]
+    time.sleep(0.5)                                   # first comment fetch is in flight
+    r = client.post(f"/api/v1/sessions/{sid}/research/stop").json()
+    assert r["stopped"] is True
+    state = None
+    for _ in range(100):
+        state = client.get(f"/api/v1/sessions/{sid}/research").json()
+        if state["run"]["status"] in ("stopped", "complete", "error"):
+            break
+        time.sleep(0.1)
+    assert state["run"]["status"] == "stopped" and state["run"]["note"] == "stopped by user"
+    assert stopped_during_comments["n"] < 6                       # comment fetching was cut short
+    assert state["run"]["brief"]["groups"][0]["name"] == "Fishing cooperative"   # brief still built
+    assert state["run"]["recommendations"][0]["tool"] == "debate"
+    assert state["counts"]["social"]["on_topic"] == 6             # gathered posts kept
+
+
+def test_recommender_tolerates_malformed_model_output(monkeypatch):
+    from app.services.evidence import recommend as rc
+
+    async def fake(schema, system, user, **kw):
+        return {"recommendations": ["debate", {"tool": "ab_experiment", "confidence": 0.8, "reason": "r", "spec_summary": "s", "variants": "A vs B", "price_anchors": None, "segments": [1, 2], "attributes": []}, {"tool": "nope"}]}
+    monkeypatch.setattr(rc, "analyze", fake)
+    recs = asyncio.run(rc.recommend_tools("s", "q", None, None))
+    assert [r["tool"] for r in recs] == ["ab_experiment"] and recs[0]["variants"] == ["A vs B"] and recs[0]["segments"] == ["1", "2"]
+
+
 def test_session_without_auto_research_starts_nothing(client, monkeypatch):
     _mock_pipeline(monkeypatch)
     sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]

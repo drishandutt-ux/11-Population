@@ -262,6 +262,8 @@ export default function SessionPage() {
         setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, status: event.status, note: event.note, budget: event.budget, covered: event.covered, recommendations: event.recommendations, finished_at: new Date().toISOString() } } : prev);
         loadResearch();
         refreshSession();
+      } else if (event.type === "research_status") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, status: event.status, note: event.note ?? prev.run.note } } : prev);
       } else if (event.type === "research_error") {
         setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, status: "error", note: event.error } } : prev);
       }
@@ -450,7 +452,11 @@ export default function SessionPage() {
             research={research}
             evidence={evidence}
             onResearchStart={async () => { await api.research.start(id); }}
-            onResearchStop={async () => { await api.research.stop(id); }}
+            onResearchStop={async () => {
+              // Optimistic: show "stopping…" at once; the backend confirms over the socket.
+              setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, status: "stopping" } } : prev);
+              await api.research.stop(id);
+            }}
             onResearchSubQuestion={async (text) => { await api.research.addSubQuestion(id, text); }}
             onEvidenceToggle={async (item) => {
               const updated = await api.research.exclude(id, item.id, !item.excluded);

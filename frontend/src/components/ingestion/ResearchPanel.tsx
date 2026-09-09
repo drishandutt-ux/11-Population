@@ -18,7 +18,7 @@ interface Props {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  queued: "queued", running: "researching…", stopping: "stopping…", complete: "complete", stopped: "stopped", interrupted: "interrupted", error: "failed",
+  queued: "queued", running: "researching…", stopping: "stopping…", finalising: "building the brief…", complete: "complete", stopped: "stopped", interrupted: "interrupted", error: "failed",
 };
 
 function fmtSecs(s: number) {
@@ -98,7 +98,8 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
   const [filter, setFilter] = useState<"all" | "on" | "web" | "social">("all");
   const feedRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(Date.now());
-  const active = run?.status === "running" || run?.status === "queued" || run?.status === "stopping";
+  const active = run?.status === "running" || run?.status === "queued" || run?.status === "stopping" || run?.status === "finalising";
+  const canStop = run?.status === "running" || run?.status === "queued";
 
   useEffect(() => {
     if (!active) return;
@@ -161,8 +162,8 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
             <span className="text-xs font-semibold text-foreground">Research · {STATUS_LABEL[run.status] || run.status}</span>
             <span className="ml-auto text-[10px] text-muted-foreground/60 tabular-nums">{fmtSecs(elapsed)}</span>
             {active ? (
-              <button onClick={() => act(onStop)} disabled={busy} className="text-[10px] flex items-center gap-1 border border-red-500/40 text-red-400 rounded px-1.5 py-0.5 hover:bg-red-500/10 disabled:opacity-50">
-                <Square className="w-2.5 h-2.5" /> Stop
+              <button onClick={() => act(onStop)} disabled={busy || !canStop} className="text-[10px] flex items-center gap-1 border border-red-500/40 text-red-400 rounded px-1.5 py-0.5 hover:bg-red-500/10 disabled:opacity-50">
+                {canStop ? <><Square className="w-2.5 h-2.5" /> Stop</> : <><Loader2 className="w-2.5 h-2.5 animate-spin" /> {run?.status === "finalising" ? "Finishing" : "Stopping"}</>}
               </button>
             ) : (
               <button onClick={() => act(onStart)} disabled={busy} className="text-[10px] flex items-center gap-1 border border-border/60 text-muted-foreground rounded px-1.5 py-0.5 hover:text-foreground disabled:opacity-50">
@@ -170,7 +171,7 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
               </button>
             )}
           </div>
-          {run.note && !active && <p className="text-[10px] text-muted-foreground/70 mb-2">{run.note}</p>}
+          {run.note && (!active || run.status === "stopping" || run.status === "finalising") && <p className="text-[10px] text-muted-foreground/70 mb-2">{run.note}</p>}
 
           {/* Sub-question checklist */}
           {run.frame ? (

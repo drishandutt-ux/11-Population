@@ -61,7 +61,14 @@ async def recommend_tools(session_id: str, question: str, frame: Optional[dict],
             + "\nAvailable tools:\n" + "\n".join(f"- {k}: {v}" for k, v in TOOLS.items()),
             session_id=session_id, label="research_recommend", max_tokens=2000,
         )
-        recs = [x for x in r.get("recommendations", []) if x.get("tool") in TOOLS]
+        raw = r.get("recommendations", [])
+        if isinstance(raw, dict):
+            raw = list(raw.values())
+        recs = [x for x in raw if isinstance(x, dict) and x.get("tool") in TOOLS]
+        for x in recs:
+            for k in ("variants", "price_anchors", "segments", "attributes"):
+                v = x.get(k)
+                x[k] = [str(i) for i in v] if isinstance(v, list) else ([str(v)] if v else [])
         for x in recs:
             x["label"] = TOOLS[x["tool"]].split(" — ")[0]
             x["confidence"] = round(max(0.0, min(1.0, float(x.get("confidence", 0)))), 2)

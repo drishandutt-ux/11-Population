@@ -121,7 +121,8 @@ async def stop_research(session_id: str) -> Optional[str]:
         run.status = "stopping"
         await db.commit()
         _stop_flags[run.id] = True
-        return run.id
+    await _emit(session_id, {"type": "research_status", "run_id": run.id, "status": "stopping", "note": "Stopping — finishing the current step, then building the brief from what was gathered."})
+    return run.id
 
 
 async def latest_run(session_id: str) -> Optional[ResearchRun]:
@@ -308,6 +309,8 @@ async def _web_loop(ctx: _Ctx):
                 budget_left = max(0, ctx.budget["max_pages"] - ctx.budget["pages"])
 
                 async def read(r: SearchResult):
+                    if ctx.stopped():
+                        return
                     try:
                         pages[r.url] = await fetch_page(r.url, ctx.question)
                     except Exception as e:  # noqa: BLE001
@@ -364,7 +367,7 @@ async def _web_loop(ctx: _Ctx):
         async with dbm.AsyncSessionLocal() as db:
             useful_rows = (await db.execute(select(Evidence).where(Evidence.id.in_([id_by_index[i] for i in useful if i in id_by_index]), Evidence.in_graph.is_(False)))).scalars().all()
         await _ingest_to_graph(ctx, list(useful_rows))
-        if verdict.satisfied or not verdict.refined_queries:
+        if verdict.satisfied or not verdict.refined_queries or ctx.stopped():
             break
         queries = verdict.refined_queries[:3]
         await asyncio.sleep(_web_query_gap())
@@ -404,6 +407,8 @@ async def _reddit_loop(ctx: _Ctx):
             p.query, p.attempt = q, attempt
         targets = sorted([p for p in fresh if p.on_topic], key=lambda p: -p.relevance)[:SOCIAL_COMMENT_POSTS]
         for p in targets:
+            if ctx.stopped():
+                break
             try:
                 p.comments = await asyncio.wait_for(reddit_comments(p, SOCIAL_COMMENTS_PER_POST), timeout=45)
             except Exception as e:  # noqa: BLE001
@@ -474,6 +479,7 @@ async def _run(run_id: str, context: str = ""):
                 print(f"[research] loop error: {type(r).__name__}: {r}")
                 traceback.print_exception(type(r), r, r.__traceback__)
 
+        await _emit(ctx.session_id, {"type": "research_status", "run_id": run_id, "status": "finalising", "note": "Building the evidence brief and tool recommendations from what was gathered."})
         # Let graph ingestion finish (bounded wait) so the brief sees a complete graph.
         if ctx.kg_tasks:
             await asyncio.wait(ctx.kg_tasks, timeout=90)
