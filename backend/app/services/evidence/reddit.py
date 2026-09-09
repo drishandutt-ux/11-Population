@@ -77,7 +77,7 @@ class _RedditBrowser:
         self._pw = None
         self._browser = None
         self._page = None
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None   # created lazily: a Lock built at import binds to no loop on older Pythons
         self.last_used = 0.0
 
     async def _ensure(self):
@@ -102,6 +102,8 @@ class _RedditBrowser:
         self._pw = self._browser = self._page = None
 
     async def fetch(self, path: str) -> Any:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             try:
                 await self._ensure()
