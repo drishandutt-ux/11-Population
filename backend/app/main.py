@@ -87,6 +87,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         unsubscribe(channel, q)
 
 
+_health_cache: dict = {}
+
+
 @app.get("/health")
 async def health():
     """Liveness + an honest database check: runs SELECT 1 so a bad DATABASE_URL shows here
@@ -94,12 +97,21 @@ async def health():
     from app.core.auth import auth_enabled, project_url
     from app.core.database import _sqlite, AsyncSessionLocal
     from sqlalchemy import text
-    db_ok, db_error = True, None
-    try:
-        async with AsyncSessionLocal() as db:
-            await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=8)
-    except Exception as e:  # noqa: BLE001
-        db_ok, db_error = False, f"{type(e).__name__}: {str(e)[:200]}"
+    import time
+    # Cache the probe for 30 s: with a wrong password every health call is a failed login, and the
+    # Supabase pooler trips a circuit breaker after too many of those.
+    now = time.time()
+    cached = _health_cache.get("at", 0)
+    if now - cached < 30:
+        db_ok, db_error = _health_cache["ok"], _health_cache["err"]
+    else:
+        db_ok, db_error = True, None
+        try:
+            async with AsyncSessionLocal() as db:
+                await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=8)
+        except Exception as e:  # noqa: BLE001
+            db_ok, db_error = False, f"{type(e).__name__}: {str(e)[:200]}"
+        _health_cache.update({"at": now, "ok": db_ok, "err": db_error})
     return {
         "status": "ok" if db_ok else "degraded",
         "auth": "supabase" if auth_enabled() else "off (dev)",
