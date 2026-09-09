@@ -236,6 +236,22 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
         })
 
         await get_lightrag(session_id)  # warm the KG cache
+        # Context grounding: rank graph entities by the question + research frame, and put the
+        # evidence brief (real sources, real reactions) in front of every agent.
+        from app.services.evidence.search.provider import query_terms
+        from app.services.evidence.frame import frame_terms
+        from app.services.evidence.brief import brief_for_prompt
+        from app.services.evidence.loop import latest_run
+        focus_terms = query_terms(query)
+        brief_text = ""
+        try:
+            run = await latest_run(session_id)
+            if run and run.frame:
+                focus_terms += frame_terms(run.frame)
+            if run and run.brief:
+                brief_text = brief_for_prompt(run.brief, 2200)
+        except Exception as e:  # noqa: BLE001
+            print(f"[orchestrator] research context unavailable: {e}")
         watcher.start()
 
         for round_num, action in enumerate(phases):
@@ -246,9 +262,11 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
             # Snapshot thread + KG once per phase (every agent in the phase shares it)
             async with AsyncSessionLocal() as db:
                 posts = await get_posts(db, session_id)
-            kg_context = get_kg_context_string(session_id, max_entities=60, max_relations=40)
-            if not kg_context.strip() or "none" in kg_context.lower():
+            kg_context = get_kg_context_string(session_id, max_entities=60, max_relations=40, focus_terms=focus_terms)
+            if "ENTITIES: none" in kg_context:
                 kg_context = f"Topic under discussion: {query}"
+            if brief_text:
+                kg_context = brief_text + "\n\n" + kg_context
             thread_context = build_thread_context(posts, agents_by_id)
 
             sem = asyncio.Semaphore(concurrency)

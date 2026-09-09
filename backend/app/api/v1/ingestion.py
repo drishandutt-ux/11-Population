@@ -30,11 +30,24 @@ async def _set_status(db: AsyncSession, session_id: str, status: SessionStatus):
         await db.commit()
 
 
+def _provenance_tag(source: str) -> str:
+    """Header line prepended to every chunk so the graph, the agents and the report know where a
+    fact came from. Model-written material is labelled synthetic and must not be read as evidence."""
+    if source == "LLM Search":
+        return "[SOURCE synthetic | model-generated research paper — a prior, NOT evidence]"
+    if source == "YouTube":
+        return "[SOURCE youtube | user-supplied video]"
+    if source == "text input":
+        return "[SOURCE personal | pasted text]"
+    return f"[SOURCE personal | {source}]"
+
+
 async def _ingest_chunks(session_id: str, raw_text: str, source: str = "document"):
     from app.core.database import AsyncSessionLocal
     from app.core.redis_client import publish, session_channel
     try:
-        chunks = chunk_text(raw_text)
+        tag = _provenance_tag(source)
+        chunks = [f"{tag}\n{c}" for c in chunk_text(raw_text)]
         rag = await get_lightrag(session_id)
         # Process in batches so frontend gets live updates
         batch_size = 5

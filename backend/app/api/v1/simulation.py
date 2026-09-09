@@ -22,6 +22,7 @@ class SpawnAgentsRequest(BaseModel):
     doc_context: str = ""
     humanity: int = 0           # 0 = expert/analytical, 100 = fully human/emotional
     humanity_coverage: int = 0  # % of the population the humanity setting applies to
+    ground_in_evidence: bool = True   # Pro: shape personas from the research evidence brief when one exists
 
 
 class SimulateRequest(BaseModel):
@@ -58,7 +59,7 @@ async def spawn_agents(
         _spawn_agents_task,
         session_id, count, mode,
         body.profile_query, body.direct_pct, body.indirect_pct, body.neutral_pct, body.doc_context,
-        body.humanity, body.humanity_coverage,
+        body.humanity, body.humanity_coverage, body.ground_in_evidence,
     )
     return {"status": "spawning", "count": count, "mode": mode}
 
@@ -84,6 +85,7 @@ async def _spawn_agents_task(
     doc_context: str = "",
     humanity: int = 0,
     humanity_coverage: int = 0,
+    ground_in_evidence: bool = True,
 ):
     from app.core.database import AsyncSessionLocal
     from app.core.redis_client import publish, session_channel
@@ -100,13 +102,23 @@ async def _spawn_agents_task(
         # ── Build the population ────────────────────────────────────────────
         if mode == "pro":
             from app.services.agents.agent_factory import generate_agents
+            brief_text = ""
+            if ground_in_evidence:
+                try:
+                    from app.services.evidence.loop import latest_run
+                    from app.services.evidence.brief import brief_for_prompt
+                    run = await latest_run(session_id)
+                    if run and run.brief:
+                        brief_text = brief_for_prompt(run.brief)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[spawn] evidence brief unavailable: {e}")
             profiles = await generate_agents(
                 session_id, query, count,
                 profile_query=profile_query,
                 direct_pct=direct_pct, indirect_pct=indirect_pct, neutral_pct=neutral_pct,
                 doc_context=doc_context,
                 humanity=humanity, humanity_coverage=humanity_coverage,
-                mode="pro",
+                mode="pro", evidence_brief=brief_text,
             )
         else:
             # FAST: sample the pre-built bank — instant, no LLM call

@@ -304,7 +304,7 @@ async def generate_post(
         user_msg = f"""The original topic/query: {query}
 
 Knowledge graph context:
-{kg_context[:1500]}
+{kg_context[:4000]}
 
 Thread discussion so far:
 {thread_context[-3000:]}
@@ -317,7 +317,7 @@ Write your reply as {agent.name}. Be direct, specific, and engage with what was 
         user_msg = f"""The original topic/query: {query}
 
 Knowledge graph context:
-{kg_context[:1500]}
+{kg_context[:4000]}
 
 Thread discussion so far:
 {thread_context[-3000:]}
@@ -330,7 +330,7 @@ Write a pointed, substantive rebuttal as {agent.name}. Be respectful but firm.""
         user_msg = f"""The original topic/query: {query}
 
 Knowledge graph context:
-{kg_context[:1500]}
+{kg_context[:4000]}
 
 Thread discussion so far:
 {thread_context[-2000:]}

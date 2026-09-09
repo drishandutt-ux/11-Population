@@ -1,19 +1,26 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { api, Session } from "@/lib/api";
+import { api, Session, ResearchState, EvidenceItem } from "@/lib/api";
+import ResearchPanel from "./ResearchPanel";
 import {
   Type, Upload, Youtube, CheckCircle, Loader2, X, Plus,
-  FileText, FileSpreadsheet, FileImage, FileCode, Presentation, Sparkles,
+  FileText, FileSpreadsheet, FileImage, FileCode, Presentation, Sparkles, Search,
 } from "lucide-react";
 
-type IngestTab = "text" | "document" | "youtube" | "llm-search";
+type IngestTab = "research" | "text" | "document" | "youtube" | "llm-search";
 type LLMModel = "claude" | "gemini" | "openai";
 
 interface Props {
   session: Session;
   onIngested: () => void;
   onGoToAgents: () => void;
+  research?: ResearchState | null;
+  evidence?: EvidenceItem[];
+  onResearchStart?: () => Promise<void>;
+  onResearchStop?: () => Promise<void>;
+  onResearchSubQuestion?: (text: string) => Promise<void>;
+  onEvidenceToggle?: (item: EvidenceItem) => Promise<void>;
 }
 
 // ── File type catalogue ──────────────────────────────────────────────────────
@@ -124,8 +131,11 @@ function PaperContent({ text }: { text: string }) {
   );
 }
 
-export default function InputPanel({ session, onIngested, onGoToAgents }: Props) {
-  const [tab, setTab]                       = useState<IngestTab>("text");
+export default function InputPanel({
+  session, onIngested, onGoToAgents,
+  research = null, evidence = [], onResearchStart, onResearchStop, onResearchSubQuestion, onEvidenceToggle,
+}: Props) {
+  const [tab, setTab]                       = useState<IngestTab>("research");
   const [text, setText]                     = useState("");
   const [ytUrl, setYtUrl]                   = useState("");
   const [selectedFiles, setSelectedFiles]   = useState<File[]>([]);
@@ -288,6 +298,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
   }
 
   const tabs: { key: IngestTab; label: string; icon: React.ReactNode }[] = [
+    { key: "research",   label: "Research",   icon: <Search   className="w-3.5 h-3.5" /> },
     { key: "text",       label: "Text",       icon: <Type     className="w-3.5 h-3.5" /> },
     { key: "document",   label: "File",       icon: <Upload   className="w-3.5 h-3.5" /> },
     { key: "youtube",    label: "YouTube",    icon: <Youtube  className="w-3.5 h-3.5" /> },
@@ -295,14 +306,15 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
   ];
 
   const canSubmit =
-    !loading &&
+    !loading && tab !== "research" &&
     (tab === "text"        ? text.trim().length > 0
     : tab === "youtube"    ? ytUrl.trim().length > 0
     : tab === "llm-search" ? (llmState === "preview" || llmQuery.trim().length > 0)
     :                         selectedFiles.length > 0);
 
+  const researchDone = research?.run?.status === "complete" || research?.run?.status === "stopped";
   const canContinue =
-    ingestedSources.length > 0 ||
+    ingestedSources.length > 0 || researchDone ||
     session.status === "ready" ||
     session.status === "simulating" ||
     session.status === "complete";
@@ -311,7 +323,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
 
   return (
     <div className="h-full overflow-auto p-6">
-      <div className="max-w-2xl mx-auto space-y-5">
+      <div className={`${tab === "research" ? "max-w-6xl" : "max-w-2xl"} mx-auto space-y-5`}>
 
         {/* Query recap */}
         <div className="border border-border/60 rounded-lg p-4">
@@ -345,6 +357,19 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
           </div>
 
           <div className="p-5 space-y-4">
+            {/* ── Research (auto web + Reddit evidence) ── */}
+            {tab === "research" && (
+              <ResearchPanel
+                sessionId={session.id}
+                state={research}
+                items={evidence}
+                onStart={onResearchStart ?? (async () => {})}
+                onStop={onResearchStop ?? (async () => {})}
+                onAddSubQuestion={onResearchSubQuestion ?? (async () => {})}
+                onToggleExclude={onEvidenceToggle ?? (async () => {})}
+              />
+            )}
+
             {/* ── Text ── */}
             {tab === "text" && (
               <textarea
@@ -617,7 +642,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
                         ["🔍", "Query auto-categorised", "into Product / Market / Behavioural / Strategy"],
                         ["📄", "Full research paper",    "1,500+ words, category-specific framework"],
                         ["📊", "Data & benchmarks",      "real numbers, historical analogues, risk estimates"],
-                        ["🧠", "Ingested into KG",       "agents will debate and cite it directly"],
+                        ["⚠️", "Labelled synthetic",     "stored as a model prior, never as evidence — agents are told so"],
                       ].map(([icon, label, detail]) => (
                         <div key={label} className="flex items-start gap-1.5">
                           <span className="text-sm leading-none mt-0.5 shrink-0">{icon}</span>
@@ -724,6 +749,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
             )}
 
             {/* ── Submit ── */}
+            {tab !== "research" && (
             <button
               onClick={submit}
               disabled={!canSubmit}
@@ -745,6 +771,7 @@ export default function InputPanel({ session, onIngested, onGoToAgents }: Props)
                     : "Ingest into knowledge graph →"
               }
             </button>
+            )}
 
             {canContinue && (
               <>

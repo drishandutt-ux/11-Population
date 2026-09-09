@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, apiFetch, Session, Agent, Post, WSEvent, SpawnOptions, SimMode } from "@/lib/api";
+import { api, apiFetch, Session, Agent, Post, WSEvent, SpawnOptions, SimMode, ResearchState, EvidenceItem } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
@@ -77,6 +77,20 @@ export default function SessionPage() {
   const opinionsInFlightRef = useRef(false);
 
   const postCountRef = useRef(0);
+
+  // Auto-research (web + Reddit evidence): state rebuilt from the API, then patched live by WS events
+  const [research, setResearch] = useState<ResearchState | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
+
+  const loadResearch = useCallback(async () => {
+    try {
+      const [st, ev] = await Promise.all([api.research.state(id), api.research.evidence(id)]);
+      setResearch(st);
+      setEvidence(ev);
+    } catch {}
+  }, [id]);
+
+  useEffect(() => { loadResearch(); }, [loadResearch]);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -217,10 +231,44 @@ export default function SessionPage() {
         refreshSession();
         // Refresh opinions with the final posts (regenerates every verdict)
         loadOpinions();
+
+      } else if (event.type === "research_started") {
+        setResearch((prev) => ({ run: { id: event.run_id, session_id: id, status: "running", question: event.question, sources: event.sources, frame: null, plan: null, verdicts: [], covered: [], budget: {}, brief: null, recommendations: null, started_at: new Date().toISOString() }, queries: [], counts: prev?.counts || {} }));
+        setEvidence([]);
+      } else if (event.type === "research_frame") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, frame: event.frame } } : prev);
+      } else if (event.type === "research_plan") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, plan: event.plan } } : prev);
+      } else if (event.type === "research_query") {
+        setResearch((prev) => {
+          if (!prev?.run) return prev;
+          const q = event.query;
+          const idx = prev.queries.findIndex((x) => x.id === q.id);
+          const queries = idx >= 0 ? prev.queries.map((x) => (x.id === q.id ? q : x)) : [...prev.queries, q];
+          return { ...prev, queries };
+        });
+      } else if (event.type === "research_item") {
+        setEvidence((prev) => {
+          const idx = prev.findIndex((x) => x.id === event.item.id);
+          return idx >= 0 ? prev.map((x) => (x.id === event.item.id ? event.item : x)) : [...prev, event.item];
+        });
+      } else if (event.type === "research_verdict") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, verdicts: [...(prev.run.verdicts || []), event.verdict], covered: event.covered } } : prev);
+      } else if (event.type === "research_budget") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, budget: event.budget } } : prev);
+      } else if (event.type === "research_brief") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, brief: event.brief } } : prev);
+      } else if (event.type === "research_complete") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, status: event.status, note: event.note, budget: event.budget, covered: event.covered, recommendations: event.recommendations, finished_at: new Date().toISOString() } } : prev);
+        loadResearch();
+        refreshSession();
+      } else if (event.type === "research_error") {
+        setResearch((prev) => prev?.run ? { ...prev, run: { ...prev.run, status: "error", note: event.error } } : prev);
       }
     });
     return () => { unsub(); };
-  }, [id, refreshSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, refreshSession, loadResearch]);
 
   // First-time opinion generation: fire once we have at least one post per agent.
   // If verdicts were already persisted for every agent that posted, skip the call.
@@ -399,6 +447,15 @@ export default function SessionPage() {
             session={session}
             onIngested={refreshSession}
             onGoToAgents={() => setActiveTab("agents")}
+            research={research}
+            evidence={evidence}
+            onResearchStart={async () => { await api.research.start(id); }}
+            onResearchStop={async () => { await api.research.stop(id); }}
+            onResearchSubQuestion={async (text) => { await api.research.addSubQuestion(id, text); }}
+            onEvidenceToggle={async (item) => {
+              const updated = await api.research.exclude(id, item.id, !item.excluded);
+              setEvidence((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+            }}
           />
         )}
         {activeTab === "agents" && (

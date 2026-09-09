@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.core.database import Base, _build_url  # noqa: E402
-import app.models.session, app.models.agent, app.models.post, app.models.report, app.models.preset, app.models.kg, app.models.profile  # noqa: E402,F401
+import app.models.session, app.models.agent, app.models.post, app.models.report, app.models.preset, app.models.kg, app.models.profile, app.models.evidence  # noqa: E402,F401
 
 config = context.config
 if config.config_file_name is not None:

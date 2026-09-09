@@ -52,9 +52,21 @@ export const api = {
     setRole: (userId: string, role: "admin" | "member") =>
       request(`/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
   },
+  research: {
+    state: (sessionId: string) => request<ResearchState>(`/sessions/${sessionId}/research`),
+    start: (sessionId: string, sources?: string[]) =>
+      request<ResearchRun>(`/sessions/${sessionId}/research/start`, { method: "POST", body: JSON.stringify(sources ? { sources } : {}) }),
+    stop: (sessionId: string) => request(`/sessions/${sessionId}/research/stop`, { method: "POST" }),
+    addSubQuestion: (sessionId: string, text: string) =>
+      request<ResearchRun>(`/sessions/${sessionId}/research/subquestion`, { method: "POST", body: JSON.stringify({ text }) }),
+    evidence: (sessionId: string) => request<EvidenceItem[]>(`/sessions/${sessionId}/evidence?limit=1000`),
+    exclude: (sessionId: string, evidenceId: string, excluded: boolean) =>
+      request<EvidenceItem>(`/sessions/${sessionId}/evidence/${evidenceId}/exclude`, { method: "POST", body: JSON.stringify({ excluded }) }),
+    recommendations: (sessionId: string) => request<{ recommendations: any[] }>(`/sessions/${sessionId}/recommendations`),
+  },
   sessions: {
-    create: (title: string, query: string) =>
-      request("/sessions", { method: "POST", body: JSON.stringify({ title, query }) }),
+    create: (title: string, query: string, opts?: { auto_research?: boolean; research_sources?: string[] }) =>
+      request("/sessions", { method: "POST", body: JSON.stringify({ title, query, ...(opts || {}) }) }),
     list: (scope: "mine" | "all" = "mine") => request<Session[]>(`/sessions${scope === "all" ? "?scope=all" : ""}`),
     get: (id: string) => request(`/sessions/${id}`),
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
@@ -164,6 +176,26 @@ export type Session = {
   is_mine?: boolean | null;
 };
 
+export type ResearchQuery = {
+  id: string; run_id: string; source: "web" | "reddit"; query: string; round: number;
+  status: "queued" | "running" | "done" | "error"; engine?: string | null; results: number; read: number; on_topic: number; note?: string | null; created_at?: string;
+};
+
+export type ResearchRun = {
+  id: string; session_id: string; status: string; question: string; sources: string[];
+  frame: any | null; plan: any | null; verdicts: any[]; covered: string[]; budget: Record<string, number>;
+  brief: any | null; recommendations: any[] | null; note?: string | null; started_at?: string | null; finished_at?: string | null;
+};
+
+export type ResearchState = { run: ResearchRun | null; queries: ResearchQuery[]; counts: Record<string, { read: number; on_topic: number }>; in_graph?: number };
+
+export type EvidenceItem = {
+  id: string; run_id?: string | null; source_class: "web" | "social" | "personal" | "synthetic"; source_ref: string;
+  title?: string | null; author?: string | null; published_at?: string | null; text: string; structured: any;
+  trust_tier: string; relevance: number; on_topic: boolean; excluded: boolean; in_graph: boolean; query?: string | null; attempt: number;
+  sub_questions: string[]; created_at?: string;
+};
+
 export type Me = { id: string; email: string | null; role: "admin" | "member"; is_admin: boolean };
 
 export type AdminUser = {
@@ -257,4 +289,14 @@ export type WSEvent =
   | { type: "like_added"; post_id: string; agent_id: string; new_likes: number }
   | { type: "kg_updated"; new_entities: string[]; new_relations: string[][] }
   | { type: "ingest_complete"; source: string }
-  | { type: "simulation_complete"; message: string };
+  | { type: "simulation_complete"; message: string }
+  | { type: "research_started"; run_id: string; question: string; sources: string[] }
+  | { type: "research_frame"; run_id: string; frame: any }
+  | { type: "research_plan"; run_id: string; plan: any }
+  | { type: "research_query"; query: ResearchQuery }
+  | { type: "research_item"; item: EvidenceItem }
+  | { type: "research_verdict"; run_id: string; source: string; round: number; verdict: any; covered: string[] }
+  | { type: "research_budget"; run_id: string; budget: Record<string, number> }
+  | { type: "research_brief"; run_id: string; brief: any }
+  | { type: "research_complete"; run_id: string; status: string; note: string; budget: Record<string, number>; covered: string[]; recommendations: any[] }
+  | { type: "research_error"; run_id: string; error: string };

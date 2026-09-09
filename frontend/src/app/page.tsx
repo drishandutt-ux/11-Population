@@ -13,6 +13,7 @@ export default function HomePage() {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [autoResearch, setAutoResearch] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { user, me, enabled: authOn, signOut } = useAuth();
@@ -41,7 +42,7 @@ export default function HomePage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const session = await api.sessions.create(title.trim(), query.trim()) as Session;
+      const session = await api.sessions.create(title.trim(), query.trim(), { auto_research: autoResearch }) as Session;
       router.push(`/session/${session.id}`);
     } catch (err: any) {
       console.error(err);
@@ -173,6 +174,10 @@ export default function HomePage() {
                   className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/60 focus:border-primary/40 text-sm resize-none"
                 />
               </div>
+              <label className="flex items-start gap-2 text-[11px] text-muted-foreground cursor-pointer select-none">
+                <input type="checkbox" checked={autoResearch} onChange={(e) => setAutoResearch(e.target.checked)} className="mt-0.5 accent-teal-500" />
+                <span><span className="text-foreground/80 font-medium">Research automatically</span> — search the web and Reddit for this question the moment the session opens, and ground the population in what real people say.</span>
+              </label>
               <button
                 type="submit"
                 disabled={creating || !title.trim() || !query.trim()}

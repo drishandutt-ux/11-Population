@@ -17,6 +17,8 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 class CreateSessionRequest(BaseModel):
     title: str
     query: str
+    auto_research: bool = True                 # start web + Reddit research immediately
+    research_sources: Optional[list[str]] = None   # default ["web", "reddit"]
 
 
 class SessionResponse(BaseModel):
@@ -46,6 +48,12 @@ async def create_session(body: CreateSessionRequest, user: AuthUser = Depends(ge
     db.add(session)
     await db.commit()
     await db.refresh(session)
+    if body.auto_research:
+        from app.services.evidence.loop import start_research
+        try:
+            await start_research(session.id, session.query, body.research_sources)
+        except Exception as e:  # noqa: BLE001 — research must never block session creation
+            print(f"[sessions] auto-research failed to start for {session.id}: {type(e).__name__}: {e}")
     return session
 
 

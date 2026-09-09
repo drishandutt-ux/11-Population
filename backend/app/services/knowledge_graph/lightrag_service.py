@@ -231,10 +231,39 @@ def get_entity_details(session_id: str, entity_name: str) -> dict:
     }
 
 
-def get_kg_context_string(session_id: str, max_entities: int = 60, max_relations: int = 40) -> str:
+def rank_entities(kg: dict, focus_terms: list, max_entities: int) -> list:
+    """Cheap relevance ranking (no LLM): +2 per focus term contained in the entity name, +log of how
+    many chunks mention it, small penalty for synthetic-only mentions. Replaces insertion order,
+    which fed agents whatever was ingested first (the cause of the 'irrelevant context' complaints)."""
+    import math
+    chunks = kg.get("chunks", [])[-200:]
+    lowered = [c.lower() for c in chunks]
+    terms = [t.lower() for t in (focus_terms or []) if t]
+    scored = []
+    for e in kg.get("entities", []):
+        el = e.lower()
+        hits = [c for c in lowered if el in c]
+        mentions = len(hits)
+        synthetic_only = mentions > 0 and all(c.startswith("[source synthetic") for c in hits)
+        score = 2.0 * sum(1 for t in terms if t in el or el in t) + math.log1p(mentions) - (1.5 if synthetic_only else 0.0)
+        scored.append((score, e))
+    scored.sort(key=lambda x: -x[0])
+    return [e for _, e in scored[:max_entities]]
+
+
+def get_kg_context_string(session_id: str, max_entities: int = 60, max_relations: int = 40, focus_terms: list = None) -> str:
     kg = _load_kg(session_id)
-    entities = kg.get("entities", [])[:max_entities]
-    relations = kg.get("relations", [])[:max_relations]
+    if focus_terms:
+        entities = rank_entities(kg, focus_terms, max_entities)
+        chosen = set(entities)
+        rels_all = [r for r in kg.get("relations", []) if len(r) == 3]
+        relations = [r for r in rels_all if r[0] in chosen or r[2] in chosen][:max_relations]
+        if len(relations) < max_relations:
+            seen = {tuple(r) for r in relations}
+            relations += [r for r in rels_all if tuple(r) not in seen][: max_relations - len(relations)]
+    else:
+        entities = kg.get("entities", [])[:max_entities]
+        relations = kg.get("relations", [])[:max_relations]
     ents = ", ".join(entities) if entities else "none"
     rels = "\n".join(f"  {r[0]} → {r[1]} → {r[2]}" for r in relations if len(r) == 3) if relations else "none"
     return f"KNOWLEDGE GRAPH ENTITIES: {ents}\n\nKEY RELATIONS:\n{rels}"

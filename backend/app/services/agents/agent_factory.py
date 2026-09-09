@@ -42,6 +42,7 @@ async def generate_agents(
     humanity: int = 0,
     humanity_coverage: int = 0,
     mode: str = "pro",
+    evidence_brief: str = "",
 ) -> list[AgentProfile]:
     """Curate a population with the LLM. This is the PRO path (FAST mode samples the
     pre-built bank instead — see seed_bank.sample_bank). Pro uses the Sonnet tier and a
@@ -74,6 +75,14 @@ async def generate_agents(
         profile_context += "Use this to shape agent demographics, backgrounds, and psychological dials.\n"
     if doc_context:
         profile_context += f"\nSURVEY / PROFILE DATA (translate to dial values):\n{doc_context[:8000]}\n"
+    if evidence_brief:
+        profile_context += (
+            f"\n{evidence_brief[:3500]}\n"
+            "GROUNDING RULES: build the population from the groups observed above. Match their stances and their share of the "
+            "conversation, give agents the arguments and phrasings those groups actually use, take demographic and place signals "
+            "from the evidence, and set the sentiment/trust dials to reflect each group's observed mood. Do not invent groups the "
+            "evidence contradicts; where the evidence is silent, fall back to plausible domain experts and sceptics.\n"
+        )
 
     def _humanity_block(batch_count: int, humanized: int) -> str:
         if humanized > 0 and humanity > 0:
