@@ -49,12 +49,22 @@ _user_cache: dict[str, tuple[float, AuthUser]] = {}   # token -> (expires_at, us
 _USER_CACHE_TTL = 60.0
 
 
+def _clean(v: str) -> str:
+    """Env values pasted into a dashboard often carry quotes, spaces or a newline; any of those
+    makes urllib raise InvalidURL on the JWKS fetch. Strip them."""
+    return (v or "").strip().strip('"').strip("'").strip()
+
+
+def project_url() -> str:
+    return _clean(get_settings().app_supabase_url).rstrip("/")
+
+
 def auth_enabled() -> bool:
-    return bool(get_settings().app_supabase_url)
+    return bool(project_url())
 
 
 def _issuer() -> str:
-    return get_settings().app_supabase_url.rstrip("/") + "/auth/v1"
+    return project_url() + "/auth/v1"
 
 
 def _jwks() -> PyJWKClient:
@@ -75,7 +85,7 @@ async def _verify_with_auth_server(token: str) -> AuthUser:
     async with httpx.AsyncClient(timeout=8.0) as client:
         r = await client.get(
             _issuer() + "/user",
-            headers={"apikey": s.app_supabase_anon_key, "Authorization": f"Bearer {token}"},
+            headers={"apikey": _clean(s.app_supabase_anon_key), "Authorization": f"Bearer {token}"},
         )
     if r.status_code != 200:
         raise AuthError("Invalid or expired session")

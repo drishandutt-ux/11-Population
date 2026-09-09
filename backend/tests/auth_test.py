@@ -91,6 +91,14 @@ def test_dev_mode_without_project(auth_off):
     assert u.is_dev and u.id == auth_mod.DEV_USER_ID
 
 
+def test_env_value_is_sanitised(monkeypatch):
+    s = get_settings()
+    monkeypatch.setattr(s, "app_supabase_url", '  "https://example-ref.supabase.co/"\n')
+    assert auth_mod.project_url() == "https://example-ref.supabase.co"
+    assert auth_mod._issuer() == ISSUER
+    assert auth_mod.auth_enabled()
+
+
 # ── API ownership isolation ──────────────────────────────────────────────────
 
 @pytest.fixture

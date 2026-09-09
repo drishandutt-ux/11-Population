@@ -6,4 +6,3 @@ __pycache__/
 lightrag_data/
 .env
 nixpacks.toml
-alembic/

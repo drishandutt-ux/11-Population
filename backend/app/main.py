@@ -76,6 +76,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 @app.get("/health")
 async def health():
-    from app.core.auth import auth_enabled
+    from app.core.auth import auth_enabled, project_url
     from app.core.database import _sqlite
-    return {"status": "ok", "auth": "supabase" if auth_enabled() else "off (dev)", "database": "sqlite" if _sqlite else "postgres"}
+    return {
+        "status": "ok",
+        "auth": "supabase" if auth_enabled() else "off (dev)",
+        "auth_issuer": (project_url() + "/auth/v1") if auth_enabled() else None,
+        "database": "sqlite" if _sqlite else "postgres",
+    }
