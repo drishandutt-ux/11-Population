@@ -86,7 +86,7 @@ The session UI is a five-tab workspace (**Ingest → Agents → Thread → Graph
 1. **Create a session.** From the landing page, give it a *title* and a *query/hypothesis*. Status: `created`.
 2. **Ingest sources** (Ingest tab). Add one or more of: pasted **text**, an uploaded **document** (PDF, Word, Excel, PowerPoint, CSV, images via Vision, etc.), a **YouTube** URL (transcript + thumbnail/frame analysis + comments), or an **AI-generated research paper** (LLM Search). Each ingest extracts entities/relations into the knowledge graph; status flips `ingesting` → `ready`. Live `kg_updated` events stream nodes into the Graph tab.
 3. **Spawn the population** (Agents tab). Pick a **mode** (Fast / Pro). Tune the *audience profile* (free text, plus an optional survey/CSV that Claude translates into dial values), the *stance split* (Direct / Indirect / Neutral percentages), the *agent count* (1–1000), and the *activity intensity*. Hit **Spawn**. Fast spawns are near-instant (the pre-built bank); Pro streams agents in as Sonnet curates them. Lineups can be **saved as presets** and reloaded later.
-4. **Run the simulation** (Thread tab). Start the debate. Posts stream in live — threaded, with replies and "debate" rebuttals flagged. A sidebar shows a one-line **verdict** per agent. You can **Pause / Resume / Stop** from the header.
+4. **Run the simulation** (Thread tab). Start the debate. Posts stream in live — threaded, with replies and "debate" rebuttals flagged. A sidebar shows a one-line **verdict** per agent (generated in batches by Claude once every agent has posted, refreshed on completion, persisted on the agent, with a **Refresh/Retry** button and a first-post excerpt as fallback). You can **Pause / Resume / Stop** from the header.
 5. **Watch the graph** (Graph tab, any time). An SVG knowledge graph grows in real time with a live activity feed; click any node to inspect its relations and source mentions.
 6. **Generate the report** (Report tab). One click produces a structured executive briefing (Direct Answer + Confidence, Question, Source Materials, Discussion, Key Metrics KPI grid, Outcome). You can then **chat** with the report or **talk to individual agents**, **regenerate**, or **Save as PDF**.
 
@@ -161,7 +161,7 @@ created ──(ingest/*)──▶ ingesting ──(done)──▶ ready ──(s
 Values: `created`, `ingesting`, `ready`, `simulating`, `paused`, `complete`, `error`.
 
 ### 6.2 `SpawnedAgent` (`spawned_agents`)
-One AI persona within a session. Columns: `id`, `session_id` (indexed), `name`, `age` (default 30), `role`, `background` (2–3 sentence bio), `stance` (enum), `correlation` (one-sentence relation to the topic), `personality` (JSON **list** of trait tags), `debate_style`, `energy` (Float, 0.3–1.0 — drives how often it posts/debates), `avatar_color` (hex), **`dials` (JSON dict — the 112-value psychological profile)**, **`humanity`** (Integer 0–100, default 0 — emotional-vs-analytical register set at spawn; see §7.7), `created_at`.
+One AI persona within a session. Columns: `id`, `session_id` (indexed), `name`, `age` (default 30), `role`, `background` (2–3 sentence bio), `stance` (enum), `correlation` (one-sentence relation to the topic), `personality` (JSON **list** of trait tags), `debate_style`, `energy` (Float, 0.3–1.0 — drives how often it posts/debates), `avatar_color` (hex), **`dials` (JSON dict — the 112-value psychological profile)**, **`humanity`** (Integer 0–100, default 0 — emotional-vs-analytical register set at spawn; see §7.7), **`verdict`** (Text, nullable — the persisted one-line Claude verdict shown in the Agent Opinions sidebar; `NULL` until generated; added via the non-destructive startup migration in `database._ensure_columns`), `created_at`.
 
 **`AgentStance` enum:** `direct` (domain experts), `indirect` (adjacent-field perspectives), `neutral` (skeptics/press/public).
 
@@ -381,7 +381,7 @@ FastAPI 0.115 on uvicorn; SQLAlchemy 2.0 async (`aiosqlite` / `asyncpg`); pydant
 | GET | `/sessions/{id}/kg/entity/{name}` | Entity drill-down (relations + source mentions). |
 | GET | `/sessions/{id}/posts` | All simulation posts. |
 | GET | `/sessions/{id}/dials` | Population dial dashboard (scorecard, heatmap, group stats). |
-| POST | `/sessions/{id}/opinions` | Generate a 10–15-word verdict per agent (Claude, `model_fast`). |
+| POST | `/sessions/{id}/opinions` | Generate a 10–15-word verdict per agent that has posted (Claude `model_fast`, **batched 25 agents/call, ≤6 calls in parallel**, integer keys, `max_tokens` scaled per batch, truncated JSON salvaged). Optional body `{"agent_ids": [...]}` regenerates a subset. Verdicts are **persisted** on `spawned_agents.verdict`. Always HTTP 200: `{"opinions": {agent_id: verdict}, "generated": n, "total": m, "error": string\|null}` — `opinions` includes previously persisted verdicts; `error` carries a friendly LLM error instead of a 500. Code: `services/simulation/opinions.py`. |
 | DELETE | `/sessions/{id}` | Delete session (no cascade). |
 | POST | `/sessions/{id}/apply-preset` | Wipe agents, load a preset population (background task). |
 
@@ -466,7 +466,7 @@ Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 wi
 ### 13.3 Components
 - **`ingestion/InputPanel`** — the four ingestion modes (Text / File drag-drop / YouTube / LLM Search with generate→preview→ingest), with an "ingested sources" tracker and a "Continue to Agents" gate.
 - **`simulation/AgentDirectory`** — the most complex component; three phases: **(1) spawn config** (a **Fast/Pro mode toggle** with a Pro cost/time warning, audience profile + survey upload, stance sliders, **Humanity + Coverage sliders (§7.7)**, **agent count up to 1000** via slider + number input + quick-pick chips, an **activity-intensity ladder** with a live "≈ N posts + M reactions" estimate, presets), **(2) live spawn dashboard** (mode-aware elapsed/ETA KPIs, agents streaming in via `agents_spawned_batch` — only the latest 60 cards are rendered at scale), **(3) ready/simulating/complete** roster grouped by stance (capped at 60 cards/stance with a "+N more" note) plus a compact **run-settings card** (mode + intensity) shown before Start. Includes `AgentCard` (stance pill, **"% human" badge**, **dominant-emotion chips**) + a **`DialViewer`** that renders all 9 dial groups as collapsible bars.
-- **`simulation/ThreadView` + `PostCard`** — the live, threaded debate feed (debate flags, like counts, markdown rendering) + a per-agent **opinions** sidebar. Auto-scroll **sticks to the bottom only while the user is already there** — scrolling up to read is never interrupted by incoming posts, and a floating **"Jump to latest"** button appears when scrolled away.
+- **`simulation/ThreadView` + `PostCard`** — the live, threaded debate feed (debate flags, like counts, markdown rendering) + a per-agent **opinions** sidebar. The sidebar shows, per agent: the Claude verdict if available → a live "summarising…" indicator **only while a request is in flight** → otherwise an italic excerpt of the agent's first post → "forming opinion…" if it hasn't posted. Its header carries a **Refresh** button (or **Retry** + the error text when generation failed). Auto-scroll **sticks to the bottom only while the user is already there** — scrolling up to read is never interrupted by incoming posts, and a floating **"Jump to latest"** button appears when scrolled away.
 - **`simulation/SimulationControls`** — header Pause/Resume/Stop (Start lives in AgentDirectory).
 - **`knowledge-graph/KGPanel`** — SVG node-graph (ring layout, live "new entity" flashes) + live activity feed + click-to-inspect entity detail panel.
 - **`report/ReportChat`** — the report document renderer (`ReportDocument`/`parseReport`: direct-answer callout, confidence badge, KPI grid) + dual-mode chat (Ask Report / Talk to Agent) + Save-as-PDF + Regenerate.
@@ -477,6 +477,8 @@ Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 wi
 
 ### 13.5 Live-update plumbing
 The session page subscribes once and maps each `WSEvent` to state: `agent_spawned`→append+progress, `agents_ready`→stop spinner, `post_created`→append only (**no forced tab switch** — the user can sit on any tab while posts stream), `like_added`→update count, `kg_updated`→grow graph + prepend activity, `ingest_complete`/`simulation_complete`→refresh (the latter also regenerates opinions). An 8s poll backstops the socket.
+
+**Opinion loading (`loadOpinions` in the session page):** verdicts are seeded from `agent.verdict` on every roster refresh (so a reloaded session shows them instantly with no LLM call); the first generation fires once posts ≥ agents (skipped if every posting agent already has a persisted verdict); the call is retried up to 3× with backoff on network/LLM failure; a failure surfaces as an error + Retry button in the sidebar instead of an endless "summarising…".
 
 ---
 
@@ -542,6 +544,8 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 **Operational (current):**
 - **Invalid Anthropic key breaks everything silently.** As of the last verification (2026-06-07), the configured `ANTHROPIC_API_KEY` returned **401 invalid x-api-key**. Because all intelligence is Claude, this yields empty graphs and zero posts. A logging fix now surfaces extraction failures in the server logs (previously they were swallowed). **A valid key is the single hardest dependency** — set it in `backend/.env` locally and in Railway's env for prod.
 
+- **Verdict generation depends on output budget.** Fixed 2026-09-09: the Agent Opinions call used to be one un-batched request with `max_tokens=1200` keyed by UUIDs; Pulse logs showed every call ending at exactly 1200 completion tokens (truncated → unparsable → silently `{}`), so the sidebar stayed on "summarising…" forever. Now batched/salvaged/persisted (§12.2). If verdicts ever go missing again, check Pulse `execution_logs` where `execution_id='opinions'` for `completion_tokens` pinned at the cap.
+
 **Architectural / by-design:**
 - **Single-replica constraint** (in-process pub/sub) and **ephemeral KG/SQLite storage** on Railway without volumes (§15.4).
 - **No cascade deletes** — deleting a session orphans its agents/posts/reports; spawning/applying a preset wipes a session's agents but not its posts.
@@ -603,11 +607,11 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 │   │   └── services/
 │   │       ├── agents/              # profiles, agent_factory, agent_runner,
 │   │       │                        #   seed_bank (Fast bank), dial_analytics
-│   │       ├── simulation/          # orchestrator, thread_manager, report_generator
+│   │       ├── simulation/          # orchestrator, thread_manager, report_generator, opinions
 │   │       ├── ingestion/           # text_processor, document_parser,
 │   │       │                        #   youtube_extractor, llm_search
 │   │       └── knowledge_graph/     # lightrag_service, graph_updater
-│   ├── tests/                       # dial_impact_experiment, kg_ingestion_test
+│   ├── tests/                       # dial_impact_experiment, kg_ingestion_test, opinions_test (pytest)
 │   ├── lightrag_data/{session}/kg.json   # per-session KG JSON (gitignored)
 │   ├── eleven_minds.db              # local SQLite (gitignored)
 │   ├── Dockerfile · nixpacks.toml · requirements.txt · .env.example
@@ -635,6 +639,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-09-09** — **Fixed the Agent Opinions sidebar stuck on "summarising…" forever.** Root cause (proved from Pulse `execution_logs`): `POST /sessions/{id}/opinions` asked Haiku for one JSON object keyed by 36-char UUIDs for *every* agent in a single call capped at `max_tokens=1200`; all 9 production calls ended at exactly 1200 completion tokens, so the JSON was always truncated, `json.loads` always failed, and the endpoint returned `{"opinions": {}}` with HTTP 200 — which the frontend treated as "still summarising". Rebuilt as `services/simulation/opinions.py`: agents are **batched (25/call, ≤6 concurrent)** with short **integer keys**, `max_tokens` scales with the batch, **truncated output is salvaged** pair-by-pair, LLM errors return a friendly `error` string (never a 500 or a silent empty map), and verdicts are **persisted** on the new `spawned_agents.verdict` column (exposed on `GET .../agents`). Frontend: verdicts seed from the roster on load, generation retries 3× with backoff, the sidebar shows "summarising…" only while a request is in flight, falls back to a first-post excerpt otherwise, and has a **Refresh/Retry** button with the error text. Added `backend/tests/opinions_test.py` (pytest, mocked Claude + SQLite).
 - **2026-06-10** — **Fixed the knowledge graph staying sparse on Pro/small runs.** The mid-simulation KG enrichment used a flat 15% post sample (tuned for 1000-agent Fast runs), which on a small Pro run (5–50 agents) rounded to ~0 posts — so the debate never reached the graph. Made it **adaptive**: `min(1.0, KG_SIM_MAX_UPDATES / agent_count)`, so any run ≤120 agents now feeds **every** post into the KG and only large runs throttle. Replaces `KG_SIM_SAMPLE` with `KG_SIM_MAX_UPDATES` (default 120).
 - **2026-06-10** — **Fixed the "Generate Report" button doing nothing on failure.** `handleMakeReport` swallowed thrown errors (only `console.error`), so a 404 (e.g. a wiped session) left the button spinning then blank. It now surfaces the reason in the report panel — and a "Session not found" 404 shows a clear "this session was reset (no persistent storage) — start a new one" message. (LLM errors already returned a friendly HTTP 200 that rendered; only the thrown-error path was silent.)
 - **2026-06-10** — **Added a "no database" notice to the landing page.** The deployment runs without persistent storage (ephemeral SQLite, no volume), so sessions vanish on restart/redeploy and stale ones 404 with "Session not found". The landing page now warns users up-front to treat each session as temporary. (Durable fix remains: add a Railway Postgres plugin + a volume for `LIGHTRAG_DATA_DIR` — see §15.4.)
@@ -655,4 +660,4 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ---
 
-*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-06-10.*
+*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-09-09.*

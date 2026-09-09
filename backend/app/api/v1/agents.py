@@ -54,6 +54,7 @@ async def list_agents(session_id: str, db: AsyncSession = Depends(get_db)):
             "energy": a.energy, "avatar_color": a.avatar_color,
             "dials": a.dials or {},
             "humanity": getattr(a, "humanity", 0) or 0,
+            "verdict": getattr(a, "verdict", None),
         }
         for a in agents
     ]
@@ -73,6 +74,7 @@ async def get_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
         "energy": agent.energy, "avatar_color": agent.avatar_color,
         "dials": agent.dials or {},
         "humanity": getattr(agent, "humanity", 0) or 0,
+        "verdict": getattr(agent, "verdict", None),
     }
 
 

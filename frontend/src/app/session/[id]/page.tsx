@@ -13,6 +13,7 @@ import ReportChat from "@/components/report/ReportChat";
 import AgentDirectory from "@/components/simulation/AgentDirectory";
 
 type Tab = "ingest" | "agents" | "simulation" | "kg" | "report";
+type OpinionsStatus = "idle" | "loading" | "done" | "error";
 
 const REPORT_PROMPT = `You are a senior analyst. Produce a structured executive briefing for this simulation session.
 
@@ -67,9 +68,13 @@ export default function SessionPage() {
   const [reportContent, setReportContent] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  // Agent opinion KPIs — generated once we have enough posts, refreshed on completion
+  // Agent opinion KPIs — generated once we have enough posts, refreshed on completion.
+  // Seeded from persisted `agent.verdict` on load; retried with backoff on failure.
   const [agentOpinions, setAgentOpinions] = useState<Record<string, string>>({});
-  const opinionsLoadedRef = useRef(false);
+  const [opinionsStatus, setOpinionsStatus] = useState<OpinionsStatus>("idle");
+  const [opinionsError, setOpinionsError] = useState<string | null>(null);
+  const opinionsAttemptedRef = useRef(false);
+  const opinionsInFlightRef = useRef(false);
 
   const postCountRef = useRef(0);
 
@@ -82,6 +87,13 @@ export default function SessionPage() {
         if (a.length > 0) {
           setAgents(a);
           setAgentsMap(Object.fromEntries(a.map((ag: Agent) => [ag.id, ag])));
+          // Persisted verdicts (from an earlier generation) show instantly on reload
+          const persisted: Record<string, string> = {};
+          for (const ag of a) if (ag.verdict) persisted[ag.id] = ag.verdict;
+          if (Object.keys(persisted).length > 0) {
+            setAgentOpinions((prev) => ({ ...persisted, ...prev }));
+            setOpinionsStatus((st) => (st === "idle" ? "done" : st));
+          }
         }
       }
     } catch {}
@@ -204,25 +216,55 @@ export default function SessionPage() {
 
       } else if (event.type === "simulation_complete") {
         refreshSession();
-        // Refresh opinions with final posts
-        api.sessions.opinions(id)
-          .then((d: any) => { if (d.opinions) setAgentOpinions(d.opinions); })
-          .catch(() => {});
+        // Refresh opinions with the final posts (regenerates every verdict)
+        loadOpinions();
       }
     });
     return () => { unsub(); };
   }, [id, refreshSession]);
 
-  // First-time opinion generation: fire once we have at least one post per agent
+  // First-time opinion generation: fire once we have at least one post per agent.
+  // If verdicts were already persisted for every agent that posted, skip the call.
   useEffect(() => {
-    if (opinionsLoadedRef.current) return;
+    if (opinionsAttemptedRef.current) return;
     if (posts.length >= Math.max(agents.length, 3) && agents.length > 0) {
-      opinionsLoadedRef.current = true;
-      api.sessions.opinions(id)
-        .then((d: any) => { if (d.opinions) setAgentOpinions(d.opinions); })
-        .catch(() => {});
+      opinionsAttemptedRef.current = true;
+      const posted = new Set(posts.filter((p) => p.content && p.type !== "like").map((p) => p.agent_id));
+      const missing = [...posted].filter((aid) => !agentOpinions[aid]);
+      if (missing.length > 0) loadOpinions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts.length, agents.length, id]);
+
+  // Generate/refresh per-agent verdicts. Retries transient failures with backoff and
+  // NEVER leaves the sidebar stuck on "summarising…": on failure we show the error + Retry.
+  async function loadOpinions(attempt = 0): Promise<void> {
+    if (opinionsInFlightRef.current) return;
+    opinionsInFlightRef.current = true;
+    setOpinionsStatus("loading");
+    setOpinionsError(null);
+    try {
+      const d = await api.sessions.opinions(id);
+      const got = d?.opinions && typeof d.opinions === "object" ? d.opinions : {};
+      if (Object.keys(got).length > 0) setAgentOpinions((prev) => ({ ...prev, ...got }));
+      if (d?.error && d.generated === 0) {
+        throw new Error(d.error);
+      }
+      setOpinionsStatus("done");
+      if (d?.error) setOpinionsError(`Some verdicts couldn't be generated: ${d.error}`);
+    } catch (e: any) {
+      const msg = e?.message || "Couldn't generate agent verdicts.";
+      if (attempt < 2) {
+        opinionsInFlightRef.current = false;
+        await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
+        return loadOpinions(attempt + 1);
+      }
+      setOpinionsStatus("error");
+      setOpinionsError(msg);
+    } finally {
+      opinionsInFlightRef.current = false;
+    }
+  }
 
   async function handleSpawn(count: number, opts?: SpawnOptions) {
     setIsSpawning(true);
@@ -387,6 +429,9 @@ export default function SessionPage() {
             onMakeReport={handleMakeReport}
             isGeneratingReport={isGeneratingReport}
             agentOpinions={agentOpinions}
+            opinionsStatus={opinionsStatus}
+            opinionsError={opinionsError}
+            onRefreshOpinions={() => loadOpinions()}
           />
         )}
         {activeTab === "kg" && (

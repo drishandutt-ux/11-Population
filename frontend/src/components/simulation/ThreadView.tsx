@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Agent, Post } from "@/lib/api";
 import PostCard from "./PostCard";
 import { stanceColor } from "@/lib/utils";
-import { MessageSquare, FileText, Loader2, Clock, ArrowDown } from "lucide-react";
+import { MessageSquare, FileText, Loader2, Clock, ArrowDown, RefreshCw, AlertCircle } from "lucide-react";
 
 interface Props {
   posts: Post[];
@@ -14,6 +14,16 @@ interface Props {
   onMakeReport?: () => void;
   isGeneratingReport?: boolean;
   agentOpinions?: Record<string, string>;
+  opinionsStatus?: "idle" | "loading" | "done" | "error";
+  opinionsError?: string | null;
+  onRefreshOpinions?: () => void;
+}
+
+/** First ~110 chars of an agent's first post — the fallback when no verdict exists. */
+function excerpt(text: string | null | undefined, max = 110): string {
+  if (!text) return "";
+  const clean = text.replace(/\s+/g, " ").replace(/[*_`#>]/g, "").trim();
+  return clean.length > max ? clean.slice(0, max - 1).trimEnd() + "…" : clean;
 }
 
 
@@ -25,6 +35,9 @@ export default function ThreadView({
   onMakeReport,
   isGeneratingReport = false,
   agentOpinions = {},
+  opinionsStatus = "idle",
+  opinionsError = null,
+  onRefreshOpinions,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -183,14 +196,40 @@ export default function ThreadView({
         {agentList.length > 0 && (
           <div className="w-72 shrink-0 border-l border-border/40 overflow-y-auto flex flex-col">
             <div className="px-3 pt-3 pb-2 border-b border-border/30 shrink-0">
-              <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
-                Agent Opinions
-                {agentList.length > MAX_OPINIONS && (
-                  <span className="ml-1 normal-case font-normal text-muted-foreground/40">
-                    · top {MAX_OPINIONS} of {agentList.length.toLocaleString()}
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider flex-1 min-w-0">
+                  Agent Opinions
+                  {agentList.length > MAX_OPINIONS && (
+                    <span className="ml-1 normal-case font-normal text-muted-foreground/40">
+                      · top {MAX_OPINIONS} of {agentList.length.toLocaleString()}
+                    </span>
+                  )}
+                </p>
+                {opinionsStatus === "loading" ? (
+                  <span className="flex items-center gap-1 text-[10px] text-primary/70 shrink-0">
+                    <Loader2 className="w-3 h-3 animate-spin" /> summarising
                   </span>
-                )}
-              </p>
+                ) : onRefreshOpinions && hasContent ? (
+                  <button
+                    onClick={onRefreshOpinions}
+                    title={opinionsStatus === "error" ? "Retry verdict generation" : "Regenerate verdicts from the latest posts"}
+                    className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors shrink-0 ${
+                      opinionsStatus === "error"
+                        ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
+                        : "border-border/50 text-muted-foreground/60 hover:text-foreground hover:border-border"
+                    }`}
+                  >
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    {opinionsStatus === "error" ? "Retry" : "Refresh"}
+                  </button>
+                ) : null}
+              </div>
+              {opinionsError && (
+                <p className="mt-1.5 flex items-start gap-1 text-[10px] leading-snug text-red-400/90">
+                  <AlertCircle className="w-3 h-3 shrink-0 mt-px" />
+                  <span>{opinionsError}</span>
+                </p>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {visibleAgents.map((agent) => {
@@ -222,18 +261,22 @@ export default function ThreadView({
                       </span>
                     </div>
 
-                    {/* Verdict, placeholder, or "forming" */}
+                    {/* Verdict → live "summarising…" → first-post excerpt fallback → "forming" */}
                     {verdict ? (
                       <p className="text-[11px] text-foreground/80 leading-snug font-medium group-hover:text-foreground transition-colors">
                         {verdict}
                       </p>
-                    ) : hasPosted ? (
+                    ) : hasPosted && opinionsStatus === "loading" ? (
                       <div className="flex items-center gap-1.5">
                         <span className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" />
                         <span className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: "200ms" }} />
                         <span className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: "400ms" }} />
                         <span className="text-[10px] text-muted-foreground/50 ml-0.5">summarising…</span>
                       </div>
+                    ) : hasPosted ? (
+                      <p className="text-[11px] text-foreground/60 leading-snug italic group-hover:text-foreground/80 transition-colors">
+                        {excerpt(firstPost.content)}
+                      </p>
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <span className="w-1 h-1 rounded-full bg-muted-foreground/30 animate-pulse" />

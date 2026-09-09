@@ -57,6 +57,7 @@ async def _ensure_columns():
     'duplicate column' failure on one doesn't abort the others."""
     migrations = [
         "ALTER TABLE spawned_agents ADD COLUMN humanity INTEGER DEFAULT 0",
+        "ALTER TABLE spawned_agents ADD COLUMN verdict TEXT",
     ]
     for ddl in migrations:
         try:

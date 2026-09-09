@@ -37,7 +37,11 @@ export const api = {
     get: (id: string) => request(`/sessions/${id}`),
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
     posts: (id: string) => request(`/sessions/${id}/posts`),
-    opinions: (id: string) => request(`/sessions/${id}/opinions`, { method: "POST" }),
+    opinions: (id: string, agentIds?: string[]) =>
+      request<OpinionsResponse>(`/sessions/${id}/opinions`, {
+        method: "POST",
+        body: JSON.stringify(agentIds ? { agent_ids: agentIds } : {}),
+      }),
   },
   ingest: {
     text: (sessionId: string, text: string) =>
@@ -167,6 +171,14 @@ export type Agent = {
   avatar_color: string;
   dials?: AgentDials;
   humanity?: number; // 0 = expert/analytical, 100 = fully human/emotional
+  verdict?: string | null; // persisted one-line verdict (Agent Opinions sidebar), null until generated
+};
+
+export type OpinionsResponse = {
+  opinions: Record<string, string>;
+  generated: number;
+  total: number;
+  error?: string | null;
 };
 
 export type SimMode = "fast" | "pro";

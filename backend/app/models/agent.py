@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Text, Float, DateTime, Enum as SAEnum, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
@@ -30,4 +31,6 @@ class SpawnedAgent(Base):
     dials: Mapped[dict] = mapped_column(JSON, nullable=True, default=None)
     # 0 = pure expert/analytical; higher = more human, emotional, gut-driven, less logical.
     humanity: Mapped[int] = mapped_column(default=0)
+    # One-line Claude-generated verdict on the session query (Agent Opinions sidebar); None until generated.
+    verdict: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
