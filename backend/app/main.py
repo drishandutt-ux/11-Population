@@ -39,6 +39,24 @@ app.include_router(presets.router, prefix="/api/v1")
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """Live events for one session. With auth on, the client passes its Supabase access
+    token as `?token=`; the socket is refused (4401/4404) unless the token is valid and the
+    session belongs to that user."""
+    from app.core.auth import user_from_ws_token, owns
+    from app.core.database import AsyncSessionLocal
+    from app.models.session import AnalysisSession
+    from sqlalchemy import select
+
+    user = await user_from_ws_token(websocket.query_params.get("token"))
+    if user is None:
+        await websocket.close(code=4401)
+        return
+    async with AsyncSessionLocal() as db:
+        sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
+    if sess is None or not owns(sess, user):
+        await websocket.close(code=4404)
+        return
+
     await websocket.accept()
     channel = session_channel(session_id)
     q = subscribe(channel)
@@ -58,4 +76,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    from app.core.auth import auth_enabled
+    from app.core.database import _sqlite
+    return {"status": "ok", "auth": "supabase" if auth_enabled() else "off (dev)", "database": "sqlite" if _sqlite else "postgres"}

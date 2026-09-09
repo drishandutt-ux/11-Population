@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.session import AnalysisSession
 from app.models.report import ReportQuery
+from app.core.auth import AuthUser, get_current_user, get_owned_session
 
 router = APIRouter(prefix="/sessions", tags=["reports"])
 
@@ -29,12 +30,10 @@ class ReportQueryResponse(BaseModel):
 async def query_report(
     session_id: str,
     body: ReportQueryRequest,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     from app.services.simulation.report_generator import answer_report_query
     answer, sources = await answer_report_query(session_id, session.query, body.question, db)
@@ -53,7 +52,8 @@ async def query_report(
 
 
 @router.get("/{session_id}/report/history", response_model=list)
-async def get_report_history(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_report_history(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await get_owned_session(session_id, user, db)
     result = await db.execute(
         select(ReportQuery)
         .where(ReportQuery.session_id == session_id)

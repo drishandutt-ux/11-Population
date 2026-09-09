@@ -31,7 +31,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     anthropic_api_key: str = ""
-    lightrag_data_dir: str = "./lightrag_data"
+    lightrag_data_dir: str = "./lightrag_data"   # legacy: KG JSON files are read from here once and imported into the DB
+
+    # ── App Supabase project ("11 Minds Population") — user auth + Postgres ────
+    # Setting APP_SUPABASE_URL turns authentication ON: every API call must carry a Supabase
+    # user access token. Leave unset for local dev (all requests run as a fixed dev user).
+    app_supabase_url: str = ""            # https://<ref>.supabase.co
+    app_supabase_anon_key: str = ""       # publishable/anon key (used only for the HS256 fallback)
 
     # ── Fast tier (default) — Haiku everywhere ──────────────────────────────
     model_orchestration: str = "claude-haiku-4-5-20251001"

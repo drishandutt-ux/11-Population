@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, Session, Agent, Post, WSEvent, SpawnOptions, SimMode } from "@/lib/api";
+import { api, apiFetch, Session, Agent, Post, WSEvent, SpawnOptions, SimMode } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
@@ -133,8 +133,7 @@ export default function SessionPage() {
   }, [id]);
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    fetch(`${base}/api/v1/sessions/${id}/kg`)
+    apiFetch(`/sessions/${id}/kg`)
       .then((r) => r.json())
       .then((data) => {
         if (data.entities?.length) setKgEntities(data.entities);

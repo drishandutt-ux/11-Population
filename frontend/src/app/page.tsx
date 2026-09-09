@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
-import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, AlertTriangle } from "lucide-react";
+import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export default function HomePage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function HomePage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { user, enabled: authOn, signOut } = useAuth();
 
   useEffect(() => {
     api.sessions.list().then((s) => setSessions(s as Session[])).catch(() => {});
@@ -56,7 +58,21 @@ export default function HomePage() {
         <div className="flex items-center">
           <span className="text-base font-semibold text-foreground tracking-tight">11 Minds Population</span>
         </div>
-        <span className="text-xs text-muted-foreground">Multi-agent simulation</span>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-muted-foreground">Multi-agent simulation</span>
+          {authOn && user && (
+            <div className="flex items-center gap-2 pl-4 border-l border-border/50">
+              <span className="text-xs text-foreground/80 max-w-[220px] truncate" title={user.email ?? ""}>{user.email}</span>
+              <button
+                onClick={() => { signOut().then(() => router.replace("/login")); }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded px-2 py-1 transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="w-3 h-3" /> Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* ── Body: two columns ── */}
@@ -120,19 +136,6 @@ export default function HomePage() {
 
         {/* Right — Form + sessions */}
         <div className="w-[420px] shrink-0 flex flex-col px-8 py-8 overflow-y-auto">
-
-          {/* No-persistence notice */}
-          <div className="border border-amber-500/25 bg-amber-500/10 rounded-lg px-4 py-3 mb-5 shrink-0 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-semibold text-amber-200">No database — sessions aren&apos;t saved</p>
-              <p className="text-[11px] text-amber-100/70 mt-0.5 leading-relaxed">
-                This demo has no persistent storage. A restart or redeploy wipes everything, so older
-                sessions can disappear or return &quot;Session not found&quot;. Treat each session as
-                temporary and finish it in one sitting.
-              </p>
-            </div>
-          </div>
 
           {/* New session form */}
           <div className="border border-border rounded-lg p-5 bg-card/30 shrink-0">

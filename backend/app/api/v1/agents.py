@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.agent import SpawnedAgent
+from app.models.session import AnalysisSession
+from app.core.auth import AuthUser, get_current_user, get_owned_session, owns
 
 router = APIRouter(tags=["agents"])
 
@@ -39,8 +41,20 @@ class ChatResponse(BaseModel):
     history: list
 
 
+async def _owned_agent(agent_id: str, user: AuthUser, db: AsyncSession) -> SpawnedAgent:
+    result = await db.execute(select(SpawnedAgent).where(SpawnedAgent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == agent.session_id))).scalar_one_or_none()
+    if not sess or not owns(sess, user):
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
 @router.get("/sessions/{session_id}/agents", response_model=list)
-async def list_agents(session_id: str, db: AsyncSession = Depends(get_db)):
+async def list_agents(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await get_owned_session(session_id, user, db)
     result = await db.execute(
         select(SpawnedAgent).where(SpawnedAgent.session_id == session_id)
     )
@@ -61,11 +75,8 @@ async def list_agents(session_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/agents/{agent_id}")
-async def get_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(SpawnedAgent).where(SpawnedAgent.id == agent_id))
-    agent = result.scalar_one_or_none()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+async def get_agent(agent_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    agent = await _owned_agent(agent_id, user, db)
     return {
         "id": agent.id, "session_id": agent.session_id, "name": agent.name,
         "age": agent.age, "role": agent.role, "background": agent.background,
@@ -82,15 +93,14 @@ async def get_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
 async def chat_with_agent(
     agent_id: str,
     body: ChatRequest,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(SpawnedAgent).where(SpawnedAgent.id == agent_id))
-    agent = result.scalar_one_or_none()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await _owned_agent(agent_id, user, db)
 
     from app.services.agents.agent_runner import chat_as_agent
-    from app.services.knowledge_graph.lightrag_service import get_kg_context_string
+    from app.services.knowledge_graph.lightrag_service import get_kg_context_string, get_lightrag
+    await get_lightrag(agent.session_id)  # warm the KG cache (DB-backed)
     kg_context = get_kg_context_string(agent.session_id)
     history = _agent_conversations.setdefault(agent_id, [])
     reply = await chat_as_agent(agent, body.message, history, kg_context)

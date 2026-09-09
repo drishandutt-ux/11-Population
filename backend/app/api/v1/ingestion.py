@@ -9,6 +9,7 @@ from app.services.ingestion.document_parser import parse_document
 from app.services.ingestion.youtube_extractor import extract_youtube
 from app.services.ingestion.text_processor import chunk_text
 from app.services.knowledge_graph.lightrag_service import get_lightrag, insert_chunks
+from app.core.auth import AuthUser, get_current_user, get_owned_session
 
 router = APIRouter(prefix="/sessions", tags=["ingestion"])
 
@@ -63,12 +64,10 @@ async def ingest_text(
     session_id: str,
     body: TextIngestRequest,
     background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
     session.status = SessionStatus.INGESTING
     await db.commit()
     background_tasks.add_task(_ingest_chunks, session_id, body.text, "text input")
@@ -80,12 +79,10 @@ async def ingest_document(
     session_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     content = await file.read()
     filename = file.filename or ""
@@ -102,12 +99,10 @@ async def ingest_youtube(
     session_id: str,
     body: YouTubeIngestRequest,
     background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     session.status = SessionStatus.INGESTING
     await db.commit()
@@ -132,13 +127,11 @@ async def generate_llm_paper(
     query: str = Form(...),
     llm: str = Form(default="claude"),
     context_file: Optional[UploadFile] = File(default=None),
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a research paper and return it to the frontend (no ingestion yet)."""
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     context_text = ""
     if context_file and context_file.filename:
@@ -166,12 +159,10 @@ async def ingest_llm_search(
     query: str = Form(...),
     llm: str = Form(default="claude"),
     context_file: Optional[UploadFile] = File(default=None),
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     # Parse optional context document now (before background task) so we hold the bytes
     context_text = ""

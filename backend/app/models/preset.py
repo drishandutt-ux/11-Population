@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, JSON, Integer
+from sqlalchemy import String, Text, DateTime, JSON, Integer, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -10,6 +10,7 @@ class AgentPreset(Base):
     __tablename__ = "agent_presets"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[Optional[str]] = mapped_column(Uuid(as_uuid=False), nullable=True, index=True, default=None)
     name: Mapped[str] = mapped_column(String(100))
     agent_count: Mapped[int] = mapped_column(Integer, default=0)
     # JSON array of agent profile dicts (all fields except id/session_id/created_at)

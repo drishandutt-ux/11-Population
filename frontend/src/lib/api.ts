@@ -1,14 +1,30 @@
+import { authHeaders, redirectToLogin } from "./supabase";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+/** fetch() against the backend with the user's Supabase token attached. Use for multipart
+ *  uploads and any call that bypasses `request()`. A 401 sends the user to /login. */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const auth = await authHeaders();
+  const res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers: { ...auth, ...(init.headers || {}) } });
+  if (res.status === 401) redirectToLogin();
+  return res;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000); // 2 min — LLM calls can be slow
   try {
+    const auth = await authHeaders();
     const res = await fetch(`${BASE}/api/v1${path}`, {
       ...options,
-      headers: { "Content-Type": "application/json", ...options?.headers },
+      headers: { "Content-Type": "application/json", ...auth, ...options?.headers },
       signal: controller.signal,
     });
+    if (res.status === 401) {
+      redirectToLogin();
+      throw new Error("Please sign in to continue.");
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`Request failed (${res.status})${text ? `: ${text.slice(0, 300)}` : ""}`);
@@ -57,7 +73,7 @@ export const api = {
     document: (sessionId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
-      return fetch(`${BASE}/api/v1/sessions/${sessionId}/ingest/document`, {
+      return apiFetch(`/sessions/${sessionId}/ingest/document`, {
         method: "POST",
         body: form,
       }).then((r) => r.json());
@@ -67,7 +83,7 @@ export const api = {
       form.append("query", data.query);
       form.append("llm", data.llm);
       if (data.contextFile) form.append("context_file", data.contextFile);
-      return fetch(`${BASE}/api/v1/sessions/${sessionId}/ingest/llm-search/generate`, {
+      return apiFetch(`/sessions/${sessionId}/ingest/llm-search/generate`, {
         method: "POST",
         body: form,
       }).then((r) => r.json());
@@ -77,7 +93,7 @@ export const api = {
       form.append("query", data.query);
       form.append("llm", data.llm);
       if (data.contextFile) form.append("context_file", data.contextFile);
-      return fetch(`${BASE}/api/v1/sessions/${sessionId}/ingest/llm-search`, {
+      return apiFetch(`/sessions/${sessionId}/ingest/llm-search`, {
         method: "POST",
         body: form,
       }).then((r) => r.json());

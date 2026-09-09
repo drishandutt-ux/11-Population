@@ -136,7 +136,8 @@ A separate full-page route lets you **chat 1:1 with any single agent** (`/sessio
 - **Two transport channels frontend↔backend:** request/response **REST** under `/api/v1`, plus a **per-session WebSocket** (`/ws/{session_id}`) for live events. The frontend also polls the session every 8s as a resilience fallback.
 - **Pub/sub is in-process, not Redis.** The module is named `redis_client.py` for historical reasons but is a pure asyncio-`Queue` fan-out (`backend/app/core/redis_client.py`). Every `publish(...)` enqueues a JSON event to all WebSocket subscribers *on the same process*. **Consequence: the app is single-replica by design** — multiple workers would not share events.
 - **All "intelligence" is Claude.** Persona generation, post writing, KG entity extraction, KG querying, report writing, query classification, and image/video Vision analysis are all Anthropic API calls. A valid `ANTHROPIC_API_KEY` is mandatory; without it the product silently produces empty graphs and no posts (see §16).
-- **Two persistence stores:** a relational DB (SQLite locally, Postgres in prod via `DATABASE_URL`) for sessions/agents/posts/reports/presets; and **per-session JSON files** on the local filesystem for knowledge graphs (`LIGHTRAG_DATA_DIR/{session_id}/kg.json`).
+- **One persistence store: Postgres on the "11 Minds Population" Supabase project** (ref `pkgfqfdnmikolrbampig`, eu-west-1) via `DATABASE_URL` (session-pooler string), for sessions/agents/posts/reports/presets **and the knowledge graphs** (`kg_graphs` table, one row per session — no more per-session `kg.json` files on the ephemeral disk). Locally, with `DATABASE_URL` unset, the same models run on SQLite (`backend/eleven_minds.db`). Schema is versioned with **Alembic** (`backend/alembic/`), run automatically at startup on Postgres.
+- **User authentication is Supabase Auth** on that same project (email + password, sign-up, magic link). The frontend holds the session with `supabase-js`; every REST call carries `Authorization: Bearer <access token>` and the WebSocket passes it as `?token=`. The backend verifies tokens locally against the project's JWKS (ES256) and scopes every session, agent, post, report, preset and graph to its owner (`user_id`). Auth is ON whenever `APP_SUPABASE_URL` is set; unset = dev mode with no login.
 - **Background work** (ingestion, agent spawning, the simulation loop) runs in FastAPI `BackgroundTasks` / fired coroutines in the same process, emitting incremental pub/sub events so the UI sees live progress.
 
 ---
@@ -146,6 +147,7 @@ A separate full-page route lets you **chat 1:1 with any single agent** (`/sessio
 The relational schema has **five tables**. There are **no DB-level foreign keys or ORM relationships** — tables are linked by convention via string `session_id` / `agent_id` / `parent_id` columns (several indexed). All primary keys are `String(36)` UUIDs; all rows have a `created_at`. Schema is created at startup via `Base.metadata.create_all` (no Alembic migrations). Models live in `backend/app/models/`.
 
 ### 6.1 `AnalysisSession` (`analysis_sessions`)
+Owner column: **`user_id`** (UUID → `auth.users.id`, nullable, indexed). Rows created in dev mode have no owner; with auth on, ownerless rows are invisible to everyone.
 The top-level unit of work. Columns: `id`, `title`, `query` (the question/hypothesis), `status` (enum), `agent_count`, `created_at`, `updated_at`.
 
 **`SessionStatus` enum** — the lifecycle state machine:
@@ -176,6 +178,10 @@ One contribution to the debate thread. Columns: `id`, `session_id` (indexed), `a
 A persisted Q&A log — one row per report question asked against a session. Columns: `id`, `session_id` (indexed), `question`, `answer`, `sources` (nullable), `created_at`.
 
 ### 6.5 `AgentPreset` (`agent_presets`)
+Also carries **`user_id`** (owner); lists and loads are per user.
+
+### 6.6 `KnowledgeGraph` (`kg_graphs`) and `profiles`
+`kg_graphs`: `session_id` (PK → session, cascade), `entities` (jsonb list), `relations` (jsonb list of `[head, verb, tail]`), `chunks` (jsonb, last 200), `updated_at`. `profiles`: `id` (→ `auth.users`), `email`, `display_name`, filled by a trigger on sign-up. Every public table has **row-level security** with owner policies (the backend connects as `postgres` and bypasses RLS; the policies protect any direct PostgREST use).
 A reusable, **session-independent** named snapshot of a population. Columns: `id`, `name`, `agent_count`, `agents` (JSON list of full agent-profile dicts — every `SpawnedAgent` field except `id`/`session_id`/`created_at`), `created_at`.
 
 **Relationship summary (all by convention):** `Session 1→N Agents`, `Session 1→N Posts`, `Agent 1→N Posts`, `Post 1→N Posts` (replies via `parent_id`), `Session 1→N ReportQueries`. `AgentPreset` is standalone. **No cascade deletes** — deleting a session orphans its agents/posts/reports.
@@ -367,9 +373,11 @@ Code: `backend/app/services/simulation/report_generator.py` (backend) + the repo
 ## 12. Backend reference
 
 ### 12.1 Tech
-FastAPI 0.115 on uvicorn; SQLAlchemy 2.0 async (`aiosqlite` / `asyncpg`); pydantic 2 + pydantic-settings; `anthropic` 0.40; ingestion libs (pypdf, python-docx, openpyxl, xlrd, python-pptx, striprtf, lxml, Pillow, yt-dlp, faster-whisper). App: `backend/app/main.py` (CORS fully open; mounts all routers under `/api/v1`; `/health`; `/ws/{session_id}`; startup creates tables).
+FastAPI 0.115 on uvicorn; SQLAlchemy 2.0 async (`aiosqlite` / `asyncpg`) + **Alembic** migrations; **PyJWT** (JWKS verification of Supabase user tokens, `app/core/auth.py`); pydantic 2 + pydantic-settings; `anthropic` 0.40; ingestion libs (pypdf, python-docx, openpyxl, xlrd, python-pptx, striprtf, lxml, Pillow, yt-dlp, faster-whisper). App: `backend/app/main.py` (CORS fully open; mounts all routers under `/api/v1`; `/health`; `/ws/{session_id}`; startup creates tables).
 
 ### 12.2 Complete API reference (all under `/api/v1`)
+
+**Authentication:** every route below (except `/health`) requires `Authorization: Bearer <Supabase access token>` when auth is on. Tokens are verified against `{APP_SUPABASE_URL}/auth/v1/.well-known/jwks.json` (ES256/RS256; HS256 projects fall back to `GET /auth/v1/user`). Missing/invalid → **401**. Any session, agent, preset or graph that the caller does not own → **404** (never 403, so ids are not confirmed). `POST /sessions` and `POST /presets` stamp `user_id`; `GET /sessions` and `GET /presets` are filtered to the caller. The WebSocket `/ws/{id}?token=…` closes with **4401** (bad token) or **4404** (not your session). `GET /health` reports `auth` and `database` mode.
 
 **Sessions** (`/sessions`)
 | Method | Path | Purpose |
@@ -459,6 +467,7 @@ Optional integration that reports **exact LLM token usage and cost** to the shar
 Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 with a **dark-only**, CSS-variable theme (near-black navy background, **teal/cyan** primary accent). Icons via `lucide-react`. `clsx` + `tailwind-merge` (`cn()`). System fonts only. Radix + framer-motion are installed but largely unused (UI is hand-rolled). `next.config.js` inlines `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`) and `NEXT_PUBLIC_WS_URL` (default `ws://localhost:8000`) at build time.
 
 ### 13.2 Pages
+- **`/login`** — sign in / create account / magic link (Supabase Auth). Every other page is wrapped in `RequireAuth` (root layout) and redirects here with `?next=` when signed out; when the Supabase env vars are absent the gate is a no-op. The landing header shows the signed-in email and a Sign out button.
 - **`app/page.tsx`** — landing: create-session form + recent-sessions list + the four use-case cards + hero illustration (`/minds-network.png`) + a **"no database" notice** warning that sessions aren't persisted (a restart/redeploy wipes them, so stale sessions can 404).
 - **`app/session/[id]/page.tsx`** — the **orchestrator component**: holds all shared state (session, agents, posts, KG entities/relations/activity, spawn progress, report, opinions), runs the WS dispatcher, polls every 8s, defines the `REPORT_PROMPT`, and renders the five tabs.
 - **`app/session/[id]/agents/[agentId]/page.tsx`** — standalone full-page 1:1 agent chat.
@@ -473,6 +482,7 @@ Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 wi
 
 ### 13.4 API client & WebSocket
 - **`lib/api.ts`** — thin REST client over `${NEXT_PUBLIC_API_URL}/api/v1`, grouped namespaces (`sessions`, `ingest`, `simulation`, `agents`, `report`, `presets`), plus full TypeScript types (`Session`, `Agent`, `AgentDials`, `Post`, `SpawnOptions`, `AgentPreset`, and the `WSEvent` discriminated union). File uploads use `FormData` directly. The KG is fetched directly (no `api.kg` namespace).
+- **`lib/supabase.ts` / `lib/auth.tsx`** — the `supabase-js` client, `getAccessToken()`, `authHeaders()`, `AuthProvider` (session state) and `RequireAuth` (route gate). `api.ts` attaches the bearer token to every call (`apiFetch` for multipart) and sends a 401 to `/login`.
 - **`lib/websocket.ts`** — a **singleton per session** (`getSessionWS(id)`): one `SessionWebSocket` shared by all subscribers, auto-reconnect after 3s on close, `subscribe(fn)` returns an unsubscribe closure. No auth on the socket.
 
 ### 13.5 Live-update plumbing
@@ -509,12 +519,16 @@ Two services, each built from its own `nixpacks.toml`:
 
 Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-stage `node:20-alpine`) as an alternative path. There is **no `railway.json`/`Procfile`/CI**.
 
+**Database & auth (Supabase project "11 Minds Population", `pkgfqfdnmikolrbampig`, eu-west-1):** the backend needs `DATABASE_URL` (use the **session pooler** string, port 5432 — Railway is IPv4-only; transaction mode on 6543 is also handled: NullPool + prepared statements off), `APP_SUPABASE_URL` and `APP_SUPABASE_ANON_KEY`. The frontend build needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. On startup the backend runs `alembic upgrade head`; the project was created with the `0001_initial` migration applied and stamped, so the first boot is a no-op. Sign-ups are open with email confirmation (Supabase's built-in mailer, rate-limited); restrict via Authentication → Providers in the dashboard if needed.
+
 ### 15.3 Environment variables
 | Var | Service | Purpose | Default |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | backend | Claude auth — **mandatory for all intelligence** | `""` (must set) |
-| `DATABASE_URL` | backend | Postgres DSN (rewritten to `postgresql+asyncpg://`); unset → SQLite | unset → SQLite |
-| `LIGHTRAG_DATA_DIR` | backend | Root for per-session KG JSON | `./lightrag_data` |
+| `DATABASE_URL` | backend | Supabase Postgres DSN (session pooler; rewritten to `postgresql+asyncpg://`); unset → SQLite | unset → SQLite |
+| `APP_SUPABASE_URL` | backend | Supabase project URL; **setting it turns user auth ON** | `""` (auth off, dev user) |
+| `APP_SUPABASE_ANON_KEY` | backend | Publishable/anon key (HS256 fallback only) | `""` |
+| `LIGHTRAG_DATA_DIR` | backend | Legacy: a `kg.json` found here is imported into `kg_graphs` once | `./lightrag_data` |
 | `MODEL_ORCHESTRATION` | backend | Heavy-reasoning model tier | `claude-haiku-4-5-20251001` |
 | `MODEL_AGENTS` | backend | Per-post model tier | `claude-haiku-4-5-20251001` |
 | `MODEL_FAST` | backend | KG/classification/verdict tier | `claude-haiku-4-5-20251001` |
@@ -532,9 +546,11 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 | `PORT` | both | Runtime port (Railway-injected) | 8000 / 3000 |
 | `NEXT_PUBLIC_API_URL` | frontend | REST base (build-time inlined) | `http://localhost:8000` |
 | `NEXT_PUBLIC_WS_URL` | frontend | WebSocket base (build-time inlined) | `ws://localhost:8000` |
+| `NEXT_PUBLIC_SUPABASE_URL` | frontend | Supabase Auth project URL (build-time) | `""` (login disabled) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | frontend | Supabase publishable key (build-time) | `""` |
 
 ### 15.4 Persistence & scaling implications
-- **Railway filesystems are ephemeral.** SQLite and all `lightrag_data/*.json` are **lost on redeploy/restart** unless a Railway **Volume** is mounted (and `LIGHTRAG_DATA_DIR` pointed at it). For durable relational data, add a Railway Postgres plugin (`DATABASE_URL`).
+- **Durable storage is Supabase Postgres.** With `DATABASE_URL` set, nothing lives on the Railway disk any more (graphs included), so redeploys no longer wipe sessions. Without it the backend silently falls back to SQLite on the ephemeral disk — check `/health` (`"database": "postgres"`).
 - **Single replica only.** Because pub/sub is in-process and the KG/SQLite are disk-local, running >1 instance would break live updates and split data. Horizontal scaling would require an external broker (e.g. real Redis) and shared storage.
 
 ---
@@ -547,9 +563,9 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 - **Verdict generation depends on output budget.** Fixed 2026-09-09: the Agent Opinions call used to be one un-batched request with `max_tokens=1200` keyed by UUIDs; Pulse logs showed every call ending at exactly 1200 completion tokens (truncated → unparsable → silently `{}`), so the sidebar stayed on "summarising…" forever. Now batched/salvaged/persisted (§12.2). If verdicts ever go missing again, check Pulse `execution_logs` where `execution_id='opinions'` for `completion_tokens` pinned at the cap.
 
 **Architectural / by-design:**
-- **Single-replica constraint** (in-process pub/sub) and **ephemeral KG/SQLite storage** on Railway without volumes (§15.4).
+- **Single-replica constraint** (in-process pub/sub). Storage is durable on Supabase once `DATABASE_URL` is set (§15.4).
 - **No cascade deletes** — deleting a session orphans its agents/posts/reports; spawning/applying a preset wipes a session's agents but not its posts.
-- **Orphaned KG sessions:** KG JSON files can outlive their DB rows (e.g. after a DB reset). The KG read endpoints still serve them from disk, but `GET /sessions/{id}` 404s — which can leave the UI session title stuck on "Loading…".
+- **Graphs cascade with their session** now (`kg_graphs.session_id` → session, on delete cascade); a session that 404s can still leave the UI title on "Loading…".
 - **Agent chat history is process-local and unbounded** (in-memory dict, never persisted, lost on restart).
 
 **Behavioral subtleties worth knowing:**
@@ -611,7 +627,8 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 │   │       ├── ingestion/           # text_processor, document_parser,
 │   │       │                        #   youtube_extractor, llm_search
 │   │       └── knowledge_graph/     # lightrag_service, graph_updater
-│   ├── tests/                       # dial_impact_experiment, kg_ingestion_test, opinions_test (pytest)
+│   ├── alembic/                     # env.py (async) + versions/0001_initial.py; alembic.ini at backend root
+│   ├── tests/                       # dial_impact_experiment, kg_ingestion_test, opinions_test, auth_test (pytest)
 │   ├── lightrag_data/{session}/kg.json   # per-session KG JSON (gitignored)
 │   ├── eleven_minds.db              # local SQLite (gitignored)
 │   ├── Dockerfile · nixpacks.toml · requirements.txt · .env.example
@@ -639,6 +656,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-09-09** — **Proper database + user accounts.** The app now persists to the **"11 Minds Population" Supabase project** (Postgres, eu-west-1): the full schema (sessions, agents, posts, reports, presets, `kg_graphs`, `profiles` + trigger, enums, indexes, RLS owner policies) was applied there and versioned as Alembic `0001_initial`, which the backend runs at startup. **Knowledge graphs moved from disk files into `kg_graphs`** (legacy `kg.json` files are imported once if found), so a redeploy no longer destroys anything. **Supabase Auth** added end to end: `/login` page (password, sign-up, magic link), `AuthProvider`/`RequireAuth` gate, bearer token on every API call and on the WebSocket; backend `app/core/auth.py` verifies ES256 tokens against the project JWKS (HS256 fallback via the Auth server), every route is owner-scoped (`user_id` on sessions and presets; children via the session), foreign resources 404, sockets close 4401/4404. Auth and Postgres switch on via env vars (`DATABASE_URL`, `APP_SUPABASE_URL`, `APP_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_*`); without them the app runs as before (SQLite, no login), so the deploy is safe before the variables are set. The landing page's "no database" warning is gone. New tests: `backend/tests/auth_test.py` (token verification, per-user isolation, WebSocket rejection, DB-backed KG round-trip).
 - **2026-09-09** — **Fixed the Agent Opinions sidebar stuck on "summarising…" forever.** Root cause (proved from Pulse `execution_logs`): `POST /sessions/{id}/opinions` asked Haiku for one JSON object keyed by 36-char UUIDs for *every* agent in a single call capped at `max_tokens=1200`; all 9 production calls ended at exactly 1200 completion tokens, so the JSON was always truncated, `json.loads` always failed, and the endpoint returned `{"opinions": {}}` with HTTP 200 — which the frontend treated as "still summarising". Rebuilt as `services/simulation/opinions.py`: agents are **batched (25/call, ≤6 concurrent)** with short **integer keys**, `max_tokens` scales with the batch, **truncated output is salvaged** pair-by-pair, LLM errors return a friendly `error` string (never a 500 or a silent empty map), and verdicts are **persisted** on the new `spawned_agents.verdict` column (exposed on `GET .../agents`). Frontend: verdicts seed from the roster on load, generation retries 3× with backoff, the sidebar shows "summarising…" only while a request is in flight, falls back to a first-post excerpt otherwise, and has a **Refresh/Retry** button with the error text. Added `backend/tests/opinions_test.py` (pytest, mocked Claude + SQLite).
 - **2026-06-10** — **Fixed the knowledge graph staying sparse on Pro/small runs.** The mid-simulation KG enrichment used a flat 15% post sample (tuned for 1000-agent Fast runs), which on a small Pro run (5–50 agents) rounded to ~0 posts — so the debate never reached the graph. Made it **adaptive**: `min(1.0, KG_SIM_MAX_UPDATES / agent_count)`, so any run ≤120 agents now feeds **every** post into the KG and only large runs throttle. Replaces `KG_SIM_SAMPLE` with `KG_SIM_MAX_UPDATES` (default 120).
 - **2026-06-10** — **Fixed the "Generate Report" button doing nothing on failure.** `handleMakeReport` swallowed thrown errors (only `console.error`), so a 404 (e.g. a wiped session) left the button spinning then blank. It now surfaces the reason in the report panel — and a "Session not found" 404 shows a clear "this session was reset (no persistent storage) — start a new one" message. (LLM errors already returned a friendly HTTP 200 that rendered; only the thrown-error path was silent.)

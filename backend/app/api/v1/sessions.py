@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.session import AnalysisSession, SessionStatus
 from app.models.agent import SpawnedAgent, AgentStance
 from app.models.post import SimulationPost
+from app.core.auth import AuthUser, get_current_user, get_owned_session, owns
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -32,9 +33,10 @@ class SessionResponse(BaseModel):
 
 
 @router.post("", response_model=SessionResponse)
-async def create_session(body: CreateSessionRequest, db: AsyncSession = Depends(get_db)):
+async def create_session(body: CreateSessionRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     session = AnalysisSession(
         id=str(uuid.uuid4()),
+        user_id=None if user.is_dev else user.id,
         title=body.title,
         query=body.query,
         status=SessionStatus.CREATED,
@@ -46,37 +48,41 @@ async def create_session(body: CreateSessionRequest, db: AsyncSession = Depends(
 
 
 @router.get("", response_model=list[SessionResponse])
-async def list_sessions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(AnalysisSession).order_by(AnalysisSession.created_at.desc()).limit(50)
-    )
+async def list_sessions(user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    q = select(AnalysisSession).order_by(AnalysisSession.created_at.desc()).limit(50)
+    # With auth on, only the caller's sessions; in dev mode everything (rows have no owner).
+    if not user.is_dev:
+        q = q.where(AnalysisSession.user_id == user.id)
+    result = await db.execute(q)
     return result.scalars().all()
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def get_session(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await get_owned_session(session_id, user, db)
     return session
 
 
 @router.get("/{session_id}/kg")
-async def get_kg(session_id: str):
-    from app.services.knowledge_graph.lightrag_service import get_kg_data
+async def get_kg(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.services.knowledge_graph.lightrag_service import get_kg_data, get_lightrag
+    await get_owned_session(session_id, user, db)
+    await get_lightrag(session_id)  # DB-backed: warm the cache before the sync read
     return get_kg_data(session_id)
 
 
 @router.get("/{session_id}/kg/entity/{entity_name}")
-async def get_kg_entity(session_id: str, entity_name: str):
-    from app.services.knowledge_graph.lightrag_service import get_entity_details
+async def get_kg_entity(session_id: str, entity_name: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.services.knowledge_graph.lightrag_service import get_entity_details, get_lightrag
+    await get_owned_session(session_id, user, db)
+    await get_lightrag(session_id)
     return get_entity_details(session_id, entity_name)
 
 
 @router.get("/{session_id}/posts")
-async def get_session_posts(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_session_posts(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from app.services.simulation.thread_manager import get_posts
+    await get_owned_session(session_id, user, db)
     posts = await get_posts(db, session_id)
     return [
         {
@@ -93,7 +99,7 @@ async def get_session_posts(session_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/{session_id}/dials")
-async def get_session_dials(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_session_dials(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Population-level aggregation of the 112 dials across this session's agents.
 
     Powers the psychographic dashboard: per-dial distributions, group means,
@@ -101,10 +107,7 @@ async def get_session_dials(session_id: str, db: AsyncSession = Depends(get_db))
     """
     from app.services.agents.dial_analytics import aggregate_dials
 
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     agents_result = await db.execute(
         select(SpawnedAgent).where(SpawnedAgent.session_id == session_id)
@@ -125,6 +128,7 @@ class OpinionsRequest(BaseModel):
 async def generate_agent_opinions(
     session_id: str,
     body: Optional[OpinionsRequest] = None,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a crisp one-liner verdict per agent (batched Claude calls; persisted on the agent).
@@ -134,22 +138,18 @@ async def generate_agent_opinions(
     """
     from app.services.simulation.opinions import generate_opinions
 
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     return await generate_opinions(db, session_id, session.query, body.agent_ids if body else None)
 
 
 @router.delete("/{session_id}", status_code=204)
-async def delete_session(session_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def delete_session(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await get_owned_session(session_id, user, db)
     await db.delete(session)
     await db.commit()
+    from app.services.knowledge_graph.lightrag_service import forget
+    forget(session_id)
 
 
 class ApplyPresetRequest(BaseModel):
@@ -161,18 +161,16 @@ async def apply_preset(
     session_id: str,
     body: ApplyPresetRequest,
     background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.preset import AgentPreset
 
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     preset_result = await db.execute(select(AgentPreset).where(AgentPreset.id == body.preset_id))
     preset = preset_result.scalar_one_or_none()
-    if not preset:
+    if not preset or not owns(preset, user):
         raise HTTPException(status_code=404, detail="Preset not found")
 
     # Clear existing agents for this session

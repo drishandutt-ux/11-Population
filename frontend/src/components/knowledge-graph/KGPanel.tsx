@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Network, Zap, X, ArrowRight, ArrowLeft, FileText } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 interface Activity {
   time: number;
@@ -93,8 +94,7 @@ export default function KGPanel({ sessionId, entities, relations, activity }: Pr
     setDetailLoading(true);
     setEntityDetail(null);
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const r = await fetch(`${base}/api/v1/sessions/${sessionId}/kg/entity/${encodeURIComponent(name)}`);
+      const r = await apiFetch(`/sessions/${sessionId}/kg/entity/${encodeURIComponent(name)}`);
       const data = await r.json();
       setEntityDetail(data);
     } catch {

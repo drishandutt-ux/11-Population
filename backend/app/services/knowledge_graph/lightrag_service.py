@@ -1,12 +1,20 @@
 """
-Lightweight knowledge graph: Claude Haiku extracts entities/relations,
-stored as JSON per session.
+Lightweight knowledge graph: Claude Haiku extracts entities/relations, stored per session.
+
+Storage moved from per-session `kg.json` files (lost on every Railway redeploy) to the
+`kg_graphs` table. An in-process cache keeps the hot path synchronous:
+
+  * `await get_lightrag(session_id)`  — loads the graph into the cache (DB, else a legacy
+    kg.json on disk, else an empty graph). Callers that read synchronously afterwards
+    (`get_kg_context_string`, `get_kg_data`, `get_entity_details`) must warm it first.
+  * `insert_chunks(...)` / `_save_kg` — async: update the cache and persist to the DB.
 """
 import os
 import json
 import asyncio
 from typing import Tuple
 import anthropic
+from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 
@@ -14,35 +22,75 @@ _kg_cache: dict = {}
 _locks: dict = {}
 
 
-def _kg_path(session_id: str) -> str:
+def _empty() -> dict:
+    return {"entities": [], "relations": [], "chunks": []}
+
+
+def _legacy_path(session_id: str) -> str:
     settings = get_settings()
-    data_dir = os.path.join(settings.lightrag_data_dir, session_id)
-    os.makedirs(data_dir, exist_ok=True)
-    return os.path.join(data_dir, "kg.json")
+    return os.path.join(settings.lightrag_data_dir, session_id, "kg.json")
 
 
 def _load_kg(session_id: str) -> dict:
+    """Synchronous cache read. Returns an empty graph if nothing was warmed yet."""
     if session_id in _kg_cache:
         return _kg_cache[session_id]
-    path = _kg_path(session_id)
-    if os.path.exists(path):
-        with open(path) as f:
-            kg = json.load(f)
-    else:
-        kg = {"entities": [], "relations": [], "chunks": []}
+    kg = _empty()
     _kg_cache[session_id] = kg
     return kg
 
 
-def _save_kg(session_id: str, kg: dict):
+async def _load_from_db(session_id: str) -> dict:
+    from app.core.database import AsyncSessionLocal
+    from app.models.kg import KnowledgeGraph
+
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(select(KnowledgeGraph).where(KnowledgeGraph.session_id == session_id))).scalar_one_or_none()
+    if row is not None:
+        return {"entities": list(row.entities or []), "relations": list(row.relations or []), "chunks": list(row.chunks or [])}
+    # One-time import of a legacy on-disk graph, if present (pre-2026-09-09 deployments).
+    path = _legacy_path(session_id)
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                kg = json.load(f)
+            kg = {"entities": kg.get("entities", []), "relations": kg.get("relations", []), "chunks": kg.get("chunks", [])}
+            await _save_kg(session_id, kg)
+            return kg
+        except Exception as e:  # noqa: BLE001
+            print(f"[lightrag] legacy kg.json import failed for {session_id}: {e}")
+    return _empty()
+
+
+async def _save_kg(session_id: str, kg: dict):
+    from app.core.database import AsyncSessionLocal
+    from app.models.kg import KnowledgeGraph
+
     _kg_cache[session_id] = kg
-    with open(_kg_path(session_id), "w") as f:
-        json.dump(kg, f, indent=2)
+    try:
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(select(KnowledgeGraph).where(KnowledgeGraph.session_id == session_id))).scalar_one_or_none()
+            if row is None:
+                db.add(KnowledgeGraph(session_id=session_id, entities=kg["entities"], relations=kg["relations"], chunks=kg["chunks"]))
+            else:
+                row.entities = list(kg["entities"])
+                row.relations = list(kg["relations"])
+                row.chunks = list(kg["chunks"])
+            await db.commit()
+    except Exception as e:  # noqa: BLE001 — the cache still serves the run; log loudly
+        print(f"[lightrag] failed to persist KG for session {session_id}: {type(e).__name__}: {e}")
 
 
 async def get_lightrag(session_id: str):
-    _load_kg(session_id)
+    """Warm the cache for a session (idempotent) and return the session id as the handle."""
+    if session_id not in _kg_cache:
+        _kg_cache[session_id] = await _load_from_db(session_id)
     return session_id
+
+
+def forget(session_id: str):
+    _kg_cache.pop(session_id, None)
+    _locks.pop(session_id, None)
 
 
 async def insert_chunks(rag: str, chunks: list) -> Tuple[list, list]:
@@ -53,6 +101,7 @@ async def insert_chunks(rag: str, chunks: list) -> Tuple[list, list]:
     if session_id not in _locks:
         _locks[session_id] = asyncio.Lock()
     async with _locks[session_id]:
+        await get_lightrag(session_id)
         kg = _load_kg(session_id)
         settings = get_settings()
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -111,12 +160,13 @@ Rules: entities = 1-4 words, 5-12 entities, 3-8 relations. No markdown, just JSO
 
         kg["chunks"].extend(chunks)
         kg["chunks"] = kg["chunks"][-200:]
-        _save_kg(session_id, kg)
+        await _save_kg(session_id, kg)
         return new_entities, new_relations
 
 
 async def query_rag(rag: str, query: str, mode: str = "hybrid") -> str:
     session_id = rag
+    await get_lightrag(session_id)
     kg = _load_kg(session_id)
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)

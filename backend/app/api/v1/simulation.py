@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.session import AnalysisSession, SessionStatus
 from app.models.agent import SpawnedAgent
+from app.core.auth import AuthUser, get_current_user, get_owned_session
 
 router = APIRouter(prefix="/sessions", tags=["simulation"])
 
@@ -36,12 +37,10 @@ async def spawn_agents(
     session_id: str,
     body: SpawnAgentsRequest,
     background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     # Clear any existing agents for this session
     result2 = await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == session_id))
@@ -169,12 +168,10 @@ async def start_simulation(
     session_id: str,
     body: SimulateRequest,
     background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session(session_id, user, db)
 
     # Block if ingestion is still running
     if session.status == SessionStatus.INGESTING:
@@ -197,22 +194,16 @@ async def start_simulation(
 
 
 @router.post("/{session_id}/simulate/pause")
-async def pause_simulation(session_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def pause_simulation(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await get_owned_session(session_id, user, db)
     session.status = SessionStatus.PAUSED
     await db.commit()
     return {"status": "paused"}
 
 
 @router.post("/{session_id}/simulate/stop")
-async def stop_simulation(session_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def stop_simulation(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await get_owned_session(session_id, user, db)
     session.status = SessionStatus.COMPLETE
     await db.commit()
     return {"status": "complete"}

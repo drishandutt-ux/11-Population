@@ -1,6 +1,7 @@
 "use client";
 
 import { WSEvent } from "./api";
+import { getAccessToken } from "./supabase";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
@@ -23,7 +24,19 @@ class SessionWebSocket {
   }
 
   private _connect() {
-    this.ws = new WebSocket(`${WS_BASE}/ws/${this.sessionId}`);
+    // The backend validates the Supabase token on connect (4401 = not signed in,
+    // 4404 = not your session). Fetch a fresh token for every (re)connect.
+    getAccessToken().then((token) => {
+      if (!this.shouldReconnect) return;
+      const url = token
+        ? `${WS_BASE}/ws/${this.sessionId}?token=${encodeURIComponent(token)}`
+        : `${WS_BASE}/ws/${this.sessionId}`;
+      this._open(url);
+    });
+  }
+
+  private _open(url: string) {
+    this.ws = new WebSocket(url);
 
     this.ws.onmessage = (event) => {
       try {
@@ -32,7 +45,9 @@ class SessionWebSocket {
       } catch {}
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (ev) => {
+      // Auth rejections are permanent for this token — don't hammer the server.
+      if (ev.code === 4401 || ev.code === 4404) return;
       if (this.shouldReconnect) {
         this.reconnectTimer = setTimeout(() => this._connect(), 3000);
       }

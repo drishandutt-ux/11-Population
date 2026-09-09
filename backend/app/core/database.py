@@ -32,11 +32,18 @@ def _build_url() -> str:
 DATABASE_URL = _build_url()
 _sqlite = DATABASE_URL.startswith("sqlite")
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    **{"connect_args": {"check_same_thread": False}} if _sqlite else {},
-)
+def _engine_kwargs() -> dict:
+    if _sqlite:
+        return {"connect_args": {"check_same_thread": False}}
+    kw: dict = {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 5, "pool_recycle": 1800}
+    # Supabase shared pooler in TRANSACTION mode (port 6543) cannot use prepared statements.
+    if ":6543/" in DATABASE_URL:
+        from sqlalchemy.pool import NullPool
+        kw = {"poolclass": NullPool, "connect_args": {"statement_cache_size": 0, "prepared_statement_cache_size": 0}}
+    return kw
+
+
+engine = create_async_engine(DATABASE_URL, echo=False, **_engine_kwargs())
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -46,9 +53,31 @@ async def get_db() -> AsyncSession:
 
 
 async def create_tables():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await _ensure_columns()
+    """Bring the schema up to date.
+
+    Postgres (production): run Alembic migrations (`backend/alembic/`) — the schema is
+    versioned and the Supabase project is stamped at the current head.
+    SQLite (local dev / tests): create_all + the idempotent column adds below."""
+    import app.models.kg  # noqa: F401 — make sure every model is registered on Base
+    if _sqlite:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await _ensure_columns()
+        return
+    await _run_alembic_upgrade()
+
+
+async def _run_alembic_upgrade():
+    import asyncio
+    from alembic import command
+    from alembic.config import Config
+
+    ini = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
+    cfg = Config(os.path.abspath(ini))
+    cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+    # Alembic's async env.py opens its own engine/loop; run it off the server loop.
+    await asyncio.to_thread(command.upgrade, cfg, "head")
+    print("[database] Alembic migrations up to date.")
 
 
 async def _ensure_columns():
@@ -58,6 +87,8 @@ async def _ensure_columns():
     migrations = [
         "ALTER TABLE spawned_agents ADD COLUMN humanity INTEGER DEFAULT 0",
         "ALTER TABLE spawned_agents ADD COLUMN verdict TEXT",
+        "ALTER TABLE analysis_sessions ADD COLUMN user_id CHAR(32)",
+        "ALTER TABLE agent_presets ADD COLUMN user_id CHAR(32)",
     ]
     for ddl in migrations:
         try:

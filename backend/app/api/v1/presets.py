@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.preset import AgentPreset
 from app.models.agent import SpawnedAgent
+from app.core.auth import AuthUser, get_current_user, get_owned_session, owns
 
 router = APIRouter(prefix="/presets", tags=["presets"])
 
@@ -28,15 +29,17 @@ class PresetResponse(BaseModel):
 
 
 @router.get("", response_model=list[PresetResponse])
-async def list_presets(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(AgentPreset).order_by(AgentPreset.created_at.desc())
-    )
+async def list_presets(user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    q = select(AgentPreset).order_by(AgentPreset.created_at.desc())
+    if not user.is_dev:
+        q = q.where(AgentPreset.user_id == user.id)
+    result = await db.execute(q)
     return result.scalars().all()
 
 
 @router.post("", response_model=PresetResponse)
-async def save_preset(body: SavePresetRequest, db: AsyncSession = Depends(get_db)):
+async def save_preset(body: SavePresetRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await get_owned_session(body.session_id, user, db)
     result = await db.execute(
         select(SpawnedAgent).where(SpawnedAgent.session_id == body.session_id)
     )
@@ -63,6 +66,7 @@ async def save_preset(body: SavePresetRequest, db: AsyncSession = Depends(get_db
 
     preset = AgentPreset(
         id=str(uuid.uuid4()),
+        user_id=None if user.is_dev else user.id,
         name=body.name.strip(),
         agent_count=len(agents),
         agents=agent_profiles,
@@ -74,10 +78,10 @@ async def save_preset(body: SavePresetRequest, db: AsyncSession = Depends(get_db
 
 
 @router.delete("/{preset_id}", status_code=204)
-async def delete_preset(preset_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_preset(preset_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AgentPreset).where(AgentPreset.id == preset_id))
     preset = result.scalar_one_or_none()
-    if not preset:
+    if not preset or not owns(preset, user):
         raise HTTPException(status_code=404, detail="Preset not found")
     await db.delete(preset)
     await db.commit()
