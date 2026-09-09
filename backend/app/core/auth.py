@@ -63,7 +63,9 @@ def _clean(v: str) -> str:
 
 
 def project_url() -> str:
-    return _clean(get_settings().app_supabase_url).rstrip("/")
+    v = _clean(get_settings().app_supabase_url).rstrip("/")
+    # An explicit "off"/"none" disables auth even when a .env file sets the URL (local dev).
+    return "" if v.lower() in ("off", "none", "false", "0") else v
 
 
 def auth_enabled() -> bool:

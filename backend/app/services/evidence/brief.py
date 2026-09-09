@@ -8,7 +8,7 @@ from typing import Optional
 
 from sqlalchemy import select
 
-from app.core.database import AsyncSessionLocal
+from app.core import database as dbm
 from app.models.evidence import Evidence
 
 from .frame import frame_for_prompt
@@ -40,7 +40,7 @@ def empty_brief(note: str = "No on-topic evidence yet.") -> dict:
 
 
 async def load_on_topic(session_id: str, limit: int = 60) -> list[Evidence]:
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         rows = (await db.execute(
             select(Evidence).where(Evidence.session_id == session_id, Evidence.on_topic.is_(True), Evidence.excluded.is_(False))
             .order_by(Evidence.relevance.desc(), Evidence.created_at.desc()).limit(limit)

@@ -130,6 +130,30 @@ def test_rank_entities_prefers_focus_and_penalises_synthetic_only():
     assert ranked[0] == "Crown Estate" and "Trading Card Game" not in ranked
 
 
+# ── structured output helper: schemas are valid JSON Schema and tool_use blocks parse ─
+
+def test_schemas_are_valid_and_analyze_parses_tool_use(monkeypatch):
+    import json
+    import jsonschema
+    from app.services.evidence import llm, frame as frm, plan as pln, judge_web as jw, judge_social as js, brief as br, recommend as rc
+    for schema in (frm.FRAME_SCHEMA, pln.PLAN_SCHEMA, jw.SCHEMA, js.SCHEMA, br.BRIEF_SCHEMA, rc.SCHEMA):
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+    captured = {}
+
+    async def fake_create(client, *, session_id=None, label="", **kw):
+        captured.update(kw)
+        block = types.SimpleNamespace(type="tool_use", name="record", input={"web_queries": ["a b c"], "web_region": "", "reddit_queries": ["x"], "rationale": "r"})
+        return types.SimpleNamespace(content=[block], stop_reason="tool_use")
+
+    monkeypatch.setattr(llm, "tracked_messages_create", fake_create)
+    out = asyncio.run(llm.analyze(pln.PLAN_SCHEMA, "sys", "user", session_id="s", label="t"))
+    assert out["web_queries"] == ["a b c"]
+    assert captured["tool_choice"] == {"type": "tool", "name": "record"} and captured["tools"][0]["input_schema"] is pln.PLAN_SCHEMA
+    assert captured["system"] == "sys" and captured["messages"][0]["content"] == "user"
+    jsonschema.validate(out, pln.PLAN_SCHEMA)
+
+
 # ── the loop end to end (mocked network + LLM) on SQLite via the API ────────
 
 @pytest.fixture

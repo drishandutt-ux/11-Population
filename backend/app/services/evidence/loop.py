@@ -17,7 +17,7 @@ from typing import Optional
 
 from sqlalchemy import select
 
-from app.core.database import AsyncSessionLocal
+from app.core import database as dbm
 from app.core.redis_client import publish, session_channel
 from app.models.evidence import Evidence, ResearchQuery, ResearchRun
 
@@ -56,6 +56,15 @@ def _now() -> datetime:
     return datetime.utcnow()
 
 
+def _iso(dt) -> Optional[str]:
+    """Naive UTC datetimes from the DB must be marked 'Z', or browsers read them as local time
+    (the panel showed a 60-minute elapsed time on a fresh run in BST)."""
+    if not dt:
+        return None
+    s = dt.isoformat()
+    return s if (dt.tzinfo is not None or s.endswith("Z")) else s + "Z"
+
+
 async def _emit(session_id: str, event: dict):
     await publish(session_channel(session_id), event)
 
@@ -65,21 +74,21 @@ def _run_payload(run: ResearchRun) -> dict:
         "id": run.id, "session_id": run.session_id, "status": run.status, "question": run.question, "sources": run.sources,
         "frame": run.frame, "plan": run.plan, "verdicts": run.verdicts or [], "covered": run.covered or [], "budget": run.budget or {},
         "brief": run.brief, "recommendations": run.recommendations, "note": run.note,
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "started_at": _iso(run.started_at),
+        "finished_at": _iso(run.finished_at),
     }
 
 
 def _query_payload(q: ResearchQuery) -> dict:
     return {"id": q.id, "run_id": q.run_id, "source": q.source, "query": q.query, "round": q.round_no, "status": q.status, "engine": q.engine,
-            "results": q.results, "read": q.read, "on_topic": q.on_topic, "note": q.note, "created_at": q.created_at.isoformat() if q.created_at else None}
+            "results": q.results, "read": q.read, "on_topic": q.on_topic, "note": q.note, "created_at": _iso(q.created_at)}
 
 
 def evidence_payload(e: Evidence) -> dict:
     return {"id": e.id, "run_id": e.run_id, "source_class": e.source_class, "source_ref": e.source_ref, "title": e.title, "author": e.author,
             "published_at": e.published_at, "text": e.text, "structured": e.structured or {}, "trust_tier": e.trust_tier,
             "relevance": e.relevance, "on_topic": e.on_topic, "excluded": e.excluded, "in_graph": e.in_graph, "query": e.query,
-            "attempt": e.attempt, "sub_questions": e.sub_questions or [], "created_at": e.created_at.isoformat() if e.created_at else None}
+            "attempt": e.attempt, "sub_questions": e.sub_questions or [], "created_at": _iso(e.created_at)}
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -87,7 +96,7 @@ def evidence_payload(e: Evidence) -> dict:
 async def start_research(session_id: str, question: str, sources: Optional[list[str]] = None, context: str = "", extra_frame: Optional[dict] = None) -> ResearchRun:
     """Create a run and launch it in the background. Returns the queued run row."""
     sources = [s for s in (sources or ["web", "reddit"]) if s in ("web", "reddit")] or ["web"]
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         # One active run per session: stop an older one that is still going.
         old = (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id, ResearchRun.status.in_(["queued", "running"])))).scalars().all()
         for r in old:
@@ -105,7 +114,7 @@ async def start_research(session_id: str, question: str, sources: Optional[list[
 
 
 async def stop_research(session_id: str) -> Optional[str]:
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         run = (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id, ResearchRun.status.in_(["queued", "running"])).order_by(ResearchRun.started_at.desc()))).scalars().first()
         if not run:
             return None
@@ -116,7 +125,7 @@ async def stop_research(session_id: str) -> Optional[str]:
 
 
 async def latest_run(session_id: str) -> Optional[ResearchRun]:
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         return (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id).order_by(ResearchRun.started_at.desc()))).scalars().first()
 
 
@@ -154,7 +163,7 @@ class _Ctx:
         return None
 
     async def save(self, **fields):
-        async with AsyncSessionLocal() as db:
+        async with dbm.AsyncSessionLocal() as db:
             run = (await db.execute(select(ResearchRun).where(ResearchRun.id == self.run_id))).scalar_one_or_none()
             if not run:
                 return
@@ -171,7 +180,7 @@ class _Ctx:
 
 
 async def _new_query(ctx: _Ctx, source: str, query: str, round_no: int) -> ResearchQuery:
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         q = ResearchQuery(id=str(uuid.uuid4()), run_id=ctx.run_id, session_id=ctx.session_id, source=source, query=query, round_no=round_no, status="running")
         db.add(q)
         await db.commit()
@@ -182,7 +191,7 @@ async def _new_query(ctx: _Ctx, source: str, query: str, round_no: int) -> Resea
 
 
 async def _update_query(ctx: _Ctx, q: ResearchQuery, **fields):
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         row = (await db.execute(select(ResearchQuery).where(ResearchQuery.id == q.id))).scalar_one_or_none()
         if not row:
             return
@@ -196,7 +205,7 @@ async def _update_query(ctx: _Ctx, q: ResearchQuery, **fields):
 async def _persist(ctx: _Ctx, rows: list[Evidence]) -> list[Evidence]:
     if not rows:
         return []
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         db.add_all(rows)
         await db.commit()
         for r in rows:
@@ -211,7 +220,7 @@ async def _score(ctx: _Ctx, updates: dict[str, dict]):
     """Apply judge scores to persisted rows and re-emit them."""
     if not updates:
         return
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         rows = (await db.execute(select(Evidence).where(Evidence.id.in_(list(updates.keys()))))).scalars().all()
         for r in rows:
             u = updates[r.id]
@@ -258,7 +267,7 @@ async def _ingest_to_graph(ctx: _Ctx, items: list[Evidence]):
                 chunks = [f"{header}\n{c}" for c in chunk_text(body)[:3]] or [text]
                 rag = await get_lightrag(ctx.session_id)
                 new_e, new_r = await insert_chunks(rag, chunks)
-                async with AsyncSessionLocal() as db:
+                async with dbm.AsyncSessionLocal() as db:
                     row = (await db.execute(select(Evidence).where(Evidence.id == e.id))).scalar_one_or_none()
                     if row:
                         row.in_graph = True
@@ -335,7 +344,8 @@ async def _web_loop(ctx: _Ctx):
         try:
             verdict = await asyncio.wait_for(judge_web(ctx.question, today_iso(), tried, items, ctx.frame, ctx.session_id), timeout=90)
         except Exception as e:  # noqa: BLE001
-            verdict = heuristic_verdict(items, f"Coverage judge failed: {e}")
+            from app.core.llm_errors import friendly_llm_error
+            verdict = heuristic_verdict(items, f"Coverage judge unavailable ({friendly_llm_error(e).strip('⚠️ ')}); all results kept.")
         useful = set(verdict.useful)
         updates = {}
         for idx, eid in id_by_index.items():
@@ -351,7 +361,7 @@ async def _web_loop(ctx: _Ctx):
         await ctx.save()
         await _emit(ctx.session_id, {"type": "research_verdict", "run_id": ctx.run_id, "source": "web", "round": round_no, "verdict": ctx.verdicts[-1], "covered": ctx.covered})
         # Graph: useful items only
-        async with AsyncSessionLocal() as db:
+        async with dbm.AsyncSessionLocal() as db:
             useful_rows = (await db.execute(select(Evidence).where(Evidence.id.in_([id_by_index[i] for i in useful if i in id_by_index]), Evidence.in_graph.is_(False)))).scalars().all()
         await _ingest_to_graph(ctx, list(useful_rows))
         if verdict.satisfied or not verdict.refined_queries:
@@ -431,7 +441,7 @@ async def _reddit_loop(ctx: _Ctx):
 # ── The run ──────────────────────────────────────────────────────────────────
 
 async def _run(run_id: str, context: str = ""):
-    async with AsyncSessionLocal() as db:
+    async with dbm.AsyncSessionLocal() as db:
         run = (await db.execute(select(ResearchRun).where(ResearchRun.id == run_id))).scalar_one_or_none()
         if not run:
             return
