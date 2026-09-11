@@ -23,6 +23,8 @@ class SpawnAgentsRequest(BaseModel):
     humanity: int = 0           # 0 = expert/analytical, 100 = fully human/emotional
     humanity_coverage: int = 0  # % of the population the humanity setting applies to
     ground_in_evidence: bool = True   # Pro: shape personas from the research evidence brief when one exists
+    mirror_survey: bool = False       # Pro + survey doc: build the population FROM the respondents
+                                      # rather than around them (the stance quota stops overriding the panel)
 
 
 class SimulateRequest(BaseModel):
@@ -57,9 +59,18 @@ async def spawn_agents(
     mode = "pro" if body.mode == "pro" else "fast"
     background_tasks.add_task(
         _spawn_agents_task,
-        session_id, count, mode,
-        body.profile_query, body.direct_pct, body.indirect_pct, body.neutral_pct, body.doc_context,
-        body.humanity, body.humanity_coverage, body.ground_in_evidence,
+        session_id=session_id,
+        count=count,
+        mode=mode,
+        profile_query=body.profile_query,
+        direct_pct=body.direct_pct,
+        indirect_pct=body.indirect_pct,
+        neutral_pct=body.neutral_pct,
+        doc_context=body.doc_context,
+        humanity=body.humanity,
+        humanity_coverage=body.humanity_coverage,
+        ground_in_evidence=body.ground_in_evidence,
+        mirror_survey=body.mirror_survey,
     )
     return {"status": "spawning", "count": count, "mode": mode}
 
@@ -86,6 +97,7 @@ async def _spawn_agents_task(
     humanity: int = 0,
     humanity_coverage: int = 0,
     ground_in_evidence: bool = True,
+    mirror_survey: bool = False,
 ):
     from app.core.database import AsyncSessionLocal
     from app.core.redis_client import publish, session_channel
@@ -117,6 +129,7 @@ async def _spawn_agents_task(
                 profile_query=profile_query,
                 direct_pct=direct_pct, indirect_pct=indirect_pct, neutral_pct=neutral_pct,
                 doc_context=doc_context,
+                mirror_survey=mirror_survey,
                 humanity=humanity, humanity_coverage=humanity_coverage,
                 mode="pro", evidence_brief=brief_text,
             )

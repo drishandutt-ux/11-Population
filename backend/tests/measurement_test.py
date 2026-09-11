@@ -475,3 +475,67 @@ def test_dial_directives_never_hand_the_model_a_stock_sentence():
         assert "part of me" not in text.lower(), f"{band} band hands the model a stock phrase"
     for band, text in agent_runner._PROBE_DIRECTIVES.items():
         assert "part of me" not in text.lower(), f"{band} probe directive hands over a stock phrase"
+
+
+# ── instruments declare their own inputs and KPIs ─────────────────────────────
+
+def test_instrument_declares_its_own_inputs():
+    """The Lab shell has no shared "stimulus + price" form — a tool brings its own controls."""
+    inst = instruments.get("purchase_intent")
+    keys = [i.key for i in inst.inputs]
+    assert keys == ["stimulus", "price", "currency"]
+    stimulus = next(i for i in inst.inputs if i.key == "stimulus")
+    assert stimulus.required and stimulus.type == "textarea"
+    # Prefilled from the session so the analyst edits rather than retypes the query.
+    assert stimulus.default_from == "session_query"
+    currency = next(i for i in inst.inputs if i.key == "currency")
+    assert currency.type == "select" and currency.default == "GBP" and "USD" in currency.options
+
+
+def test_instrument_declares_kpis_that_exist_in_its_aggregates():
+    """A declared KPI the aggregator never produces would render as a blank tile."""
+    inst = instruments.get("purchase_intent")
+    rows = [{
+        "agent_id": "a1", "agent": {"name": "N", "role": "r"},
+        "answer": {"reasoning": "r", "would_buy": "yes", "likelihood_0_100": 70,
+                   "max_price": 40.0, "key_driver": "need", "sentiment": 0.4},
+        "segments": {},
+    }]
+    agg = inst.aggregate(rows, {"price": 30, "seed": 1})
+    for kpi in inst.kpis:
+        if kpi.key == "would_buy_share":
+            assert agg["headline"]["metric"] == kpi.key
+        else:
+            assert kpi.key in agg, f"KPI {kpi.key} is declared but never aggregated"
+
+
+def test_required_inputs_are_reported_by_the_instrument():
+    assert instruments.get("purchase_intent").required_inputs() == ["stimulus"]
+
+
+def test_instrument_payload_carries_the_declaration():
+    """`GET /lab/instruments` is the single source of truth both sides read."""
+    from app.api.v1.measurement import _instrument_payload
+
+    payload = _instrument_payload(instruments.get("purchase_intent"))
+    assert {"inputs", "kpis", "page", "answer_schema", "schema_id"} <= set(payload)
+    assert payload["page"] == "purchase_intent"
+    assert payload["inputs"][0]["key"] == "stimulus"
+    assert payload["kpis"][0]["key"] == "would_buy_share"
+    # No leftovers from the old hardcoded-form contract.
+    assert "spec_fields" not in payload and "stimulus_hint" not in payload
+
+
+def test_http_missing_required_input_is_a_400(api_client):
+    client, Session = api_client
+    session_id = client.post("/api/v1/sessions", json={"title": "T", "query": "q", "auto_research": False}).json()["id"]
+
+    async def seed():
+        async with Session() as db:
+            db.add(_agent(session_id=session_id, name="P0"))
+            await db.commit()
+    asyncio.run(seed())
+
+    r = client.post(f"/api/v1/sessions/{session_id}/probes",
+                    json={"instrument": "purchase_intent", "spec": {"price": 12}})
+    assert r.status_code == 400 and "offer" in r.text.lower()

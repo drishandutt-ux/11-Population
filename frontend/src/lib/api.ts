@@ -283,6 +283,10 @@ export type SpawnOptions = {
   doc_context?: string;
   humanity?: number;          // 0-100 intensity
   humanity_coverage?: number; // 0-100 % of agents it applies to
+  ground_in_evidence?: boolean;
+  /** Pro + survey upload: build the population FROM the respondents instead of applying the
+   *  stance quota over the top of them. */
+  mirror_survey?: boolean;
 };
 
 export type Post = {
@@ -331,26 +335,51 @@ export type WSEvent =
 
 // ── Behaviour Lab ────────────────────────────────────────────────────────────
 
-/** A probe template: schema, question and the spec fields its editor should show. */
+/** One control on an instrument's own input panel. There is no shared form: each tool
+ *  declares the inputs it needs, and the UI renders them. */
+export type InstrumentInput = {
+  key: string;
+  type: "text" | "textarea" | "number" | "select" | "money";
+  label: string;
+  required: boolean;
+  help: string;
+  placeholder: string;
+  default: any;
+  /** "session_query" prefills from the session so the analyst edits rather than retypes. */
+  default_from: string;
+  options: string[];
+};
+
+/** A headline number the instrument produces, named so the shell can render it without
+ *  knowing what the tool measures. */
+export type InstrumentKpi = {
+  key: string;
+  label: string;
+  format: "share" | "mean" | "money" | "count";
+  help: string;
+};
+
+/** A tool: its inputs, its schema, its KPIs and which page renders its results. */
 export type Instrument = {
   key: string;
   label: string;
   description: string;
   question: string;
-  chart: string;
-  stimulus_hint: string;
-  spec_fields: string[];
+  inputs: InstrumentInput[];
+  kpis: InstrumentKpi[];
+  /** Key into the frontend page registry; empty or unknown falls back to the generic view. */
+  page: string;
   schema_id: string;
   answer_schema: { properties: Record<string, any>; required?: string[] };
 };
 
+/** Instrument-declared inputs land here by key, alongside the runner's own options. The
+ *  shell never assumes a particular instrument's fields. */
 export type ProbeSpec = {
-  stimulus?: string;
-  price?: number | null;
-  currency?: string;
   context?: { kg?: boolean; own_posts?: boolean; prior_answers?: boolean };
   agent_filter?: { segments?: Record<string, string | string[]>; sample?: number; agent_ids?: string[] };
   seed?: number;
+  [key: string]: any;
 };
 
 export type ProbeRequest = {

@@ -521,6 +521,7 @@ export default function SessionPage() {
         {activeTab === "lab" && (
           <LabPanel
             sessionId={id}
+            sessionQuery={session?.query || ""}
             agents={agents}
             liveAnswers={probeAnswers}
             completedAt={probeCompletedAt}

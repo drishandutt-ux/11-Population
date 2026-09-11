@@ -252,10 +252,17 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
 }
 
 // ── Profile doc upload ────────────────────────────────────────────────────────
+/** How much of an uploaded survey reaches the prompt. Matches SURVEY_CHAR_LIMIT in
+ *  agent_factory.py — the file used to be cut to 12,000 here and then to 8,000 again on the
+ *  server, silently, so a large survey lost rows twice with nothing said about it. */
+const SURVEY_CHAR_LIMIT = 8000;
+
 function ProfileDocUpload({
   docContext,
   onDocContext,
   mode,
+  mirrorSurvey,
+  onMirrorSurvey,
 }: {
   docContext: string;
   onDocContext: (text: string, name: string) => void;
@@ -263,9 +270,12 @@ function ProfileDocUpload({
    *  pre-built bank with no LLM call, so an uploaded doc is discarded — say so rather than
    *  letting it look like it was used. */
   mode: SimMode;
+  mirrorSurvey: boolean;
+  onMirrorSurvey: (v: boolean) => void;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [trimmed, setTrimmed] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleFile(file: File) {
@@ -277,7 +287,14 @@ function ProfileDocUpload({
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = (e.target?.result as string) || "";
-      const truncated = text.length > 12000 ? text.slice(0, 12000) : text;
+      const truncated = text.slice(0, SURVEY_CHAR_LIMIT);
+      if (text.length > SURVEY_CHAR_LIMIT) {
+        const keptRows = truncated.split("\n").length - 1;
+        const totalRows = text.split("\n").length - 1;
+        setTrimmed(`Trimmed to the first ${SURVEY_CHAR_LIMIT.toLocaleString()} characters — about ${keptRows} of ${totalRows} rows reach the model.`);
+      } else {
+        setTrimmed(null);
+      }
       setFileName(file.name);
       onDocContext(truncated, file.name);
     };
@@ -296,7 +313,7 @@ function ProfileDocUpload({
           <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
           <span className="text-foreground truncate flex-1">{fileName}</span>
           <button
-            onClick={() => { setFileName(null); onDocContext("", ""); }}
+            onClick={() => { setFileName(null); setTrimmed(null); onDocContext("", ""); }}
             className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="w-3 h-3" />
@@ -314,6 +331,27 @@ function ProfileDocUpload({
 
       {warning && (
         <p className="text-[10px] text-yellow-400 mt-1">{warning}</p>
+      )}
+
+      {trimmed && <p className="text-[10px] text-yellow-400 mt-1">{trimmed}</p>}
+
+      {docContext && mode === "pro" && (
+        // Two competing sources of truth for who the population is — the survey and the stance
+        // quota. This decides which one wins.
+        <label className="flex items-start gap-2 mt-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={mirrorSurvey}
+            onChange={(e) => onMirrorSurvey(e.target.checked)}
+            className="mt-0.5 accent-[hsl(var(--primary))]"
+          />
+          <span className="text-[10px] text-muted-foreground leading-relaxed">
+            <span className="text-foreground/80">Mirror the panel.</span> Build agents from these
+            respondents — their demographics, circumstances and answers — and let stance follow
+            from each person rather than the sliders. Uncheck to use the survey as flavour and
+            keep the stance mix above.
+          </span>
+        </label>
       )}
 
       {docContext && mode === "fast" ? (
@@ -400,6 +438,9 @@ export default function AgentDirectory({
   const [directPct, setDirectPct] = useState(33);
   const [indirectPct, setIndirectPct] = useState(33);
   const [docContext, setDocContext] = useState("");
+  // Pro + survey: build the population FROM the respondents rather than applying the stance
+  // quota over the top of them. Defaults on, because uploading a panel implies wanting it.
+  const [mirrorSurvey, setMirrorSurvey] = useState(true);
   const [humanity, setHumanity] = useState(50);          // 0 = expert, 100 = fully human
   const [humanityCoverage, setHumanityCoverage] = useState(60); // % of agents it applies to
   const [search, setSearch] = useState("");
@@ -479,6 +520,7 @@ export default function AgentDirectory({
       doc_context: docContext,
       humanity,
       humanity_coverage: humanityCoverage,
+      mirror_survey: mirrorSurvey,
     });
   }
 
@@ -591,6 +633,8 @@ export default function AgentDirectory({
               docContext={docContext}
               onDocContext={(text) => setDocContext(text)}
               mode={mode}
+              mirrorSurvey={mirrorSurvey}
+              onMirrorSurvey={setMirrorSurvey}
             />
           </div>
 

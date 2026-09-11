@@ -57,14 +57,17 @@ class ProbeRequest(BaseModel):
 
 
 def _instrument_payload(inst) -> dict:
+    """The single source of truth both sides read. The UI builds its input panel from
+    `inputs` and its headline strip from `kpis`, so a new instrument reaches the product
+    without the Lab shell being touched."""
     return {
         "key": inst.key,
         "label": inst.label,
         "description": inst.description,
         "question": inst.question,
-        "chart": inst.chart,
-        "stimulus_hint": inst.stimulus_hint,
-        "spec_fields": list(inst.spec_fields),
+        "inputs": [i.as_dict() for i in inst.inputs],
+        "kpis": [k.as_dict() for k in inst.kpis],
+        "page": inst.page,
         "schema_id": inst.schema_id(),
         "answer_schema": inst.answer_schema,
     }
@@ -152,6 +155,12 @@ async def create_probe(
         raise HTTPException(400, "This session has no population yet — spawn agents first.")
 
     spec = dict(body.spec or {})
+    # Required inputs are whatever the instrument says they are — the API has no opinion
+    # about stimuli, prices or attribute levels.
+    missing = [k for k in inst.required_inputs() if not str(spec.get(k) or "").strip()]
+    if missing:
+        labels = {i.key: i.label for i in inst.inputs}
+        raise HTTPException(400, f"Missing required input(s): {', '.join(labels.get(k, k) for k in missing)}")
     if body.agent_filter:
         spec["agent_filter"] = body.agent_filter
     seed = body.seed if body.seed is not None else random.randint(1, 2**31 - 1)

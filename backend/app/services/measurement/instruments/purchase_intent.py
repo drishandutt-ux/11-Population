@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.services.evidence.llm import enum, i, n, obj, s
 from app.services.measurement import stats
-from app.services.measurement.instruments import Instrument, register
+from app.services.measurement.instruments import InputField, Instrument, Kpi, register
 
 DRIVERS = ["price", "need", "trust", "social", "convenience", "identity", "risk"]
 
@@ -138,6 +138,34 @@ def aggregate(rows: list[dict], spec: dict) -> dict:
     }
 
 
+# This instrument's own input panel. The stimulus lives HERE, not in the Lab shell: it is
+# purchase intent's input, not something every future tool inherits. A pricing ladder or a
+# conjoint declares entirely different controls.
+INPUTS = (
+    InputField(
+        key="stimulus", type="textarea", label="The offer", required=True,
+        help="Write it as the customer would see it. The session query is written for you, the analyst — this is written for them.",
+        placeholder="Describe the product or offer exactly as the customer would see it, including the price.",
+        default_from="session_query",
+    ),
+    InputField(
+        key="price", type="money", label="Asking price",
+        help="Optional. Supplied it, and you also get a demand curve and a check on who actually clears the price.",
+        placeholder="34.99",
+    ),
+    InputField(
+        key="currency", type="select", label="Currency", default="GBP",
+        options=("GBP", "USD", "EUR"),
+    ),
+)
+
+KPIS = (
+    Kpi("would_buy_share", "Would buy", "share", "Share answering yes, with a Wilson interval."),
+    Kpi("likelihood", "Mean likelihood", "mean", "Self-rated 0-100."),
+    Kpi("max_price", "Walk-away price", "money", "The most they would pay before walking away."),
+    Kpi("sentiment", "Feeling", "mean", "-1 hostile to 1 delighted."),
+)
+
 INSTRUMENT = register(Instrument(
     key="purchase_intent",
     label="Purchase intent",
@@ -149,9 +177,9 @@ INSTRUMENT = register(Instrument(
     ),
     directive=DIRECTIVE,
     aggregate=aggregate,
-    chart="share_with_curve",
-    stimulus_hint="Describe the product or offer exactly as the customer would see it, including the price.",
+    inputs=INPUTS,
+    kpis=KPIS,
+    page="purchase_intent",
     max_tokens=500,
     version=2,
-    spec_fields=("stimulus", "price", "currency"),
 ))

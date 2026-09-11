@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 import random
 import asyncio
@@ -30,6 +31,81 @@ that reflects their emotional state, motivations, habits, trust patterns, fricti
 commercial intent, product experience, and composite readiness scores — all relative to the topic being debated."""
 
 
+#: How many characters of an uploaded survey reach the prompt. The frontend trims to the same
+#: number and says so, so a large survey is never silently cut twice.
+SURVEY_CHAR_LIMIT = 8000
+
+
+def _mirror_block(count: int) -> str:
+    """Instructions for building the population FROM a survey rather than around it.
+
+    Without this the stance quota wins: the model fills its "direct = domain expert" slots with
+    invented analysts, and a 24-respondent consumer panel ends up diluted by people who were
+    never in it."""
+    return f"""
+SURVEY FIDELITY — THIS IS THE PRIMARY INSTRUCTION:
+- The survey above is a REAL PANEL. Build this population FROM those respondents. Each agent
+  must correspond to a specific respondent: keep their age, city, occupation, income band,
+  commute and behaviour, and translate their scored answers into the matching dials.
+- Their own words in any comment field are the best evidence you have — let them set the
+  agent's register, vocabulary and what they care about.
+- Do NOT invent domain experts, analysts, consultants or industry insiders to fill a quota.
+  If the panel is made of ordinary consumers, the population is made of ordinary consumers.
+- Assign each agent the stance that HONESTLY follows from their own relationship to the topic
+  (direct = they live this decision or work in it, indirect = adjacent experience, neutral =
+  little stake or undecided). Ignore any requested stance percentages — the panel decides.
+- Only if there are fewer respondents than the {count} agents requested may you add further
+  people, and they must be plausible members of the same population, not experts about it.
+"""
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
+
+
+def _duplicate_keys(d: dict) -> tuple[str, str]:
+    """Two ways the same person shows up twice: the same name, or the same job at the same age."""
+    return _norm(d.get("name")), f"{_norm(d.get('role'))}|{d.get('age')}"
+
+
+def split_duplicates(agent_dicts: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(kept, duplicates). Batches are generated CONCURRENTLY from an identical prompt and
+    cannot see each other's output, so every batch independently invents the single most
+    obvious persona for the topic — two 38-year-old urban mobility economists, and so on."""
+    kept: list[dict] = []
+    dupes: list[dict] = []
+    seen_names: set[str] = set()
+    seen_roles: set[str] = set()
+    for d in agent_dicts:
+        if not isinstance(d, dict) or not d.get("name"):
+            continue
+        name_key, role_key = _duplicate_keys(d)
+        if (name_key and name_key in seen_names) or (role_key and role_key in seen_roles):
+            dupes.append(d)
+            continue
+        seen_names.add(name_key)
+        seen_roles.add(role_key)
+        kept.append(d)
+    return kept, dupes
+
+
+def uniquify_names(agent_dicts: list[dict]) -> list[dict]:
+    """Last-resort guarantee that no two agents share a name, for when a repair call fails.
+    A renamed twin is still a twin, but at least the roster is navigable."""
+    seen: set[str] = set()
+    for d in agent_dicts:
+        base = str(d.get("name") or "Unnamed")
+        name = base
+        n = 2
+        while _norm(name) in seen:
+            parts = base.split()
+            name = f"{parts[0]} {chr(64 + n)}. {' '.join(parts[1:])}" if len(parts) > 1 else f"{base} {n}"
+            n += 1
+        seen.add(_norm(name))
+        d["name"] = name
+    return agent_dicts
+
+
 async def generate_agents(
     session_id: str,
     query: str,
@@ -43,6 +119,7 @@ async def generate_agents(
     humanity_coverage: int = 0,
     mode: str = "pro",
     evidence_brief: str = "",
+    mirror_survey: bool = False,
 ) -> list[AgentProfile]:
     """Curate a population with the LLM. This is the PRO path (FAST mode samples the
     pre-built bank instead — see seed_bank.sample_bank). Pro uses the Sonnet tier and a
@@ -74,7 +151,9 @@ async def generate_agents(
         profile_context = f"\nAUDIENCE PROFILE INSTRUCTIONS:\n{profile_query}\n"
         profile_context += "Use this to shape agent demographics, backgrounds, and psychological dials.\n"
     if doc_context:
-        profile_context += f"\nSURVEY / PROFILE DATA (translate to dial values):\n{doc_context[:8000]}\n"
+        profile_context += f"\nSURVEY / PROFILE DATA (translate to dial values):\n{doc_context[:SURVEY_CHAR_LIMIT]}\n"
+        if mirror_survey:
+            profile_context += _mirror_block(count)
     if evidence_brief:
         profile_context += (
             f"\n{evidence_brief[:3500]}\n"
@@ -195,6 +274,41 @@ Return ONLY the JSON array, no markdown, no explanation."""
 
     batch_results = await asyncio.gather(*[_gen_batch(b) for b in batches])
     agent_dicts = [d for batch in batch_results for d in batch]
+
+    # ── Repair cross-batch collisions ──────────────────────────────────────────
+    # Concurrent batches share one prompt and cannot see each other, so the obvious
+    # archetypes get invented more than once. Regenerate only the collided slots, telling
+    # the model exactly who is already taken.
+    agent_dicts, dupes = split_duplicates(agent_dicts)
+    if dupes:
+        print(f"[agent_factory] {len(dupes)} duplicate persona(s) across batches — regenerating")
+        taken = "\n".join(f"- {d.get('name')} — {d.get('role')} (age {d.get('age')})" for d in agent_dicts)
+        d_n = sum(1 for d in dupes if d.get("stance") == "direct")
+        i_n = sum(1 for d in dupes if d.get("stance") == "indirect")
+        n_n = len(dupes) - d_n - i_n
+        h_n = sum(1 for d in dupes if int(d.get("humanity") or 0) > 0)
+        repair_prompt = _build_prompt(len(dupes), d_n, i_n, n_n, h_n) + f"""
+
+ALREADY IN THIS POPULATION — every persona you return must be a DIFFERENT person with a
+different name, a different job and a different angle on the topic:
+{taken}
+"""
+        try:
+            async with sem:
+                response = await tracked_messages_create(
+                    client,
+                    session_id=session_id,
+                    label="spawn:repair",
+                    model=gen_model,
+                    max_tokens=12000,
+                    system=_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": repair_prompt}],
+                )
+            replacements, _ = split_duplicates(agent_dicts + _parse_agents_json(response.content[0].text))
+            agent_dicts = replacements
+        except Exception as e:  # noqa: BLE001 — a failed repair must not lose the population
+            print(f"[agent_factory] duplicate repair failed: {type(e).__name__}: {e}")
+            agent_dicts = uniquify_names(agent_dicts + dupes)
 
     if not agent_dicts:
         raise RuntimeError(
