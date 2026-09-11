@@ -6,6 +6,8 @@ Create Date: 2026-09-11
 """
 from alembic import op
 
+from app.core.migrations import run_script
+
 revision = "0004_measurement"
 down_revision = "0003_evidence"
 branch_labels = None
@@ -65,7 +67,8 @@ create policy "probe_answers: via session owner" on public.probe_answers for all
 
 
 def upgrade() -> None:
-    op.execute(UPGRADE_SQL)
+    # One statement at a time: asyncpg rejects a multi-command prepared statement.
+    run_script(UPGRADE_SQL)
 
 
 def downgrade() -> None:

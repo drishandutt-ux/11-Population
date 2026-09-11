@@ -8,6 +8,8 @@ Create Date: 2026-09-09
 """
 from alembic import op
 
+from app.core.migrations import run_script
+
 revision = "0002_profile_roles"
 down_revision = "0001_initial"
 branch_labels = None
@@ -46,7 +48,8 @@ where not exists (select 1 from public.profiles where role = 'admin')
 
 
 def upgrade() -> None:
-    op.execute(UPGRADE_SQL)
+    # One statement at a time: asyncpg rejects a multi-command prepared statement.
+    run_script(UPGRADE_SQL)
 
 
 def downgrade() -> None:

@@ -11,6 +11,8 @@ Create Date: 2026-09-09
 """
 from alembic import op
 
+from app.core.migrations import run_script
+
 revision = "0001_initial"
 down_revision = None
 branch_labels = None
@@ -165,7 +167,8 @@ create policy "kg: via session owner" on public.kg_graphs for all to authenticat
 
 
 def upgrade() -> None:
-    op.execute(UPGRADE_SQL)
+    # One statement at a time: asyncpg rejects a multi-command prepared statement.
+    run_script(UPGRADE_SQL)
 
 
 def downgrade() -> None:

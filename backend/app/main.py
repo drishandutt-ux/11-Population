@@ -9,12 +9,21 @@ from app.core.redis_client import subscribe, unsubscribe, session_channel
 from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement
 
 
+#: Why the schema is not up to date, if it isn't. Surfaced on /health — a failed migration
+#: used to be a printed warning only, while /health still said the database was fine, so a
+#: missing table looked like a working deploy until the first request touched it.
+SCHEMA_ERROR: "str | None" = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global SCHEMA_ERROR
     try:
         await create_tables()
+        SCHEMA_ERROR = None
         print("[startup] Database tables ready.")
     except Exception as e:
+        SCHEMA_ERROR = f"{type(e).__name__}: {str(e)[:300]}"
         print(f"[startup] WARNING: create_tables() failed: {e}")
         print("[startup] App will start anyway — DB errors will surface per-request.")
     yield
@@ -114,10 +123,12 @@ async def health():
             db_ok, db_error = False, f"{type(e).__name__}: {str(e)[:200]}"
         _health_cache.update({"at": now, "ok": db_ok, "err": db_error})
     return {
-        "status": "ok" if db_ok else "degraded",
+        "status": "ok" if (db_ok and not SCHEMA_ERROR) else "degraded",
         "auth": "supabase" if auth_enabled() else "off (dev)",
         "auth_issuer": (project_url() + "/auth/v1") if auth_enabled() else None,
         "database": "sqlite" if _sqlite else "postgres",
         "database_ok": db_ok,
         "database_error": db_error,
+        "schema_ok": SCHEMA_ERROR is None,
+        "schema_error": SCHEMA_ERROR,
     }

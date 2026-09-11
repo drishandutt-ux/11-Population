@@ -6,6 +6,8 @@ Create Date: 2026-09-09
 """
 from alembic import op
 
+from app.core.migrations import run_script
+
 revision = "0003_evidence"
 down_revision = "0002_profile_roles"
 branch_labels = None
@@ -94,7 +96,8 @@ create policy "evidence: via session owner" on public.evidence for all to authen
 
 
 def upgrade() -> None:
-    op.execute(UPGRADE_SQL)
+    # One statement at a time: asyncpg rejects a multi-command prepared statement.
+    run_script(UPGRADE_SQL)
 
 
 def downgrade() -> None:
