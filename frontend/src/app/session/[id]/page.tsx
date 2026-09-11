@@ -4,16 +4,17 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, apiFetch, Session, Agent, Post, WSEvent, SpawnOptions, SimMode, ResearchState, EvidenceItem } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
-import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft } from "lucide-react";
+import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
 import ThreadView from "@/components/simulation/ThreadView";
 import SimulationControls from "@/components/simulation/SimulationControls";
 import KGPanel from "@/components/knowledge-graph/KGPanel";
 import ReportChat from "@/components/report/ReportChat";
 import AgentDirectory from "@/components/simulation/AgentDirectory";
+import LabPanel from "@/components/lab/LabPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
-type Tab = "ingest" | "agents" | "simulation" | "kg" | "report";
+type Tab = "ingest" | "agents" | "simulation" | "lab" | "kg" | "report";
 type OpinionsStatus = "idle" | "loading" | "done" | "error";
 
 const REPORT_PROMPT = `You are a senior analyst. Produce a structured executive briefing for this simulation session.
@@ -53,6 +54,9 @@ export default function SessionPage() {
   const [kgEntities, setKgEntities] = useState<string[]>([]);
   const [kgRelations, setKgRelations] = useState<string[][]>([]);
   const [kgActivity, setKgActivity] = useState<{ time: number; source: string; entities: string[]; relations: string[][] }[]>([]);
+  // Probe answers stream in per agent; the Lab shows them filling in before the aggregates exist.
+  const [probeAnswers, setProbeAnswers] = useState<Record<string, { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> }[]>>({});
+  const [probeCompletedAt, setProbeCompletedAt] = useState(0);
   const [isSpawning, setIsSpawning] = useState(false);
   const [spawnProgress, setSpawnProgress] = useState<{ current: number; total: number } | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
@@ -224,6 +228,21 @@ export default function SessionPage() {
             ...prev.slice(0, 49),
           ]);
         }
+
+      } else if (event.type === "probe_started") {
+        setProbeAnswers((prev) => ({ ...prev, [event.probe_id]: [] }));
+
+      } else if (event.type === "probe_answer") {
+        setProbeAnswers((prev) => ({
+          ...prev,
+          [event.probe_id]: [
+            ...(prev[event.probe_id] || []),
+            { agent_id: event.agent_id, agent_name: event.agent_name, avatar_color: event.avatar_color, answer: event.answer },
+          ],
+        }));
+
+      } else if (event.type === "probe_complete") {
+        setProbeCompletedAt(Date.now());
 
       } else if (event.type === "ingest_complete") {
         refreshSession();
@@ -400,6 +419,7 @@ export default function SessionPage() {
     { key: "ingest", label: "Ingest", icon: <Brain className="w-3.5 h-3.5" /> },
     { key: "agents", label: agents.length > 0 ? `Agents (${agents.length})` : "Agents", icon: <Users className="w-3.5 h-3.5" /> },
     { key: "simulation", label: posts.length > 0 ? `Thread (${posts.length})` : "Thread", icon: <MessageSquare className="w-3.5 h-3.5" /> },
+    { key: "lab", label: "Lab", icon: <Beaker className="w-3.5 h-3.5" /> },
     { key: "kg", label: "Graph", icon: <Network className="w-3.5 h-3.5" /> },
     { key: "report", label: "Report", icon: <FileText className="w-3.5 h-3.5" /> },
   ];
@@ -496,6 +516,21 @@ export default function SessionPage() {
             opinionsStatus={opinionsStatus}
             opinionsError={opinionsError}
             onRefreshOpinions={() => loadOpinions()}
+          />
+        )}
+        {activeTab === "lab" && (
+          <LabPanel
+            sessionId={id}
+            agents={agents}
+            liveAnswers={probeAnswers}
+            completedAt={probeCompletedAt}
+            onClearLive={(probeId) =>
+              setProbeAnswers((prev) => {
+                const next = { ...prev };
+                delete next[probeId];
+                return next;
+              })
+            }
           />
         )}
         {activeTab === "kg" && (

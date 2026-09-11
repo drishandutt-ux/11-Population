@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.database import create_tables
 from app.core.redis_client import subscribe, unsubscribe, session_channel
-from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research
+from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement
 
 
 @asynccontextmanager
@@ -48,6 +48,7 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(presets.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(research.router, prefix="/api/v1")
+app.include_router(measurement.router, prefix="/api/v1")
 
 
 @app.websocket("/ws/{session_id}")

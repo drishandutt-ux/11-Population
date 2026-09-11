@@ -238,7 +238,40 @@ def _dials_to_behavioral_guidance(dials: dict, humanity: int = 0) -> str:
     return guidance + human_block
 
 
-def _build_system_prompt(agent: SpawnedAgent) -> str:
+# How each humanity band answers a measurement instrument. The register has to carry over from
+# posting: a reactive agent does not suddenly deliberate because it was handed a form, and an
+# expert does not answer a pricing question from the gut.
+_PROBE_DIRECTIVES = {
+    "expert": (
+        "\n\nHOW YOU ANSWER THIS: Deliberately. Weigh the specifics of what is actually on offer against "
+        "what you know, and let the evidence decide. Your reasoning is short but concrete — a real "
+        "consideration, not a summary of your personality."
+    ),
+    "tempered": (
+        "\n\nHOW YOU ANSWER THIS: You think it through, but how you feel about it clearly colours where "
+        "you land. Name the practical reason; let the feeling show in the weighting."
+    ),
+    "balanced": (
+        "\n\nHOW YOU ANSWER THIS: Gut and reason pull equally. Say which way each one points, then commit "
+        "to an answer anyway — people do decide."
+    ),
+    "defensive": (
+        "\n\nHOW YOU ANSWER THIS: Your feeling about it decides, and then you justify it. You will not be "
+        "argued into an answer that feels wrong, however good the offer looks on paper."
+    ),
+    "reactive": (
+        "\n\nHOW YOU ANSWER THIS: From the gut, instantly. One short line of reasoning, no analysis, no "
+        "weighing of pros and cons. Your first reaction IS your answer."
+    ),
+}
+
+
+def _build_system_prompt(agent: SpawnedAgent, task: str = "post") -> str:
+    """Persona + dials + humanity register.
+
+    `task="post"` ends with the Reddit-style writing instruction the debate uses.
+    `task="probe"` swaps that for answering a measurement instrument in character, keeping the
+    same persona and register — the Behaviour Lab measures the same person that argued."""
     personality = ", ".join(agent.personality) if agent.personality else "thoughtful"
     humanity = getattr(agent, "humanity", 0) or 0
     prompt = f"""You are {agent.name}, a {agent.age}-year-old {agent.role}.
@@ -254,6 +287,16 @@ Your stance type: {agent.stance} ({"a domain expert" if agent.stance == "direct"
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
 
     band = _humanity_band(humanity)
+
+    if task == "probe":
+        prompt += _PROBE_DIRECTIVES.get(band, _PROBE_DIRECTIVES["expert"])
+        prompt += """
+
+You are answering a question put to you directly, in character, as yourself. Stay this person:
+your background, your circumstances and your register decide the answer.
+Do NOT break character. Do NOT answer as an analyst describing this person. Do NOT mention you are an AI."""
+        return prompt
+
     if band == "reactive":
         prompt += """
 

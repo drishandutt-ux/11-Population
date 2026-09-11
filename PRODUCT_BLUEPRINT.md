@@ -19,6 +19,7 @@ Repository: `11-minds-army` (the product is branded **"11 Minds Population"**; "
 9. [The knowledge graph](#9-the-knowledge-graph)
 10. [Ingestion pipeline](#10-ingestion-pipeline)
 11. [The report system](#11-the-report-system)
+11a. [The Behaviour Lab — probes & instruments](#11a-the-behaviour-lab--probes--instruments)
 12. [Backend reference (API + events + data)](#12-backend-reference)
 13. [Frontend reference](#13-frontend-reference)
 14. [Tech stack summary](#14-tech-stack-summary)
@@ -183,6 +184,9 @@ Also carries **`user_id`** (owner); lists and loads are per user.
 ### 6.6 `KnowledgeGraph` (`kg_graphs`) and `profiles`
 `kg_graphs`: `session_id` (PK → session, cascade), `entities` (jsonb list), `relations` (jsonb list of `[head, verb, tail]`), `chunks` (jsonb, last 200), `updated_at`. `profiles`: `id` (→ `auth.users`), `email`, `display_name`, **`role`** (`admin` | `member`), filled by a trigger on sign-up — **the first account to register becomes `admin`** (the trigger takes a table lock so two simultaneous sign-ups cannot both win); every later account is a `member`. Admins can promote/demote from the Admin page; the last admin cannot be demoted. Every public table has **row-level security** with owner policies (the backend connects as `postgres` and bypasses RLS; the policies protect any direct PostgREST use).
 A reusable, **session-independent** named snapshot of a population. Columns: `id`, `name`, `agent_count`, `agents` (JSON list of full agent-profile dicts — every `SpawnedAgent` field except `id`/`session_id`/`created_at`), `created_at`.
+
+### 6.7 `Probe` (`probes`) and `ProbeAnswer` (`probe_answers`)
+The Behaviour Lab's storage (§11a). `probes`: `id`, `session_id` (→ session, cascade), `instrument`, `schema_id` (e.g. `purchase_intent.v1`), `spec` (jsonb — stimulus, price, currency, context policy, agent filter, seed), `experiment_id` + `variant_key` (set when the probe is one arm of an A/B; null otherwise), `seed`, `model`, `prompt_hash`, `status` (`queued|running|complete|failed|stopped`), `agent_count`, `answer_count`, `failed_count`, `aggregates` (jsonb — everything the UI draws), `error`, `created_at`, `completed_at`. `probe_answers`: `id`, `probe_id` (cascade), `session_id`, `agent_id`, `answer` (jsonb, the instrument's typed schema), `reasoning` (denormalised for cheap quoting), `latency_ms`, `created_at`. Both carry RLS owner policies via the session. Alembic `0004_measurement`.
 
 **Relationship summary (all by convention):** `Session 1→N Agents`, `Session 1→N Posts`, `Agent 1→N Posts`, `Post 1→N Posts` (replies via `parent_id`), `Session 1→N ReportQueries`. `AgentPreset` is standalone. **No cascade deletes** — deleting a session orphans its agents/posts/reports.
 
@@ -397,6 +401,45 @@ Code: `backend/app/services/simulation/report_generator.py` (backend) + the repo
 
 ---
 
+## 11a. The Behaviour Lab — probes & instruments
+
+Until now the product's only structured output was the **112 dials assigned at spawn**, which are *priors, not results*. The Behaviour Lab turns the population into a measurement instrument: ask each agent a structured question **once**, store the typed answer, then compute everything else deterministically with no further model calls.
+
+### 11a.1 The probe primitive
+A **probe** is a spec — instrument, question, answer schema, stimulus, context policy, agent filter, seed — run against a set of agents, returning one typed answer per agent plus aggregates. One mechanism, not a family of features: an A/B test is the same probe against two stimuli; a price slider is a probe that elicited each agent's reservation price once, then a curve you drag for free.
+
+`services/measurement/probe.py` runs it: select agents → snapshot context once → answer every agent concurrently (`PROBE_CONCURRENCY = 32`) → persist each answer and stream it over the session websocket → aggregate in pure Python → store the aggregates on the probe row.
+
+### 11a.2 How an agent answers (why the personas stay coherent)
+The answer call reuses **the agent's own system prompt** — persona, dial-driven behavioural rules, humanity band — via `agent_runner._build_system_prompt(agent, task="probe")`. `task="probe"` swaps the Reddit-post instruction for a band-specific *how you answer this* directive, so the register carries over: a `reactive` agent answers from the gut in one line, an `expert` deliberates. The user message then shows the agent what it actually knows and has already done:
+
+- **the topic** and the same ranked KG context + evidence brief the debate agents get;
+- **what it said publicly** — its own last 3 posts, with an instruction to stay consistent or say why it changed its mind;
+- **what it already decided privately** — its last 4 probe answers in this session, so the agent who said £9 was its limit does not accept £14 an instrument later;
+- **its commercial dials, explicitly labelled priors, NOT the answer** — so a 9/10 purchase-intent persona can still refuse a bad price;
+- **the stimulus** (with the asking price when there is one).
+
+Two rules keep the numbers honest: **reason before number** (every schema puts a short `reasoning` field first, so the model anchors to a stated reason instead of clustering on the midpoint) and **the answer is private** (nobody in the debate sees it, so there is nothing to perform — a socially-cautious agent can admit what it would really do). The answer comes back through one Claude **tool-use** call whose `input_schema` is the instrument's schema (`services/evidence/llm.analyze` + `coerce`), so the output is always valid, correctly-typed JSON. A call that fails after one retry **drops that agent from the denominator** — never a default value, which would corrupt the share.
+
+Context is switchable per probe via `spec.context` (`{kg, own_posts, prior_answers}`).
+
+### 11a.3 Instrument library
+An instrument is a probe template: schema + question + directive + aggregator + chart, registered in `services/measurement/instruments/`. Adding one is a single file plus a registry line — the API and the UI picker enumerate it automatically. Shipped so far:
+
+| Instrument | The agent answers | The client sees |
+|---|---|---|
+| **`purchase_intent`** (`v1`) | `reasoning`, `would_buy` (yes/no/unsure), `likelihood_0_100`, `max_price_gbp` (own walk-away price), `key_driver` (price/need/trust/social/convenience/identity/risk), `sentiment` (-1..1) | Share who would buy with a Wilson CI; decision and driver mix; mean likelihood, walk-away price and feeling with bootstrap CIs; a **demand curve** + revenue-optimal price derived from the walk-away prices; the share whose own walk-away price clears the asking price, with a **contradiction count** where that disagrees with what they said; segment splits; verbatims grouped by answer; one plain-language sentence |
+
+Planned next (same primitive, per the Behaviour Lab plan): price sensitivity (Van Westendorp), budget allocation, concept/A-B test, sentiment & stance shift, Likert/NPS, conjoint, MaxDiff, Kano, message testing, brand funnel, churn, framing tests, structured interviews.
+
+### 11a.4 Statistics (`services/measurement/stats.py`)
+Pure Python, numpy-free, unit-tested: Wilson intervals for every proportion; bootstrap intervals for means (seeded, so an interval is reproducible); paired lift for within-subjects A/B; segment splits that **flag thin buckets rather than hiding them**; raking (IPF) to a target census; demand/revenue curves and the revenue-optimal price; test-retest agreement; polarisation.
+
+### 11a.5 Reproducibility
+Every probe stores its **seed, model, schema id and prompt hash**, and the agent sample is drawn with a seeded RNG — so "the same 100 agents" means the same 100 agents on a re-run, and two results are only comparable when the ask matched. Answers are never mixed across schema versions.
+
+---
+
 ## 12. Backend reference
 
 ### 12.1 Tech
@@ -418,6 +461,17 @@ FastAPI 0.115 on uvicorn; SQLAlchemy 2.0 async (`aiosqlite` / `asyncpg`) + **Ale
 | GET | `/sessions/{id}/dials` | Population dial dashboard (scorecard, heatmap, group stats). |
 | POST | `/sessions/{id}/opinions` | Generate a 10–15-word verdict per agent that has posted (Claude `model_fast`, **batched 25 agents/call, ≤6 calls in parallel**, integer keys, `max_tokens` scaled per batch, truncated JSON salvaged). Optional body `{"agent_ids": [...]}` regenerates a subset. Verdicts are **persisted** on `spawned_agents.verdict`. Always HTTP 200: `{"opinions": {agent_id: verdict}, "generated": n, "total": m, "error": string\|null}` — `opinions` includes previously persisted verdicts; `error` carries a friendly LLM error instead of a 500. Code: `services/simulation/opinions.py`. |
 | DELETE | `/sessions/{id}` | Delete session (no cascade). |
+
+**Behaviour Lab** (§11a)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/lab/instruments` | The instrument library — key, label, description, question, answer schema, spec fields. The UI builds its picker from this. |
+| POST | `/sessions/{id}/probes/estimate` | How many agents match the filter, which model, and the estimated cost — **before** you run. |
+| POST | `/sessions/{id}/probes` | Run an instrument: `{instrument, spec{stimulus, price, currency, context, agent_filter}, mode, seed}`. Returns the probe row immediately; the run happens in the background and streams. **400** if the session has no population, **404** for an unknown instrument. |
+| GET | `/sessions/{id}/probes` | All probes for the session, newest first. |
+| GET | `/sessions/{id}/probes/{probe_id}` | One probe with its `aggregates`, plus every typed answer with the agent's name, role and segments (`?include_answers=false` to skip). |
+| POST | `/sessions/{id}/probes/{probe_id}/stop` | Stop a running probe; answers already collected are kept and still aggregate. |
+| GET | `/sessions/{id}/probes/{probe_id}/export.csv` | Flat file for the client's analyst — one row per agent, segments + every answer field as columns. |
 | POST | `/sessions/{id}/apply-preset` | Wipe agents, load a preset population (background task). |
 
 **Ingestion** (`/sessions`)
@@ -474,6 +528,9 @@ All JSON, `type`-tagged, published to channel `session:{id}`:
 | `post_created` | `{post, agent}` | an agent posted |
 | `like_added` | `{post_id, agent_id, agent_name, new_likes}` | an agent liked a post |
 | `simulation_complete` | `{message}` | all rounds done |
+| `probe_started` | `{probe_id, instrument, agent_count}` | a probe began |
+| `probe_answer` | `{probe_id, agent_id, agent_name, avatar_color, answer, segments}` | one agent answered (streams into the Lab's dot grid) |
+| `probe_complete` | `{probe_id, status, answer_count, failed_count, sentence}` | a probe finished; aggregates are on the probe row |
 | `ping` | — | 30s keepalive |
 
 ### 12.4 Usage monitoring — AI Agent Pulse (direct-to-Supabase, no n8n)
@@ -497,7 +554,7 @@ Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 wi
 - **`/login`** — sign in / create account / magic link / **forgot password → emailed reset link → set a new password** (Supabase Auth; a recovery link lands on `/login?mode=reset` or with `type=recovery` in the URL fragment and shows the new-password form). A wrong password gets a plain-language message pointing at password managers and the reset flow. **Every emailed link (confirmation, magic link, reset) is redirected by Supabase to the project's Site URL unless the app's origin is in the Redirect URLs allow-list** — Authentication → URL Configuration must have **Site URL = `https://populations.11-minds.com`** (the frontend's custom domain, Railway service `amiable-courage`) and Redirect URLs listing `https://populations.11-minds.com/**` and `https://11-population.up.railway.app/**` (the same frontend's Railway domain), otherwise links land on `localhost:3000`. The `11-Population` Railway service (`11-population-production.up.railway.app`) is the backend API and is never a redirect target. Every other page is wrapped in `RequireAuth` (root layout) and redirects here with `?next=` when signed out. The Supabase project is resolved at runtime: build-time `NEXT_PUBLIC_SUPABASE_*` if present, else the backend's `GET /api/v1/config`, else the gate is a no-op. The landing header shows the signed-in email, an **Admin** chip for admins, and Sign out; admins get a **Mine / All users** toggle on the session list.
 - **`/admin`** — admin-only user list (email, role, session count, joined) with Make admin / Make member.
 - **`app/page.tsx`** — landing: create-session form + recent-sessions list + the four use-case cards + hero illustration (`/minds-network.png`) + a **"no database" notice** warning that sessions aren't persisted (a restart/redeploy wipes them, so stale sessions can 404).
-- **`app/session/[id]/page.tsx`** — the **orchestrator component**: holds all shared state (session, agents, posts, KG entities/relations/activity, spawn progress, report, opinions), runs the WS dispatcher, polls every 8s, defines the `REPORT_PROMPT`, and renders the five tabs.
+- **`app/session/[id]/page.tsx`** — the **orchestrator component**: holds all shared state (session, agents, posts, KG entities/relations/activity, spawn progress, report, opinions), runs the WS dispatcher, polls every 8s, defines the `REPORT_PROMPT`, and renders the six tabs (Ingest · Agents · Thread · **Lab** · Graph · Report).
 - **`app/session/[id]/agents/[agentId]/page.tsx`** — standalone full-page 1:1 agent chat.
 
 ### 13.3 Components
@@ -506,10 +563,11 @@ Next.js 14.2 (App Router, `src/app/`) + React 18 + TypeScript 5. Tailwind 3.4 wi
 - **`simulation/ThreadView` + `PostCard`** — the live, threaded debate feed (debate flags, like counts, markdown rendering) + a per-agent **opinions** sidebar. The sidebar shows, per agent: the Claude verdict if available → a live "summarising…" indicator **only while a request is in flight** → otherwise an italic excerpt of the agent's first post → "forming opinion…" if it hasn't posted. Its header carries a **Refresh** button (or **Retry** + the error text when generation failed). Auto-scroll **sticks to the bottom only while the user is already there** — scrolling up to read is never interrupted by incoming posts, and a floating **"Jump to latest"** button appears when scrolled away.
 - **`simulation/SimulationControls`** — header Pause/Resume/Stop (Start lives in AgentDirectory).
 - **`knowledge-graph/KGPanel`** — SVG node-graph (ring layout, live "new entity" flashes) + live activity feed + click-to-inspect entity detail panel.
+- **`lab/LabPanel` + `lab/Charts`** — the **Lab** tab (§11a). Left: instrument picker (populated from `GET /lab/instruments`), stimulus editor, asking price/currency, "who answers" segment filters, Fast/Pro model choice, a live **cost estimate before you run**, and the list of past runs. Right: while the probe runs, a **dot grid — one dot per agent, coloured by its answer** — fills in from `probe_answer` events with the latest reasonings underneath; when it finishes, the headline share with its **confidence band**, the plain-language sentence, mean stats, decision and driver bars, the **demand curve** (with the asking price and the revenue-optimal point marked), segment splits (thin buckets greyed, not hidden), verbatims, a CSV export, and a provenance line (model, seed, schema, how many failed and were excluded). Charts are hand-rolled inline **SVG** — no chart library.
 - **`report/ReportChat`** — the report document renderer (`ReportDocument`/`parseReport`: direct-answer callout, confidence badge, KPI grid) + dual-mode chat (Ask Report / Talk to Agent) + Save-as-PDF + Regenerate.
 
 ### 13.4 API client & WebSocket
-- **`lib/api.ts`** — thin REST client over `${NEXT_PUBLIC_API_URL}/api/v1`, grouped namespaces (`sessions`, `ingest`, `simulation`, `agents`, `report`, `presets`), plus full TypeScript types (`Session`, `Agent`, `AgentDials`, `Post`, `SpawnOptions`, `AgentPreset`, and the `WSEvent` discriminated union). File uploads use `FormData` directly. The KG is fetched directly (no `api.kg` namespace).
+- **`lib/api.ts`** — thin REST client over `${NEXT_PUBLIC_API_URL}/api/v1`, grouped namespaces (`sessions`, `research`, `ingest`, `simulation`, `agents`, `report`, `presets`, `lab`), plus full TypeScript types (`Session`, `Agent`, `AgentDials`, `Post`, `SpawnOptions`, `AgentPreset`, `Instrument`, `Probe`, `ProbeAggregates`, `Interval`, and the `WSEvent` discriminated union). File uploads use `FormData` directly; the probe CSV goes through `apiFetch` and downloads as a blob so the auth header is attached. The KG is fetched directly (no `api.kg` namespace).
 - **`lib/supabase.ts` / `lib/auth.tsx`** — the `supabase-js` client, `getAccessToken()`, `authHeaders()`, `AuthProvider` (session state) and `RequireAuth` (route gate). `api.ts` attaches the bearer token to every call (`apiFetch` for multipart) and sends a 401 to `/login`.
 - **`lib/websocket.ts`** — a **singleton per session** (`getSessionWS(id)`): one `SessionWebSocket` shared by all subscribers, auto-reconnect after 3s on close, `subscribe(fn)` returns an unsubscribe closure. No auth on the socket.
 
@@ -652,11 +710,14 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 │   │       ├── agents/              # profiles, agent_factory, agent_runner,
 │   │       │                        #   seed_bank (Fast bank), dial_analytics
 │   │       ├── simulation/          # orchestrator, thread_manager, report_generator, opinions
+│   │       ├── measurement/         # Behaviour Lab: probe (runner), stats (pure Python),
+│   │       │                        #   instruments/ (one file per instrument)
 │   │       ├── ingestion/           # text_processor, document_parser,
 │   │       │                        #   youtube_extractor, llm_search
 │   │       └── knowledge_graph/     # lightrag_service, graph_updater
-│   ├── alembic/                     # env.py (async) + versions/0001_initial.py; alembic.ini at backend root
-│   ├── tests/                       # dial_impact_experiment, kg_ingestion_test, opinions_test, auth_test (pytest)
+│   ├── alembic/                     # env.py (async) + versions/0001…0004; alembic.ini at backend root
+│   ├── tests/                       # dial_impact_experiment, kg_ingestion_test, opinions_test,
+│   │                                #   auth_test, evidence_test, measurement_test (pytest)
 │   ├── lightrag_data/{session}/kg.json   # per-session KG JSON (gitignored)
 │   ├── eleven_minds.db              # local SQLite (gitignored)
 │   ├── Dockerfile · nixpacks.toml · requirements.txt · .env.example
@@ -684,6 +745,7 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ## 19. Changelog
 
+- **2026-09-11** — **Behaviour Lab, phase 1: the probe primitive and the first instrument (§11a).** The population is now a measurement instrument, not just a debate. A **probe** asks every agent one structured question once (Claude tool-use, so the answer is always valid typed JSON), stores it, and computes everything else in pure Python. Personas stay themselves while answering: the probe reuses the agent's own system prompt via the new `_build_system_prompt(agent, task="probe")` — which swaps the Reddit-post instruction for a **humanity-band-specific answering directive** (reactive agents answer from the gut, experts deliberate) — and shows each agent the topic + ranked KG/brief context, **its own last posts**, **its own earlier probe answers** (so decisions stay consistent across instruments), and its **commercial dials explicitly labelled priors, not the answer**. Every schema puts `reasoning` first (reason before number), answers are framed as private (nothing to perform), and an agent whose call fails is **dropped from the denominator rather than defaulted**. First instrument: **purchase intent** — decision, likelihood, the agent's own walk-away price, key driver and sentiment; aggregated into a share with a **Wilson interval**, a **demand curve and revenue-optimal price** derived from the walk-away prices (which is what will make the price slider instant later), the share whose own price clears the asking price plus a **contradiction count** where that disagrees with what they said, driver mix, segment splits and verbatims — with one plain-language sentence the report generator can quote. New: `services/measurement/{probe,stats}.py` + `instruments/` (registry — a new instrument is one file plus one line), tables `probes` / `probe_answers` (Alembic **`0004_measurement`**, RLS via session owner), API `GET /lab/instruments`, `POST /sessions/{id}/probes[/estimate]`, `GET /sessions/{id}/probes[/{id}][/export.csv]`, `POST …/stop`, WS events `probe_started` / `probe_answer` / `probe_complete`, and a new **Lab tab** (instrument picker, stimulus + price editor, segment filter, cost estimate before running, a live dot grid of the population answering, then charts as inline SVG with error bars everywhere). Seed, model, schema id and prompt hash are stored on every probe, and the agent sample is seeded, so a re-run is reproducible. Tests: `backend/tests/measurement_test.py` (24 — statistics, persona context assembly, filters, a full run with a stubbed model, and the HTTP round trip including CSV).
 - **2026-09-10** — Magic-link / reset emails were landing on `localhost:3000` from production: the frontend sends the right `emailRedirectTo`, but the Supabase project's Site URL was still localhost and the production origin was not in the Redirect URLs allow-list, so Supabase silently fell back (visible in auth logs as `referer: http://localhost:3000` for requests from other networks). Documented the real frontend origin: **`https://populations.11-minds.com`** (Railway service `amiable-courage`; `11-population.up.railway.app` is its Railway alias). No code change.
 - **2026-09-09** — **Model-output hardening after a production crash.** A research brief came back with `groups` as pseudo-XML text and `key_facts` as a string (the model hit `max_tokens` mid-structure); the panel called `.map` on it and the whole session page died with "Application error". Backend: `evidence/llm.analyze` now raises `LlmTruncated` when `stop_reason == max_tokens` (the brief retries once on the top half of the evidence, budget raised to 8k tokens) and every structured answer passes through `llm.coerce(schema, value)`, which forces the schema's shapes (recovers `<item><parameter …>` blocks into objects, strings → lists, `"35%"` → 35, unknown enum → first value, missing keys → empty). Stored briefs are normalised on the way out too (`normalise_brief`), so old rows render. Frontend: `ErrorBoundary` around every session tab and the research panel (a bad payload shows an inline notice, never a blank app) and the panel treats every model field defensively (`asList`/`asStrList`/`asNum`).
 - **2026-09-09** — Research Stop is immediate and visible: the loop checks the stop flag between page reads and comment fetches (not only between queries), the API emits `research_status` (`stopping`, then `finalising` while the brief is built) so the panel shows progress and disables the button, and a stopped run still produces the brief and recommendations from everything gathered (test: `test_stop_mid_run_still_builds_brief`). The tool recommender no longer crashes on non-object entries in the model's list.
@@ -713,4 +775,4 @@ Dockerfiles also exist (backend `python:3.11-slim` + ffmpeg/gcc; frontend multi-
 
 ---
 
-*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-09-10.*
+*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-09-11.*

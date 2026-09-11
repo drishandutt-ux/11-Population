@@ -150,6 +150,29 @@ export const api = {
       }),
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
   },
+  lab: {
+    instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
+    estimate: (sessionId: string, body: ProbeRequest) =>
+      request<ProbeEstimate>(`/sessions/${sessionId}/probes/estimate`, { method: "POST", body: JSON.stringify(body) }),
+    run: (sessionId: string, body: ProbeRequest) =>
+      request<Probe>(`/sessions/${sessionId}/probes`, { method: "POST", body: JSON.stringify(body) }),
+    probes: (sessionId: string) => request<{ probes: Probe[] }>(`/sessions/${sessionId}/probes`),
+    probe: (sessionId: string, probeId: string) =>
+      request<Probe & { answers: ProbeAnswerRow[] }>(`/sessions/${sessionId}/probes/${probeId}`),
+    stop: (sessionId: string, probeId: string) =>
+      request<{ status: string }>(`/sessions/${sessionId}/probes/${probeId}/stop`, { method: "POST" }),
+    /** CSV goes through apiFetch so the auth header is attached, then downloads as a blob. */
+    downloadCsv: async (sessionId: string, probeId: string, filename: string) => {
+      const res = await apiFetch(`/sessions/${sessionId}/probes/${probeId}/export.csv`);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+  },
   presets: {
     list: () => request<AgentPreset[]>("/presets"),
     save: (sessionId: string, name: string) =>
@@ -300,4 +323,97 @@ export type WSEvent =
   | { type: "research_brief"; run_id: string; brief: any }
   | { type: "research_complete"; run_id: string; status: string; note: string; budget: Record<string, number>; covered: string[]; recommendations: any[] }
   | { type: "research_error"; run_id: string; error: string }
-  | { type: "research_status"; run_id: string; status: string; note?: string };
+  | { type: "research_status"; run_id: string; status: string; note?: string }
+  | { type: "probe_started"; probe_id: string; instrument: string; agent_count: number }
+  | { type: "probe_answer"; probe_id: string; agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any>; segments: Record<string, string> }
+  | { type: "probe_complete"; probe_id: string; status: string; answer_count: number; failed_count: number; sentence: string };
+
+
+// ── Behaviour Lab ────────────────────────────────────────────────────────────
+
+/** A probe template: schema, question and the spec fields its editor should show. */
+export type Instrument = {
+  key: string;
+  label: string;
+  description: string;
+  question: string;
+  chart: string;
+  stimulus_hint: string;
+  spec_fields: string[];
+  schema_id: string;
+  answer_schema: { properties: Record<string, any>; required?: string[] };
+};
+
+export type ProbeSpec = {
+  stimulus?: string;
+  price?: number | null;
+  currency?: string;
+  context?: { kg?: boolean; own_posts?: boolean; prior_answers?: boolean };
+  agent_filter?: { segments?: Record<string, string | string[]>; sample?: number; agent_ids?: string[] };
+  seed?: number;
+};
+
+export type ProbeRequest = {
+  instrument: string;
+  spec: ProbeSpec;
+  mode?: SimMode;
+  seed?: number | null;
+  agent_filter?: ProbeSpec["agent_filter"];
+};
+
+export type ProbeEstimate = { agent_count: number; mode: SimMode; model: string; estimated_cost_usd: number };
+
+export type ProbeStatus = "queued" | "running" | "complete" | "failed" | "stopped";
+
+/** A share with its Wilson interval — every proportion the Lab reports carries one. */
+export type Interval = { share: number; low: number; high: number; n: number; successes: number };
+export type MeanInterval = { mean: number; low: number; high: number; median: number; p25: number; p75: number; sd: number; n: number };
+
+export type ProbeAggregates = {
+  n: number;
+  sentence: string;
+  headline?: Interval & { metric: string; label: string };
+  would_buy?: (Interval & { value: string; count: number })[];
+  likelihood?: MeanInterval;
+  max_price?: MeanInterval & { currency: string };
+  demand_curve?: { price: number; share: number; low: number; high: number; revenue_index: number }[];
+  optimal_price?: { price: number; share: number; revenue_index: number };
+  at_asking_price?: Interval | null;
+  consistency?: { contradictions: number; share: number | null; note: string };
+  drivers?: (Interval & { value: string; count: number })[];
+  sentiment?: MeanInterval;
+  segments?: Record<string, (Interval & { segment: string; value: string; n: number; thin: boolean })[]>;
+  verbatims?: Record<string, { agent_id: string; name: string; role: string; reasoning: string; max_price?: number }[]>;
+};
+
+export type Probe = {
+  id: string;
+  session_id: string;
+  instrument: string;
+  schema_id: string;
+  spec: ProbeSpec;
+  experiment_id: string | null;
+  variant_key: string | null;
+  seed: number;
+  model: string;
+  prompt_hash: string;
+  status: ProbeStatus;
+  agent_count: number;
+  answer_count: number;
+  failed_count: number;
+  aggregates: ProbeAggregates | null;
+  error: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+};
+
+export type ProbeAnswerRow = {
+  agent_id: string;
+  name: string;
+  role: string;
+  avatar_color: string;
+  answer: Record<string, any>;
+  reasoning: string;
+  segments: Record<string, string>;
+  latency_ms: number;
+};
