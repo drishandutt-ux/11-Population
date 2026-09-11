@@ -136,3 +136,27 @@ def test_a_genuinely_different_person_with_the_same_job_survives():
         _p("B Person", "Software Developer, Bristol", 44),
     ])
     assert len(kept) == 2 and not dupes
+
+
+def test_role_head_splits_on_a_slash_descriptor():
+    """Pro spawns write roles as "Job / Descriptor"; two sergeants described differently are
+    still two sergeants. This pair (both aged 49) survived the first version of the fix."""
+    from app.services.agents.agent_factory import role_head
+    assert role_head("Retired Police Sergeant / Sceptical Cyclist") == role_head(
+        "Retired Police Sergeant / Ownership-Minded Cyclist")
+
+    kept, dupes = split_duplicates([
+        _p("Donal Fahy", "Retired Police Sergeant / Sceptical Cyclist", 49, stance="indirect"),
+        _p("Roy Stanton", "Retired Police Sergeant / Ownership-Minded Cyclist", 49, stance="neutral"),
+    ])
+    assert len(kept) == 1 and len(dupes) == 1
+
+
+def test_same_trade_a_generation_apart_still_survives():
+    """Two print shop owners 15 years apart are plausibly two people — the age window is what
+    separates a clone from a coincidence."""
+    kept, dupes = split_duplicates([
+        _p("Oliver Parrish", "Print Shop Owner / Self-Maintaining Cyclist", 42),
+        _p("Gordon Baird", "Print Shop Owner / Committed Cyclist and DIY Mechanic", 57),
+    ])
+    assert len(kept) == 2 and not dupes

@@ -74,7 +74,9 @@ def role_head(role: str) -> str:
     "Urban Mobility Economist, Transport Policy Institute" and "Urban Mobility Economist,
     University of Leeds" are the same persona wearing different lanyards; comparing whole role
     strings misses that, which is how three urban mobility economists reached one roster."""
-    head = re.split(r"[,(]| and | at | for | with ", str(role or ""), maxsplit=1)[0]
+    # "/" matters: the model often writes "Retired Police Sergeant / Sceptical Cyclist", and
+    # two of those are one persona twice however differently the second half is phrased.
+    head = re.split(r"[,(/|·—–]| and | at | for | with ", str(role or ""), maxsplit=1)[0]
     return _norm(head)
 
 
