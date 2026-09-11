@@ -18,7 +18,7 @@ SCHEMA = obj({
     "reasoning": s("1-2 sentences, in character, explaining your decision"),
     "would_buy": enum(["yes", "no", "unsure"], "Would you actually buy this?"),
     "likelihood_0_100": i("How likely you are to buy, 0-100"),
-    "max_price_gbp": n("The most YOU would pay before walking away, in the offer's currency"),
+    "max_price": n("The most YOU would pay before walking away, in the offer's currency"),
     "key_driver": enum(DRIVERS, "The single thing that decided it"),
     "sentiment": n("How you feel about the offer, -1 (hostile) to 1 (delighted)"),
 })
@@ -38,6 +38,16 @@ YOU ARE MAKING A DECISION, NOT WRITING A POST.
 - "No" is a real answer. Most people, most of the time, do not buy."""
 
 
+def _reservation(answer: dict) -> float:
+    """The agent's walk-away price. `max_price_gbp` is the v1 spelling: the field was renamed
+    because the instrument prices in the offer's currency, not always GBP."""
+    v = answer.get("max_price", answer.get("max_price_gbp"))
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _verbatims(rows: list[dict], value: str, limit: int = 4) -> list[dict]:
     out = []
     for r in rows:
@@ -48,7 +58,7 @@ def _verbatims(rows: list[dict], value: str, limit: int = 4) -> list[dict]:
             "name": r["agent"].get("name", ""),
             "role": r["agent"].get("role", ""),
             "reasoning": r["answer"].get("reasoning", ""),
-            "max_price": r["answer"].get("max_price_gbp"),
+            "max_price": _reservation(r["answer"]),
         })
         if len(out) >= limit:
             break
@@ -70,7 +80,7 @@ def aggregate(rows: list[dict], spec: dict) -> dict:
 
     head = _yes_share(rows)
     likelihood = stats.mean_ci([a.get("likelihood_0_100", 0) for a in answers], seed=seed)
-    reservation = [a.get("max_price_gbp", 0) for a in answers]
+    reservation = [_reservation(a) for a in answers]
     max_price = stats.mean_ci(reservation, seed=seed)
     curve = stats.demand_curve(reservation, max_price=(float(price) * 2 if price else None))
 
@@ -84,7 +94,7 @@ def aggregate(rows: list[dict], spec: dict) -> dict:
         at_price = stats.share_of(reservation, lambda v: float(v or 0) >= p)
         contradictions = sum(
             1 for a in answers
-            if (a.get("would_buy") == "yes") != (float(a.get("max_price_gbp") or 0) >= p)
+            if (a.get("would_buy") == "yes") != (_reservation(a) >= p)
         )
 
     segments = {
@@ -142,6 +152,6 @@ INSTRUMENT = register(Instrument(
     chart="share_with_curve",
     stimulus_hint="Describe the product or offer exactly as the customer would see it, including the price.",
     max_tokens=500,
-    version=1,
+    version=2,
     spec_fields=("stimulus", "price", "currency"),
 ))

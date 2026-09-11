@@ -103,7 +103,7 @@ def test_purchase_intent_is_registered_and_reasoning_comes_first():
     assert inst is not None
     keys = list(inst.answer_schema["properties"].keys())
     assert keys[0] == "reasoning", "reason-before-number keeps answers off the midpoint"
-    assert inst.schema_id() == "purchase_intent.v1"
+    assert inst.schema_id() == "purchase_intent.v2"
 
 
 def test_unknown_instrument_is_none():
@@ -116,7 +116,7 @@ def test_purchase_intent_aggregate_shape():
             "agent_id": f"a{i}",
             "agent": {"name": f"N{i}", "role": "r"},
             "answer": {"reasoning": "because", "would_buy": buy, "likelihood_0_100": like,
-                       "max_price_gbp": price, "key_driver": driver, "sentiment": 0.2},
+                       "max_price": price, "key_driver": driver, "sentiment": 0.2},
             "segments": {"stance": "direct", "age_band": "25-34"},
         }
     rows = [row(0, "yes", 20, 80, "need"), row(1, "no", 5, 10, "price"),
@@ -410,3 +410,68 @@ def test_http_unknown_instrument_is_404(api_client):
     session_id = client.post("/api/v1/sessions", json={"title": "T", "query": "q", "auto_research": False}).json()["id"]
     r = client.post(f"/api/v1/sessions/{session_id}/probes", json={"instrument": "nope", "spec": {}})
     assert r.status_code == 404
+
+
+# ── cost estimate ─────────────────────────────────────────────────────────────
+
+def test_cost_is_priced_from_the_model_not_the_mode_label():
+    """Regression: the estimate used to be a per-mode constant, so a "Fast" probe was quoted
+    at Haiku rates even where MODEL_AGENTS is overridden to Sonnet — a ~12x understatement."""
+    from app.api.v1.measurement import estimate_cost_usd
+
+    haiku = estimate_cost_usd("claude-haiku-4-5-20251001", 10)
+    sonnet46 = estimate_cost_usd("claude-sonnet-4-6", 10)
+    opus = estimate_cost_usd("claude-opus-5", 10)
+    assert haiku < sonnet46 < opus
+    # 10 × (2400 tok × $3/M + 260 tok × $15/M)
+    assert sonnet46 == pytest.approx(0.111, abs=0.001)
+
+
+def test_cost_scales_with_agent_count():
+    from app.api.v1.measurement import estimate_cost_usd
+    assert estimate_cost_usd("claude-haiku-4-5", 100) == pytest.approx(
+        estimate_cost_usd("claude-haiku-4-5", 10) * 10, rel=1e-6)
+    assert estimate_cost_usd("claude-haiku-4-5", 0) == 0
+
+
+def test_unknown_model_is_priced_at_the_top_tier_not_the_cheapest():
+    from app.api.v1.measurement import estimate_cost_usd
+    unknown = estimate_cost_usd("some-future-model", 10)
+    assert unknown >= estimate_cost_usd("claude-opus-5", 10)
+
+
+# ── currency-neutral walk-away price ──────────────────────────────────────────
+
+def test_walk_away_price_field_is_currency_neutral():
+    """v1 called it max_price_gbp while the instrument already priced in USD/EUR."""
+    inst = instruments.get("purchase_intent")
+    props = inst.answer_schema["properties"]
+    assert "max_price" in props and "max_price_gbp" not in props
+    assert inst.schema_id() == "purchase_intent.v2"
+
+
+def test_v1_answers_still_aggregate():
+    """Answers recorded under the old field name must not silently become £0."""
+    rows = [{
+        "agent_id": "a1", "agent": {"name": "N", "role": "r"},
+        "answer": {"reasoning": "r", "would_buy": "yes", "likelihood_0_100": 70,
+                   "max_price_gbp": 31.99, "key_driver": "convenience", "sentiment": 0.2},
+        "segments": {},
+    }]
+    agg = instruments.get("purchase_intent").aggregate(rows, {"price": 34.99, "seed": 1})
+    assert agg["max_price"]["median"] == 31.99
+    assert agg["consistency"]["contradictions"] == 1   # said yes, own price is below the ask
+
+
+# ── no canned phrasing ────────────────────────────────────────────────────────
+
+def test_dial_directives_never_hand_the_model_a_stock_sentence():
+    """Regression: the balanced directive contained the literal example
+    "part of me feels…, but rationally…", and every balanced-band agent opened with it —
+    in the debate and in probe answers alike."""
+    from app.services.agents import agent_runner
+
+    for band, text in agent_runner._HUMANITY_DIRECTIVES.items():
+        assert "part of me" not in text.lower(), f"{band} band hands the model a stock phrase"
+    for band, text in agent_runner._PROBE_DIRECTIVES.items():
+        assert "part of me" not in text.lower(), f"{band} probe directive hands over a stock phrase"

@@ -19,9 +19,33 @@ from app.services.measurement import instruments, probe as probe_svc
 
 router = APIRouter(tags=["measurement"])
 
-# Rough per-agent cost of one probe answer, from the Pulse figures for today's runs
-# (a probe is shorter than a post: ~700 in / ~110 out). Shown before the run, not billed.
-_COST_PER_AGENT = {"fast": 0.0005, "pro": 0.004}
+# List prices per million tokens, matched against the model id that will ACTUALLY run.
+# Pricing the mode label instead ("fast" = Haiku) silently understates the bill wherever
+# MODEL_AGENTS is overridden — in production it is set to Sonnet, so a "Fast" probe was
+# quoted at Haiku rates and cost ~12x that.
+_PRICE_PER_MTOK = {
+    "sonnet-4-6": (3.0, 15.0),
+    "haiku": (1.0, 5.0),
+    "sonnet": (2.0, 10.0),
+    "opus": (5.0, 25.0),
+    "fable": (10.0, 50.0),
+}
+# An unrecognised model is priced at the top tier: an estimate that flatters the bill is
+# worse than one that overshoots.
+_FALLBACK_PRICE = (5.0, 25.0)
+
+# Measured from production probe runs: one answer carries the persona, the ranked KG /
+# brief context and the agent's own history, and returns a short typed answer.
+_EST_TOKENS_IN = 2400
+_EST_TOKENS_OUT = 260
+
+
+def estimate_cost_usd(model: str, agents: int) -> float:
+    """What this probe will actually cost, from the resolved model id."""
+    key = next((k for k in _PRICE_PER_MTOK if k in (model or "")), None)
+    price_in, price_out = _PRICE_PER_MTOK.get(key, _FALLBACK_PRICE)
+    per_agent = (_EST_TOKENS_IN * price_in + _EST_TOKENS_OUT * price_out) / 1_000_000
+    return round(agents * per_agent, 4)
 
 
 class ProbeRequest(BaseModel):
@@ -96,11 +120,12 @@ async def estimate_probe(
         spec["agent_filter"] = body.agent_filter
     chosen = probe_svc._select_agents(list(agents), spec, body.seed or 0)
     mode = "pro" if body.mode == "pro" else "fast"
+    model = get_settings().agent_model(mode)
     return {
         "agent_count": len(chosen),
         "mode": mode,
-        "model": get_settings().agent_model(mode),
-        "estimated_cost_usd": round(len(chosen) * _COST_PER_AGENT[mode], 4),
+        "model": model,
+        "estimated_cost_usd": estimate_cost_usd(model, len(chosen)),
     }
 
 

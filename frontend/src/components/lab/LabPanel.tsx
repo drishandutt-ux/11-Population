@@ -36,7 +36,7 @@ export default function LabPanel({ sessionId, agents, liveAnswers, completedAt, 
   const [currency, setCurrency] = useState("GBP");
   const [mode, setMode] = useState<SimMode>("fast");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [estimate, setEstimate] = useState<{ agent_count: number; estimated_cost_usd: number } | null>(null);
+  const [estimate, setEstimate] = useState<{ agent_count: number; estimated_cost_usd: number; model: string } | null>(null);
   const [probes, setProbes] = useState<Probe[]>([]);
   const [selected, setSelected] = useState<(Probe & { answers?: ProbeAnswerRow[] }) | null>(null);
   const [busy, setBusy] = useState(false);
@@ -209,15 +209,19 @@ export default function LabPanel({ sessionId, agents, liveAnswers, completedAt, 
                 onClick={() => setMode(m)}
                 className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${mode === m ? "border-primary text-primary bg-primary/10" : "border-border text-muted-foreground hover:text-foreground"}`}
               >
-                {m === "fast" ? "Fast (Haiku)" : "Pro (Sonnet)"}
+                {m === "fast" ? "Fast" : "Pro"}
               </button>
             ))}
           </div>
         </div>
 
         {estimate && (
+          // The model comes from the backend's resolved config, not from the tier label —
+          // MODEL_AGENTS can point "Fast" at any model, and the cost follows the real one.
           <p className="text-[11px] text-muted-foreground">
             {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} will answer · about ${estimate.estimated_cost_usd.toFixed(2)}
+            <br />
+            <span className="opacity-70">{estimate.model}</span>
           </p>
         )}
 
