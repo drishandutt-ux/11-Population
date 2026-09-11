@@ -255,9 +255,14 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
 function ProfileDocUpload({
   docContext,
   onDocContext,
+  mode,
 }: {
   docContext: string;
   onDocContext: (text: string, name: string) => void;
+  /** Survey data is translated to dials by Claude during Pro curation. Fast mode samples the
+   *  pre-built bank with no LLM call, so an uploaded doc is discarded — say so rather than
+   *  letting it look like it was used. */
+  mode: SimMode;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -311,9 +316,16 @@ function ProfileDocUpload({
         <p className="text-[10px] text-yellow-400 mt-1">{warning}</p>
       )}
 
-      <p className="text-[10px] text-muted-foreground/50 mt-1">
-        CSV/text with survey responses — Claude will translate to dial values
-      </p>
+      {docContext && mode === "fast" ? (
+        <p className="text-[10px] text-yellow-400 mt-1">
+          Fast mode samples the pre-built persona bank and ignores this file. Switch to Pro to
+          have Claude translate these responses into dial values.
+        </p>
+      ) : (
+        <p className="text-[10px] text-muted-foreground/50 mt-1">
+          CSV/text with survey responses — Claude will translate to dial values (Pro mode only)
+        </p>
+      )}
 
       <input
         ref={inputRef}
@@ -578,6 +590,7 @@ export default function AgentDirectory({
             <ProfileDocUpload
               docContext={docContext}
               onDocContext={(text) => setDocContext(text)}
+              mode={mode}
             />
           </div>
 
