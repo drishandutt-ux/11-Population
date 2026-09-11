@@ -85,3 +85,54 @@ def test_survey_limit_is_a_single_shared_number():
     """The frontend trims to this same number and says so, instead of the file being cut at
     12,000 in the browser and again at 8,000 on the server with nothing reported."""
     assert SURVEY_CHAR_LIMIT == 8000
+
+
+# ── the roster that prompted the fix ──────────────────────────────────────────
+
+def test_role_head_strips_the_employer():
+    from app.services.agents.agent_factory import role_head
+    assert role_head("Urban Mobility Economist, Transport Policy Institute") == role_head(
+        "Urban Mobility Economist, University of Leeds")
+    assert role_head("Retired Police Sergeant, Sheffield") == role_head(
+        "Retired Police Sergeant and Cycling Club Treasurer, Sheffield")
+    assert role_head("NHS Radiographer, Leeds (Night Shifts)") == role_head(
+        "NHS Radiographer, Night-Shift Worker, Leeds")
+    assert role_head("Software Developer, Manchester") != role_head("Pharmacy Technician, Nottingham")
+
+
+def test_same_job_similar_age_is_a_clone_even_under_another_name():
+    kept, dupes = split_duplicates([
+        _p("Dr. Priya Mehta", "Urban Mobility Economist, Transport Policy Institute", age=38),
+        _p("Dr. Priya Menon", "Urban Mobility Economist, Transport Policy Research Centre", age=39),
+    ])
+    assert len(kept) == 1 and len(dupes) == 1
+
+
+def test_real_before_roster_collapses_its_clone_clusters():
+    """The 25-agent survey-seeded spawn that prompted this work. Whole-role matching caught
+    one duplicate; job-title matching catches the economist, radiographer and sergeant
+    clusters too."""
+    roster = [
+        _p("Dr. Priya Mehta", "Urban Mobility Economist, Transport Policy Institute", 38),
+        _p("Dr. Priya Mehta", "Urban Mobility Economist, University of Leeds", 38),
+        _p("Dr. Priya Menon", "Urban Mobility Economist, Transport Policy Research Centre", 39),
+        _p("Marcus Osei", "NHS Radiographer, Leeds (Night Shifts)", 34),
+        _p("Tamsin Gallagher", "NHS Radiographer, Night-Shift Worker, Leeds", 33),
+        _p("Sandra Okonkwo", "Retired Police Sergeant, Sheffield", 49),
+        _p("Tom Haskell", "Retired Police Sergeant and Cycling Club Treasurer, Sheffield", 49),
+        _p("Jamie Kowalski", "Software Developer, Manchester (Remote-Hybrid)", 31),
+        _p("Rachel Ndegwa", "Pharmacy Technician, Nottingham", 39),
+    ]
+    kept, dupes = split_duplicates(roster)
+    names = [d["name"] for d in kept]
+    assert len(dupes) == 4, [d["name"] for d in dupes]
+    assert names == ["Dr. Priya Mehta", "Marcus Osei", "Sandra Okonkwo", "Jamie Kowalski", "Rachel Ndegwa"]
+
+
+def test_a_genuinely_different_person_with_the_same_job_survives():
+    """Two software developers a generation apart are two people, not one persona twice."""
+    kept, dupes = split_duplicates([
+        _p("A Person", "Software Developer, Manchester", 31),
+        _p("B Person", "Software Developer, Bristol", 44),
+    ])
+    assert len(kept) == 2 and not dupes

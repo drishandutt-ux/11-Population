@@ -63,28 +63,49 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
 
 
-def _duplicate_keys(d: dict) -> tuple[str, str]:
-    """Two ways the same person shows up twice: the same name, or the same job at the same age."""
-    return _norm(d.get("name")), f"{_norm(d.get('role'))}|{d.get('age')}"
+#: Two people with the same job title this far apart in age are plausibly two real people;
+#: closer than this and they are the same persona invented twice.
+_CLONE_AGE_WINDOW = 6
+
+
+def role_head(role: str) -> str:
+    """The job itself, stripped of employer and embellishment.
+
+    "Urban Mobility Economist, Transport Policy Institute" and "Urban Mobility Economist,
+    University of Leeds" are the same persona wearing different lanyards; comparing whole role
+    strings misses that, which is how three urban mobility economists reached one roster."""
+    head = re.split(r"[,(]| and | at | for | with ", str(role or ""), maxsplit=1)[0]
+    return _norm(head)
 
 
 def split_duplicates(agent_dicts: list[dict]) -> tuple[list[dict], list[dict]]:
-    """(kept, duplicates). Batches are generated CONCURRENTLY from an identical prompt and
-    cannot see each other's output, so every batch independently invents the single most
-    obvious persona for the topic — two 38-year-old urban mobility economists, and so on."""
+    """(kept, duplicates).
+
+    A duplicate is the same name, or the same job title at a similar age. Batches are
+    generated from one prompt and cannot see each other, so each independently invents the
+    obvious persona for the topic — and when a survey is mirrored, several batches each turn
+    the same respondent into an agent."""
     kept: list[dict] = []
     dupes: list[dict] = []
     seen_names: set[str] = set()
-    seen_roles: set[str] = set()
+    seen_roles: list[tuple[str, int]] = []
     for d in agent_dicts:
         if not isinstance(d, dict) or not d.get("name"):
             continue
-        name_key, role_key = _duplicate_keys(d)
-        if (name_key and name_key in seen_names) or (role_key and role_key in seen_roles):
+        name_key = _norm(d.get("name"))
+        head = role_head(d.get("role"))
+        try:
+            age = int(d.get("age") or 0)
+        except (TypeError, ValueError):
+            age = 0
+        clash = (name_key and name_key in seen_names) or any(
+            head and head == h and abs(age - a) <= _CLONE_AGE_WINDOW for h, a in seen_roles
+        )
+        if clash:
             dupes.append(d)
             continue
         seen_names.add(name_key)
-        seen_roles.add(role_key)
+        seen_roles.append((head, age))
         kept.append(d)
     return kept, dupes
 
@@ -248,7 +269,18 @@ Return ONLY the JSON array, no markdown, no explanation."""
     # spawn (100 batches) doesn't fire 100 concurrent calls and trip rate limits.
     sem = asyncio.Semaphore(max(1, settings.spawn_concurrency))
 
-    async def _gen_batch(batch: list[tuple[str, bool]]) -> list[dict]:
+    def _taken_block(taken: list[dict]) -> str:
+        if not taken:
+            return ""
+        listed = "\n".join(f"- {t.get('name')} — {t.get('role')} (age {t.get('age')})" for t in taken[:40])
+        return f"""
+
+ALREADY IN THIS POPULATION — every persona you return must be a DIFFERENT person: a different
+name, a different job title, a different angle. Do not produce a variation of anyone below.
+{listed}
+"""
+
+    async def _gen_batch(batch: list[tuple[str, bool]], taken: list[dict], label: str = "spawn") -> list[dict]:
         bcount = len(batch)
         if bcount == 0:
             return []
@@ -261,19 +293,28 @@ Return ONLY the JSON array, no markdown, no explanation."""
                 response = await tracked_messages_create(
                     client,
                     session_id=session_id,
-                    label="spawn",
+                    label=label,
                     model=gen_model,
                     max_tokens=12000,
                     system=_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h)}],
+                    messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h) + _taken_block(taken)}],
                 )
                 return _parse_agents_json(response.content[0].text)
             except Exception as e:
                 print(f"[agent_factory] batch generation failed ({bcount} agents): {type(e).__name__}: {e}")
                 return []
 
-    batch_results = await asyncio.gather(*[_gen_batch(b) for b in batches])
-    agent_dicts = [d for batch in batch_results for d in batch]
+    # Prevention beats repair: run the FIRST batch alone, then hand its roster to all the
+    # others so they build around it instead of re-inventing the same obvious personas. Costs
+    # one round-trip of latency, not one extra call — the remaining batches still run
+    # concurrently.
+    agent_dicts: list[dict] = []
+    if batches:
+        agent_dicts = await _gen_batch(batches[0], [])
+        if len(batches) > 1:
+            rest = await asyncio.gather(*[_gen_batch(b, agent_dicts) for b in batches[1:]])
+            for r in rest:
+                agent_dicts.extend(r)
 
     # ── Repair cross-batch collisions ──────────────────────────────────────────
     # Concurrent batches share one prompt and cannot see each other, so the obvious
@@ -282,30 +323,10 @@ Return ONLY the JSON array, no markdown, no explanation."""
     agent_dicts, dupes = split_duplicates(agent_dicts)
     if dupes:
         print(f"[agent_factory] {len(dupes)} duplicate persona(s) across batches — regenerating")
-        taken = "\n".join(f"- {d.get('name')} — {d.get('role')} (age {d.get('age')})" for d in agent_dicts)
-        d_n = sum(1 for d in dupes if d.get("stance") == "direct")
-        i_n = sum(1 for d in dupes if d.get("stance") == "indirect")
-        n_n = len(dupes) - d_n - i_n
-        h_n = sum(1 for d in dupes if int(d.get("humanity") or 0) > 0)
-        repair_prompt = _build_prompt(len(dupes), d_n, i_n, n_n, h_n) + f"""
-
-ALREADY IN THIS POPULATION — every persona you return must be a DIFFERENT person with a
-different name, a different job and a different angle on the topic:
-{taken}
-"""
+        slots = [(str(d.get("stance") or "neutral"), int(d.get("humanity") or 0) > 0) for d in dupes]
         try:
-            async with sem:
-                response = await tracked_messages_create(
-                    client,
-                    session_id=session_id,
-                    label="spawn:repair",
-                    model=gen_model,
-                    max_tokens=12000,
-                    system=_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": repair_prompt}],
-                )
-            replacements, _ = split_duplicates(agent_dicts + _parse_agents_json(response.content[0].text))
-            agent_dicts = replacements
+            replacements = await _gen_batch(slots, agent_dicts, label="spawn:repair")
+            agent_dicts, _ = split_duplicates(agent_dicts + replacements)
         except Exception as e:  # noqa: BLE001 — a failed repair must not lose the population
             print(f"[agent_factory] duplicate repair failed: {type(e).__name__}: {e}")
             agent_dicts = uniquify_names(agent_dicts + dupes)
