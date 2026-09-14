@@ -58,6 +58,18 @@ export default function SessionPage() {
   const [probeAnswers, setProbeAnswers] = useState<Record<string, { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> }[]>>({});
   const [probeCompletedAt, setProbeCompletedAt] = useState(0);
   const [experimentCompletedAt, setExperimentCompletedAt] = useState(0);
+  // Stable identity, and a no-op when the key is absent: this is passed to the Lab, whose
+  // completion effects call it — a fresh closure per render made those effects re-run
+  // forever (each call re-rendered the page, which minted a new callback, which re-ran the
+  // effect, which fetched the probe list again: thousands of requests a minute).
+  const clearLiveAnswers = useCallback((probeId: string) => {
+    setProbeAnswers((prev) => {
+      if (!(probeId in prev)) return prev;
+      const next = { ...prev };
+      delete next[probeId];
+      return next;
+    });
+  }, []);
   const [isSpawning, setIsSpawning] = useState(false);
   const [spawnProgress, setSpawnProgress] = useState<{ current: number; total: number } | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
@@ -530,13 +542,7 @@ export default function SessionPage() {
             liveAnswers={probeAnswers}
             completedAt={probeCompletedAt}
             experimentCompletedAt={experimentCompletedAt}
-            onClearLive={(probeId) =>
-              setProbeAnswers((prev) => {
-                const next = { ...prev };
-                delete next[probeId];
-                return next;
-              })
-            }
+            onClearLive={clearLiveAnswers}
           />
         )}
         {activeTab === "kg" && (

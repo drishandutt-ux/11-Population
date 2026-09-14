@@ -60,6 +60,8 @@ export default function ExperimentPanel({
   const [error, setError] = useState<string | null>(null);
   const selectedId = useRef<string | null>(initial?.id || null);
   selectedId.current = selected?.id || null;
+  const clearLive = useRef(onClearLive);
+  clearLive.current = onClearLive;
 
   // Two variants to start, both prefilled from the session so the analyst edits the difference.
   useEffect(() => {
@@ -112,9 +114,9 @@ export default function ExperimentPanel({
     const id = selectedId.current;
     api.lab.experiment(sessionId, id).then((full) => {
       setSelected(full);
-      for (const p of full.probes || []) onClearLive(p.id);
+      for (const p of full.probes || []) clearLive.current(p.id);
     }).catch(() => undefined);
-  }, [completedAt, sessionId, onClearLive]);
+  }, [completedAt, sessionId]);
 
   function updateVariant(i: number, patch: Partial<VariantDraft>) {
     setVariants((prev) => prev.map((v, j) => (j === i ? { ...v, ...patch } : v)));

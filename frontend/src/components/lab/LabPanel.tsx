@@ -54,6 +54,10 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   const [error, setError] = useState<string | null>(null);
   const selectedId = useRef<string | null>(null);
   selectedId.current = selected?.id || null;
+  // Read through a ref so the completion effects below run once per completion tick, never
+  // because a parent re-render handed down a new function.
+  const clearLive = useRef(onClearLive);
+  clearLive.current = onClearLive;
 
   const instrument = useMemo(() => instruments.find((i) => i.key === instrumentKey), [instruments, instrumentKey]);
   const canExperiment = useMemo(() => instruments.some((i) => i.supports_experiments), [instruments]);
@@ -110,9 +114,9 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
       const id = selectedId.current;
       if (!id) return;
       const full = await api.lab.probe(sessionId, id).catch(() => null);
-      if (full && full.status !== "queued" && full.status !== "running") { setSelected(full); onClearLive(full.id); }
+      if (full && full.status !== "queued" && full.status !== "running") { setSelected(full); clearLive.current(full.id); }
     })();
-  }, [completedAt, loadProbes, sessionId, onClearLive]);
+  }, [completedAt, loadProbes, sessionId]);
 
   useEffect(() => {
     if (!experimentCompletedAt) return;
