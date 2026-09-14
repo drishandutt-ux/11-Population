@@ -14,7 +14,8 @@ from app.core.auth import AuthUser, get_current_user, get_owned_session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.agent import SpawnedAgent
-from app.models.measurement import Probe, ProbeAnswer
+from app.models.measurement import Experiment, Probe, ProbeAnswer
+from app.services.measurement import experiment as experiment_svc
 from app.services.measurement import instruments, probe as probe_svc
 
 router = APIRouter(tags=["measurement"])
@@ -70,6 +71,10 @@ def _instrument_payload(inst) -> dict:
         "page": inst.page,
         "schema_id": inst.schema_id(),
         "answer_schema": inst.answer_schema,
+        # What an A/B test of this tool compares; empty means it cannot be run as one.
+        "metrics": [m.as_dict() for m in inst.metrics],
+        "supports_experiments": inst.supports_experiments(),
+        "decision_key": inst.decision_key,
     }
 
 
@@ -288,6 +293,267 @@ async def export_probe_csv(
         ])
     buf.seek(0)
     filename = f"{p.instrument}_{probe_id[:8]}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── experiments (A/B/n) ───────────────────────────────────────────────────────
+
+class VariantRequest(BaseModel):
+    key: str
+    label: str = ""
+    spec: dict[str, Any] = {}
+
+
+class ExperimentRequest(BaseModel):
+    instrument: str
+    variants: list[VariantRequest]
+    design: str = "within"                   # "within" (paired, same agents) | "between" (seeded split)
+    name: str = ""
+    spec: dict[str, Any] = {}                # shared across arms: context policy
+    mode: str = "fast"
+    seed: Optional[int] = None
+    agent_filter: Optional[dict[str, Any]] = None
+
+
+def _experiment_payload(e: Experiment, probes: Optional[list[Probe]] = None) -> dict:
+    out = {
+        "id": e.id,
+        "session_id": e.session_id,
+        "name": e.name,
+        "design": e.design,
+        "instrument": e.instrument,
+        "variants": e.variants or [],
+        "spec": e.spec or {},
+        "seed": e.seed,
+        "model": e.model,
+        "status": e.status,
+        "agent_count": e.agent_count,
+        "results": e.results,
+        "error": e.error,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+        "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+    }
+    if probes is not None:
+        out["probes"] = [_probe_payload(p) for p in probes]
+    return out
+
+
+def _validate_experiment(body: ExperimentRequest):
+    inst = instruments.get(body.instrument)
+    if not inst:
+        raise HTTPException(404, f"Unknown instrument '{body.instrument}'")
+    if not inst.supports_experiments():
+        raise HTTPException(400, f"{inst.label} cannot be run as an A/B test: it declares no metrics to compare.")
+    if body.design not in experiment_svc.DESIGNS:
+        raise HTTPException(400, f"design must be one of {', '.join(experiment_svc.DESIGNS)}")
+    if not (experiment_svc.MIN_VARIANTS <= len(body.variants) <= experiment_svc.MAX_VARIANTS):
+        raise HTTPException(400, f"An experiment needs {experiment_svc.MIN_VARIANTS} to {experiment_svc.MAX_VARIANTS} variants.")
+    keys = [v.key.strip() for v in body.variants]
+    if len(set(keys)) != len(keys) or any(not k for k in keys):
+        raise HTTPException(400, "Variant keys must be unique and non-empty.")
+    labels = {i.key: i.label for i in inst.inputs}
+    for v in body.variants:
+        missing = [k for k in inst.required_inputs() if not str((v.spec or {}).get(k) or "").strip()]
+        if missing:
+            raise HTTPException(400, f"Variant {v.label or v.key}: missing {', '.join(labels.get(k, k) for k in missing)}")
+    return inst
+
+
+async def _owned_experiment(session_id: str, experiment_id: str, db: AsyncSession) -> Experiment:
+    e = await db.get(Experiment, experiment_id)
+    if not e or e.session_id != session_id:
+        raise HTTPException(404, "Experiment not found")
+    return e
+
+
+@router.post("/sessions/{session_id}/experiments/estimate")
+async def estimate_experiment(
+    session_id: str,
+    body: ExperimentRequest,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Within-subjects asks every chosen agent once per variant; between-subjects asks each
+    agent once, so it costs the same as a single probe."""
+    await get_owned_session(session_id, user, db)
+    _validate_experiment(body)
+    agents = (await db.execute(
+        select(SpawnedAgent).where(SpawnedAgent.session_id == session_id)
+    )).scalars().all()
+    shared = dict(body.spec or {})
+    if body.agent_filter:
+        shared["agent_filter"] = body.agent_filter
+    chosen = probe_svc._select_agents(list(agents), shared, body.seed or 0)
+    mode = "pro" if body.mode == "pro" else "fast"
+    model = get_settings().agent_model(mode)
+    calls = len(chosen) * len(body.variants) if body.design == "within" else len(chosen)
+    return {
+        "agent_count": len(chosen),
+        "variants": len(body.variants),
+        "calls": calls,
+        "mode": mode,
+        "model": model,
+        "estimated_cost_usd": estimate_cost_usd(model, calls),
+    }
+
+
+@router.post("/sessions/{session_id}/experiments")
+async def create_experiment(
+    session_id: str,
+    body: ExperimentRequest,
+    background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Run an A/B/n test: one probe per variant, then the paired (or split) comparison. Arms
+    stream as ordinary `probe_*` events; `experiment_complete` carries the verdict."""
+    await get_owned_session(session_id, user, db)
+    inst = _validate_experiment(body)
+
+    agent_total = (await db.execute(
+        select(func.count(SpawnedAgent.id)).where(SpawnedAgent.session_id == session_id)
+    )).scalar_one()
+    if not agent_total:
+        raise HTTPException(400, "This session has no population yet — spawn agents first.")
+
+    seed = body.seed if body.seed is not None else random.randint(1, 2**31 - 1)
+    mode = "pro" if body.mode == "pro" else "fast"
+    model = get_settings().agent_model(mode)
+    shared = dict(body.spec or {})
+    if body.agent_filter:
+        shared["agent_filter"] = body.agent_filter
+    variants = [{"key": v.key.strip(), "label": (v.label or v.key).strip(), "spec": dict(v.spec or {})} for v in body.variants]
+
+    e = Experiment(
+        session_id=session_id, name=body.name.strip(), design=body.design, instrument=inst.key,
+        variants=variants, spec=shared, seed=seed, model=model, status="queued",
+    )
+    db.add(e)
+    await db.flush()
+
+    probes = []
+    for v in variants:
+        # Every arm is a full probe: same instrument, same shared filter and context, the same
+        # seed (so a within-subjects sample is the SAME agents in every arm), its own stimulus.
+        spec = {**shared, **v["spec"], "seed": seed}
+        p = Probe(
+            session_id=session_id, instrument=inst.key, schema_id=inst.schema_id(), spec=spec,
+            experiment_id=e.id, variant_key=v["key"], seed=seed, model=model,
+            prompt_hash=probe_svc.prompt_hash(inst, spec), status="queued",
+        )
+        db.add(p)
+        probes.append(p)
+    await db.commit()
+
+    background_tasks.add_task(experiment_svc.run_experiment, e.id)
+    return _experiment_payload(e, probes)
+
+
+@router.get("/sessions/{session_id}/experiments")
+async def list_experiments(
+    session_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await get_owned_session(session_id, user, db)
+    rows = (await db.execute(
+        select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc())
+    )).scalars().all()
+    return {"experiments": [_experiment_payload(e) for e in rows]}
+
+
+@router.get("/sessions/{session_id}/experiments/{experiment_id}")
+async def get_experiment(
+    session_id: str,
+    experiment_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await get_owned_session(session_id, user, db)
+    e = await _owned_experiment(session_id, experiment_id, db)
+    probes = (await db.execute(
+        select(Probe).where(Probe.experiment_id == experiment_id).order_by(Probe.created_at)
+    )).scalars().all()
+    return _experiment_payload(e, probes)
+
+
+@router.post("/sessions/{session_id}/experiments/{experiment_id}/stop")
+async def stop_experiment(
+    session_id: str,
+    experiment_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stop every running arm. Answers already collected still pair and compare."""
+    await get_owned_session(session_id, user, db)
+    e = await _owned_experiment(session_id, experiment_id, db)
+    if e.status in ("queued", "running"):
+        probes = (await db.execute(
+            select(Probe).where(Probe.experiment_id == experiment_id)
+        )).scalars().all()
+        for p in probes:
+            if p.status in ("queued", "running"):
+                p.status = "stopped"
+        await db.commit()
+    return {"status": e.status}
+
+
+@router.get("/sessions/{session_id}/experiments/{experiment_id}/export.csv")
+async def export_experiment_csv(
+    session_id: str,
+    experiment_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """One row per agent, every arm's answer side by side, plus whether they flipped."""
+    await get_owned_session(session_id, user, db)
+    e = await _owned_experiment(session_id, experiment_id, db)
+    inst = instruments.get(e.instrument)
+    answer_keys = list((inst.answer_schema.get("properties") or {}).keys()) if inst else []
+    segment_keys = ["stance", "age_band", "humanity_band", "purchase_intent_prior", "price_pain_prior"]
+    variants = list(e.variants or [])
+
+    probes = (await db.execute(select(Probe).where(Probe.experiment_id == experiment_id))).scalars().all()
+    probe_by_key = {p.variant_key: p for p in probes}
+    rows = (await db.execute(
+        select(ProbeAnswer, SpawnedAgent)
+        .join(SpawnedAgent, SpawnedAgent.id == ProbeAnswer.agent_id, isouter=True)
+        .where(ProbeAnswer.probe_id.in_([p.id for p in probes]))
+    )).all()
+
+    by_agent: dict[str, dict] = {}
+    for a, ag in rows:
+        entry = by_agent.setdefault(a.agent_id, {"agent": ag, "answers": {}})
+        entry["answers"][a.probe_id] = a.answer or {}
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    header = ["agent_id", "name", "role", *segment_keys]
+    for v in variants:
+        header += [f"{v['key']}_{k}" for k in answer_keys]
+    if inst and inst.decision_key:
+        header.append("flipped")
+    w.writerow(header)
+    for agent_id, entry in sorted(by_agent.items()):
+        ag = entry["agent"]
+        segs = probe_svc.segments_for(ag) if ag else {}
+        line = [agent_id, getattr(ag, "name", ""), getattr(ag, "role", ""), *[segs.get(k, "") for k in segment_keys]]
+        decisions = []
+        for v in variants:
+            p = probe_by_key.get(v["key"])
+            ans = entry["answers"].get(p.id, {}) if p else {}
+            line += [ans.get(k, "") for k in answer_keys]
+            if inst and inst.decision_key and ans:
+                decisions.append(ans.get(inst.decision_key))
+        if inst and inst.decision_key:
+            line.append("yes" if len(decisions) == len(variants) and len(set(decisions)) > 1 else "no")
+        w.writerow(line)
+    buf.seek(0)
+    filename = f"experiment_{e.instrument}_{experiment_id[:8]}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",

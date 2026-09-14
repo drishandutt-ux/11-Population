@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.services.evidence.llm import enum, i, n, obj, s
 from app.services.measurement import stats
-from app.services.measurement.instruments import InputField, Instrument, Kpi, register
+from app.services.measurement.instruments import InputField, Instrument, Kpi, Metric, register
 
 DRIVERS = ["price", "need", "trust", "social", "convenience", "identity", "risk"]
 
@@ -166,6 +166,20 @@ KPIS = (
     Kpi("sentiment", "Feeling", "mean", "-1 hostile to 1 delighted."),
 )
 
+# What an A/B test compares between two offers. Each reads ONE answer; the experiments layer
+# pairs them per agent. Would-buy is the primary: the verdict is written about it.
+METRICS = (
+    Metric("would_buy", "Would buy", "share",
+           lambda a: 1.0 if a.get("would_buy") == "yes" else 0.0, primary=True,
+           help="Share answering yes."),
+    Metric("likelihood_0_100", "Likelihood", "mean",
+           lambda a: float(a.get("likelihood_0_100") or 0), help="Self-rated 0-100."),
+    Metric("max_price", "Walk-away price", "money", _reservation,
+           help="The most they would pay before walking away."),
+    Metric("sentiment", "Feeling", "mean",
+           lambda a: float(a.get("sentiment") or 0), help="-1 hostile to 1 delighted."),
+)
+
 INSTRUMENT = register(Instrument(
     key="purchase_intent",
     label="Purchase intent",
@@ -179,6 +193,9 @@ INSTRUMENT = register(Instrument(
     aggregate=aggregate,
     inputs=INPUTS,
     kpis=KPIS,
+    metrics=METRICS,
+    decision_key="would_buy",
+    driver_key="key_driver",
     page="purchase_intent",
     max_tokens=500,
     version=2,

@@ -57,6 +57,7 @@ export default function SessionPage() {
   // Probe answers stream in per agent; the Lab shows them filling in before the aggregates exist.
   const [probeAnswers, setProbeAnswers] = useState<Record<string, { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> }[]>>({});
   const [probeCompletedAt, setProbeCompletedAt] = useState(0);
+  const [experimentCompletedAt, setExperimentCompletedAt] = useState(0);
   const [isSpawning, setIsSpawning] = useState(false);
   const [spawnProgress, setSpawnProgress] = useState<{ current: number; total: number } | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
@@ -243,6 +244,9 @@ export default function SessionPage() {
 
       } else if (event.type === "probe_complete") {
         setProbeCompletedAt(Date.now());
+
+      } else if (event.type === "experiment_complete") {
+        setExperimentCompletedAt(Date.now());
 
       } else if (event.type === "ingest_complete") {
         refreshSession();
@@ -525,6 +529,7 @@ export default function SessionPage() {
             agents={agents}
             liveAnswers={probeAnswers}
             completedAt={probeCompletedAt}
+            experimentCompletedAt={experimentCompletedAt}
             onClearLive={(probeId) =>
               setProbeAnswers((prev) => {
                 const next = { ...prev };

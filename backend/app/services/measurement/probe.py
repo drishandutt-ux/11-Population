@@ -22,7 +22,7 @@ import traceback
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
@@ -79,7 +79,8 @@ def segments_for(agent: SpawnedAgent) -> dict:
 # ── per-agent context ─────────────────────────────────────────────────────────
 
 _PRIOR_LABELS = {
-    "would_buy": "decision", "likelihood_0_100": "likelihood", "max_price_gbp": "walk-away price",
+    "would_buy": "decision", "likelihood_0_100": "likelihood", "max_price": "walk-away price",
+    "max_price_gbp": "walk-away price",
     "key_driver": "driver", "sentiment": "feeling",
 }
 
@@ -104,8 +105,13 @@ def _format_prior_answer(instrument: str, answer: dict) -> str:
     return f'{line} — "{why}"' if why else line
 
 
-async def _agent_history(db, session_id: str, agent_id: str, probe_id: str) -> tuple[list[str], list[str]]:
-    """(what this agent said publicly, what it already decided privately)."""
+async def _agent_history(
+    db, session_id: str, agent_id: str, probe_id: str, experiment_id: Optional[str] = None,
+) -> tuple[list[str], list[str]]:
+    """(what this agent said publicly, what it already decided privately).
+
+    The other arms of the same experiment are never shown: a within-subjects A/B only measures
+    anything if the agent answers variant B with no memory of what it said to variant A."""
     posts = (await db.execute(
         select(SimulationPost.content)
         .where(SimulationPost.session_id == session_id, SimulationPost.agent_id == agent_id,
@@ -113,13 +119,15 @@ async def _agent_history(db, session_id: str, agent_id: str, probe_id: str) -> t
         .order_by(SimulationPost.created_at.desc()).limit(MAX_PRIOR_POSTS)
     )).scalars().all()
 
-    rows = (await db.execute(
+    q = (
         select(Probe.instrument, ProbeAnswer.answer)
         .join(Probe, Probe.id == ProbeAnswer.probe_id)
         .where(ProbeAnswer.session_id == session_id, ProbeAnswer.agent_id == agent_id,
                ProbeAnswer.probe_id != probe_id)
-        .order_by(ProbeAnswer.created_at.desc()).limit(MAX_PRIOR_ANSWERS)
-    )).all()
+    )
+    if experiment_id:
+        q = q.where(or_(Probe.experiment_id.is_(None), Probe.experiment_id != experiment_id))
+    rows = (await db.execute(q.order_by(ProbeAnswer.created_at.desc()).limit(MAX_PRIOR_ANSWERS))).all()
 
     said = [clip(p, 320) for p in posts if p and p.strip()]
     decided = [_format_prior_answer(inst, ans or {}) for inst, ans in rows]
@@ -173,7 +181,7 @@ def _build_user_message(
 
 async def answer_one(
     agent: SpawnedAgent, *, instrument, spec: dict, probe_id: str, session_id: str,
-    query: str, kg_context: str, model: str,
+    query: str, kg_context: str, model: str, experiment_id: Optional[str] = None,
 ) -> Optional[dict]:
     """Ask one agent the instrument's question and persist the typed answer.
 
@@ -181,7 +189,7 @@ async def answer_one(
     denominator rather than filled with a default — a made-up answer would corrupt the share)."""
     started = time.monotonic()
     async with AsyncSessionLocal() as db:
-        said, decided = await _agent_history(db, session_id, agent.id, probe_id)
+        said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id)
 
     system = _build_system_prompt(agent, task="probe") + instrument.directive
     user = _build_user_message(
@@ -278,8 +286,11 @@ async def _is_stopped(probe_id: str) -> bool:
     return status in ("stopped", None)
 
 
-async def run_probe(probe_id: str) -> None:
-    """Background task: run one probe to completion and store its aggregates."""
+async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> None:
+    """Background task: run one probe to completion and store its aggregates.
+
+    `concurrency` is lowered by the experiments layer so that k arms running at once still
+    add up to one probe's worth of in-flight calls."""
     try:
         async with AsyncSessionLocal() as db:
             probe = await db.get(Probe, probe_id)
@@ -291,6 +302,7 @@ async def run_probe(probe_id: str) -> None:
             )).scalars().all()
             session_id, spec, seed = probe.session_id, dict(probe.spec or {}), probe.seed
             instrument_key, model = probe.instrument, probe.model
+            experiment_id = probe.experiment_id
             query = (session.query if session else "") or ""
 
         instrument = instruments.get(instrument_key)
@@ -315,7 +327,7 @@ async def run_probe(probe_id: str) -> None:
             "instrument": instrument_key, "agent_count": len(chosen),
         })
 
-        sem = asyncio.Semaphore(PROBE_CONCURRENCY)
+        sem = asyncio.Semaphore(max(1, int(concurrency)))
         await_stop = asyncio.Event()
         rows: list[dict] = []
         failed = 0
@@ -331,6 +343,7 @@ async def run_probe(probe_id: str) -> None:
                 row = await answer_one(
                     agent, instrument=instrument, spec=spec, probe_id=probe_id,
                     session_id=session_id, query=query, kg_context=kg_context, model=model,
+                    experiment_id=experiment_id,
                 )
             async with lock:
                 if row:

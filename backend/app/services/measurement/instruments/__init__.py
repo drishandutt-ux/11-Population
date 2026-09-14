@@ -60,6 +60,28 @@ class Kpi:
 
 
 @dataclass(frozen=True)
+class Metric:
+    """One number an A/B test can compare between variants, read from a single answer.
+
+    An instrument that declares metrics can be run as an experiment: the experiments layer
+    asks each agent the same instrument once per variant and reports the paired difference
+    on every metric declared here. `value` maps one answer to a float (or None to exclude
+    the agent from that metric) — a share metric returns 1.0/0.0."""
+
+    key: str
+    label: str
+    #: share · mean · money — how to format the level and the lift.
+    format: str
+    value: Callable[[dict], Optional[float]]
+    #: The metric the verdict is written about. Exactly one per instrument.
+    primary: bool = False
+    help: str = ""
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "label": self.label, "format": self.format, "primary": self.primary, "help": self.help}
+
+
+@dataclass(frozen=True)
 class Instrument:
     key: str
     label: str
@@ -81,6 +103,14 @@ class Instrument:
     #: generic renderer when no page is registered, so a new backend instrument is usable
     #: before its page is written.
     page: str = ""
+    #: What an A/B test compares. Empty means the tool cannot be run as an experiment.
+    metrics: tuple[Metric, ...] = ()
+    #: The categorical answer field whose change between variants counts as a "flip"
+    #: (e.g. would_buy). Empty means the experiments layer reports lift without flips.
+    decision_key: str = ""
+    #: The categorical answer field that explains a decision (e.g. key_driver), used to code
+    #: the reasons of the agents who flipped.
+    driver_key: str = ""
     #: Answers are short; this caps the tool-use call.
     max_tokens: int = 500
     #: Bumped when the schema changes, so old answers are never silently mixed with new ones.
@@ -91,6 +121,15 @@ class Instrument:
 
     def required_inputs(self) -> list[str]:
         return [i.key for i in self.inputs if i.required]
+
+    def supports_experiments(self) -> bool:
+        return bool(self.metrics)
+
+    def primary_metric(self) -> Optional["Metric"]:
+        for m in self.metrics:
+            if m.primary:
+                return m
+        return self.metrics[0] if self.metrics else None
 
 
 _REGISTRY: dict[str, Instrument] = {}

@@ -161,6 +161,27 @@ export const api = {
       request<Probe & { answers: ProbeAnswerRow[] }>(`/sessions/${sessionId}/probes/${probeId}`),
     stop: (sessionId: string, probeId: string) =>
       request<{ status: string }>(`/sessions/${sessionId}/probes/${probeId}/stop`, { method: "POST" }),
+    // A/B/n experiments: one instrument, several variants, the same agents (or a seeded split).
+    estimateExperiment: (sessionId: string, body: ExperimentRequest) =>
+      request<ExperimentEstimate>(`/sessions/${sessionId}/experiments/estimate`, { method: "POST", body: JSON.stringify(body) }),
+    runExperiment: (sessionId: string, body: ExperimentRequest) =>
+      request<Experiment>(`/sessions/${sessionId}/experiments`, { method: "POST", body: JSON.stringify(body) }),
+    experiments: (sessionId: string) => request<{ experiments: Experiment[] }>(`/sessions/${sessionId}/experiments`),
+    experiment: (sessionId: string, experimentId: string) =>
+      request<Experiment>(`/sessions/${sessionId}/experiments/${experimentId}`),
+    stopExperiment: (sessionId: string, experimentId: string) =>
+      request<{ status: string }>(`/sessions/${sessionId}/experiments/${experimentId}/stop`, { method: "POST" }),
+    downloadExperimentCsv: async (sessionId: string, experimentId: string, filename: string) => {
+      const res = await apiFetch(`/sessions/${sessionId}/experiments/${experimentId}/export.csv`);
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
     /** CSV goes through apiFetch so the auth header is attached, then downloads as a blob. */
     downloadCsv: async (sessionId: string, probeId: string, filename: string) => {
       const res = await apiFetch(`/sessions/${sessionId}/probes/${probeId}/export.csv`);
@@ -330,7 +351,9 @@ export type WSEvent =
   | { type: "research_status"; run_id: string; status: string; note?: string }
   | { type: "probe_started"; probe_id: string; instrument: string; agent_count: number }
   | { type: "probe_answer"; probe_id: string; agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any>; segments: Record<string, string> }
-  | { type: "probe_complete"; probe_id: string; status: string; answer_count: number; failed_count: number; sentence: string };
+  | { type: "probe_complete"; probe_id: string; status: string; answer_count: number; failed_count: number; sentence: string }
+  | { type: "experiment_started"; experiment_id: string; probe_ids: string[]; agent_count: number; design: string }
+  | { type: "experiment_complete"; experiment_id: string; status: string; verdict?: string };
 
 
 // ── Behaviour Lab ────────────────────────────────────────────────────────────
@@ -359,6 +382,15 @@ export type InstrumentKpi = {
   help: string;
 };
 
+/** One number an A/B test compares between variants, declared by the instrument. */
+export type InstrumentMetric = {
+  key: string;
+  label: string;
+  format: "share" | "mean" | "money";
+  primary: boolean;
+  help: string;
+};
+
 /** A tool: its inputs, its schema, its KPIs and which page renders its results. */
 export type Instrument = {
   key: string;
@@ -367,6 +399,10 @@ export type Instrument = {
   question: string;
   inputs: InstrumentInput[];
   kpis: InstrumentKpi[];
+  /** What an A/B test of this tool compares; empty when it cannot be run as one. */
+  metrics: InstrumentMetric[];
+  supports_experiments: boolean;
+  decision_key: string;
   /** Key into the frontend page registry; empty or unknown falls back to the generic view. */
   page: string;
   schema_id: string;
@@ -445,4 +481,122 @@ export type ProbeAnswerRow = {
   reasoning: string;
   segments: Record<string, string>;
   latency_ms: number;
+};
+
+// ── Experiments (A/B/n) ───────────────────────────────────────────────────────
+
+export type ExperimentDesign = "within" | "between";
+
+export type ExperimentVariant = { key: string; label: string; spec: Record<string, any> };
+
+export type ExperimentRequest = {
+  instrument: string;
+  design: ExperimentDesign;
+  name?: string;
+  variants: ExperimentVariant[];
+  spec?: Record<string, any>;
+  mode?: SimMode;
+  seed?: number | null;
+  agent_filter?: ProbeSpec["agent_filter"];
+};
+
+export type ExperimentEstimate = {
+  agent_count: number;
+  variants: number;
+  calls: number;
+  mode: SimMode;
+  model: string;
+  estimated_cost_usd: number;
+};
+
+/** A difference between two arms with its bootstrap interval. */
+export type Lift = { mean: number; low: number; high: number; n: number; significant: boolean; n_a?: number; n_b?: number };
+
+export type ComparisonMetric = {
+  key: string;
+  label: string;
+  format: "share" | "mean" | "money";
+  primary: boolean;
+  currency: string;
+  control: number;
+  variant: number;
+  lift: Lift;
+};
+
+export type FlipRow = {
+  agent_id: string;
+  name: string;
+  role: string;
+  from: string;
+  to: string;
+  reasoning_control: string;
+  reasoning_variant: string;
+  driver: string;
+  segments: Record<string, string>;
+};
+
+export type SegmentLift = {
+  segment: string;
+  value: string;
+  n: number;
+  thin: boolean;
+  control: number;
+  variant: number;
+  mean: number;
+  low: number;
+  high: number;
+  significant: boolean;
+};
+
+export type Comparison = {
+  variant: string;
+  label: string;
+  control: string;
+  control_label: string;
+  n: number;
+  metrics: ComparisonMetric[];
+  /** Within-subjects only: agents whose decision changed, with both reasons. */
+  flips: {
+    n: number;
+    paired: number;
+    share: Interval;
+    direction: (Interval & { value: string; count: number })[];
+    reasons: (Interval & { value: string; count: number })[];
+    rows: FlipRow[];
+  } | null;
+  /** The primary metric's lift inside every segment bucket — the heat-map. */
+  segments: Record<string, SegmentLift[]>;
+  sentence: string;
+};
+
+export type ExperimentResults = {
+  design: ExperimentDesign;
+  instrument: string;
+  control: string;
+  primary_metric: string;
+  arms: { key: string; label: string; n: number }[];
+  comparisons: Comparison[];
+  verdict: string;
+  /** variant key → probe id */
+  probes: Record<string, string>;
+};
+
+export type Experiment = {
+  id: string;
+  session_id: string;
+  name: string;
+  design: ExperimentDesign;
+  instrument: string;
+  variants: ExperimentVariant[];
+  spec: Record<string, any>;
+  seed: number;
+  model: string;
+  status: ProbeStatus;
+  agent_count: number;
+  results: ExperimentResults | null;
+  error: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  /** The arms, when fetched individually or just created. */
+  probes?: Probe[];
 };

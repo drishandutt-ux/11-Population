@@ -43,6 +43,89 @@ const CAT_COLORS: Record<string, string> = {
   unsure: "#fbbf24",
 };
 
+// Colours a live dot by whichever answer field looks categorical, so a dot grid can show
+// progress for any instrument without knowing its schema.
+const ANSWER_COLORS: Record<string, string> = {
+  yes: "hsl(var(--primary))", no: "#f87171", unsure: "#fbbf24",
+  buy: "hsl(var(--primary))", reject: "#f87171",
+};
+
+export function dotColor(answer: Record<string, any>, fallback: string): string {
+  for (const v of Object.values(answer || {})) {
+    if (typeof v === "string" && ANSWER_COLORS[v.toLowerCase()]) return ANSWER_COLORS[v.toLowerCase()];
+  }
+  return fallback;
+}
+
+/** Format a level (a share, a mean, a price) the way its metric asks. */
+export function fmtLevel(v: number, format: "share" | "mean" | "money", currency = ""): string {
+  if (format === "share") return pct(v);
+  if (format === "money") return money(v, currency || "GBP");
+  return `${Math.round(v * 100) / 100}`;
+}
+
+/** Format a lift with its sign: "+11 pts", "−4.2", "+£1.20". */
+export function fmtLift(v: number, format: "share" | "mean" | "money", currency = ""): string {
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "";
+  const a = Math.abs(v);
+  if (format === "share") return `${sign}${Math.round(a * 100)} pts`;
+  if (format === "money") return `${sign}${money(a, currency || "GBP")}`;
+  return `${sign}${Math.round(a * 100) / 100}`;
+}
+
+/** A difference between two arms, drawn around zero with its interval. Green when the
+ *  interval clears zero upwards, red downwards, grey when it does not — the grey is the
+ *  point: a lift whose band crosses zero is not a result. */
+export function LiftBar({
+  lift, format, currency, scale,
+}: {
+  lift: { mean: number; low: number; high: number; significant: boolean };
+  format: "share" | "mean" | "money";
+  currency?: string;
+  /** Half-width of the axis in the metric's own units; defaults to the interval's reach. */
+  scale?: number;
+}) {
+  const W = 200, H = 14, MID = W / 2;
+  const reach = Math.max(scale || 0, Math.abs(lift.low), Math.abs(lift.high), Math.abs(lift.mean), 1e-9) * 1.1;
+  const x = (v: number) => MID + (v / reach) * (MID - 4);
+  const color = !lift.significant ? "hsl(var(--muted-foreground))" : lift.mean > 0 ? "hsl(var(--primary))" : "#f87171";
+  return (
+    <div className="flex items-center gap-2">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[200px] h-3.5" preserveAspectRatio="none" role="img"
+        aria-label={`lift ${fmtLift(lift.mean, format, currency)}`}>
+        <rect x="0" y="5" width={W} height="4" rx="2" fill="hsl(var(--muted))" />
+        <line x1={MID} y1="0" x2={MID} y2={H} stroke="hsl(var(--border))" strokeWidth="1" />
+        <rect x={Math.min(x(lift.low), x(lift.high))} y="5" width={Math.max(1, Math.abs(x(lift.high) - x(lift.low)))} height="4" rx="2" fill={color} opacity="0.3" />
+        <rect x={x(lift.mean) - 1} y="1" width="2" height={H - 2} rx="1" fill={color} />
+      </svg>
+      <span className="text-xs tabular-nums shrink-0 w-20" style={{ color }}>{fmtLift(lift.mean, format, currency)}</span>
+    </div>
+  );
+}
+
+/** A cell of the segment heat-map: lift coloured by sign and size, greyed when thin. */
+export function HeatCell({ lift, thin, n, format, currency, maxAbs }: {
+  lift: { mean: number; significant: boolean }; thin: boolean; n: number;
+  format: "share" | "mean" | "money"; currency?: string; maxAbs: number;
+}) {
+  const strength = maxAbs > 0 ? Math.min(1, Math.abs(lift.mean) / maxAbs) : 0;
+  const bg = lift.mean === 0 ? "transparent" : lift.mean > 0
+    ? `hsl(var(--primary) / ${0.12 + strength * 0.5})`
+    : `rgba(248, 113, 113, ${0.12 + strength * 0.5})`;
+  return (
+    <div
+      className={`rounded-md px-2 py-1.5 text-center ${thin ? "opacity-40" : ""}`}
+      style={{ background: bg }}
+      title={thin ? `Only ${n} agents — too few to read confidently` : `${n} agents${lift.significant ? "" : " · interval includes zero"}`}
+    >
+      <div className={`text-xs tabular-nums ${lift.significant ? "text-foreground" : "text-muted-foreground"}`}>
+        {fmtLift(lift.mean, format, currency)}{!lift.significant && !thin ? "" : ""}
+      </div>
+      <div className="text-[9px] text-muted-foreground/70 tabular-nums">n={n}{lift.significant ? " ✓" : ""}</div>
+    </div>
+  );
+}
+
 export function CategoryBars({ rows, title }: { rows: { value: string; count: number; share: number }[]; title: string }) {
   if (!rows?.length) return null;
   return (

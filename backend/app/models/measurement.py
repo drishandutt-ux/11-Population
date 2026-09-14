@@ -50,3 +50,31 @@ class ProbeAnswer(Base):
     reasoning: Mapped[str] = mapped_column(Text, default="")
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Experiment(Base):
+    """An A/B/n test: one instrument run once per variant, on the same agents (within-subjects,
+    paired) or on a seeded split of the population (between-subjects). The arms are ordinary
+    probes carrying this row's id, so every arm is a full probe result in its own right; what
+    lives here is the comparison — lift per metric with an interval, who flipped and why, the
+    segment map and the verdict."""
+
+    __tablename__ = "experiments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), index=True)
+    name: Mapped[str] = mapped_column(String(160), default="")
+    design: Mapped[str] = mapped_column(String(16), default="within")  # within | between
+    instrument: Mapped[str] = mapped_column(String(48), index=True)
+    # [{key, label, spec}] in order; the first is the control.
+    variants: Mapped[list] = mapped_column(JSON, default=list)
+    # Shared across arms: agent_filter, context policy.
+    spec: Mapped[dict] = mapped_column(JSON, default=dict)
+    seed: Mapped[int] = mapped_column(Integer, default=0)
+    model: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)  # queued|running|complete|failed|stopped
+    agent_count: Mapped[int] = mapped_column(Integer, default=0)
+    results: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)

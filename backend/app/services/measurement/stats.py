@@ -105,6 +105,34 @@ def paired_lift(pairs: Sequence[tuple[float, float]], *, iterations: int = 2000,
     return out
 
 
+def unpaired_lift(a: Sequence[float], b: Sequence[float], *, iterations: int = 2000, seed: int = 0) -> dict:
+    """mean(b) - mean(a) for two independent groups (between-subjects A/B), with a bootstrap
+    interval that resamples each group on its own. Wider than the paired version at the same
+    n — which is the honest price of not having each agent as its own control."""
+    va = [float(x) for x in a if x is not None]
+    vb = [float(x) for x in b if x is not None]
+    if not va or not vb:
+        return {"mean": 0.0, "low": 0.0, "high": 0.0, "n": 0, "n_a": len(va), "n_b": len(vb), "significant": False}
+    ma, mb = sum(va) / len(va), sum(vb) / len(vb)
+    diff = mb - ma
+    if len(va) == 1 and len(vb) == 1:
+        low = high = diff
+    else:
+        rng = random.Random(seed)
+        boots = []
+        for _ in range(iterations):
+            ra = sum(va[rng.randrange(len(va))] for _ in va) / len(va)
+            rb = sum(vb[rng.randrange(len(vb))] for _ in vb) / len(vb)
+            boots.append(rb - ra)
+        boots.sort()
+        low, high = _percentile(boots, 0.025), _percentile(boots, 0.975)
+    return {
+        "mean": round(diff, 4), "low": round(low, 4), "high": round(high, 4),
+        "n": len(va) + len(vb), "n_a": len(va), "n_b": len(vb),
+        "significant": low > 0 or high < 0,
+    }
+
+
 # ── segments ──────────────────────────────────────────────────────────────────
 
 def segment(rows: Sequence[dict], key: str, aggregate: Callable[[Sequence[dict]], dict], *, min_n: int = 3) -> list[dict]:
