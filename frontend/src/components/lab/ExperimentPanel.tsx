@@ -45,7 +45,9 @@ const DESIGNS: { key: ExperimentDesign; label: string; help: string }[] = [
 export default function ExperimentPanel({
   sessionId, sessionQuery, agents, instruments, liveAnswers, completedAt, onClearLive, initial, onBack,
 }: Props) {
-  const testable = useMemo(() => instruments.filter((i) => i.supports_experiments && !i.hidden), [instruments]);
+  // Any tool that declares metrics, hidden or not: Ask left the picker when the survey arrived
+  // but is still the right base for a text-material A/B ("Reaction").
+  const testable = useMemo(() => instruments.filter((i) => i.supports_experiments), [instruments]);
   const [baseKey, setBaseKey] = useState<string>(initial?.instrument || testable[0]?.key || "");
   const base = useMemo(() => testable.find((i) => i.key === baseKey), [testable, baseKey]);
   const [design, setDesign] = useState<ExperimentDesign>(initial?.design || "within");

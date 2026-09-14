@@ -28,6 +28,7 @@ export default function InstrumentForm({ instrument, values, onChange }: Props) 
 }
 
 function Field({ field, value, onChange }: { field: InstrumentInput; value: any; onChange: (v: any) => void }) {
+  if (field.type === "questions") return null; // rendered by the tool's own form (see forms/)
   const label = (
     <label className="text-xs text-muted-foreground block mb-1.5">
       {field.label}
@@ -104,7 +105,7 @@ export function initialValues(instrument: Instrument, ctx: { session_query?: str
   for (const f of instrument.inputs) {
     if (f.default_from === "session_query" && ctx.session_query) out[f.key] = ctx.session_query;
     else if (f.default !== null && f.default !== undefined) out[f.key] = f.default;
-    else out[f.key] = "";
+    else out[f.key] = f.type === "questions" ? [] : "";
   }
   return out;
 }
@@ -114,6 +115,7 @@ export function toSpec(instrument: Instrument, values: Record<string, any>): Rec
   for (const f of instrument.inputs) {
     const raw = values[f.key];
     if (raw === "" || raw === undefined || raw === null) continue;
+    if (Array.isArray(raw) && raw.length === 0) continue;
     spec[f.key] = f.type === "number" || f.type === "money" ? Number(raw) : raw;
   }
   return spec;

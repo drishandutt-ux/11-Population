@@ -81,13 +81,21 @@ async def code_factors(factors: list[str], *, session_id: Optional[str], model: 
     return out
 
 
-async def apply_themes(probe_ids: list[str], *, model: Optional[str] = None) -> None:
-    """Code the key factors of every answer in `probe_ids` together, write `theme` onto each
-    answer, and refresh each probe's aggregates. Safe to call twice (recodes)."""
+def theme_key_for(field: str) -> str:
+    """Where a coded theme lives for an arbitrary free-text field (`key_factor` keeps `theme`)."""
+    return THEME_KEY if field == FACTOR_KEY else f"{field}__theme"
+
+
+async def apply_themes(probe_ids: list[str], *, model: Optional[str] = None,
+                       fields: Optional[list[str]] = None) -> None:
+    """Code the free-text `fields` (default: the key factor) of every answer in `probe_ids`
+    together, write the theme onto each answer, and refresh each probe's aggregates. Safe to
+    call twice (recodes)."""
     from app.services.measurement import instruments
 
     if not probe_ids:
         return
+    fields = fields or [FACTOR_KEY]
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(
             select(ProbeAnswer).where(ProbeAnswer.probe_id.in_(probe_ids)).order_by(ProbeAnswer.created_at)
@@ -95,16 +103,21 @@ async def apply_themes(probe_ids: list[str], *, model: Optional[str] = None) -> 
         if not rows:
             return
         session_id = rows[0].session_id
-        factors = [str((r.answer or {}).get(FACTOR_KEY) or "") for r in rows]
-        try:
-            themes = await code_factors(factors, session_id=session_id,
-                                        model=model or get_settings().agent_model("fast"))
-        except Exception as e:  # noqa: BLE001 — coding is a convenience; the run must not fail on it
-            print(f"[themes] coding failed, keeping raw factors: {type(e).__name__}: {e}")
-            themes = [_norm(f) for f in factors]
-        for r, t in zip(rows, themes):
+        coded: dict[str, list[str]] = {}
+        for field in fields:
+            factors = [str((r.answer or {}).get(field) or "") for r in rows]
+            if not any(factors):
+                continue
+            try:
+                coded[field] = await code_factors(factors, session_id=session_id,
+                                                  model=model or get_settings().agent_model("fast"))
+            except Exception as e:  # noqa: BLE001 — coding is a convenience; the run must not fail on it
+                print(f"[themes] coding failed for {field}, keeping raw text: {type(e).__name__}: {e}")
+                coded[field] = [_norm(f) for f in factors]
+        for i, r in enumerate(rows):
             ans = dict(r.answer or {})
-            ans[THEME_KEY] = t
+            for field, themes in coded.items():
+                ans[theme_key_for(field)] = themes[i]
             r.answer = ans
         await db.commit()
 

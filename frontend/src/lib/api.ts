@@ -362,7 +362,7 @@ export type WSEvent =
  *  declares the inputs it needs, and the UI renders them. */
 export type InstrumentInput = {
   key: string;
-  type: "text" | "textarea" | "number" | "select" | "money";
+  type: "text" | "textarea" | "number" | "select" | "money" | "questions";
   label: string;
   required: boolean;
   help: string;
@@ -411,6 +411,10 @@ export type Instrument = {
   question_from: string;
   /** Internal instruments (the choice design's) are not offered in the picker. */
   hidden: boolean;
+  /** Key into the frontend form registry (a bespoke input panel); empty = generic form. */
+  form: string;
+  /** Ready-made forms for a form-building tool (the survey's templates). */
+  templates: SurveyTemplate[];
   /** Key into the frontend page registry; empty or unknown falls back to the generic view. */
   page: string;
   schema_id: string;
@@ -628,4 +632,52 @@ export type Experiment = {
   completed_at: string | null;
   /** The arms, when fetched individually or just created. */
   probes?: Probe[];
+};
+
+// ── Survey ────────────────────────────────────────────────────────────────────
+
+export type SurveyQuestionType = "single" | "multi" | "scale" | "yesno" | "number" | "text" | "grid";
+
+export type SurveyQuestion = {
+  key: string;
+  type: SurveyQuestionType;
+  text: string;
+  options?: string[];
+  rows?: string[];
+  columns?: string[];
+  min?: number;
+  max?: number;
+  min_label?: string;
+  max_label?: string;
+  primary?: boolean;
+};
+
+export type SurveyTemplate = {
+  key: string;
+  label: string;
+  description: string;
+  title: string;
+  questions: SurveyQuestion[];
+};
+
+export type SurveyBucket = Interval & { value: string; count: number };
+
+export type SurveyQuestionResult = {
+  key: string;
+  type: SurveyQuestionType;
+  text: string;
+  n: number;
+  primary: boolean;
+  sentence: string;
+  distribution?: SurveyBucket[];
+  headline?: SurveyBucket & { label: string };
+  mean?: MeanInterval;
+  top_two_box?: Interval;
+  bottom_two_box?: Interval;
+  mean_selected?: number;
+  themes?: SurveyBucket[];
+  themes_coded?: boolean;
+  responses?: { agent_id: string; name: string; role: string; text: string; theme: string }[];
+  columns?: string[];
+  rows?: { key: string; label: string; distribution: SurveyBucket[]; n: number }[];
 };

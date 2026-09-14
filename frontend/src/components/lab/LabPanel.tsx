@@ -17,7 +17,8 @@ import { api, Agent, Experiment, Instrument, Probe, ProbeAnswerRow, ProbeRequest
 import { Beaker, Download, Loader2, Play, Square, AlertTriangle, RefreshCw, ChevronLeft, FlaskConical } from "lucide-react";
 import { DotGrid, dotColor } from "./Charts";
 import ExperimentPanel from "./ExperimentPanel";
-import InstrumentForm, { initialValues, toSpec } from "./InstrumentForm";
+import { initialValues, toSpec } from "./InstrumentForm";
+import { formFor } from "./forms";
 import { SEGMENT_FILTERS } from "./filters";
 import { pageFor } from "./pages";
 
@@ -151,7 +152,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   async function run() {
     const req = buildRequest();
     if (!instrument || !req) return;
-    const missing = instrument.inputs.filter((f) => f.required && !String(values[f.key] ?? "").trim());
+    const missing = instrument.inputs.filter((f) => f.required && (Array.isArray(values[f.key]) ? values[f.key].length === 0 : !String(values[f.key] ?? "").trim()));
     if (missing.length) { setError(`${missing.map((f) => f.label).join(", ")} required.`); return; }
     setBusy(true); setError(null);
     try {
@@ -292,6 +293,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   }
 
   const Page = pageFor(instrument.page || instrument.key);
+  const Form = formFor(instrument.form);
 
   // ── One tool ──────────────────────────────────────────────────────────────
   return (
@@ -309,8 +311,8 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
           <p className="text-[11px] text-muted-foreground mt-0.5">{instrument.description}</p>
         </div>
 
-        {/* The tool's own inputs, from its own declaration. */}
-        <InstrumentForm
+        {/* The tool's own inputs, from its own declaration (or its own builder). */}
+        <Form
           instrument={instrument}
           values={values}
           onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
@@ -395,7 +397,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{instrument.label}</div>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                  {instrument.inputs.map((f) => selected.spec?.[f.key]).filter(Boolean).join(" · ")}
+                  {instrument.inputs.map((f) => selected.spec?.[f.key]).filter((v) => typeof v === "string" && v).join(" · ")}
                 </p>
               </div>
               {running ? (

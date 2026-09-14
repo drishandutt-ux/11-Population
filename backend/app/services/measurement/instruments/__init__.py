@@ -131,6 +131,9 @@ class Instrument:
     postprocess: Optional[Callable[..., Any]] = None
     #: Internal instruments (the choice design's) are not offered in the picker.
     hidden: bool = False
+    #: Identifies a bespoke input panel in the frontend form registry (a survey builder);
+    #: empty means the generic InstrumentForm renders `inputs`.
+    form: str = ""
 
     def schema_id(self) -> str:
         return f"{self.key}.v{self.version}"
@@ -139,6 +142,10 @@ class Instrument:
         """The answer schema for this run. Static for most tools; the choice instrument fills
         its enum from the variants in the spec."""
         return self.answer_schema
+
+    def validate(self, spec: dict) -> list[str]:
+        """Instrument-specific checks beyond required inputs; return human-readable errors."""
+        return []
 
     def question_for(self, spec: dict) -> str:
         if self.question_from:
@@ -186,7 +193,7 @@ def _load() -> None:
     global _loaded
     if _loaded:
         return
-    from app.services.measurement.instruments import ask, choice, purchase_intent  # noqa: F401
+    from app.services.measurement.instruments import ask, choice, purchase_intent, survey  # noqa: F401
     # Only after a clean import: a module that raises must keep raising, not leave the
     # registry half-built and every later lookup silently returning None.
     _loaded = True

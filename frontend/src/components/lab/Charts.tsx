@@ -420,3 +420,157 @@ export function FlowDiagram({
     </svg>
   );
 }
+
+// ── survey visuals ────────────────────────────────────────────────────────────
+// Per question type. Every mark is clickable: the page filters the individual responses to
+// the people behind it, which is what turns a chart into an answer.
+
+export const SERIES = ["hsl(var(--primary))", "#a78bfa", "#fb923c", "#38bdf8", "#f472b6", "#facc15", "#34d399", "#f87171", "#c084fc", "#94a3b8", "#fdba74", "#67e8f9"];
+export const seriesColor = (i: number) => SERIES[i % SERIES.length];
+/** Agree→disagree columns read as a diverging scale: green through grey to red. */
+export const LIKERT = ["hsl(var(--primary))", "hsl(var(--primary) / 0.55)", "hsl(var(--muted-foreground) / 0.45)", "rgba(248,113,113,0.6)", "#f87171"];
+
+/** Single choice / yes-no: a donut with a legend that doubles as the click target. */
+export function Donut({ rows, selected, onSelect }: {
+  rows: { value: string; count: number; share: number; low: number; high: number }[];
+  selected?: string | null; onSelect?: (value: string | null) => void;
+}) {
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const R = 42, C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div className="grid grid-cols-[110px_1fr] gap-4 items-center">
+      <svg viewBox="0 0 110 110" className="w-[110px] h-[110px]" role="img" aria-label="Share by answer">
+        <circle cx="55" cy="55" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="14" />
+        {rows.map((r, i) => {
+          const frac = total ? r.count / total : 0;
+          const dash = `${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}`;
+          const el = (
+            <circle key={r.value} cx="55" cy="55" r={R} fill="none" stroke={seriesColor(i)} strokeWidth={selected === r.value ? 18 : 14}
+              strokeDasharray={dash} strokeDashoffset={-offset * C} transform="rotate(-90 55 55)"
+              opacity={selected && selected !== r.value ? 0.35 : 1} className="cursor-pointer transition-all"
+              onClick={() => onSelect?.(selected === r.value ? null : r.value)}>
+              <title>{`${r.value}: ${r.count} (${pct(r.share)})`}</title>
+            </circle>
+          );
+          offset += frac;
+          return el;
+        })}
+        <text x="55" y="52" textAnchor="middle" fontSize="16" fontWeight="600" fill="hsl(var(--foreground))">{total}</text>
+        <text x="55" y="64" textAnchor="middle" fontSize="7" fill="hsl(var(--muted-foreground))">responses</text>
+      </svg>
+      <div className="space-y-1 min-w-0">
+        {rows.map((r, i) => (
+          <button key={r.value} type="button" onClick={() => onSelect?.(selected === r.value ? null : r.value)}
+            className={`w-full flex items-center gap-2 text-left rounded px-1 py-0.5 ${selected === r.value ? "bg-muted/60" : "hover:bg-muted/40"} ${selected && selected !== r.value ? "opacity-50" : ""}`}>
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: seriesColor(i) }} />
+            <span className="text-xs text-foreground/85 truncate flex-1" title={r.value}>{r.value}</span>
+            <span className="text-xs tabular-nums text-muted-foreground shrink-0">{pct(r.share)} <span className="opacity-60">· {r.count}</span></span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Scale / number: one bar per point (or bin), the mean marked; bars click through. */
+export function Histogram({ rows, mean, selected, onSelect, minLabel, maxLabel }: {
+  rows: { value: string; count: number; share: number }[];
+  mean?: number; selected?: string | null; onSelect?: (value: string | null) => void;
+  minLabel?: string; maxLabel?: string;
+}) {
+  if (!rows.length) return null;
+  const W = 320, H = 110, PAD = 14, BW = (W - PAD * 2) / rows.length;
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  const numeric = rows.every((r) => !Number.isNaN(Number(r.value)));
+  const x = (i: number) => PAD + i * BW;
+  const meanX = numeric && mean !== undefined
+    ? (() => { const vals = rows.map((r) => Number(r.value)); const lo = vals[0], hi = vals[vals.length - 1]; return hi === lo ? W / 2 : PAD + ((mean - lo) / (hi - lo)) * (W - PAD * 2 - BW) + BW / 2; })()
+    : null;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Distribution">
+      {rows.map((r, i) => {
+        const h = (r.count / max) * (H - 36);
+        const on = selected === r.value;
+        return (
+          <g key={r.value} className="cursor-pointer" onClick={() => onSelect?.(on ? null : r.value)} opacity={selected && !on ? 0.4 : 1}>
+            <rect x={x(i) + 2} y={H - 22 - h} width={BW - 4} height={Math.max(1, h)} rx="2" fill="hsl(var(--primary))" opacity={on ? 1 : 0.7} />
+            <text x={x(i) + BW / 2} y={H - 24 - h} textAnchor="middle" fontSize="7" fill="hsl(var(--foreground))">{r.count || ""}</text>
+            <text x={x(i) + BW / 2} y={H - 10} textAnchor="middle" fontSize="7" fill="hsl(var(--muted-foreground))">{r.value.length > 8 ? r.value.slice(0, 8) + "…" : r.value}</text>
+            <title>{`${r.value}: ${r.count} (${pct(r.share)})`}</title>
+          </g>
+        );
+      })}
+      {meanX !== null && (
+        <g>
+          <line x1={meanX} y1={6} x2={meanX} y2={H - 22} stroke="#fbbf24" strokeWidth="1.2" strokeDasharray="3 2" />
+          <text x={meanX} y={5} textAnchor="middle" fontSize="7" fill="#fbbf24">mean {Math.round((mean ?? 0) * 100) / 100}</text>
+        </g>
+      )}
+      {minLabel && <text x={PAD} y={H - 1} fontSize="6.5" fill="hsl(var(--muted-foreground))">{minLabel}</text>}
+      {maxLabel && <text x={W - PAD} y={H - 1} textAnchor="end" fontSize="6.5" fill="hsl(var(--muted-foreground))">{maxLabel}</text>}
+    </svg>
+  );
+}
+
+/** Grid (Likert): one stacked bar per row, columns in order, diverging colours. */
+export function StackedRows({ rows, columns, selected, onSelect }: {
+  rows: { key: string; label: string; distribution: { value: string; count: number; share: number }[]; n: number }[];
+  columns: string[];
+  selected?: { row: string; value: string } | null;
+  onSelect?: (sel: { row: string; value: string } | null) => void;
+}) {
+  const color = (i: number) => (columns.length <= LIKERT.length ? LIKERT[Math.round((i / Math.max(1, columns.length - 1)) * (LIKERT.length - 1))] : seriesColor(i));
+  return (
+    <div className="space-y-2">
+      {rows.map((r) => (
+        <div key={r.key} className="grid grid-cols-[7rem_1fr] items-center gap-2">
+          <span className="text-xs text-foreground/85 truncate" title={r.label}>{r.label}</span>
+          <div className="flex h-5 rounded-sm overflow-hidden bg-muted">
+            {r.distribution.map((d, i) => {
+              const on = selected && selected.row === r.key && selected.value === d.value;
+              return d.count ? (
+                <div key={d.value} title={`${d.value}: ${d.count} (${pct(d.share)})`}
+                  onClick={() => onSelect?.(on ? null : { row: r.key, value: d.value })}
+                  className="cursor-pointer flex items-center justify-center text-[9px] text-background/90 transition-all"
+                  style={{ width: `${d.share * 100}%`, background: color(i), opacity: selected && !on ? 0.4 : 1 }}>
+                  {d.share >= 0.12 ? pct(d.share) : ""}
+                </div>
+              ) : null;
+            })}
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 pl-[7.5rem]">
+        {columns.map((c, i) => (
+          <span key={c} className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2 h-2 rounded-sm" style={{ background: color(i) }} />{c}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Multiple choice: horizontal bars, share of respondents who ticked each option. */
+export function OptionBars({ rows, selected, onSelect }: {
+  rows: { value: string; count: number; share: number; low: number; high: number }[];
+  selected?: string | null; onSelect?: (value: string | null) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {rows.map((r, i) => {
+        const on = selected === r.value;
+        return (
+          <button key={r.value} type="button" onClick={() => onSelect?.(on ? null : r.value)}
+            className={`w-full flex items-center gap-2 text-left ${selected && !on ? "opacity-50" : ""}`}>
+            <span className="w-28 shrink-0 text-xs text-foreground/85 truncate" title={r.value}>{r.value}</span>
+            <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden relative">
+              <div className="absolute inset-y-0 rounded-sm" style={{ left: `${r.low * 100}%`, width: `${Math.max(1, (r.high - r.low) * 100)}%`, background: seriesColor(i), opacity: 0.2 }} />
+              <div className="h-full rounded-sm" style={{ width: `${Math.max(1, r.share * 100)}%`, background: seriesColor(i), opacity: on ? 1 : 0.8 }} />
+            </div>
+            <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{pct(r.share)} <span className="opacity-60">· {r.count}</span></span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

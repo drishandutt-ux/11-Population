@@ -78,7 +78,16 @@ def _instrument_payload(inst) -> dict:
         "stimulus_key": inst.stimulus_key,
         "question_from": inst.question_from,
         "hidden": inst.hidden,
+        "form": inst.form,
+        "templates": getattr(inst, "templates", None) or _templates_for(inst.key),
     }
+
+
+def _templates_for(key: str) -> list:
+    if key == "survey":
+        from app.services.measurement.instruments.survey import TEMPLATES
+        return TEMPLATES
+    return []
 
 
 def _probe_payload(p: Probe) -> dict:
@@ -169,6 +178,9 @@ async def create_probe(
     if missing:
         labels = {i.key: i.label for i in inst.inputs}
         raise HTTPException(400, f"Missing required input(s): {', '.join(labels.get(k, k) for k in missing)}")
+    problems = inst.validate(spec)
+    if problems:
+        raise HTTPException(400, "; ".join(problems))
     if body.agent_filter:
         spec["agent_filter"] = body.agent_filter
     seed = body.seed if body.seed is not None else random.randint(1, 2**31 - 1)
@@ -350,7 +362,10 @@ def _experiment_payload(e: Experiment, probes: Optional[list[Probe]] = None) -> 
 
 def _validate_experiment(body: ExperimentRequest):
     inst = instruments.get(body.instrument)
-    if not inst or inst.hidden:
+    # A hidden tool may still be an A/B base if it declares metrics (Ask, superseded in the
+    # picker by the survey, stays the base for text-material tests); the choice instrument
+    # itself never is.
+    if not inst or (inst.hidden and not inst.supports_experiments()):
         raise HTTPException(404, f"Unknown instrument '{body.instrument}'")
     if body.design not in experiment_svc.DESIGNS:
         raise HTTPException(400, f"design must be one of {', '.join(experiment_svc.DESIGNS)}")
@@ -366,6 +381,9 @@ def _validate_experiment(body: ExperimentRequest):
         missing = [k for k in inst.required_inputs() if not str((v.spec or {}).get(k) or "").strip()]
         if missing:
             raise HTTPException(400, f"Variant {v.label or v.key}: missing {', '.join(labels.get(k, k) for k in missing)}")
+        problems = inst.validate(v.spec or {})
+        if problems:
+            raise HTTPException(400, f"Variant {v.label or v.key}: " + "; ".join(problems))
     return inst
 
 

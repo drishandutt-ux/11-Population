@@ -170,4 +170,7 @@ INSTRUMENT = register(Instrument(
     stimulus_key="material",
     question_from="question",
     postprocess=postprocess,
+    # Superseded by the Survey tool's "Reaction" template; kept so past runs still render and
+    # so the A/B test can keep using it as a base.
+    hidden=True,
 ))
