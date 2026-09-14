@@ -120,6 +120,8 @@ def test_within_subjects_lift_is_paired_and_flips_are_real_changes():
     assert flips["n"] == 5 and flips["paired"] == 10
     assert all(r["from"] == "no" and r["to"] == "yes" for r in flips["rows"])
     assert flips["direction"][0]["value"] == "no → yes" and flips["direction"][0]["count"] == 5
+    # The flow matrix covers every paired agent, stayers included: 3 yes→yes, 5 no→yes, 2 no→no.
+    assert {(m["from"], m["to"]): m["count"] for m in flips["matrix"]} == {("yes", "yes"): 3, ("no", "yes"): 5, ("no", "no"): 2}
     assert flips["reasons"][0]["value"] == "need"
     assert flips["rows"][0]["reasoning_variant"] and flips["rows"][0]["reasoning_control"]
 

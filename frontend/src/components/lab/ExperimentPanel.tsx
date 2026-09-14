@@ -13,7 +13,7 @@ import {
   api, Agent, Experiment, ExperimentDesign, ExperimentEstimate, ExperimentRequest, Instrument, SimMode,
 } from "@/lib/api";
 import { AlertTriangle, ChevronLeft, Download, FlaskConical, Loader2, Play, Plus, RefreshCw, Square, X } from "lucide-react";
-import { DotGrid, dotColor } from "./Charts";
+import { PairedDots } from "./Charts";
 import InstrumentForm, { initialValues, toSpec } from "./InstrumentForm";
 import { SEGMENT_FILTERS } from "./filters";
 import ExperimentPage from "./pages/ExperimentPage";
@@ -314,26 +314,12 @@ export default function ExperimentPanel({
             </div>
 
             {running && (
-              <div className={`grid gap-4 ${selected.variants.length > 2 ? "grid-cols-3" : "grid-cols-2"}`}>
-                {selected.variants.map((v) => {
-                  const probe = (selected.probes || []).find((p) => p.variant_key === v.key);
-                  const live = probe ? liveAnswers[probe.id] || [] : [];
-                  const total = probe?.agent_count || (selected.design === "within" ? selected.agent_count || agents.length : Math.ceil((selected.agent_count || agents.length) / selected.variants.length));
-                  return (
-                    <div key={v.key} className="space-y-2">
-                      <div className="text-xs text-muted-foreground">
-                        <span className="text-foreground/90">{v.label || v.key}</span> · {live.length} of {total} answered
-                      </div>
-                      <DotGrid total={total} dots={live.map((x) => ({ color: dotColor(x.answer, x.avatar_color), title: `${x.agent_name}: ${x.answer?.reasoning ?? ""}` }))} />
-                      {live.slice(-2).reverse().map((x) => (
-                        <p key={x.agent_id} className="text-[11px] text-muted-foreground truncate">
-                          <span className="text-foreground/80">{x.agent_name}</span> — {x.answer?.reasoning}
-                        </p>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+              <LiveComparison
+                experiment={selected}
+                instrument={selectedInstrument}
+                liveAnswers={liveAnswers}
+                fallbackTotal={agents.length}
+              />
             )}
 
             {selected.error && (
@@ -352,6 +338,99 @@ export default function ExperimentPanel({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** The live view of an experiment. Not two dot grids side by side — one pill per agent, split
+ *  per arm, so what fills in is each person's pair of answers, and a ring marks the ones who
+ *  have already changed their mind. The counters are the comparison forming in real time. */
+function LiveComparison({
+  experiment, instrument, liveAnswers, fallbackTotal,
+}: {
+  experiment: Experiment;
+  instrument: Instrument | undefined;
+  liveAnswers: Record<string, LiveAnswer[]>;
+  fallbackTotal: number;
+}) {
+  const arms = experiment.variants.map((v) => v.key);
+  const decision = instrument?.decision_key || "";
+  const probeFor: Record<string, string> = {};
+  for (const p of experiment.probes || []) if (p.variant_key) probeFor[p.variant_key] = p.id;
+
+  const byAgent = new Map<string, { agent_id: string; name: string; fallback: string; answers: Record<string, Record<string, any> | undefined> }>();
+  const answered: Record<string, number> = {};
+  for (const k of arms) {
+    const rows = liveAnswers[probeFor[k]] || [];
+    answered[k] = rows.length;
+    for (const r of rows) {
+      const e = byAgent.get(r.agent_id) || { agent_id: r.agent_id, name: r.agent_name, fallback: r.avatar_color, answers: {} };
+      e.answers[k] = r.answer;
+      byAgent.set(r.agent_id, e);
+    }
+  }
+  const within = experiment.design === "within";
+  const total = within
+    ? (experiment.probes?.[0]?.agent_count || experiment.agent_count || fallbackTotal)
+    : (experiment.agent_count || fallbackTotal);
+
+  const pills = Array.from(byAgent.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((a) => {
+      const complete = arms.every((k) => a.answers[k]);
+      const decisions = decision ? arms.map((k) => a.answers[k]?.[decision]).filter((v) => v !== undefined) : [];
+      const flipped = complete && decisions.length === arms.length && new Set(decisions.map(String)).size > 1;
+      const title = [a.name, ...arms.map((k) => a.answers[k] ? `${experiment.variants.find((v) => v.key === k)?.label || k}: ${a.answers[k]?.reasoning ?? ""}` : "")].filter(Boolean).join("\n");
+      return { ...a, flipped, title };
+    });
+  const paired = pills.filter((p) => arms.every((k) => p.answers[k])).length;
+  const flipped = pills.filter((p) => p.flipped).length;
+  // Room for the agents that have not answered any arm yet.
+  const pending = Math.max(0, total - pills.length);
+  const placeholders = Array.from({ length: within ? pending : 0 }, (_, i) => ({
+    agent_id: `pending-${i}`, name: "", fallback: "", answers: {} as Record<string, Record<string, any> | undefined>, flipped: false, title: "waiting",
+  }));
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-4">
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs text-muted-foreground">
+          {within ? `The same ${total} agents, ${arms.length} offers` : `${total} agents split across ${arms.length} offers`}
+        </span>
+        <span className="text-[10px] text-muted-foreground/70">
+          {within ? "one pill per agent · one segment per offer · ring = changed their answer" : "one segment per agent, coloured by its answer"}
+        </span>
+      </div>
+
+      <div className={`grid gap-2 ${within ? "grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]" : "grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]"}`}>
+        {arms.map((k) => (
+          <div key={k} className="rounded-lg bg-muted/40 px-3 py-2">
+            <div className="text-[10px] text-muted-foreground truncate">{experiment.variants.find((v) => v.key === k)?.label || k}</div>
+            <div className="text-lg font-semibold tabular-nums">{answered[k] || 0}<span className="text-xs text-muted-foreground font-normal"> / {within ? total : "…"}</span></div>
+          </div>
+        ))}
+        {within && (
+          <>
+            <div className="rounded-lg bg-muted/40 px-3 py-2">
+              <div className="text-[10px] text-muted-foreground">Answered both</div>
+              <div className="text-lg font-semibold tabular-nums">{paired}</div>
+            </div>
+            <div className="rounded-lg bg-amber-400/10 px-3 py-2">
+              <div className="text-[10px] text-amber-200/80">Changed their answer</div>
+              <div className="text-lg font-semibold tabular-nums text-amber-300">{flipped}<span className="text-xs text-muted-foreground font-normal"> of {paired}</span></div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <PairedDots agents={[...pills, ...placeholders]} arms={arms} />
+
+      {pills.filter((p) => p.flipped).slice(-2).reverse().map((p) => (
+        <p key={p.agent_id} className="text-[11px] text-muted-foreground truncate">
+          <span className="text-amber-300">{p.name}</span> changed: {arms.map((k) => `${experiment.variants.find((v) => v.key === k)?.label || k} → ${p.answers[k]?.[decision]}`).join(" · ")}
+        </p>
+      ))}
     </div>
   );
 }

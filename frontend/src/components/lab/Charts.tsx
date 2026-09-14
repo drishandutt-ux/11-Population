@@ -259,3 +259,159 @@ export function SegmentTable({ title, rows }: { title: string; rows: { value: st
     </div>
   );
 }
+
+// ── A/B-specific visuals ──────────────────────────────────────────────────────
+// Everything below draws a COMPARISON, not a level: the same agent in two arms, a delta
+// with its interval, or a flow between answers. None of it is used by single-probe pages.
+
+/** One pill per agent, split into one segment per arm. A segment takes the colour of that
+ *  agent's answer as it lands; a ring marks an agent whose decision differs between arms.
+ *  This is the live view of an experiment: you watch people change their minds. */
+export function PairedDots({
+  agents, arms,
+}: {
+  agents: { agent_id: string; name: string; fallback: string; answers: Record<string, Record<string, any> | undefined>; flipped: boolean; title: string }[];
+  arms: string[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-[4px]">
+      {agents.map((a) => (
+        <span
+          key={a.agent_id}
+          title={a.title}
+          className={`flex h-3 rounded-[3px] overflow-hidden ${a.flipped ? "ring-2 ring-amber-300/90 ring-offset-1 ring-offset-background" : ""}`}
+          style={{ width: `${arms.length * 9}px` }}
+        >
+          {arms.map((k) => {
+            const ans = a.answers[k];
+            return (
+              <span
+                key={k}
+                className={`flex-1 ${ans ? "" : "bg-muted animate-pulse"}`}
+                style={ans ? { background: dotColor(ans, a.fallback) } : undefined}
+              />
+            );
+          })}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** The primary metric as a before/after: two bars, the levels, and one big signed delta with
+ *  its interval. The delta is the result; the levels are context. */
+export function DeltaHero({
+  label, controlLabel, variantLabel, control, variant, lift, format, currency,
+}: {
+  label: string; controlLabel: string; variantLabel: string;
+  control: number; variant: number;
+  lift: { mean: number; low: number; high: number; significant: boolean };
+  format: "share" | "mean" | "money"; currency?: string;
+}) {
+  const max = format === "share" ? 1 : Math.max(Math.abs(control), Math.abs(variant), 1e-9);
+  const w = (v: number) => `${Math.max(1, Math.min(100, (Math.abs(v) / max) * 100))}%`;
+  const color = !lift.significant ? "hsl(var(--muted-foreground))" : lift.mean > 0 ? "hsl(var(--primary))" : "#f87171";
+  return (
+    <div className="grid grid-cols-[1fr_auto] gap-6 items-center">
+      <div>
+        <div className="text-xs text-muted-foreground mb-2">{label}</div>
+        {[{ l: controlLabel, v: control, dim: true }, { l: variantLabel, v: variant, dim: false }].map((row) => (
+          <div key={row.l} className="grid grid-cols-[6rem_1fr_4rem] items-center gap-3 mb-1.5">
+            <span className={`text-xs truncate ${row.dim ? "text-muted-foreground" : "text-foreground"}`} title={row.l}>{row.l}</span>
+            <div className="h-5 bg-muted rounded-sm overflow-hidden">
+              <div className="h-full rounded-sm transition-all" style={{ width: w(row.v), background: row.dim ? "hsl(var(--muted-foreground) / 0.45)" : color }} />
+            </div>
+            <span className={`text-sm tabular-nums text-right ${row.dim ? "text-muted-foreground" : "text-foreground font-medium"}`}>{fmtLevel(row.v, format, currency)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="text-right min-w-[8rem]">
+        <div className="text-4xl font-semibold tabular-nums leading-none" style={{ color }}>{fmtLift(lift.mean, format, currency)}</div>
+        <div className="text-[11px] text-muted-foreground tabular-nums mt-1.5">
+          95% CI {fmtLift(lift.low, format, currency)} to {fmtLift(lift.high, format, currency)}
+        </div>
+        <div className="text-[10px] mt-0.5" style={{ color }}>{lift.significant ? "interval clears zero" : "interval includes zero"}</div>
+      </div>
+    </div>
+  );
+}
+
+const FLOW_ORDER = ["yes", "unsure", "no"];
+
+/** How the same agents moved between answers: left column = what they said to the control,
+ *  right column = to the variant, ribbons = each from→to group (stayers faint, movers solid). */
+export function FlowDiagram({
+  matrix, controlLabel, variantLabel,
+}: {
+  matrix: { from: string; to: string; count: number }[];
+  controlLabel: string; variantLabel: string;
+}) {
+  const total = matrix.reduce((s, m) => s + m.count, 0);
+  if (!total) return null;
+  const cats = Array.from(new Set(matrix.flatMap((m) => [m.from, m.to])));
+  cats.sort((a, b) => {
+    const ia = FLOW_ORDER.indexOf(a), ib = FLOW_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+  });
+  const W = 360, H = 170, PAD_T = 18, PAD_B = 6, COL = 14, GAP = 6, LX = 70, RX = W - 70 - COL;
+  const usable = H - PAD_T - PAD_B - GAP * Math.max(0, cats.length - 1);
+  const size = (n: number) => (n / total) * usable;
+
+  const leftTotals: Record<string, number> = {}, rightTotals: Record<string, number> = {};
+  for (const m of matrix) {
+    leftTotals[m.from] = (leftTotals[m.from] || 0) + m.count;
+    rightTotals[m.to] = (rightTotals[m.to] || 0) + m.count;
+  }
+  const leftY: Record<string, number> = {}, rightY: Record<string, number> = {};
+  let y = PAD_T;
+  for (const c of cats) { leftY[c] = y; y += size(leftTotals[c] || 0) + GAP; }
+  y = PAD_T;
+  for (const c of cats) { rightY[c] = y; y += size(rightTotals[c] || 0) + GAP; }
+
+  // Ribbons stack inside each node in category order, so they never cross within a node.
+  const leftCursor = { ...leftY }, rightCursor = { ...rightY };
+  const ribbons = [];
+  for (const from of cats) for (const to of cats) {
+    const m = matrix.find((x) => x.from === from && x.to === to);
+    if (!m) continue;
+    const h = size(m.count);
+    const y0 = leftCursor[from], y1 = rightCursor[to];
+    leftCursor[from] += h; rightCursor[to] += h;
+    const x0 = LX + COL, x1 = RX, cx = (x0 + x1) / 2;
+    const d = `M${x0},${y0} C${cx},${y0} ${cx},${y1} ${x1},${y1} L${x1},${y1 + h} C${cx},${y1 + h} ${cx},${y0 + h} ${x0},${y0 + h} Z`;
+    const moved = from !== to;
+    ribbons.push(
+      <path key={`${from}-${to}`} d={d} fill={CAT_COLORS[to] ?? "hsl(var(--primary))"} opacity={moved ? 0.75 : 0.18}>
+        <title>{`${m.count} ${moved ? "moved" : "stayed"}: ${from} → ${to}`}</title>
+      </path>
+    );
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="How agents moved between answers">
+      <text x={LX + COL / 2} y={10} textAnchor="middle" fontSize="7.5" fill="hsl(var(--muted-foreground))">{controlLabel}</text>
+      <text x={RX + COL / 2} y={10} textAnchor="middle" fontSize="7.5" fill="hsl(var(--muted-foreground))">{variantLabel}</text>
+      {ribbons}
+      {cats.map((c) => (
+        <g key={c}>
+          {leftTotals[c] ? (
+            <>
+              <rect x={LX} y={leftY[c]} width={COL} height={Math.max(1, size(leftTotals[c]))} rx="2" fill={CAT_COLORS[c] ?? "hsl(var(--primary))"} />
+              <text x={LX - 4} y={leftY[c] + Math.max(1, size(leftTotals[c])) / 2 + 3} textAnchor="end" fontSize="8" fill="hsl(var(--foreground))" className="capitalize">
+                {c} · {leftTotals[c]}
+              </text>
+            </>
+          ) : null}
+          {rightTotals[c] ? (
+            <>
+              <rect x={RX} y={rightY[c]} width={COL} height={Math.max(1, size(rightTotals[c]))} rx="2" fill={CAT_COLORS[c] ?? "hsl(var(--primary))"} />
+              <text x={RX + COL + 4} y={rightY[c] + Math.max(1, size(rightTotals[c])) / 2 + 3} fontSize="8" fill="hsl(var(--foreground))">
+                {rightTotals[c]} · {c}
+              </text>
+            </>
+          ) : null}
+        </g>
+      ))}
+    </svg>
+  );
+}

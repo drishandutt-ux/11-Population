@@ -106,10 +106,17 @@ def _flips(instrument, control_rows: dict, variant_rows: dict) -> Optional[dict]
             "segments": va.get("segments") or {},
         })
     share = stats.wilson(len(rows), len(paired))
+    # Every paired agent's movement, stayers included — what the flow diagram draws.
+    matrix: dict[tuple, int] = {}
+    for agent_id in paired:
+        k = (str(control_rows[agent_id]["answer"].get(key)), str(variant_rows[agent_id]["answer"].get(key)))
+        matrix[k] = matrix.get(k, 0) + 1
     return {
         "n": len(rows),
         "paired": len(paired),
         "share": share,
+        "matrix": sorted(({"from": f, "to": t, "count": c} for (f, t), c in matrix.items()),
+                         key=lambda d: (-d["count"], d["from"], d["to"])),
         "direction": stats.distribution([f"{r['from']} → {r['to']}" for r in rows]),
         "reasons": stats.distribution([r["driver"] for r in rows if r["driver"]]) if instrument.driver_key else [],
         "rows": rows[:MAX_FLIP_ROWS],

@@ -560,6 +560,8 @@ export type Comparison = {
     n: number;
     paired: number;
     share: Interval;
+    /** Every paired agent's movement on the decision field, stayers included. */
+    matrix: { from: string; to: string; count: number }[];
     direction: (Interval & { value: string; count: number })[];
     reasons: (Interval & { value: string; count: number })[];
     rows: FlipRow[];
