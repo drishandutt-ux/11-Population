@@ -35,12 +35,15 @@ class InputField:
     #: "session_query"; anything unrecognised is ignored by the client.
     default_from: str = ""
     options: tuple[str, ...] = ()
+    #: For free-text inputs: ready-made phrasings the UI offers as one-click chips.
+    suggestions: tuple[str, ...] = ()
 
     def as_dict(self) -> dict:
         return {
             "key": self.key, "type": self.type, "label": self.label, "required": self.required,
             "help": self.help, "placeholder": self.placeholder, "default": self.default,
             "default_from": self.default_from, "options": list(self.options),
+            "suggestions": list(self.suggestions),
         }
 
 
@@ -115,9 +118,34 @@ class Instrument:
     max_tokens: int = 500
     #: Bumped when the schema changes, so old answers are never silently mixed with new ones.
     version: int = 1
+    #: Which spec key holds what the agent is shown. Purchase intent calls it the offer
+    #: (`stimulus`); a generic ask calls it the material.
+    stimulus_key: str = "stimulus"
+    #: If set, the ask itself comes from the spec under this key (the analyst writes the
+    #: question) instead of the fixed `question` above.
+    question_from: str = ""
+    #: Runs once after every answer is in and before aggregation: (probe_ids, model) -> None.
+    #: Used for population-level coding (free-text reasons into shared themes). It may rewrite
+    #: stored answers, so it runs before `aggregate`. An experiment runs it ONCE across all
+    #: arms so the themes are shared, and skips the per-arm call.
+    postprocess: Optional[Callable[..., Any]] = None
+    #: Internal instruments (the choice design's) are not offered in the picker.
+    hidden: bool = False
 
     def schema_id(self) -> str:
         return f"{self.key}.v{self.version}"
+
+    def schema_for(self, spec: dict) -> dict:
+        """The answer schema for this run. Static for most tools; the choice instrument fills
+        its enum from the variants in the spec."""
+        return self.answer_schema
+
+    def question_for(self, spec: dict) -> str:
+        if self.question_from:
+            q = str(spec.get(self.question_from) or "").strip()
+            if q:
+                return q
+        return self.question
 
     def required_inputs(self) -> list[str]:
         return [i.key for i in self.inputs if i.required]
@@ -158,7 +186,7 @@ def _load() -> None:
     global _loaded
     if _loaded:
         return
-    from app.services.measurement.instruments import purchase_intent  # noqa: F401
+    from app.services.measurement.instruments import ask, choice, purchase_intent  # noqa: F401
     # Only after a clean import: a module that raises must keep raising, not leave the
     # registry half-built and every later lookup silently returning None.
     _loaded = True

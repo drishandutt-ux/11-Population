@@ -75,6 +75,9 @@ def _instrument_payload(inst) -> dict:
         "metrics": [m.as_dict() for m in inst.metrics],
         "supports_experiments": inst.supports_experiments(),
         "decision_key": inst.decision_key,
+        "stimulus_key": inst.stimulus_key,
+        "question_from": inst.question_from,
+        "hidden": inst.hidden,
     }
 
 
@@ -278,7 +281,9 @@ async def export_probe_csv(
     )).all()
 
     inst = instruments.get(p.instrument)
-    answer_keys = list((inst.answer_schema.get("properties") or {}).keys()) if inst else []
+    answer_keys = list((inst.schema_for(p.spec or {}).get("properties") or {}).keys()) if inst else []
+    if inst and inst.driver_key and inst.driver_key not in answer_keys:
+        answer_keys.append(inst.driver_key)          # coded theme, written after the run
     segment_keys = ["stance", "age_band", "humanity_band", "purchase_intent_prior", "price_pain_prior"]
 
     buf = io.StringIO()
@@ -311,8 +316,9 @@ class VariantRequest(BaseModel):
 class ExperimentRequest(BaseModel):
     instrument: str
     variants: list[VariantRequest]
-    design: str = "within"                   # "within" (paired, same agents) | "between" (seeded split)
+    design: str = "within"                   # "within" (paired) | "between" (seeded split) | "choice" (all at once, pick one)
     name: str = ""
+    question: str = ""                       # choice design: the ask; defaults to the base tool's question
     spec: dict[str, Any] = {}                # shared across arms: context policy
     mode: str = "fast"
     seed: Optional[int] = None
@@ -344,12 +350,12 @@ def _experiment_payload(e: Experiment, probes: Optional[list[Probe]] = None) -> 
 
 def _validate_experiment(body: ExperimentRequest):
     inst = instruments.get(body.instrument)
-    if not inst:
+    if not inst or inst.hidden:
         raise HTTPException(404, f"Unknown instrument '{body.instrument}'")
-    if not inst.supports_experiments():
-        raise HTTPException(400, f"{inst.label} cannot be run as an A/B test: it declares no metrics to compare.")
     if body.design not in experiment_svc.DESIGNS:
         raise HTTPException(400, f"design must be one of {', '.join(experiment_svc.DESIGNS)}")
+    if body.design != "choice" and not inst.supports_experiments():
+        raise HTTPException(400, f"{inst.label} cannot be run as an A/B test: it declares no metrics to compare.")
     if not (experiment_svc.MIN_VARIANTS <= len(body.variants) <= experiment_svc.MAX_VARIANTS):
         raise HTTPException(400, f"An experiment needs {experiment_svc.MIN_VARIANTS} to {experiment_svc.MAX_VARIANTS} variants.")
     keys = [v.key.strip() for v in body.variants]
@@ -436,17 +442,32 @@ async def create_experiment(
     await db.flush()
 
     probes = []
-    for v in variants:
-        # Every arm is a full probe: same instrument, same shared filter and context, the same
-        # seed (so a within-subjects sample is the SAME agents in every arm), its own stimulus.
-        spec = {**shared, **v["spec"], "seed": seed}
+    if body.design == "choice":
+        # One probe for the whole comparison: every agent sees all the options at once.
+        choice = instruments.get("choice")
+        question = body.question.strip() or (
+            str((variants[0]["spec"] or {}).get(inst.question_from) or "").strip() if inst.question_from else ""
+        ) or inst.question
+        spec = experiment_svc.compose_choice_spec(inst, variants, shared, question, seed)
         p = Probe(
-            session_id=session_id, instrument=inst.key, schema_id=inst.schema_id(), spec=spec,
-            experiment_id=e.id, variant_key=v["key"], seed=seed, model=model,
-            prompt_hash=probe_svc.prompt_hash(inst, spec), status="queued",
+            session_id=session_id, instrument=choice.key, schema_id=choice.schema_id(), spec=spec,
+            experiment_id=e.id, variant_key=experiment_svc.CHOICE_ARM, seed=seed, model=model,
+            prompt_hash=probe_svc.prompt_hash(choice, spec), status="queued",
         )
         db.add(p)
         probes.append(p)
+    else:
+        for v in variants:
+            # Every arm is a full probe: same instrument, same shared filter and context, the same
+            # seed (so a within-subjects sample is the SAME agents in every arm), its own stimulus.
+            spec = {**shared, **v["spec"], "seed": seed}
+            p = Probe(
+                session_id=session_id, instrument=inst.key, schema_id=inst.schema_id(), spec=spec,
+                experiment_id=e.id, variant_key=v["key"], seed=seed, model=model,
+                prompt_hash=probe_svc.prompt_hash(inst, spec), status="queued",
+            )
+            db.add(p)
+            probes.append(p)
     await db.commit()
 
     background_tasks.add_task(experiment_svc.run_experiment, e.id)
@@ -512,10 +533,12 @@ async def export_experiment_csv(
     """One row per agent, every arm's answer side by side, plus whether they flipped."""
     await get_owned_session(session_id, user, db)
     e = await _owned_experiment(session_id, experiment_id, db)
-    inst = instruments.get(e.instrument)
+    inst = instruments.get("choice") if e.design == "choice" else instruments.get(e.instrument)
     answer_keys = list((inst.answer_schema.get("properties") or {}).keys()) if inst else []
+    if inst and inst.driver_key and inst.driver_key not in answer_keys:
+        answer_keys.append(inst.driver_key)          # coded theme, written after the run
     segment_keys = ["stance", "age_band", "humanity_band", "purchase_intent_prior", "price_pain_prior"]
-    variants = list(e.variants or [])
+    variants = [{"key": experiment_svc.CHOICE_ARM, "label": "all"}] if e.design == "choice" else list(e.variants or [])
 
     probes = (await db.execute(select(Probe).where(Probe.experiment_id == experiment_id))).scalars().all()
     probe_by_key = {p.variant_key: p for p in probes}

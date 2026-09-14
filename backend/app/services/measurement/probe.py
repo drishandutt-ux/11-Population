@@ -82,6 +82,8 @@ _PRIOR_LABELS = {
     "would_buy": "decision", "likelihood_0_100": "likelihood", "max_price": "walk-away price",
     "max_price_gbp": "walk-away price",
     "key_driver": "driver", "sentiment": "feeling",
+    "verdict": "verdict", "strength": "strength", "feeling": "feeling", "key_factor": "because",
+    "choice": "chose", "runner_up": "runner-up", "confidence": "confidence",
 }
 
 
@@ -97,7 +99,7 @@ def _commercial_priors(agent: SpawnedAgent) -> str:
 def _format_prior_answer(instrument: str, answer: dict) -> str:
     bits = []
     for key, val in answer.items():
-        if key == "reasoning" or val in (None, ""):
+        if key in ("reasoning", "theme") or val in (None, ""):
             continue
         bits.append(f"{_PRIOR_LABELS.get(key, key.replace('_', ' '))} {val}")
     why = clip(answer.get("reasoning", ""), 140)
@@ -163,7 +165,7 @@ def _build_user_message(
             f"YOUR GENERAL TENDENCIES (priors, NOT the answer to this): {priors}"
         )
 
-    stimulus = (spec.get("stimulus") or "").strip()
+    stimulus = str(spec.get(instrument.stimulus_key) or "").strip()
     if stimulus:
         price = spec.get("price")
         currency = spec.get("currency", "GBP")
@@ -171,9 +173,9 @@ def _build_user_message(
         head = "WHAT YOU ARE BEING ASKED ABOUT:"
         if price:
             head += f" (asking price: {sym}{float(price):g})"
-        blocks.append(f"{head}\n{clip(stimulus, 2500)}")
+        blocks.append(f"{head}\n{clip(stimulus, 6000)}")
 
-    blocks.append(instrument.question + "\n\nRecord your answer with the tool.")
+    blocks.append("THE QUESTION: " + instrument.question_for(spec) + "\n\nRecord your answer with the tool.")
     return "\n\n".join(blocks)
 
 
@@ -197,9 +199,10 @@ async def answer_one(
         kg_context=kg_context, said=said, decided=decided,
     )
 
+    schema = instrument.schema_for(spec)
     try:
         answer = await analyze(
-            instrument.answer_schema, system, user,
+            schema, system, user,
             session_id=session_id, label=f"probe:{instrument.key}",
             model=model, max_tokens=instrument.max_tokens,
         )
@@ -207,7 +210,7 @@ async def answer_one(
         # Short schemas rarely truncate; when they do, one retry with more room is enough.
         try:
             answer = await analyze(
-                instrument.answer_schema, system, user,
+                schema, system, user,
                 session_id=session_id, label=f"probe:{instrument.key}:retry",
                 model=model, max_tokens=instrument.max_tokens * 2,
             )
@@ -376,6 +379,13 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
             probe_id, status=status, answer_count=len(rows), failed_count=failed,
             aggregates=aggregates, completed_at=datetime.utcnow(),
         )
+        # Population-level coding (free-text reasons → shared themes). An experiment runs it
+        # once across all its arms instead, so the vocabulary is shared.
+        if instrument.postprocess and rows and not experiment_id:
+            try:
+                await instrument.postprocess([probe_id], model)
+            except Exception as e:  # noqa: BLE001
+                print(f"[probe] postprocess failed for {probe_id}: {type(e).__name__}: {e}")
         await publish(session_channel(session_id), {
             "type": "probe_complete", "probe_id": probe_id, "status": status,
             "answer_count": len(rows), "failed_count": failed,
@@ -423,7 +433,7 @@ def prompt_hash(instrument, spec: dict) -> str:
     """Fingerprint of what was asked, so two results are only ever compared when the ask matched."""
     blob = json.dumps({
         "schema": instrument.schema_id(),
-        "question": instrument.question,
+        "question": instrument.question_for(spec),
         "directive": instrument.directive,
         "spec": {k: spec.get(k) for k in sorted(spec) if k != "seed"},
     }, sort_keys=True, default=str)

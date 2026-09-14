@@ -371,6 +371,8 @@ export type InstrumentInput = {
   /** "session_query" prefills from the session so the analyst edits rather than retypes. */
   default_from: string;
   options: string[];
+  /** Free-text inputs: ready-made phrasings offered as one-click chips. */
+  suggestions: string[];
 };
 
 /** A headline number the instrument produces, named so the shell can render it without
@@ -403,6 +405,12 @@ export type Instrument = {
   metrics: InstrumentMetric[];
   supports_experiments: boolean;
   decision_key: string;
+  /** Which input holds what the agent is shown ("stimulus", "material"…). */
+  stimulus_key: string;
+  /** Set when the ask comes from the spec (the analyst writes the question). */
+  question_from: string;
+  /** Internal instruments (the choice design's) are not offered in the picker. */
+  hidden: boolean;
   /** Key into the frontend page registry; empty or unknown falls back to the generic view. */
   page: string;
   schema_id: string;
@@ -485,7 +493,7 @@ export type ProbeAnswerRow = {
 
 // ── Experiments (A/B/n) ───────────────────────────────────────────────────────
 
-export type ExperimentDesign = "within" | "between";
+export type ExperimentDesign = "within" | "between" | "choice";
 
 export type ExperimentVariant = { key: string; label: string; spec: Record<string, any> };
 
@@ -493,6 +501,8 @@ export type ExperimentRequest = {
   instrument: string;
   design: ExperimentDesign;
   name?: string;
+  /** Choice design: the ask; defaults to the base tool's question. */
+  question?: string;
   variants: ExperimentVariant[];
   spec?: Record<string, any>;
   mode?: SimMode;
@@ -571,6 +581,17 @@ export type Comparison = {
   sentence: string;
 };
 
+export type Preference = Interval & {
+  key: string;
+  label: string;
+  runner_up: number;
+  runner_up_share: number;
+  themes: (Interval & { value: string; count: number })[];
+  confidence: MeanInterval;
+  segments: Record<string, (Interval & { segment: string; value: string; n: number; thin: boolean })[]>;
+  verbatims: { agent_id: string; name: string; role: string; reasoning: string; key_factor: string; theme: string }[];
+};
+
 export type ExperimentResults = {
   design: ExperimentDesign;
   instrument: string;
@@ -579,8 +600,14 @@ export type ExperimentResults = {
   arms: { key: string; label: string; n: number }[];
   comparisons: Comparison[];
   verdict: string;
-  /** variant key → probe id */
+  /** variant key → probe id ("all" for the choice design's single arm) */
   probes: Record<string, string>;
+  /** Choice design only. */
+  preference?: Preference[];
+  head_to_head?: { first: string; second: string; count: number }[];
+  clear_winner?: boolean;
+  winner?: string;
+  n?: number;
 };
 
 export type Experiment = {

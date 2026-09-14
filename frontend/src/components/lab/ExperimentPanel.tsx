@@ -13,7 +13,7 @@ import {
   api, Agent, Experiment, ExperimentDesign, ExperimentEstimate, ExperimentRequest, Instrument, SimMode,
 } from "@/lib/api";
 import { AlertTriangle, ChevronLeft, Download, FlaskConical, Loader2, Play, Plus, RefreshCw, Square, X } from "lucide-react";
-import { PairedDots } from "./Charts";
+import { PairedDots, DotGrid, optionColor } from "./Charts";
 import InstrumentForm, { initialValues, toSpec } from "./InstrumentForm";
 import { SEGMENT_FILTERS } from "./filters";
 import ExperimentPage from "./pages/ExperimentPage";
@@ -37,18 +37,20 @@ const KEYS = ["A", "B", "C", "D", "E", "F"];
 const MAX_VARIANTS = 6;
 
 const DESIGNS: { key: ExperimentDesign; label: string; help: string }[] = [
-  { key: "within", label: "Same agents", help: "Every agent answers every variant, in separate calls with no memory of the other. Paired, so the interval is tight even at 50 agents." },
+  { key: "within", label: "Rate each", help: "Every agent answers every variant separately, with no memory of the other. Paired lift, who flipped and why. Best for 'does B land better than A'." },
+  { key: "choice", label: "Choose between", help: "Every agent sees all the options at once and picks a winner and a runner-up. One call per agent. Best for 'which is best'." },
   { key: "between", label: "Split population", help: "The population is split by seed; each agent sees one variant. Use when the variants would contaminate each other." },
 ];
 
 export default function ExperimentPanel({
   sessionId, sessionQuery, agents, instruments, liveAnswers, completedAt, onClearLive, initial, onBack,
 }: Props) {
-  const testable = useMemo(() => instruments.filter((i) => i.supports_experiments), [instruments]);
+  const testable = useMemo(() => instruments.filter((i) => i.supports_experiments && !i.hidden), [instruments]);
   const [baseKey, setBaseKey] = useState<string>(initial?.instrument || testable[0]?.key || "");
   const base = useMemo(() => testable.find((i) => i.key === baseKey), [testable, baseKey]);
   const [design, setDesign] = useState<ExperimentDesign>(initial?.design || "within");
   const [name, setName] = useState(initial?.name || "");
+  const [question, setQuestion] = useState(initial?.probes?.[0]?.spec?.question || "");
   const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [mode, setMode] = useState<SimMode>("fast");
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -88,11 +90,12 @@ export default function ExperimentPanel({
       instrument: base.key,
       design,
       name: name.trim() || undefined,
+      ...(design === "choice" && question.trim() ? { question: question.trim() } : {}),
       mode,
       variants: variants.map((v) => ({ key: v.key, label: v.label.trim() || v.key, spec: toSpec(base, v.values) })),
       ...(Object.keys(segments).length ? { agent_filter: { segments } } : {}),
     };
-  }, [base, design, name, mode, variants, filters]);
+  }, [base, design, name, question, mode, variants, filters]);
 
   useEffect(() => {
     const req = buildRequest();
@@ -134,7 +137,7 @@ export default function ExperimentPanel({
     const req = buildRequest();
     if (!base || !req) return;
     for (const v of variants) {
-      const missing = base.inputs.filter((f) => f.required && !String(v.values[f.key] ?? "").trim());
+      const missing = base.inputs.filter((f) => f.required && !(design === "choice" && f.key === base.question_from) && !String(v.values[f.key] ?? "").trim());
       if (missing.length) { setError(`Variant ${v.label || v.key}: ${missing.map((f) => f.label).join(", ")} required.`); return; }
     }
     setBusy(true); setError(null);
@@ -217,14 +220,37 @@ export default function ExperimentPanel({
                 </button>
               )}
             </div>
-            <InstrumentForm instrument={base} values={v.values} onChange={(k, val) => updateVariant(i, { values: { ...v.values, [k]: val } })} />
+            <InstrumentForm
+              instrument={design === "choice" && base.question_from ? { ...base, inputs: base.inputs.filter((f) => f.key !== base.question_from) } : base}
+              values={v.values}
+              onChange={(k, val) => updateVariant(i, { values: { ...v.values, [k]: val } })}
+            />
           </div>
         ))}
 
         {base && variants.length < MAX_VARIANTS && (
           <button onClick={addVariant} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-            <Plus className="w-3.5 h-3.5" /> Add a variant
+            <Plus className="w-3.5 h-3.5" /> Add {design === "choice" ? "an option" : "a variant"}
           </button>
+        )}
+
+        {base && design === "choice" && (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">The question, asked once with all options shown</label>
+            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={2}
+              placeholder={base.question}
+              className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 resize-y" />
+            {(base.inputs.find((f) => f.key === base.question_from)?.suggestions || []).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {["Which of these would you go for, and which is your second choice?", ...(base.inputs.find((f) => f.key === base.question_from)?.suggestions || [])].map((sug) => (
+                  <button key={sug} type="button" onClick={() => setQuestion(sug)}
+                    className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${question === sug ? "border-primary/60 text-primary bg-primary/10" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>
+                    {sug}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         <div>
@@ -254,7 +280,7 @@ export default function ExperimentPanel({
 
         {estimate && (
           <p className="text-[11px] text-muted-foreground">
-            {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} × {design === "within" ? `${estimate.variants} variants` : "1 variant each"} = {estimate.calls} answers · about ${estimate.estimated_cost_usd.toFixed(2)}
+            {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} × {design === "within" ? `${estimate.variants} variants` : design === "choice" ? "1 choice each" : "1 variant each"} = {estimate.calls} answers · about ${estimate.estimated_cost_usd.toFixed(2)}
             <br /><span className="opacity-70">{estimate.model}</span>
           </p>
         )}
@@ -268,7 +294,7 @@ export default function ExperimentPanel({
         <button onClick={run} disabled={busy || !agents.length || !!running || !base}
           className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground text-sm font-medium px-4 py-2.5 rounded-lg transition-all">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          Run A/B test
+          {design === "choice" ? "Ask them to choose" : "Run A/B test"}
         </button>
         {!agents.length && (
           <p className="text-[11px] text-muted-foreground">Spawn a population first — the Lab measures the agents in this session.</p>
@@ -292,7 +318,7 @@ export default function ExperimentPanel({
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{selected.name || "A/B test"}</div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {selectedInstrument?.label || selected.instrument} · {selected.variants.map((v) => v.label || v.key).join(" vs ")} · {selected.design === "within" ? "same agents" : "split population"}
+                  {selectedInstrument?.label || selected.instrument} · {selected.variants.map((v) => v.label || v.key).join(" vs ")} · {selected.design === "within" ? "same agents" : selected.design === "choice" ? "chose between" : "split population"}
                 </p>
               </div>
               {running ? (
@@ -330,7 +356,7 @@ export default function ExperimentPanel({
               <>
                 <ExperimentPage instrument={selectedInstrument} experiment={selected} />
                 <p className="text-[10px] text-muted-foreground/70">
-                  {selected.results.arms.map((a) => `${a.label}: ${a.n} answered`).join(" · ")} · model {selected.model} · seed {selected.seed} · {selected.design}-subjects
+                  {selected.results.arms.map((a) => `${a.label}: ${a.n} answered`).join(" · ")} · model {selected.model} · seed {selected.seed} · {selected.design === "choice" ? "choose between" : `${selected.design}-subjects`}
                   {selected.status === "stopped" ? " · stopped early — only the answers collected are compared" : ""}
                 </p>
               </>
@@ -358,6 +384,40 @@ function LiveComparison({
   const decision = instrument?.decision_key || "";
   const probeFor: Record<string, string> = {};
   for (const p of experiment.probes || []) if (p.variant_key) probeFor[p.variant_key] = p.id;
+
+  if (experiment.design === "choice") {
+    const probe = (experiment.probes || [])[0];
+    const rows = probe ? liveAnswers[probe.id] || [] : [];
+    const total = probe?.agent_count || experiment.agent_count || fallbackTotal;
+    const counts: Record<string, number> = {};
+    for (const r of rows) counts[String(r.answer?.choice)] = (counts[String(r.answer?.choice)] || 0) + 1;
+    return (
+      <div className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-4">
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs text-muted-foreground">{total} agents, each choosing between {arms.length} options</span>
+          <span className="text-[10px] text-muted-foreground/70">one dot per agent, coloured by the option it chose</span>
+        </div>
+        <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]">
+          {experiment.variants.map((v) => (
+            <div key={v.key} className="rounded-lg bg-muted/40 px-3 py-2">
+              <div className="text-[10px] truncate" style={{ color: optionColor(arms, v.key) }}>{v.key} · {v.label || v.key}</div>
+              <div className="text-lg font-semibold tabular-nums">{counts[v.key] || 0}<span className="text-xs text-muted-foreground font-normal"> chose it</span></div>
+            </div>
+          ))}
+          <div className="rounded-lg bg-muted/40 px-3 py-2">
+            <div className="text-[10px] text-muted-foreground">Answered</div>
+            <div className="text-lg font-semibold tabular-nums">{rows.length}<span className="text-xs text-muted-foreground font-normal"> / {total}</span></div>
+          </div>
+        </div>
+        <DotGrid total={total} dots={rows.map((r) => ({ color: optionColor(arms, String(r.answer?.choice)), title: `${r.agent_name}: ${r.answer?.reasoning ?? ""}` }))} />
+        {rows.slice(-2).reverse().map((r) => (
+          <p key={r.agent_id} className="text-[11px] text-muted-foreground truncate">
+            <span className="text-foreground/80">{r.agent_name}</span> chose {r.answer?.choice} — {r.answer?.reasoning}
+          </p>
+        ))}
+      </div>
+    );
+  }
 
   const byAgent = new Map<string, { agent_id: string; name: string; fallback: string; answers: Record<string, Record<string, any> | undefined> }>();
   const answered: Record<string, number> = {};

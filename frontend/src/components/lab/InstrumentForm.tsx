@@ -37,16 +37,31 @@ function Field({ field, value, onChange }: { field: InstrumentInput; value: any;
   const help = field.help ? <p className="text-[10px] text-muted-foreground/60 mt-1">{field.help}</p> : null;
 
   if (field.type === "textarea") {
+    const short = field.suggestions?.length > 0;
     return (
       <div>
         {label}
         <textarea
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
-          rows={6}
+          rows={short ? 2 : 6}
           placeholder={field.placeholder}
           className={`${CONTROL} resize-y`}
         />
+        {short && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {field.suggestions.map((sug) => (
+              <button
+                key={sug}
+                type="button"
+                onClick={() => onChange(sug)}
+                className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${value === sug ? "border-primary/60 text-primary bg-primary/10" : "border-border/60 text-muted-foreground hover:text-foreground"}`}
+              >
+                {sug}
+              </button>
+            ))}
+          </div>
+        )}
         {help}
       </div>
     );

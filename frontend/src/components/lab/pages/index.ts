@@ -1,6 +1,7 @@
 import { ComponentType } from "react";
 import GenericPage from "./GenericPage";
 import PurchaseIntentPage from "./PurchaseIntentPage";
+import AskPage from "./AskPage";
 import { InstrumentPageProps } from "./types";
 
 /** Instrument key (the backend's `page` field) → its own results page.
@@ -9,6 +10,7 @@ import { InstrumentPageProps } from "./types";
  *  tool before its bespoke UI exists. The shell never branches on instrument keys itself. */
 const PAGES: Record<string, ComponentType<InstrumentPageProps>> = {
   purchase_intent: PurchaseIntentPage,
+  ask: AskPage,
 };
 
 export function pageFor(key: string): ComponentType<InstrumentPageProps> {

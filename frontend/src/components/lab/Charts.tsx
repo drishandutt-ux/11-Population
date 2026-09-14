@@ -41,12 +41,17 @@ const CAT_COLORS: Record<string, string> = {
   yes: "hsl(var(--primary))",
   no: "#f87171",
   unsure: "#fbbf24",
+  mixed: "#fbbf24",
 };
+
+/** Stable colours for option keys (A, B, C…) in a choice comparison. */
+export const OPTION_COLORS = ["hsl(var(--primary))", "#a78bfa", "#fb923c", "#38bdf8", "#f472b6", "#facc15"];
+export const optionColor = (keys: string[], key: string) => OPTION_COLORS[Math.max(0, keys.indexOf(key)) % OPTION_COLORS.length];
 
 // Colours a live dot by whichever answer field looks categorical, so a dot grid can show
 // progress for any instrument without knowing its schema.
 const ANSWER_COLORS: Record<string, string> = {
-  yes: "hsl(var(--primary))", no: "#f87171", unsure: "#fbbf24",
+  yes: "hsl(var(--primary))", no: "#f87171", unsure: "#fbbf24", mixed: "#fbbf24",
   buy: "hsl(var(--primary))", reject: "#f87171",
 };
 
@@ -336,7 +341,7 @@ export function DeltaHero({
   );
 }
 
-const FLOW_ORDER = ["yes", "unsure", "no"];
+const FLOW_ORDER = ["yes", "unsure", "mixed", "no"];
 
 /** How the same agents moved between answers: left column = what they said to the control,
  *  right column = to the variant, ribbons = each from→to group (stayers faint, movers solid). */

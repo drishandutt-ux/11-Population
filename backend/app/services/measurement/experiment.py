@@ -33,7 +33,8 @@ from app.models.measurement import Experiment, Probe, ProbeAnswer
 from app.services.measurement import instruments, stats
 from app.services.measurement.probe import PROBE_CONCURRENCY, _select_agents, run_probe, segments_for
 
-DESIGNS = ("within", "between")
+DESIGNS = ("within", "between", "choice")
+CHOICE_ARM = "all"   # the single arm of a choose-between-them experiment
 MIN_VARIANTS, MAX_VARIANTS = 2, 6
 SEGMENT_KEYS = ("stance", "age_band", "humanity_band", "purchase_intent_prior")
 SEGMENT_ITERATIONS = 600   # per-bucket bootstraps are many and small; this keeps analysis fast
@@ -274,6 +275,50 @@ def analyse(instrument, design: str, variants: list[dict], arms: dict[str, dict[
     }
 
 
+# ── choice design ─────────────────────────────────────────────────────────────
+
+def compose_choice_spec(instrument, variants: list[dict], shared: dict, question: str, seed: int) -> dict:
+    """One probe for the whole comparison: every variant's material, labelled, in one stimulus."""
+    parts = []
+    for v in variants:
+        material = str((v.get("spec") or {}).get(instrument.stimulus_key) or "").strip()
+        price = (v.get("spec") or {}).get("price")
+        currency = (v.get("spec") or {}).get("currency", "GBP")
+        sym = {"GBP": "£", "USD": "$", "EUR": "€"}.get(currency, "")
+        head = f"OPTION {v['key']} — {v.get('label') or v['key']}"
+        if price:
+            head += f" (price: {sym}{float(price):g})"
+        parts.append(f"{head}\n{material}")
+    return {
+        **{k: val for k, val in shared.items() if k not in ("price", "currency")},
+        "stimulus": "\n\n".join(parts),
+        "question": question or instrument.question,
+        "option_keys": [v["key"] for v in variants],
+        "option_labels": {v["key"]: (v.get("label") or v["key"]) for v in variants},
+        "seed": seed,
+    }
+
+
+def choice_results(variants: list[dict], probe: Probe) -> dict:
+    agg = dict(probe.aggregates or {})
+    pref = {p["key"]: p for p in agg.get("preference") or []}
+    return {
+        "design": "choice",
+        "instrument": "choice",
+        "control": variants[0]["key"],
+        "primary_metric": "preference",
+        "arms": [{"key": v["key"], "label": v.get("label") or v["key"], "n": pref.get(v["key"], {}).get("successes", 0)} for v in variants],
+        "comparisons": [],
+        "preference": agg.get("preference") or [],
+        "head_to_head": agg.get("head_to_head") or [],
+        "clear_winner": bool(agg.get("clear_winner")),
+        "winner": agg.get("winner"),
+        "n": agg.get("n", 0),
+        "verdict": agg.get("sentence", ""),
+        "probes": {CHOICE_ARM: probe.id},
+    }
+
+
 # ── the run ───────────────────────────────────────────────────────────────────
 
 async def _set(experiment_id: str, **fields) -> None:
@@ -324,13 +369,13 @@ async def run_experiment(experiment_id: str) -> None:
             agents = (await db.execute(
                 select(SpawnedAgent).where(SpawnedAgent.session_id == exp.session_id)
             )).scalars().all()
-            session_id, design, seed = exp.session_id, exp.design, exp.seed
+            session_id, design, seed, model = exp.session_id, exp.design, exp.seed, exp.model
             variants = list(exp.variants or [])
             shared = dict(exp.spec or {})
             by_key = {p.variant_key: p for p in probes}
 
             instrument = instruments.get(exp.instrument)
-            if not instrument or not instrument.supports_experiments():
+            if not instrument or (design != "choice" and not instrument.supports_experiments()):
                 exp.status, exp.error = "failed", f"instrument '{exp.instrument}' cannot be run as an experiment"
                 exp.completed_at = datetime.utcnow()
                 await db.commit()
@@ -350,7 +395,8 @@ async def run_experiment(experiment_id: str) -> None:
             exp.status = "running"
             exp.agent_count = len(chosen)
             await db.commit()
-            probe_ids = [by_key[v["key"]].id for v in variants if v["key"] in by_key]
+            probe_ids = ([by_key[CHOICE_ARM].id] if CHOICE_ARM in by_key else []) if design == "choice" \
+                else [by_key[v["key"]].id for v in variants if v["key"] in by_key]
 
         if not chosen:
             await _set(experiment_id, status="failed", error="no agents matched the filter", completed_at=datetime.utcnow())
@@ -366,6 +412,32 @@ async def run_experiment(experiment_id: str) -> None:
         # independent calls with no memory of each other, so order carries no information.
         per_arm = max(4, PROBE_CONCURRENCY // max(1, len(probe_ids)))
         await asyncio.gather(*(run_probe(pid, concurrency=per_arm) for pid in probe_ids))
+
+        # Population-level coding runs ONCE across every arm, so themes are shared between them.
+        arm_instrument = instruments.get("choice") if design == "choice" else instrument
+        if arm_instrument and arm_instrument.postprocess:
+            try:
+                await arm_instrument.postprocess(probe_ids, model)
+            except Exception as e:  # noqa: BLE001
+                print(f"[experiment] postprocess failed: {type(e).__name__}: {e}")
+
+        if design == "choice":
+            async with AsyncSessionLocal() as db:
+                probe = await db.get(Probe, probe_ids[0])
+            if not probe or probe.status == "failed" or not (probe.aggregates or {}).get("n"):
+                await _set(experiment_id, status="failed", error=(probe.error if probe else None) or "the choice probe produced no answers",
+                           completed_at=datetime.utcnow())
+                await publish(session_channel(session_id), {"type": "experiment_complete", "experiment_id": experiment_id, "status": "failed"})
+                return
+            results = choice_results(variants, probe)
+            status = "complete" if probe.status == "complete" else "stopped"
+            await _set(experiment_id, status=status, results=results, completed_at=datetime.utcnow())
+            await publish(session_channel(session_id), {
+                "type": "experiment_complete", "experiment_id": experiment_id, "status": status,
+                "verdict": results.get("verdict", ""),
+            })
+            print(f"[experiment] {experiment_id}: {status} — {results.get('verdict', '')[:120]}")
+            return
 
         async with AsyncSessionLocal() as db:
             probes = (await db.execute(select(Probe).where(Probe.id.in_(probe_ids)))).scalars().all()
