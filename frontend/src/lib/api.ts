@@ -760,6 +760,8 @@ export type PopulationConstraints = {
   profile_query?: string;
   doc_context?: string;
   skip_questions?: boolean;
+  /** Dials the detect stage set from the research (dial → the evidence it rests on). */
+  derived_from_research?: Record<string, string>;
 };
 
 export type PopulationSegment = {

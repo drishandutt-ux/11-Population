@@ -611,6 +611,7 @@ async def generate_agents_from_plan(
     mode: str = "fast",
     evidence_text: str = "",
     on_progress=None,
+    should_stop=None,
 ) -> list[AgentProfile]:
     """Build the roster segment by segment from an approved Population Studio plan.
 
@@ -634,6 +635,8 @@ async def generate_agents_from_plan(
     profiles: list[AgentProfile] = []
 
     async def _batch(seg: dict, n: int, h: int, taken: list[dict], label: str) -> list[dict]:
+        if should_stop and should_stop():
+            return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
         async with sem:
             try:
                 response = await tracked_messages_create(
@@ -725,6 +728,8 @@ async def generate_agents_from_plan(
                 print(f"[agent_factory] plan duplicate repair failed: {type(e).__name__}: {e}")
                 all_dicts = uniquify_names(all_dicts + ds)
 
+    if not all_dicts and should_stop and should_stop():
+        return []
     if not all_dicts:
         raise RuntimeError("Persona generation produced no valid personas — the model output could not be parsed (check the ANTHROPIC_API_KEY and try again).")
 

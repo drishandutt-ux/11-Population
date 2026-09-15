@@ -93,7 +93,7 @@ export default function PopulationStudioPage() {
         loadFacts();
       } else if (ev.type === "research_item" && ev.item.source_class === "quant") {
         setFacts((prev) => { const k = prev.findIndex((x) => x.id === ev.item.id); return k >= 0 ? prev.map((x) => (x.id === ev.item.id ? ev.item : x)) : [...prev, ev.item]; });
-      } else if (ev.type === "research_brief" || ev.type === "research_complete") {
+      } else if (ev.type === "research_brief" || ev.type === "research_complete" || ev.type === "research_status" || ev.type === "research_error" || ev.type === "research_started") {
         api.research.state(id).then(setResearch).catch(() => {});
       } else if (ev.type === "agents_spawned_batch") {
         setSpawn({ current: ev.spawned, total: ev.total });
@@ -116,6 +116,27 @@ export default function PopulationStudioPage() {
     const t = setInterval(loadBuild, 6000);
     return () => clearInterval(t);
   }, [build?.status, build?.id, loadBuild]);
+
+  // The research panel on the Ingest tab may be stopped or finish while this page is open.
+  const researchRunning = !!research?.run && ["queued", "running", "stopping", "finalising"].includes(research.run.status);
+  useEffect(() => {
+    if (!researchRunning) return;
+    const t = setInterval(() => { api.research.state(id).then(setResearch).catch(() => {}); }, 8000);
+    return () => clearInterval(t);
+  }, [researchRunning, id]);
+
+  // Dials the detect stage set from the research land on the build; mirror them into the
+  // panel (the analyst could not have moved a dial meanwhile — the panel is locked while a
+  // stage runs), so what the plan will honour is what the panel shows.
+  const derivedRef = useRef<string>("");
+  useEffect(() => {
+    const derived = build?.constraints?.derived_from_research;
+    if (!derived || !Object.keys(derived).length) return;
+    const sig = `${build?.id}:${JSON.stringify(derived)}`;
+    if (derivedRef.current === sig) return;
+    derivedRef.current = sig;
+    setConstraints((c) => ({ ...c, demographics: { ...c.demographics, ...(build!.constraints.demographics || {}) }, sentiment: { ...c.sentiment, ...(build!.constraints.sentiment || {}) }, derived_from_research: derived }));
+  }, [build?.id, build?.constraints?.derived_from_research]);
 
   const fullConstraints = useMemo<PopulationConstraints>(() => ({ ...constraints, profile_query: constraints.profile_query || "", doc_context: constraints.doc_context || "" }), [constraints]);
   const active = isActive(build?.status);
@@ -159,7 +180,7 @@ export default function PopulationStudioPage() {
     try { const u = await api.research.exclude(id, item.id, !item.excluded); setFacts((prev) => prev.map((x) => (x.id === u.id ? u : x))); } catch {}
   };
 
-  const dialsLocked = active || status === "clarifying";
+  const dialsLocked = active;
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -169,7 +190,7 @@ export default function PopulationStudioPage() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground">Population Studio</span>
-            {status && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${status === "error" ? "border-red-500/30 text-red-300" : status === "complete" ? "border-emerald-500/30 text-emerald-300" : status === "awaiting_review" || status === "clarifying" ? "border-amber-500/30 text-amber-300" : "border-primary/30 text-primary"}`}>{STATUS_LABEL[status] || status}</span>}
+            {status && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${status === "error" ? "border-red-500/30 text-red-300" : status === "complete" ? "border-emerald-500/30 text-emerald-300" : status === "awaiting_review" || status === "clarifying" || status === "stopped" ? "border-amber-500/30 text-amber-300" : "border-primary/30 text-primary"}`}>{status === "stopped" && build?.plan ? "stopped — plan ready to build" : STATUS_LABEL[status] || status}</span>}
           </div>
           <p className="text-[11px] text-muted-foreground truncate">{session?.title || "Loading…"}</p>
         </div>
@@ -181,9 +202,9 @@ export default function PopulationStudioPage() {
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_340px] gap-0">
+      <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_340px] xl:grid-rows-[minmax(0,1fr)]">
         {/* Sources */}
-        <aside className="hidden xl:block h-full overflow-y-auto border-r border-border/40 p-4">
+        <aside className="min-h-0 xl:overflow-y-auto border-b xl:border-b-0 xl:border-r border-border/40 p-4 order-2 xl:order-1">
           <ErrorBoundary label="The sources panel">
             <SourcesPanel
               sessionQuery={session?.query || ""}
@@ -210,11 +231,11 @@ export default function PopulationStudioPage() {
         </aside>
 
         {/* Build */}
-        <main className="h-full overflow-y-auto p-4 space-y-4">
+        <main className="min-h-0 xl:overflow-y-auto p-4 space-y-4 order-1 xl:order-2">
           <div className="flex items-center gap-3 flex-wrap">
             <Stepper status={status} />
             {active && build && (
-              <button disabled={busy} onClick={stop} className="ml-auto flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-40"><Square className="w-3 h-3" /> Stop</button>
+              <button disabled={busy} onClick={stop} className="ml-auto flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-40" title={status === "spawning" ? "Stop generating; the personas already written are kept" : "Skip the rest of the gathering and compose the plan from what is on file"}><Square className="w-3 h-3" /> {status === "spawning" ? "Stop & keep" : "Stop & plan now"}</button>
             )}
           </div>
 
@@ -276,26 +297,25 @@ export default function PopulationStudioPage() {
         </main>
 
         {/* Dials */}
-        <aside className="hidden xl:flex h-full flex-col border-l border-border/40">
-          <div className="flex-1 overflow-y-auto p-4">
+        <aside className="min-h-0 flex flex-col border-t xl:border-t-0 xl:border-l border-border/40 order-3">
+          <div className="flex-1 min-h-0 xl:overflow-y-auto p-4">
             <ErrorBoundary label="The dials">
               <DialsPanel constraints={constraints} onChange={setConstraints} count={count} onCount={setCount} mode={mode} onMode={setMode} disabled={active} />
+              {constraints.derived_from_research && Object.keys(constraints.derived_from_research).length > 0 && (
+                <p className="text-[10px] text-emerald-300/80 mt-3 leading-relaxed"><span className="font-semibold">Set from the research:</span> {Object.keys(constraints.derived_from_research).map((k) => k.replace(/_/g, " ")).join(", ")}. Move any dial to override it; Re-plan applies your change.</p>
+              )}
             </ErrorBoundary>
             <label className="flex items-start gap-2 mt-3 cursor-pointer">
               <input type="checkbox" checked={!!constraints.skip_questions} disabled={active} onChange={(e) => setConstraints((c) => ({ ...c, skip_questions: e.target.checked }))} className="mt-0.5 accent-[hsl(var(--primary))]" />
               <span className="text-[10px] text-muted-foreground leading-relaxed">Don&apos;t ask me clarifying questions — plan on the defaults.</span>
             </label>
           </div>
-          <div className="p-4 border-t border-border/40 space-y-2 shrink-0">
-            {(!build || ["complete", "error", "stopped"].includes(status || "")) && (
-              <button disabled={busy || !session} onClick={startBuild} className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm disabled:opacity-50">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} {build ? "Start a new plan" : "Detect & plan"} · {count} agents
-              </button>
-            )}
-            {build && status === "awaiting_review" && (
+          <div className="p-4 border-t border-border/40 space-y-2 shrink-0 sticky bottom-0 bg-background xl:static">
+            {/* A plan on file can always be built — after review, after a stop, or again after a build. */}
+            {build?.plan && !active && (
               <>
                 <button disabled={busy || regenerating.size > 0} onClick={approve} className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm disabled:opacity-50">
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Approve &amp; build {keptCount} agents · {mode === "pro" ? "Pro" : "Fast"}
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {status === "complete" ? "Rebuild" : "Approve & build"} {keptCount} agents · {mode === "pro" ? "Pro" : "Fast"}
                 </button>
                 <button disabled={busy} onClick={replan} className="w-full flex items-center justify-center gap-2 border border-border/60 text-muted-foreground hover:text-foreground font-medium py-2 rounded-xl text-xs disabled:opacity-50">
                   <RefreshCw className="w-3.5 h-3.5" /> Re-plan with these dials (keeps accepted)
@@ -304,8 +324,27 @@ export default function PopulationStudioPage() {
                 {mode === "pro" && keptCount > 150 && <p className="text-[10px] text-amber-300/90 text-center">Pro writes {keptCount} personas on Sonnet — several minutes and real API spend.</p>}
               </>
             )}
-            {build && status === "clarifying" && <p className="text-[11px] text-muted-foreground text-center">Answer the questions in the middle to continue.</p>}
-            {active && <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> {STATUS_LABEL[status || ""]}</p>}
+            {(!build || (!active && status !== "clarifying")) && (
+              <button disabled={busy || !session} onClick={startBuild} className={`w-full flex items-center justify-center gap-2 font-semibold rounded-xl disabled:opacity-50 ${build?.plan ? "border border-border/60 text-muted-foreground hover:text-foreground py-2 text-xs" : "bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 text-sm"}`}>
+                {busy && !build?.plan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className={build?.plan ? "w-3.5 h-3.5" : "w-4 h-4"} />} {build ? "Start a new plan from scratch" : "Detect & plan"} · {count} agents
+              </button>
+            )}
+            {build && status === "clarifying" && (
+              <>
+                <p className="text-[11px] text-muted-foreground text-center">Answer the questions in the middle, or</p>
+                <button disabled={busy} onClick={() => answer({}, true)} className="w-full flex items-center justify-center gap-2 border border-border/60 text-muted-foreground hover:text-foreground font-medium py-2 rounded-xl text-xs disabled:opacity-50">
+                  <Check className="w-3.5 h-3.5" /> Skip the questions &amp; plan now
+                </button>
+              </>
+            )}
+            {active && build && (
+              <>
+                <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> {STATUS_LABEL[status || ""]}</p>
+                <button disabled={busy} onClick={stop} className="w-full flex items-center justify-center gap-2 border border-red-500/30 text-red-300 hover:bg-red-500/10 font-medium py-2 rounded-xl text-xs disabled:opacity-50">
+                  <Square className="w-3.5 h-3.5" /> {status === "spawning" ? "Stop — keep the agents written so far" : "Stop — plan now with what we have"}
+                </button>
+              </>
+            )}
           </div>
         </aside>
       </div>

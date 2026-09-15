@@ -108,7 +108,9 @@ export default function SourcesPanel(p: Props) {
             <span className="text-muted-foreground leading-snug">
               {brief
                 ? <>Evidence brief · <span className="text-foreground/85">{groups.length} stakeholder group{groups.length === 1 ? "" : "s"}</span>{typeof brief.overall_for_pct === "number" && <> · {brief.overall_for_pct}% for / {brief.overall_against_pct}% against / {brief.overall_mixed_pct}% mixed</>}</>
-                : researchActive ? "Research still running on the Ingest tab — the brief lands when it finishes"
+                : run?.status === "stopping" || run?.status === "finalising" ? "Research is finishing — the brief lands in a moment"
+                : researchActive ? "Research still running on the Ingest tab — the brief lands when it finishes (or press Stop there to use what it has)"
+                : run ? `Research ${run.status} without a brief. The plan will use the knowledge graph, statistics and your dials.`
                 : "No evidence brief yet. Run research on the Ingest tab for real stakeholder groups and quotes."}
             </span>
           </div>

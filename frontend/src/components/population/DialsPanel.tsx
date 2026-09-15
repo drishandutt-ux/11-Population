@@ -34,11 +34,16 @@ interface Props {
   disabled?: boolean;
 }
 
-function Row({ label, value, children, color = "text-foreground" }: { label: string; value: string; children: React.ReactNode; color?: string }) {
+function FromResearch({ basis }: { basis?: string }) {
+  if (!basis) return null;
+  return <span className="text-[9px] px-1 rounded border border-emerald-500/30 text-emerald-300/90 ml-1.5" title={basis}>from research</span>;
+}
+
+function Row({ label, value, children, color = "text-foreground", basis }: { label: string; value: string; children: React.ReactNode; color?: string; basis?: string }) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[11px]">
-        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground">{label}<FromResearch basis={basis} /></span>
         <span className={`font-semibold tabular-nums ${color}`}>{value}</span>
       </div>
       {children}
@@ -46,10 +51,10 @@ function Row({ label, value, children, color = "text-foreground" }: { label: str
   );
 }
 
-function Dial({ label, value, onChange, lo, hi, color, disabled }: { label: string; value: number; onChange: (v: number) => void; lo: string; hi: string; color: string; disabled?: boolean }) {
+function Dial({ label, value, onChange, lo, hi, color, disabled, basis }: { label: string; value: number; onChange: (v: number) => void; lo: string; hi: string; color: string; disabled?: boolean; basis?: string }) {
   const moved = value !== 5;
   return (
-    <Row label={label} value={moved ? `${value}/10` : "auto"} color={moved ? color : "text-muted-foreground/60"}>
+    <Row label={label} value={moved ? `${value}/10` : "auto"} color={moved ? color : "text-muted-foreground/60"} basis={basis}>
       <input type="range" min={0} max={10} step={1} value={value} disabled={disabled} onChange={(e) => onChange(+e.target.value)} className={`w-full ${color.replace("text-", "accent-")} cursor-pointer h-1.5`} />
       <div className="flex justify-between text-[9px] text-muted-foreground/50"><span>{lo}</span><span>{hi}</span></div>
     </Row>
@@ -79,6 +84,7 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
   const setDemo = (patch: Partial<NonNullable<PopulationConstraints["demographics"]>>) => set({ demographics: { ...demo, ...patch } });
   const setSent = (patch: Partial<NonNullable<PopulationConstraints["sentiment"]>>) => set({ sentiment: { ...sent, ...patch } });
   const mood = sent.mood ?? { for: 40, against: 35, mixed: 25 };
+  const from = c.derived_from_research ?? {};
 
   return (
     <div className="space-y-4">
@@ -112,7 +118,7 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Demographics</span>
           <span className="text-[10px] text-muted-foreground/50 ml-auto">who they are</span>
         </div>
-        <Row label="Age range" value={`${demo.age_min ?? 18} – ${demo.age_max ?? 75}`} color="text-sky-400">
+        <Row label="Age range" value={`${demo.age_min ?? 18} – ${demo.age_max ?? 75}`} color="text-sky-400" basis={from.age_range || from.age_skew}>
           <div className="flex items-center gap-2">
             <input type="number" min={10} max={100} value={demo.age_min ?? 18} disabled={disabled} onChange={(e) => setDemo({ age_min: Math.min(+e.target.value || 10, (demo.age_max ?? 75) - 1) })} className="w-14 bg-muted/50 border border-border rounded-lg px-2 py-1 text-[11px] text-foreground focus:outline-none" />
             <input type="range" min={10} max={100} value={demo.age_max ?? 75} disabled={disabled} onChange={(e) => setDemo({ age_max: Math.max(+e.target.value, (demo.age_min ?? 18) + 1) })} className="flex-1 accent-sky-500 cursor-pointer h-1.5" />
@@ -124,11 +130,11 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
             ))}
           </div>
         </Row>
-        <Row label="Women" value={`${gender.female}%`} color="text-pink-400">
+        <Row label="Women" value={`${gender.female}%`} color="text-pink-400" basis={from.gender}>
           <input type="range" min={0} max={100} step={5} value={gender.female} disabled={disabled} onChange={(e) => { const f = +e.target.value; const other = gender.other; setDemo({ gender: { female: f, male: Math.max(0, 100 - f - other), other } }); }} className="w-full accent-pink-500 cursor-pointer h-1.5" />
           <div className="flex justify-between text-[9px] text-muted-foreground/50"><span>men {gender.male}%</span><span>non-binary {gender.other}%</span></div>
         </Row>
-        <Row label="Where they live" value={demo.regions?.length ? `${demo.regions.length} place${demo.regions.length > 1 ? "s" : ""}` : "from the evidence"} color={demo.regions?.length ? "text-sky-400" : "text-muted-foreground/60"}>
+        <Row label="Where they live" value={demo.regions?.length ? `${demo.regions.length} place${demo.regions.length > 1 ? "s" : ""}` : "from the evidence"} color={demo.regions?.length ? "text-sky-400" : "text-muted-foreground/60"} basis={from.regions}>
           <input
             value={(demo.regions ?? []).join(", ")}
             disabled={disabled}
@@ -138,9 +144,9 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
           />
         </Row>
         <div className="grid grid-cols-3 gap-1.5">
-          <div><p className="text-[10px] text-muted-foreground mb-1">Settlement</p><Select disabled={disabled} value={demo.urban_rural ?? "mixed"} onChange={(v) => setDemo({ urban_rural: v as any })} options={[["mixed", "mixed"], ["urban", "urban"], ["suburban", "suburban"], ["rural", "rural"]]} /></div>
-          <div><p className="text-[10px] text-muted-foreground mb-1">Income</p><Select disabled={disabled} value={demo.income ?? "mixed"} onChange={(v) => setDemo({ income: v as any })} options={[["mixed", "mixed"], ["low", "low"], ["middle", "middle"], ["high", "high"]]} /></div>
-          <div><p className="text-[10px] text-muted-foreground mb-1">Education</p><Select disabled={disabled} value={demo.education ?? "mixed"} onChange={(v) => setDemo({ education: v as any })} options={[["mixed", "mixed"], ["secondary", "secondary"], ["degree", "degree"], ["postgraduate", "postgrad"]]} /></div>
+          <div><p className="text-[10px] text-muted-foreground mb-1">Settlement<FromResearch basis={from.urban_rural} /></p><Select disabled={disabled} value={demo.urban_rural ?? "mixed"} onChange={(v) => setDemo({ urban_rural: v as any })} options={[["mixed", "mixed"], ["urban", "urban"], ["suburban", "suburban"], ["rural", "rural"]]} /></div>
+          <div><p className="text-[10px] text-muted-foreground mb-1">Income<FromResearch basis={from.income} /></p><Select disabled={disabled} value={demo.income ?? "mixed"} onChange={(v) => setDemo({ income: v as any })} options={[["mixed", "mixed"], ["low", "low"], ["middle", "middle"], ["high", "high"]]} /></div>
+          <div><p className="text-[10px] text-muted-foreground mb-1">Education<FromResearch basis={from.education} /></p><Select disabled={disabled} value={demo.education ?? "mixed"} onChange={(v) => setDemo({ education: v as any })} options={[["mixed", "mixed"], ["secondary", "secondary"], ["degree", "degree"], ["postgraduate", "postgrad"]]} /></div>
         </div>
         <input value={demo.notes ?? ""} disabled={disabled} onChange={(e) => setDemo({ notes: e.target.value })} placeholder="Anything else about who they are (optional)" className="w-full bg-muted/50 border border-border rounded-lg px-2 py-1.5 text-[11px] text-foreground placeholder-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50" />
       </div>
@@ -154,7 +160,7 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
         </div>
         <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={sent.follow_evidence !== false} disabled={disabled} onChange={(e) => setSent({ follow_evidence: e.target.checked })} className="mt-0.5 accent-[hsl(var(--primary))]" />
-          <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Follow the evidence.</span> Let the observed for / against split set the mood. Untick to impose your own.</span>
+          <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Follow the evidence.</span> Let the observed for / against split set the mood. Untick to impose your own.{from.mood && <FromResearch basis={from.mood} />}</span>
         </label>
         {sent.follow_evidence === false && (
           <div className="space-y-2 pl-1">
@@ -167,11 +173,11 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
             <div className="flex justify-between text-[11px]"><span className="text-muted-foreground">Mixed / undecided</span><span className="text-slate-400 font-semibold">{mood.mixed}% (auto)</span></div>
           </div>
         )}
-        <Dial label="Emotional temperature" value={sent.temperature ?? 5} onChange={(v) => setSent({ temperature: v })} lo="calm" hi="heated" color="text-rose-400" disabled={disabled} />
-        <Dial label="Trust in institutions" value={sent.trust_in_institutions ?? 5} onChange={(v) => setSent({ trust_in_institutions: v })} lo="cynical" hi="trusting" color="text-blue-400" disabled={disabled} />
-        <Dial label="Price sensitivity" value={sent.price_sensitivity ?? 5} onChange={(v) => setSent({ price_sensitivity: v })} lo="price-blind" hi="every penny" color="text-teal-400" disabled={disabled} />
-        <Dial label="Comfort with technology" value={sent.tech_savviness ?? 5} onChange={(v) => setSent({ tech_savviness: v })} lo="wary" hi="early adopter" color="text-cyan-400" disabled={disabled} />
-        <Dial label="Openness to change" value={sent.openness_to_change ?? 5} onChange={(v) => setSent({ openness_to_change: v })} lo="set in their ways" hi="restless" color="text-amber-400" disabled={disabled} />
+        <Dial label="Emotional temperature" value={sent.temperature ?? 5} onChange={(v) => setSent({ temperature: v })} lo="calm" hi="heated" color="text-rose-400" disabled={disabled} basis={from.temperature} />
+        <Dial label="Trust in institutions" value={sent.trust_in_institutions ?? 5} onChange={(v) => setSent({ trust_in_institutions: v })} lo="cynical" hi="trusting" color="text-blue-400" disabled={disabled} basis={from.trust_in_institutions} />
+        <Dial label="Price sensitivity" value={sent.price_sensitivity ?? 5} onChange={(v) => setSent({ price_sensitivity: v })} lo="price-blind" hi="every penny" color="text-teal-400" disabled={disabled} basis={from.price_sensitivity} />
+        <Dial label="Comfort with technology" value={sent.tech_savviness ?? 5} onChange={(v) => setSent({ tech_savviness: v })} lo="wary" hi="early adopter" color="text-cyan-400" disabled={disabled} basis={from.tech_savviness} />
+        <Dial label="Openness to change" value={sent.openness_to_change ?? 5} onChange={(v) => setSent({ openness_to_change: v })} lo="set in their ways" hi="restless" color="text-amber-400" disabled={disabled} basis={from.openness_to_change} />
       </div>
 
       {/* Stance + humanity */}

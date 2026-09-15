@@ -102,8 +102,8 @@ async def decide_segment(session_id: str, build_id: str, segment_id: str, body: 
     bld = await _owned_build(session_id, build_id, user, db)
     if body.decision not in ("accept", "reject", "edit"):
         raise HTTPException(status_code=400, detail="decision must be accept, reject or edit")
-    if bld.status not in ("awaiting_review", "planning"):
-        raise HTTPException(status_code=409, detail=f"Build is {bld.status}; segments can only be reviewed while the plan awaits review")
+    if bld.status not in ("awaiting_review", "planning", "stopped", "complete", "error"):
+        raise HTTPException(status_code=409, detail=f"Build is {bld.status}; segments can only be reviewed once the plan exists")
     out = await builder.decide_segment(build_id, segment_id, body.decision, body.edits, body.reason)
     return builder.build_payload(out)
 
@@ -120,7 +120,7 @@ async def replan(session_id: str, build_id: str, body: ReplanRequest, user: Auth
 @router.post("/sessions/{session_id}/population/builds/{build_id}/approve")
 async def approve(session_id: str, build_id: str, body: ApproveRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     bld = await _owned_build(session_id, build_id, user, db)
-    if bld.status not in ("awaiting_review", "complete", "error"):
+    if bld.status not in ("awaiting_review", "complete", "error", "stopped"):
         raise HTTPException(status_code=409, detail=f"Build is {bld.status}; approve once the plan is ready for review")
     if not bld.plan or not any(sg.get("decision") != "rejected" for sg in (bld.plan.get("segments") or [])):
         raise HTTPException(status_code=400, detail="No segments to build from")

@@ -162,7 +162,10 @@ def api_client(tmp_path, monkeypatch):
         if "target_population" in props:
             return {"topic": "tram line", "decision": "use it", "geography": "United Kingdom", "target_population": "Greater Manchester residents",
                     "population_kind": "citizens", "segments_hinted": ["commuters", "retirees"], "demographic_signals": [{"attribute": "region", "value": "GM", "source": "query"}],
-                    "sentiment_signals": ["mostly for"], "gaps": ["fares"], "confidence": 70}
+                    "sentiment_signals": ["mostly for"], "gaps": ["fares"], "confidence": 70,
+                    "dials": {"age_min": 22, "age_max": 64, "age_skew": "unknown", "female_pct": 52, "regions": ["Greater Manchester"], "urban_rural": "urban",
+                              "income": "unknown", "education": "unknown", "for_pct": 55, "against_pct": 25, "temperature": 6, "trust_in_institutions": -1,
+                              "price_sensitivity": -1, "tech_savviness": -1, "openness_to_change": -1, "basis": "Census and the consultation"}}
         if "questions" in props:
             return {"questions": [{"id": "q1", "text": "Which boroughs?", "why": "changes the regions", "suggested": ["all ten", "Salford only"], "default": "all ten"}], "note": "can proceed"}
         if "segments" in props:
@@ -179,7 +182,7 @@ def api_client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(builder, "analyze", fake_analyze)
 
-    async def fake_generate(session_id, query, segments, constraints, *, mode="fast", evidence_text="", on_progress=None):
+    async def fake_generate(session_id, query, segments, constraints, *, mode="fast", evidence_text="", on_progress=None, should_stop=None):
         from app.services.agents.profiles import AgentProfile
         out = []
         for seg in segments:
@@ -333,3 +336,89 @@ def test_plan_generation_runs_segments_concurrently_and_tags_them(monkeypatch):
     # Two segments' first batches overlap in time: three calls total, two rounds, not three.
     assert elapsed < 0.55, elapsed
     assert ("Seg A", 12, 12) in progress and ("Seg B", 5, 5) in progress
+
+
+# ── dials from research ───────────────────────────────────────────────────────
+
+def test_detected_dials_fill_only_the_dials_left_on_default():
+    analyst = {"demographics": {"age_min": 18, "age_max": 75, "regions": ["Bristol"], "income": "mixed"},
+               "sentiment": {"follow_evidence": True, "temperature": 5, "price_sensitivity": 9}}
+    detected = {"age_min": 25, "age_max": 54, "age_skew": "younger", "female_pct": 47, "regions": ["Bath"], "urban_rural": "urban",
+                "income": "middle", "education": "unknown", "for_pct": 41, "against_pct": 30, "temperature": 6, "trust_in_institutions": -1,
+                "price_sensitivity": 3, "tech_savviness": 7, "openness_to_change": -1, "basis": "Census 2021 and the YouGov tracker"}
+    c, set_from = builder.apply_detected_dials(analyst, detected)
+    d, se = c["demographics"], c["sentiment"]
+    assert (d["age_min"], d["age_max"], d["age_skew"]) == (25, 54, "younger")
+    assert d["gender"] == {"female": 47, "male": 51, "other": 2}
+    assert d["regions"] == ["Bristol"]                       # the analyst named a place — theirs wins
+    assert d["urban_rural"] == "urban" and d["income"] == "middle" and "education" not in d
+    assert se["follow_evidence"] is False and se["mood"] == {"for": 41, "against": 30, "mixed": 29}
+    assert se["temperature"] == 6 and se["tech_savviness"] == 7
+    assert se["price_sensitivity"] == 9                       # moved by the analyst — untouched
+    assert "trust_in_institutions" not in se and "openness_to_change" not in se
+    assert set(set_from) == {"age_range", "age_skew", "gender", "urban_rural", "income", "mood", "temperature", "tech_savviness"}
+    assert all(v == "Census 2021 and the YouGov tracker" for v in set_from.values())
+    line = builder.dials_log_line(set_from, c)
+    assert "ages 25-54" in line and "47% women" in line and "mood 41% for / 30% against" in line
+
+
+def test_detected_dials_can_be_revised_on_a_later_detect_but_never_over_an_analyst_move():
+    first, _ = builder.apply_detected_dials({}, {"age_min": 30, "age_max": 60, "female_pct": 60, "for_pct": -1, "against_pct": -1, "basis": "b"})
+    assert first["demographics"]["age_min"] == 30 and "age_range" in first["derived_from_research"]
+    second, _ = builder.apply_detected_dials(first, {"age_min": 20, "age_max": 40, "female_pct": -1, "for_pct": -1, "against_pct": -1, "basis": "b2"})
+    assert second["demographics"]["age_min"] == 20                     # research-set dials may be revised by research
+    assert second["demographics"]["gender"]["female"] == 60            # unknown this time → the earlier value stays
+    assert builder.apply_detected_dials({"sentiment": {"temperature": 8}}, {"temperature": 2, "for_pct": -1, "against_pct": -1})[0]["sentiment"]["temperature"] == 8
+    assert builder.apply_detected_dials({}, None) == ({}, {})
+
+
+def test_generation_stops_between_batches_and_keeps_what_was_written(monkeypatch):
+    from app.core.config import get_settings
+
+    async def fake_rag(session_id):
+        return session_id
+
+    async def fake_query(rag, query, mode="hybrid"):
+        return "kg"
+
+    monkeypatch.setattr(agent_factory, "get_lightrag", fake_rag)
+    monkeypatch.setattr(agent_factory, "query_rag", fake_query)
+    monkeypatch.setattr(get_settings(), "spawn_concurrency", 1)
+    flag = {"stop": False}
+    calls = {"n": 0}
+
+    class _Resp:
+        def __init__(self, text): self.content = [type("B", (), {"text": text})()]
+
+    async def fake_create(client, **kw):
+        import json as _j
+        calls["n"] += 1
+        n = int(kw["messages"][0]["content"].split("Create ")[1].split(" ")[0])
+        flag["stop"] = True  # the analyst presses Stop while the first batch is in flight
+        return _Resp(_j.dumps([{"name": f"P {calls['n']} {k}", "age": 20 + k, "role": f"r {calls['n']} {k}", "background": "b", "stance": "neutral",
+                               "correlation": "c", "personality": [], "debate_style": "d", "humanity": 0, "dials": {}} for k in range(n)]))
+
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", fake_create)
+    segs = [{"id": "a", "name": "A", "count": 25, "stance": "neutral", "demographics": {}, "sentiment": {}}]
+    profiles = asyncio.new_event_loop().run_until_complete(
+        agent_factory.generate_agents_from_plan("s", "q", segs, {}, should_stop=lambda: flag["stop"]))
+    assert 0 < len(profiles) <= 10 and calls["n"] == 1   # the first batch is kept, the other two never start
+
+
+def test_http_stop_during_clarify_plans_with_what_we_have_and_can_be_approved(api_client):
+    client, Session, calls = api_client
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
+    b = client.post(f"/api/v1/sessions/{sid}/population/builds", json={"mode": "fast", "count": 10, "constraints": {}, "sources": {"quant": False}}).json()
+    b = _wait(client, sid, lambda b: b["status"] == "clarifying")
+    r = client.post(f"/api/v1/sessions/{sid}/population/builds/{b['id']}/stop")
+    assert r.json()["stopped"] is True
+    b = _wait(client, sid, lambda b: b["status"] == "awaiting_review")
+    assert b["plan"] and sum(s["count"] for s in b["plan"]["segments"]) == 10
+    assert any("planning now with what has been gathered" in e["message"] for e in b["log"])
+    # the dials detect proposed are on the build, marked as research-set
+    assert b["constraints"]["derived_from_research"]
+    # a stopped-then-planned build approves like any other
+    r = client.post(f"/api/v1/sessions/{sid}/population/builds/{b['id']}/approve", json={})
+    assert r.status_code == 200
+    b = _wait(client, sid, lambda b: b["status"] == "complete")
+    assert len(client.get(f"/api/v1/sessions/{sid}/agents").json()) == 10
