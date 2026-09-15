@@ -735,6 +735,7 @@ export type PopulationSources = { quant: boolean; quant_sources: string[]; quant
 /** The dials. Anything left at its default ("mixed", 5, follow_evidence) is not imposed on the plan. */
 export type PopulationConstraints = {
   stance?: { direct: number; indirect: number; neutral: number; follow_plan?: boolean };
+  /** Legacy — the Studio ignores these: humanity is set per segment by its register (humanity_hint). */
   humanity?: number;
   humanity_coverage?: number;
   demographics?: {
@@ -784,6 +785,7 @@ export type PopulationSegment = {
   arguments: string[];
   evidence: string[];
   rationale: string;
+  /** The segment's register (expert | tempered | balanced | defensive | reactive) — sets its agents' humanity band. */
   humanity_hint?: string;
   decision: "proposed" | "accepted" | "rejected" | "edited";
   reason?: string | null;

@@ -3,20 +3,8 @@
 import { PopulationConstraints, SimMode } from "@/lib/api";
 import { Brain, Rocket, Heart, Users, SlidersHorizontal, MapPin, Thermometer } from "lucide-react";
 
-/** Humanity register bands (mirrors backend agent_runner._humanity_band). */
-export function humanityBand(h: number): { label: string; desc: string; color: string } {
-  if (h >= 70) return { label: "Reactive", desc: "pure gut — judges and reacts, logic ignored", color: "text-rose-400" };
-  if (h >= 60) return { label: "Defensive", desc: "defends their feelings with logic at any cost", color: "text-orange-400" };
-  if (h >= 50) return { label: "Balanced", desc: "50 / 50 feeling and logic", color: "text-amber-400" };
-  if (h >= 20) return { label: "Tempered", desc: "a bit sentimental, logic stays in control", color: "text-teal-400" };
-  if (h > 0) return { label: "Mostly logical", desc: "barely sentimental", color: "text-sky-400" };
-  return { label: "Off", desc: "pure analytical experts", color: "text-muted-foreground" };
-}
-
 export const DEFAULT_CONSTRAINTS: PopulationConstraints = {
   stance: { direct: 33, indirect: 33, neutral: 34, follow_plan: true },
-  humanity: 50,
-  humanity_coverage: 60,
   demographics: { age_min: 18, age_max: 75, age_skew: "even", gender: { female: 50, male: 48, other: 2 }, regions: [], urban_rural: "mixed", income: "mixed", education: "mixed", notes: "" },
   sentiment: { follow_evidence: true, mood: { for: 40, against: 35, mixed: 25 }, temperature: 5, trust_in_institutions: 5, price_sensitivity: 5, tech_savviness: 5, openness_to_change: 5 },
   profile_query: "",
@@ -74,9 +62,6 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
   const st = c.stance ?? DEFAULT_CONSTRAINTS.stance!;
   const demo = c.demographics ?? DEFAULT_CONSTRAINTS.demographics!;
   const sent = c.sentiment ?? DEFAULT_CONSTRAINTS.sentiment!;
-  const humanity = c.humanity ?? 50;
-  const coverage = c.humanity_coverage ?? 60;
-  const hBand = humanityBand(humanity);
   const neutral = Math.max(0, 100 - st.direct - st.indirect);
   const gender = demo.gender ?? { female: 50, male: 48, other: 2 };
 
@@ -201,19 +186,15 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
             <div className="flex justify-between text-[11px]"><span className="text-muted-foreground">Neutral</span><span className="text-slate-400 font-semibold">{neutral}% (auto)</span></div>
           </div>
         )}
-        <div className="border-t border-border/40 pt-3 space-y-2">
+        <div className="border-t border-border/40 pt-3 space-y-1.5">
           <div className="flex items-center gap-2">
             <Heart className="w-3.5 h-3.5 text-pink-400" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Humanity</span>
             <span className="text-[10px] text-muted-foreground/50 ml-auto">feeling over logic</span>
           </div>
-          <Row label="Intensity" value={humanity === 0 ? "Off" : `${humanity}% · ${hBand.label}`} color={hBand.color}>
-            <input type="range" min={0} max={100} step={5} value={humanity} disabled={disabled} onChange={(e) => set({ humanity: +e.target.value })} className="w-full accent-pink-500 cursor-pointer h-1.5" />
-            {humanity > 0 && <p className="text-[10px] text-muted-foreground/70">{hBand.desc}</p>}
-          </Row>
-          <Row label="Coverage" value={`${coverage}% of agents`} color="text-pink-300">
-            <input type="range" min={0} max={100} step={5} value={coverage} disabled={disabled || humanity === 0} onChange={(e) => set({ humanity_coverage: +e.target.value })} className="w-full accent-pink-400 cursor-pointer h-1.5" />
-          </Row>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Set <span className="text-foreground/80">per segment</span> by the plan: each group&apos;s <span className="text-pink-300">register</span> (expert → reactive) decides how analytical or emotional its people argue. Review it on the segment cards — edit a segment to change it.
+          </p>
         </div>
       </div>
     </div>

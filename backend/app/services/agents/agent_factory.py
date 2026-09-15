@@ -448,8 +448,48 @@ def _salvage_objects(raw: str) -> list[dict]:
 
 _DEMOGRAPHIC_KEYS = ("gender", "region", "income_band", "education", "occupation")
 
+# The segment's register (humanity_hint) IS the humanity dial in the Studio path. Each hint
+# maps to a band of the 0-100 humanity scale (matching agent_runner._humanity_band boundaries)
+# and every persona in the segment gets a value inside that band, varied per person. The old
+# population-wide humanity/humanity_coverage constraints are ignored here: the plan decides,
+# segment by segment, how analytical or emotional its people are.
+HINT_HUMANITY_BANDS: dict[str, tuple[int, int]] = {
+    "expert": (0, 15),
+    "tempered": (25, 45),
+    "balanced": (50, 58),
+    "defensive": (60, 68),
+    "reactive": (72, 90),
+}
 
-def _segment_block(seg: dict, n: int, humanized: int) -> str:
+_HINT_REGISTER_DESC = {
+    "expert": "analytical and evidence-led — they weigh specifics and argue from what they know",
+    "tempered": "logic leads, but feeling clearly colours their tone and emphasis",
+    "balanced": "feeling and logic pull equally — gut and reason both audible",
+    "defensive": "feeling decides first; logic is recruited to defend it",
+    "reactive": "pure gut — snap judgments, no analysis, feeling over being right",
+}
+
+
+def hint_band(hint: Optional[str]) -> tuple[int, int]:
+    return HINT_HUMANITY_BANDS.get((hint or "").strip().lower(), HINT_HUMANITY_BANDS["tempered"])
+
+
+def finalise_segment_dicts(seg: dict, dicts: list[dict]) -> None:
+    """Pin what the plan fixed on each model-written persona: the stance, the segment name,
+    and a humanity value inside the segment's register band (the model varies it per person;
+    the band is guaranteed here)."""
+    lo, hi = hint_band(seg.get("humanity_hint"))
+    for d in dicts:
+        d["stance"] = seg.get("stance", d.get("stance"))
+        d["_segment"] = seg.get("name", "")
+        try:
+            h = int(d.get("humanity") or lo)
+        except (TypeError, ValueError):
+            h = lo
+        d["humanity"] = max(lo, min(hi, h))
+
+
+def _segment_block(seg: dict, n: int) -> str:
     """The segment spec as the persona prompt sees it. Everything the plan fixed is stated as
     a hard constraint so ten personas from one segment are ten different people from the SAME
     slice of the population, not ten variations on the topic's obvious archetype."""
@@ -476,7 +516,7 @@ Arguments this group actually makes (use their phrasing, vary it per person):
 {args}
 {('Evidence behind this segment:' + chr(10) + evidence) if evidence else ''}
 Why this segment exists: {seg.get('rationale', '')}
-Humanity: exactly {humanized} of the {n} personas are high-humanity everyday people (set "humanity" to the value given below); the rest are analytical (humanity 0).
+Register: {(seg.get('humanity_hint') or 'tempered')} — {_HINT_REGISTER_DESC.get((seg.get('humanity_hint') or 'tempered').lower(), _HINT_REGISTER_DESC['tempered'])}. Set every persona's "humanity" to a value between {hint_band(seg.get('humanity_hint'))[0]} and {hint_band(seg.get('humanity_hint'))[1]}, varied per person — not all the same number.
 """
 
 
@@ -517,14 +557,14 @@ def _constraints_block(constraints: dict) -> str:
     return "POPULATION-WIDE DIALS (set by the analyst; honour them):\n" + "\n".join(lines) + "\n"
 
 
-def _plan_prompt(query: str, seg: dict, n: int, humanized: int, humanity: int, constraints: dict, kg_summary: str, evidence_text: str, taken: list[dict]) -> str:
+def _plan_prompt(query: str, seg: dict, n: int, constraints: dict, kg_summary: str, evidence_text: str, taken: list[dict]) -> str:
     doc = (constraints or {}).get("doc_context") or ""
     doc_block = f"\nSURVEY / PROFILE DATA (translate to dial values where a respondent fits this segment):\n{doc[:SURVEY_CHAR_LIMIT]}\n" if doc else ""
     return f"""Create {n} distinct personas for a synthetic population that will debate and be surveyed on this topic:
 
 QUERY: {query}
 
-{_segment_block(seg, n, humanized)}
+{_segment_block(seg, n)}
 {_constraints_block(constraints)}
 KNOWLEDGE CONTEXT:
 {kg_summary[:2000]}
@@ -533,7 +573,7 @@ KNOWLEDGE CONTEXT:
 Rules:
 - All {n} are members of THIS segment: same stance, inside the age range, matching the gender split, living in the places named, with occupations and circumstances that fit. Within that, make them {n} clearly DIFFERENT people — different names, jobs, life situations, reasons for their view, and ways of talking.
 - Give each a specific, textured background (a real-sounding life, a concrete stake) and a believable reason to hold the view they hold. Some are sharp, some are muddled; some calm, some heated — match the segment's temperature on average.
-- High-humanity personas (humanity = {humanity}) react from feeling, keep trust.credibility and trust.authority LOW, and run 2-3 sentiment dials hot (7-10). Analytical personas (humanity = 0) are measured and evidence-led.
+- "humanity" places each persona on a feeling-vs-logic scale (0 pure analyst, 100 pure gut); keep every value inside the segment's register band stated above. Below 50: measured and evidence-led. 50 and above: feeling-led — keep trust.credibility and trust.authority LOW and run 2-3 sentiment dials hot (7-10). At 70+ they are plain-spoken, can be biased or inconsistent, and value how they FEEL over being correct.
 - SENTIMENT IS PRIMARY: give every persona a distinct emotional signature with a couple of dominant emotions running hot and others clearly low. Use the full 0-10 range across the batch; do not cluster on 5.
 {_taken_block_text(taken)}
 Return a JSON array with exactly {n} objects. Each object MUST have ALL of these keys:
@@ -612,6 +652,7 @@ async def generate_agents_from_plan(
     evidence_text: str = "",
     on_progress=None,
     should_stop=None,
+    on_note=None,
 ) -> list[AgentProfile]:
     """Build the roster segment by segment from an approved Population Studio plan.
 
@@ -626,15 +667,12 @@ async def generate_agents_from_plan(
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     sem = asyncio.Semaphore(max(1, settings.spawn_concurrency))
 
-    humanity = max(0, min(100, int((constraints or {}).get("humanity") or 0)))
-    coverage = max(0, min(100, int((constraints or {}).get("humanity_coverage") or 0)))
-
     all_dicts: list[dict] = []
     done_total = 0
     used_colors: list[str] = []
     profiles: list[AgentProfile] = []
 
-    async def _batch(seg: dict, n: int, h: int, taken: list[dict], label: str) -> list[dict]:
+    async def _batch(seg: dict, n: int, taken: list[dict], label: str) -> list[dict]:
         if should_stop and should_stop():
             return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
         async with sem:
@@ -642,7 +680,7 @@ async def generate_agents_from_plan(
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
                     system=_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, h, humanity, constraints, kg_summary, evidence_text, taken)}],
+                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, kg_summary, evidence_text, taken)}],
                 )
                 return _parse_agents_json(response.content[0].text)
             except Exception as e:  # noqa: BLE001
@@ -656,24 +694,7 @@ async def generate_agents_from_plan(
         count = int(seg.get("count") or 0)
         if count <= 0:
             return []
-        # How many of this segment are high-humanity: the population-wide coverage, nudged by
-        # the segment's own register hint so an "expert" segment stays mostly analytical.
-        hint = (seg.get("humanity_hint") or "").lower()
-        seg_cov = coverage if humanity > 0 else 0
-        if hint == "expert":
-            seg_cov = min(seg_cov, 20)
-        elif hint in ("defensive", "reactive"):
-            seg_cov = max(seg_cov, 70) if humanity > 0 else 0
-        humanized_total = round(count * seg_cov / 100)
         sizes = [_BATCH_SIZE] * (count // _BATCH_SIZE) + ([count % _BATCH_SIZE] if count % _BATCH_SIZE else [])
-        # Spread the humanized slots across the batches.
-        hum_per_batch: list[int] = []
-        left = humanized_total
-        for i, n in enumerate(sizes):
-            share = round(humanized_total * n / count) if i < len(sizes) - 1 else left
-            share = max(0, min(n, share, left))
-            hum_per_batch.append(share)
-            left -= share
         seg_dicts: list[dict] = []
 
         async def _note():
@@ -686,47 +707,58 @@ async def generate_agents_from_plan(
         # rest concurrently. Segments themselves run side by side (bounded by the semaphore) —
         # they are different slices of the population, so they rarely collide, and the
         # duplicate repair below catches the few that do.
-        first = await _batch(seg, sizes[0], hum_per_batch[0], seg_dicts, "spawn:plan")
+        first = await _batch(seg, sizes[0], seg_dicts, "spawn:plan")
         seg_dicts.extend(first)
         done_total += len(first)
         await _note()
         if len(sizes) > 1:
-            async def _rest(n: int, h: int):
+            async def _rest(n: int):
                 nonlocal done_total
-                r = await _batch(seg, n, h, list(seg_dicts), "spawn:plan")
+                r = await _batch(seg, n, list(seg_dicts), "spawn:plan")
                 seg_dicts.extend(r)
                 done_total += len(r)
                 await _note()
-            await asyncio.gather(*[_rest(n, h) for n, h in zip(sizes[1:], hum_per_batch[1:])])
-        for d in seg_dicts:
-            d["stance"] = seg.get("stance", d.get("stance"))
-            d["_segment"] = seg.get("name", "")
+            await asyncio.gather(*[_rest(n) for n in sizes[1:]])
+        finalise_segment_dicts(seg, seg_dicts)
         return seg_dicts
 
     for part in await asyncio.gather(*[_segment(seg) for seg in segments]):
         all_dicts.extend(part)
 
     all_dicts, dupes = split_duplicates(all_dicts)
-    if dupes:
+    if dupes and not (should_stop and should_stop()):
         print(f"[agent_factory] {len(dupes)} duplicate persona(s) across plan batches — regenerating")
+        if on_note:
+            await on_note(f"{len(dupes)} persona(s) came out too alike across segments — regenerating them", "Same name, or the same job at a similar age. Segments are written side by side and cannot see each other's rosters.")
         by_seg: dict[str, list[dict]] = {}
         for d in dupes:
             by_seg.setdefault(d.get("_segment", ""), []).append(d)
         seg_by_name = {s.get("name", ""): s for s in segments}
-        for name, ds in by_seg.items():
+        snapshot = list(all_dicts)
+
+        async def _repair(name: str, ds: list[dict]) -> list[dict]:
             seg = seg_by_name.get(name)
             if not seg:
-                continue
-            h = sum(1 for d in ds if int(d.get("humanity") or 0) > 0)
+                return []
             try:
-                repl = await _batch(seg, len(ds), h, all_dicts, "spawn:plan:repair")
-                for d in repl:
-                    d["stance"] = seg.get("stance", d.get("stance"))
-                    d["_segment"] = name
-                all_dicts, _ = split_duplicates(all_dicts + repl)
+                repl = await _batch(seg, len(ds), snapshot, "spawn:plan:repair")
+                finalise_segment_dicts(seg, repl)
+                return repl
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] plan duplicate repair failed: {type(e).__name__}: {e}")
-                all_dicts = uniquify_names(all_dicts + ds)
+                return []
+
+        # Repairs run side by side (one call per segment that had a clash), then one last
+        # dedup; anything still colliding is renamed rather than lost.
+        repaired = await asyncio.gather(*[_repair(n, ds) for n, ds in by_seg.items()])
+        all_dicts, still = split_duplicates(all_dicts + [d for r in repaired for d in r])
+        if len(all_dicts) < len(snapshot) + len(dupes):
+            missing = len(snapshot) + len(dupes) - len(all_dicts)
+            all_dicts = uniquify_names(all_dicts + (still + dupes)[:missing])
+        if on_note:
+            await on_note(f"Roster complete: {len(all_dicts)} distinct personas", None)
+    elif dupes:
+        all_dicts = uniquify_names(all_dicts + dupes)
 
     if not all_dicts and should_stop and should_stop():
         return []

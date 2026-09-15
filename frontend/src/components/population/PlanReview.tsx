@@ -14,6 +14,15 @@ interface Props {
 
 const MOOD: Record<string, string> = { for: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", against: "bg-red-500/15 text-red-300 border-red-500/30", mixed: "bg-amber-500/15 text-amber-300 border-amber-500/30", uncertain: "bg-slate-500/15 text-slate-300 border-slate-500/30" };
 
+/** The segment's register — how its agents argue. Mirrors backend HINT_HUMANITY_BANDS. */
+const REGISTER: Record<string, { desc: string; cls: string }> = {
+  expert: { desc: "analytical, evidence-first", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+  tempered: { desc: "logic leads, feeling colours it", cls: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
+  balanced: { desc: "gut and reason 50/50", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  defensive: { desc: "feeling decides, logic defends it", cls: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
+  reactive: { desc: "pure gut — snap judgments", cls: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
+};
+
 function toLabel(s: string) { return s.replace(/_/g, " "); }
 
 function EditForm({ seg, onSave, onCancel, busy }: { seg: PopulationSegment; onSave: (edits: Partial<PopulationSegment>) => void; onCancel: () => void; busy: boolean }) {
@@ -30,6 +39,7 @@ function EditForm({ seg, onSave, onCancel, busy }: { seg: PopulationSegment; onS
   const [education, setEducation] = useState(d.education || "mixed");
   const [mood, setMood] = useState(se.mood);
   const [temp, setTemp] = useState(se.temperature ?? 5);
+  const [register, setRegister] = useState(seg.humanity_hint || "tempered");
   const [desc, setDesc] = useState(seg.description);
   const inp = "w-full bg-muted/50 border border-border rounded-lg px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50";
   const lab = "text-[10px] text-muted-foreground mb-0.5 block";
@@ -48,10 +58,16 @@ function EditForm({ seg, onSave, onCancel, busy }: { seg: PopulationSegment; onS
         <div><label className={lab}>Education</label><select className={inp} value={education} onChange={(e) => setEducation(e.target.value)}>{["secondary", "some college", "degree", "postgraduate", "mixed"].map((o) => <option key={o} value={o}>{o}</option>)}</select></div>
         <div><label className={lab}>Temperature {temp}/10</label><input type="range" min={0} max={10} value={temp} onChange={(e) => setTemp(+e.target.value)} className="w-full accent-rose-500 h-1.5 mt-2" /></div>
       </div>
+      <div>
+        <label className={lab}>Register — how this group argues</label>
+        <select className={inp} value={register} onChange={(e) => setRegister(e.target.value)}>
+          {Object.entries(REGISTER).map(([k, r]) => <option key={k} value={k}>{k} — {r.desc}</option>)}
+        </select>
+      </div>
       <div><label className={lab}>Where they live (comma separated)</label><input className={inp} value={regions} onChange={(e) => setRegions(e.target.value)} /></div>
       <div className="flex gap-2 justify-end">
         <button disabled={busy} onClick={onCancel} className="text-[11px] px-3 py-1.5 rounded-lg border border-border/60 text-muted-foreground hover:text-foreground">Cancel</button>
-        <button disabled={busy} onClick={() => onSave({ name, description: desc, share_pct: share, stance, demographics: { age_min: Math.min(ageMin, ageMax), age_max: Math.max(ageMin, ageMax), gender_female_pct: female, regions: regions.split(",").map((s) => s.trim()).filter(Boolean), income_band: income, education }, sentiment: { mood, temperature: temp, top_emotions: se.top_emotions || [] } })} className="flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25 disabled:opacity-40">
+        <button disabled={busy} onClick={() => onSave({ name, description: desc, share_pct: share, stance, humanity_hint: register, demographics: { age_min: Math.min(ageMin, ageMax), age_max: Math.max(ageMin, ageMax), gender_female_pct: female, regions: regions.split(",").map((s) => s.trim()).filter(Boolean), income_band: income, education }, sentiment: { mood, temperature: temp, top_emotions: se.top_emotions || [] } })} className="flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25 disabled:opacity-40">
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save &amp; accept
         </button>
       </div>
@@ -77,6 +93,7 @@ function SegmentCard({ seg, onDecide, busy, readOnly }: { seg: PopulationSegment
             <span className="text-sm font-semibold text-foreground">{seg.name}</span>
             <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded border ${stanceColor(seg.stance)}`}>{seg.stance}</span>
             <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded border ${MOOD[se.mood] || MOOD.mixed}`}>{se.mood}</span>
+            <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded border ${(REGISTER[seg.humanity_hint || "tempered"] || REGISTER.tempered).cls}`} title={`Register: how this group argues — ${(REGISTER[seg.humanity_hint || "tempered"] || REGISTER.tempered).desc}`}>{seg.humanity_hint || "tempered"}</span>
             {rejected && <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/30 text-red-300">{busy ? "regenerating…" : "rejected"}</span>}
             {accepted && <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-300">{seg.decision}</span>}
             {seg.replaced && !rejected && <span className="text-[10px] text-muted-foreground/60">replaces “{seg.replaced}”</span>}

@@ -1,4 +1,5 @@
 import json
+import random
 from typing import Optional
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
@@ -35,7 +36,7 @@ _HUMANITY_DIRECTIVES = {
         # answers all opened "Part of me feels… but rationally…" because this line used to
         # supply exactly that sentence.
         "- Weigh how you FEEL about this and what the LOGIC says in equal measure, and make both visible in how you put it — in your own words, not a formula.\n"
-        "- Neither side fully wins — you sit in the tension between gut and reason and let both visibly shape your take."
+        "- When gut and reason agree, COMMIT — plant your flag without hedging. Balanced means both voices are audible, not forever torn; only sit in the tension when they genuinely pull apart."
     ),
     "defensive": (
         "\n\nYOUR REGISTER — FEELINGS DECIDE, LOGIC DEFENDS (this overrides the analytical guidance above):\n"
@@ -309,7 +310,7 @@ Your relationship to the topic: {agent.correlation}
 
 Your personality: {personality}
 Your debate style: {agent.debate_style}
-Your stance type: {agent.stance} ({"a domain expert" if agent.stance == "direct" else "an adjacent-field perspective" if agent.stance == "indirect" else "a neutral/skeptical observer"})"""
+Your stance type: {agent.stance} ({"a first-hand stake — you live this decision or work inside it; that makes you experienced, not necessarily an expert" if agent.stance == "direct" else "an adjacent-field perspective" if agent.stance == "indirect" else "a neutral/skeptical observer"})"""
 
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
 
@@ -357,6 +358,30 @@ PRO MODE — write at full depth:
 - Sound like a distinct human being, not a balanced panel summary."""
 
 
+# How each band uses what it knows. Real people don't recite briefings: the further from
+# "expert", the looser the grip on facts — and nobody, expert included, may name the machinery
+# ("knowledge graph", "context", "the evidence provided"), which prod posts were doing verbatim.
+_KNOWLEDGE_USE = {
+    "expert": "Draw on what you know where it genuinely helps and cite specifics the way a well-informed person would.",
+    "tempered": "Use a specific or two from what you know where it fits, in your own words — you're talking, not reporting.",
+    "balanced": "At most one or two loose specifics from what you know, in your own words. Real people don't recite figures.",
+    "defensive": "Only reach for a fact when it defends how you feel — one, loosely remembered, is plenty.",
+    "reactive": "Don't cite anything. React to the idea, not the data.",
+}
+
+# Per-post length, drawn at random per band so a thread reads like a real one — mixed lengths,
+# not fifty essays. (Weights, then the directive text.)
+_LENGTH_CHOICES: dict[str, list[tuple[str, float]]] = {
+    "expert": [("2-3 solid paragraphs", 0.55), ("one tight paragraph", 0.45)],
+    "tempered": [("1-2 paragraphs", 0.55), ("3-4 conversational sentences", 0.45)],
+    "balanced": [("one short paragraph", 0.5), ("2-3 sentences", 0.5)],
+    "defensive": [("one short, charged paragraph", 0.4), ("2-3 blunt sentences", 0.6)],
+    "reactive": [("one or two short sentences", 1.0)],
+}
+
+_BAND_MAX_TOKENS = {"expert": 600, "tempered": 500, "balanced": 420, "defensive": 350, "reactive": 150}
+
+
 async def generate_post(
     agent: SpawnedAgent,
     query: str,
@@ -369,12 +394,17 @@ async def generate_post(
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     is_pro = mode == "pro"
+    band = _humanity_band(getattr(agent, "humanity", 0) or 0)
+
+    knowledge_block = f"""Things you happen to know about this topic — from reading, conversations, the news. This is YOUR OWN knowledge; never call it "context", "evidence", "the knowledge graph" or anything that sounds like it was handed to you:
+{kg_context[:4000]}
+
+{_KNOWLEDGE_USE[band]}"""
 
     if post_type == "reply" and reply_to_content:
         user_msg = f"""The original topic/query: {query}
 
-Knowledge graph context:
-{kg_context[:4000]}
+{knowledge_block}
 
 Thread discussion so far:
 {thread_context[-3000:]}
@@ -386,8 +416,7 @@ Write your reply as {agent.name}. Be direct, specific, and engage with what was 
     elif post_type == "debate":
         user_msg = f"""The original topic/query: {query}
 
-Knowledge graph context:
-{kg_context[:4000]}
+{knowledge_block}
 
 Thread discussion so far:
 {thread_context[-3000:]}
@@ -395,12 +424,11 @@ Thread discussion so far:
 You disagree with the following comment and want to challenge it:
 "{reply_to_content}"
 
-Write a pointed, substantive rebuttal as {agent.name}. Be respectful but firm."""
+Write a pointed rebuttal as {agent.name} — in your register: an analyst rebuts with evidence, an everyday person just tells them why they're wrong."""
     else:
         user_msg = f"""The original topic/query: {query}
 
-Knowledge graph context:
-{kg_context[:4000]}
+{knowledge_block}
 
 Thread discussion so far:
 {thread_context[-2000:]}
@@ -410,13 +438,19 @@ Share your perspective on this topic as {agent.name}. Start a new thread or add 
     system_prompt = _build_system_prompt(agent)
     if is_pro:
         system_prompt += _PRO_POST_DIRECTIVE
+    length = random.choices([c for c, _ in _LENGTH_CHOICES[band]], weights=[w for _, w in _LENGTH_CHOICES[band]])[0]
+    system_prompt += f"\n\nLength for THIS post: {length}. Real threads vary — say what you have to say and stop; never pad to fill space."
+
+    max_tokens = _BAND_MAX_TOKENS[band]
+    if is_pro and band in ("expert", "tempered"):
+        max_tokens = 850
 
     response = await tracked_messages_create(
         client,
         session_id=getattr(agent, "session_id", None),
         label="post",
         model=settings.agent_model(mode),
-        max_tokens=850 if is_pro else 600,
+        max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}],
     )

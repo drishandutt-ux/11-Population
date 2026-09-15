@@ -100,14 +100,29 @@ def test_constraints_summary_only_states_moved_dials():
 def test_plan_prompt_pins_the_segment_and_the_dials():
     seg = {"name": "Commuting parents", "description": "who", "stance": "direct", "share_pct": 40,
            "demographics": {"age_min": 28, "age_max": 45, "gender_female_pct": 60, "regions": ["Greater Manchester"], "income_band": "middle", "education": "mixed", "occupations": ["teacher"]},
-           "sentiment": {"mood": "for", "temperature": 7, "top_emotions": ["hope", "anxiety"]}, "arguments": ["the bus never comes"], "evidence": ["61% aged 25-44 (ONS)"], "rationale": "r"}
-    cons = {"demographics": {"regions": ["Greater Manchester"], "age_min": 25, "age_max": 50}, "sentiment": {"price_sensitivity": 8}, "humanity": 60}
-    p = agent_factory._plan_prompt("Will they use a new tram line?", seg, 10, 4, 60, cons, "KG", "EVIDENCE", [{"name": "A B", "role": "x", "age": 30}])
+           "sentiment": {"mood": "for", "temperature": 7, "top_emotions": ["hope", "anxiety"]}, "arguments": ["the bus never comes"], "evidence": ["61% aged 25-44 (ONS)"], "rationale": "r",
+           "humanity_hint": "defensive"}
+    cons = {"demographics": {"regions": ["Greater Manchester"], "age_min": 25, "age_max": 50}, "sentiment": {"price_sensitivity": 8}}
+    p = agent_factory._plan_prompt("Will they use a new tram line?", seg, 10, cons, "KG", "EVIDENCE", [{"name": "A B", "role": "x", "age": 30}])
     assert "Commuting parents" in p and "Ages: 28 to 45" in p and "roughly 60% women" in p
-    assert "exactly 4 of the 10 personas are high-humanity" in p
+    assert "Register: defensive" in p and "between 60 and 68" in p
     assert "Everyone lives in: Greater Manchester" in p and "price sensitivity: 8/10" in p
     assert '"stance": "direct"' in p and "ALREADY IN THIS POPULATION" in p and "A B" in p
     assert '"gender"' in p and '"region"' in p and "DIALS INSTRUCTIONS" in p
+
+
+def test_segment_register_sets_the_humanity_band():
+    """The segment's humanity_hint IS the humanity dial: an unknown or missing hint falls back
+    to tempered, and every persona is clamped into its segment's band whatever the model wrote."""
+    assert agent_factory.hint_band("reactive") == (72, 90)
+    assert agent_factory.hint_band("Expert") == (0, 15)
+    assert agent_factory.hint_band(None) == agent_factory.hint_band("nonsense") == (25, 45)
+    lo, hi = agent_factory.HINT_HUMANITY_BANDS["balanced"]
+    seg = {"name": "S", "stance": "direct", "humanity_hint": "balanced"}
+    dicts = [{"humanity": 0}, {"humanity": 55}, {"humanity": 100}, {"humanity": "bad", "stance": "neutral"}]
+    agent_factory.finalise_segment_dicts(seg, dicts)
+    assert [d["humanity"] for d in dicts] == [lo, 55, hi, lo]
+    assert all(d["stance"] == "direct" and d["_segment"] == "S" for d in dicts)
 
 
 def test_profile_from_dict_keeps_demographics_and_segment():
@@ -182,7 +197,7 @@ def api_client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(builder, "analyze", fake_analyze)
 
-    async def fake_generate(session_id, query, segments, constraints, *, mode="fast", evidence_text="", on_progress=None, should_stop=None):
+    async def fake_generate(session_id, query, segments, constraints, *, mode="fast", evidence_text="", on_progress=None, should_stop=None, on_note=None):
         from app.services.agents.profiles import AgentProfile
         out = []
         for seg in segments:
@@ -422,3 +437,33 @@ def test_http_stop_during_clarify_plans_with_what_we_have_and_can_be_approved(ap
     assert r.status_code == 200
     b = _wait(client, sid, lambda b: b["status"] == "complete")
     assert len(client.get(f"/api/v1/sessions/{sid}/agents").json()) == 10
+
+
+def test_startup_marks_interrupted_runs_and_builds(api_client):
+    """A redeploy kills in-process tasks; their rows must not claim to be running afterwards
+    (prod showed "Research is finishing" for an hour after the task had died)."""
+    import asyncio as _a
+    from app.models.evidence import ResearchRun
+    from app.models.population import PopulationBuild
+    from app.core.recovery import recover_interrupted
+    client, Session, _ = api_client
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
+
+    async def seed():
+        async with Session() as db:
+            db.add(ResearchRun(id="r1", session_id=sid, status="finalising", question="q", sources=["web"]))
+            db.add(ResearchRun(id="r2", session_id=sid, status="complete", question="q", sources=["web"]))
+            db.add(PopulationBuild(id="b1", session_id=sid, status="spawning", plan={"segments": []}, log=[]))
+            db.add(PopulationBuild(id="b2", session_id=sid, status="awaiting_review", plan={"segments": []}, log=[]))
+            await db.commit()
+        return await recover_interrupted()
+
+    counts = _a.new_event_loop().run_until_complete(seed())
+    assert counts == {"research_runs": 1, "population_builds": 1}
+    st = client.get(f"/api/v1/sessions/{sid}/research").json()
+    assert st["run"]["status"] in ("interrupted", "complete")
+    b1 = client.get(f"/api/v1/sessions/{sid}/population/builds/b1").json()
+    assert b1["status"] == "stopped" and b1["log"][-1]["message"] == "Interrupted by a server restart" and "approved" in b1["log"][-1]["detail"]
+    assert client.get(f"/api/v1/sessions/{sid}/population/builds/b2").json()["status"] == "awaiting_review"
+    # a stopped build with a plan can still be approved
+    assert client.post(f"/api/v1/sessions/{sid}/population/builds/b1/approve", json={}).status_code == 400  # empty plan → nothing to build, but not a 409
