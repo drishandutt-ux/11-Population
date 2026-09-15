@@ -4,6 +4,15 @@ Everything is persisted as it happens (research_runs, research_queries, evidence
 mirrored to the session WebSocket so the Ingest tab fills live and a reload rebuilds the panel.
 Stop rules: judge satisfied, round/attempt caps, on-topic target, the budget (queries, pages,
 seconds), or a user Stop (status → 'stopping', checked between steps).
+
+Termination is guaranteed three ways (a prod run once outlived its 420s budget by an hour
+because a step hung where no budget check runs, and Stop was a silent no-op once the status
+said 'stopping'):
+- every external await is bounded (search, judges, frame, plan, brief, recommendations),
+  and the gathering loops as a whole sit under a hard wall-clock cap;
+- a second Stop press hard-cancels the task; Stop on a run whose task no longer exists
+  (a restart killed it) finalises the row directly instead of returning nothing;
+- a run whose row was deleted mid-flight (session deleted) stands down at the next save.
 """
 from __future__ import annotations
 
@@ -25,7 +34,8 @@ from .fetch_page import FetchedPage, fetch_page
 from .frame import build_frame, fallback_frame, frame_terms, freshness_of, stale_before, today_iso
 from .judge_social import judge_posts
 from .judge_web import WebItem, WebVerdict, heuristic_verdict, judge_web
-from .plan import plan_query
+from .judge_social import heuristic_judge
+from .plan import fallback_plan, plan_query
 from .reddit import ReadPost, reddit_comments, search_reddit
 from .search import SearchResult, get_search_provider
 from .search.provider import has_keyed_engine
@@ -42,6 +52,10 @@ SOCIAL_COMMENTS_PER_POST = int(os.environ.get("SOCIAL_COMMENTS_PER_POST", 10))
 RESEARCH_MAX_PAGES = int(os.environ.get("RESEARCH_MAX_PAGES", 80))
 RESEARCH_MAX_QUERIES = int(os.environ.get("RESEARCH_MAX_QUERIES", 20))
 RESEARCH_MAX_SECONDS = int(os.environ.get("RESEARCH_MAX_SECONDS", 420))
+# Hard wall-clock cap on the gathering loops as a whole — the between-steps budget checks
+# should always fire first; this is the guarantee when a step hangs where no check runs.
+RESEARCH_HARD_CAP_SECONDS = int(os.environ.get("RESEARCH_HARD_CAP_SECONDS", max(600, RESEARCH_MAX_SECONDS * 2)))
+SEARCH_TIMEOUT = int(os.environ.get("RESEARCH_SEARCH_TIMEOUT", 90))
 KG_INGEST_CONCURRENCY = 4
 
 _tasks: dict[str, asyncio.Task] = {}
@@ -104,11 +118,18 @@ async def start_research(session_id: str, question: str, sources: Optional[list[
     """Create a run and launch it in the background. Returns the queued run row."""
     sources = [s for s in (sources or ["web", "reddit"]) if s in ("web", "reddit")] or ["web"]
     async with dbm.AsyncSessionLocal() as db:
-        # One active run per session: stop an older one that is still going.
-        old = (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id, ResearchRun.status.in_(["queued", "running"])))).scalars().all()
+        # One active run per session: stop an older one that is still going. An older row whose
+        # task no longer exists (a restart killed it) is finalised outright, not left 'stopping'.
+        old = (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id, ResearchRun.status.in_(["queued", "running", "stopping"])))).scalars().all()
         for r in old:
-            r.status = "stopping"
-            _stop_flags[r.id] = True
+            t = _tasks.get(r.id)
+            if t and not t.done():
+                r.status = "stopping"
+                _stop_flags[r.id] = True
+            else:
+                r.status = "interrupted"
+                r.note = "Superseded by a new run; the old job was no longer running."
+                r.finished_at = _now()
         run = ResearchRun(id=str(uuid.uuid4()), session_id=session_id, status="queued", question=question, sources=sources,
                           budget={"max_queries": RESEARCH_MAX_QUERIES, "max_pages": RESEARCH_MAX_PAGES, "max_seconds": RESEARCH_MAX_SECONDS, "queries": 0, "pages": 0, "seconds": 0, "items": 0, "on_topic": 0},
                           frame=extra_frame)
@@ -121,15 +142,32 @@ async def start_research(session_id: str, question: str, sources: Optional[list[
 
 
 async def stop_research(session_id: str) -> Optional[str]:
+    """Stop the session's active run. Always does something: the first press asks the loop to
+    wind down; a press while already 'stopping' hard-cancels the task; a press on a run whose
+    task no longer exists (a restart killed it) finalises the row directly."""
     async with dbm.AsyncSessionLocal() as db:
-        run = (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id, ResearchRun.status.in_(["queued", "running"])).order_by(ResearchRun.started_at.desc()))).scalars().first()
+        run = (await db.execute(select(ResearchRun).where(ResearchRun.session_id == session_id, ResearchRun.status.in_(["queued", "running", "stopping"])).order_by(ResearchRun.started_at.desc()))).scalars().first()
         if not run:
             return None
+        run_id, was_stopping = run.id, run.status == "stopping"
+        task = _tasks.get(run_id)
+        if not task or task.done():
+            run.status = "stopped"
+            run.note = "Stopped. The job was no longer running (the server restarted while it was in flight); what was gathered is kept."
+            run.finished_at = _now()
+            await db.commit()
+            await _emit(session_id, {"type": "research_complete", "run_id": run_id, "status": "stopped", "note": run.note, "budget": run.budget or {}, "covered": run.covered or [], "recommendations": run.recommendations or []})
+            return run_id
         run.status = "stopping"
         await db.commit()
-        _stop_flags[run.id] = True
-    await _emit(session_id, {"type": "research_status", "run_id": run.id, "status": "stopping", "note": "Stopping — finishing the current step, then building the brief from what was gathered."})
-    return run.id
+    _stop_flags[run_id] = True
+    if was_stopping:
+        # Second press: the polite flag was already up — cancel the task outright.
+        task.cancel()
+        await _emit(session_id, {"type": "research_status", "run_id": run_id, "status": "stopping", "note": "Force-stopping now."})
+    else:
+        await _emit(session_id, {"type": "research_status", "run_id": run_id, "status": "stopping", "note": "Stopping — finishing the current step, then building the brief from what was gathered. Press Stop again to force-stop."})
+    return run_id
 
 
 async def latest_run(session_id: str) -> Optional[ResearchRun]:
@@ -174,6 +212,8 @@ class _Ctx:
         async with dbm.AsyncSessionLocal() as db:
             run = (await db.execute(select(ResearchRun).where(ResearchRun.id == self.run_id))).scalar_one_or_none()
             if not run:
+                # The run (or its whole session) was deleted while we worked — stand down.
+                _stop_flags[self.run_id] = True
                 return
             for k, v in fields.items():
                 setattr(run, k, v)
@@ -308,7 +348,7 @@ async def _web_loop(ctx: _Ctx):
             row = await _new_query(ctx, "web", q, round_no)
             t0 = time.time()
             try:
-                results: list[SearchResult] = await provider.search(q, {"max_results": WEB_RESULTS_PER_QUERY, "region": region})
+                results: list[SearchResult] = await asyncio.wait_for(provider.search(q, {"max_results": WEB_RESULTS_PER_QUERY, "region": region}), timeout=SEARCH_TIMEOUT)
                 fresh = [r for r in results if r.url not in ctx.seen_refs]
                 for r in fresh:
                     ctx.seen_refs.add(r.url)
@@ -406,7 +446,11 @@ async def _reddit_loop(ctx: _Ctx):
         if not fresh and "blocked" in note.lower():
             await _update_query(ctx, row, status="error", note=note[:300])
             break
-        verdict = await judge_posts(ctx.question, "reddit", q, tried, fresh, SOCIAL_MIN_ON_TOPIC, hints=list(ctx.hints), frame=ctx.frame, stale_before=before, session_id=ctx.session_id)
+        try:
+            verdict = await asyncio.wait_for(judge_posts(ctx.question, "reddit", q, tried, fresh, SOCIAL_MIN_ON_TOPIC, hints=list(ctx.hints), frame=ctx.frame, stale_before=before, session_id=ctx.session_id), timeout=90)
+        except Exception as e:  # noqa: BLE001
+            print(f"[research] reddit judge unavailable, using heuristic: {type(e).__name__}: {e}")
+            verdict = heuristic_judge(ctx.question, q, fresh, SOCIAL_MIN_ON_TOPIC, stale_before=before)
         for k, p in enumerate(fresh):
             v = verdict.verdicts[k] if k < len(verdict.verdicts) else None
             p.relevance = v.relevance if v else 0.0
@@ -463,11 +507,19 @@ async def _run(run_id: str, context: str = ""):
     await _emit(ctx.session_id, {"type": "research_started", "run_id": run_id, "question": ctx.question, "sources": ctx.sources})
     try:
         if not ctx.frame:
-            ctx.frame = await build_frame(ctx.question, ctx.session_id, context) or fallback_frame(ctx.question)
+            try:
+                ctx.frame = await asyncio.wait_for(build_frame(ctx.question, ctx.session_id, context), timeout=120) or fallback_frame(ctx.question)
+            except Exception as e:  # noqa: BLE001 — a frame we can't build must not sink the run (CancelledError is a BaseException and passes through)
+                print(f"[research] frame unavailable, using fallback: {type(e).__name__}: {e}")
+                ctx.frame = fallback_frame(ctx.question)
         await ctx.save(frame=ctx.frame)
         await _emit(ctx.session_id, {"type": "research_frame", "run_id": run_id, "frame": ctx.frame})
 
-        ctx.plan = await plan_query(ctx.question, ctx.frame, ctx.session_id)
+        try:
+            ctx.plan = await asyncio.wait_for(plan_query(ctx.question, ctx.frame, ctx.session_id), timeout=120)
+        except Exception as e:  # noqa: BLE001
+            print(f"[research] planner unavailable, using fallback plan: {type(e).__name__}: {e}")
+            ctx.plan = fallback_plan(ctx.question)
         if "web" not in ctx.sources:
             ctx.plan["web_queries"] = []
         if "reddit" not in ctx.sources:
@@ -480,7 +532,15 @@ async def _run(run_id: str, context: str = ""):
             loops.append(_web_loop(ctx))
         if ctx.plan.get("reddit_queries"):
             loops.append(_reddit_loop(ctx))
-        results = await asyncio.gather(*loops, return_exceptions=True)
+        # The budget checks between steps are the normal stop; the hard cap is the guarantee
+        # when a step hangs somewhere no check runs (a prod run once gathered for an hour
+        # against a 7-minute budget).
+        try:
+            results = await asyncio.wait_for(asyncio.gather(*loops, return_exceptions=True), timeout=RESEARCH_HARD_CAP_SECONDS)
+        except asyncio.TimeoutError:
+            results = []
+            ctx.budget["seconds"] = int(time.time() - ctx.t0)
+            print(f"[research] hard time cap hit ({RESEARCH_HARD_CAP_SECONDS}s) — gathering cancelled, finishing with what we have")
         for r in results:
             if isinstance(r, Exception):
                 print(f"[research] loop error: {type(r).__name__}: {r}")
@@ -493,14 +553,30 @@ async def _run(run_id: str, context: str = ""):
 
         from .brief import build_brief
         from .recommend import recommend_tools
-        brief = await build_brief(ctx.session_id, ctx.question, ctx.frame)
-        await ctx.save(brief=brief)
-        await _emit(ctx.session_id, {"type": "research_brief", "run_id": run_id, "brief": brief})
-        recs = await recommend_tools(ctx.session_id, ctx.question, ctx.frame, brief)
+        brief = None
+        try:
+            brief = await asyncio.wait_for(build_brief(ctx.session_id, ctx.question, ctx.frame), timeout=240)
+            await ctx.save(brief=brief)
+            await _emit(ctx.session_id, {"type": "research_brief", "run_id": run_id, "brief": brief})
+        except Exception as e:  # noqa: BLE001 — the run must land even briefless
+            print(f"[research] brief failed: {type(e).__name__}: {e}")
+        recs = []
+        try:
+            recs = await asyncio.wait_for(recommend_tools(ctx.session_id, ctx.question, ctx.frame, brief), timeout=120)
+        except Exception as e:  # noqa: BLE001
+            print(f"[research] recommendations failed: {type(e).__name__}: {e}")
         status = "stopped" if ctx.stopped() else "complete"
         note = ctx.over_budget() or ("stopped by user" if ctx.stopped() else "coverage satisfied or query plan exhausted")
         await ctx.save(recommendations=recs, status=status, note=note, finished_at=_now())
         await _emit(ctx.session_id, {"type": "research_complete", "run_id": run_id, "status": status, "note": note, "budget": ctx.budget, "covered": ctx.covered, "recommendations": recs})
+    except asyncio.CancelledError:
+        # A second Stop press cancelled the task outright. Land the row honestly; what was
+        # gathered is already persisted.
+        try:
+            await asyncio.shield(ctx.save(status="stopped", note="force-stopped by user", finished_at=_now()))
+            await asyncio.shield(_emit(ctx.session_id, {"type": "research_complete", "run_id": run_id, "status": "stopped", "note": "force-stopped by user", "budget": ctx.budget, "covered": ctx.covered, "recommendations": []}))
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         await ctx.save(status="error", note=f"{type(e).__name__}: {e}"[:500], finished_at=_now())

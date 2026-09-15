@@ -356,3 +356,58 @@ def test_session_without_auto_research_starts_nothing(client, monkeypatch):
     _mock_pipeline(monkeypatch)
     sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
     assert client.get(f"/api/v1/sessions/{sid}/research").json()["run"] is None
+
+
+def test_stop_finalises_an_orphan_run_whose_task_died(client, monkeypatch):
+    """A restart kills the research task but leaves the row saying 'stopping'/'running'; Stop used
+    to be a silent no-op forever (prod: 100 clicks, still 'stopping'). Now it lands the row."""
+    _mock_pipeline(monkeypatch)
+    from app.services.evidence import loop
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
+    import app.core.database as dbm
+    from app.models.evidence import ResearchRun
+
+    async def seed():
+        async with dbm.AsyncSessionLocal() as db:
+            db.add(ResearchRun(id="orphan1", session_id=sid, status="stopping", question="q", sources=["web"]))
+            await db.commit()
+    asyncio.new_event_loop().run_until_complete(seed())
+    assert "orphan1" not in loop._tasks
+    r = client.post(f"/api/v1/sessions/{sid}/research/stop").json()
+    assert r == {"stopped": True, "run_id": "orphan1"}
+    state = client.get(f"/api/v1/sessions/{sid}/research").json()
+    assert state["run"]["status"] == "stopped" and "no longer running" in state["run"]["note"]
+    # and a further stop is a clean no-op
+    assert client.post(f"/api/v1/sessions/{sid}/research/stop").json()["stopped"] is False
+
+
+def test_second_stop_press_force_cancels_a_stuck_step(client, monkeypatch):
+    """The polite flag is only read between steps; if a step hangs, the second Stop press must
+    cancel the task outright and land the run as 'stopped'."""
+    _mock_pipeline(monkeypatch)
+    from app.services.evidence import loop
+
+    async def hanging_comments(post, n):
+        await asyncio.sleep(30)   # a step that ignores the stop flag
+        return []
+
+    async def many_posts(q):
+        return [rd.ReadPost("p1", "Wind farm off Portland", author="u/a", author_title="r/Dorset", published_at="2026-08-05T00:00:00+00:00", url="https://www.reddit.com/r/Dorset/comments/p1/x/", likes=40, comment_count=12, payload={"title": "Wind farm", "body": "", "kind": "text"})], "Read 1"
+
+    async def on_topic(question, platform, query, tried, posts, min_on_topic, **kw):
+        return judge_social.JudgeResult([judge_social.PostVerdict(0.9, True) for _ in posts], len(posts), False, None, "ok", "test")
+
+    monkeypatch.setattr(loop, "reddit_comments", hanging_comments)
+    monkeypatch.setattr(loop, "search_reddit", many_posts)
+    monkeypatch.setattr(loop, "judge_posts", on_topic)
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": True}).json()["id"]
+    time.sleep(0.6)                                     # the comment fetch is now hanging
+    assert client.post(f"/api/v1/sessions/{sid}/research/stop").json()["stopped"] is True   # polite
+    assert client.post(f"/api/v1/sessions/{sid}/research/stop").json()["stopped"] is True   # force
+    state = None
+    for _ in range(50):
+        state = client.get(f"/api/v1/sessions/{sid}/research").json()
+        if state["run"]["status"] in ("stopped", "error"):
+            break
+        time.sleep(0.1)
+    assert state["run"]["status"] == "stopped" and state["run"]["note"] == "force-stopped by user"
