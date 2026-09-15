@@ -283,3 +283,53 @@ def test_facts_without_a_number_are_dropped():
         "junk",
     ])
     assert [f["value"] for f in kept] == ["752,560", "78%"]
+
+
+def test_plan_generation_runs_segments_concurrently_and_tags_them(monkeypatch):
+    """Segments are independent slices, so they must not queue behind each other: on prod a
+    50-agent, 8-segment build took ~1.5 min per segment when they ran one at a time."""
+    import time as _t
+    from app.core.config import get_settings
+
+    async def fake_rag(session_id):
+        return session_id
+
+    async def fake_query(rag, query, mode="hybrid"):
+        return "kg"
+
+    monkeypatch.setattr(agent_factory, "get_lightrag", fake_rag)
+    monkeypatch.setattr(agent_factory, "query_rag", fake_query)
+    monkeypatch.setattr(get_settings(), "spawn_concurrency", 8)
+    calls = []
+
+    class _Resp:
+        def __init__(self, text): self.content = [type("B", (), {"text": text})()]
+
+    async def fake_create(client, **kw):
+        user = kw["messages"][0]["content"]
+        seg = "A" if "Name: Seg A" in user else "B"
+        n = int(user.split("Create ")[1].split(" ")[0])
+        calls.append((seg, _t.monotonic()))
+        await asyncio.sleep(0.2)
+        import json as _j
+        return _Resp(_j.dumps([{"name": f"{seg} person {k} {len(calls)}", "age": 30 + k, "role": f"{seg} role {k} batch {len(calls)}", "background": "b", "stance": "neutral",
+                               "correlation": "c", "personality": [], "debate_style": "d", "humanity": 0, "gender": "female", "region": "Bristol", "dials": {}} for k in range(n)]))
+
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", fake_create)
+    progress = []
+
+    async def on_progress(name, done_seg, seg_count, done_total):
+        progress.append((name, done_seg, seg_count))
+
+    segs = [{"id": "a", "name": "Seg A", "count": 12, "stance": "direct", "demographics": {}, "sentiment": {}},
+            {"id": "b", "name": "Seg B", "count": 5, "stance": "neutral", "demographics": {}, "sentiment": {}}]
+    t0 = _t.monotonic()
+    profiles = asyncio.new_event_loop().run_until_complete(
+        agent_factory.generate_agents_from_plan("s", "q", segs, {"humanity": 50, "humanity_coverage": 60}, on_progress=on_progress))
+    elapsed = _t.monotonic() - t0
+    assert len(profiles) == 17
+    assert sum(1 for p in profiles if p.segment == "Seg A") == 12 and all(p.stance == "direct" for p in profiles if p.segment == "Seg A")
+    assert profiles[0].demographics["region"] == "Bristol"
+    # Two segments' first batches overlap in time: three calls total, two rounds, not three.
+    assert elapsed < 0.55, elapsed
+    assert ("Seg A", 12, 12) in progress and ("Seg B", 5, 5) in progress

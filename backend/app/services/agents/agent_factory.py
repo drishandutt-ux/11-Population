@@ -646,10 +646,13 @@ async def generate_agents_from_plan(
                 print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
                 return []
 
-    for seg in segments:
+    progress_lock = asyncio.Lock()
+
+    async def _segment(seg: dict) -> list[dict]:
+        nonlocal done_total
         count = int(seg.get("count") or 0)
         if count <= 0:
-            continue
+            return []
         # How many of this segment are high-humanity: the population-wide coverage, nudged by
         # the segment's own register hint so an "expert" segment stays mostly analytical.
         hint = (seg.get("humanity_hint") or "").lower()
@@ -669,23 +672,36 @@ async def generate_agents_from_plan(
             hum_per_batch.append(share)
             left -= share
         seg_dicts: list[dict] = []
-        # First batch alone so the rest can build around it; the rest concurrently.
-        first = await _batch(seg, sizes[0], hum_per_batch[0], all_dicts + seg_dicts, "spawn:plan")
-        seg_dicts.extend(first)
-        done_total += len(first)
-        if on_progress:
-            await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
-        if len(sizes) > 1:
-            rest = await asyncio.gather(*[_batch(seg, n, h, all_dicts + seg_dicts, "spawn:plan") for n, h in zip(sizes[1:], hum_per_batch[1:])])
-            for r in rest:
-                seg_dicts.extend(r)
-                done_total += len(r)
+
+        async def _note():
+            nonlocal done_total
+            async with progress_lock:
                 if on_progress:
                     await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
+
+        # Within a segment: the first batch alone so the rest can build around it, then the
+        # rest concurrently. Segments themselves run side by side (bounded by the semaphore) —
+        # they are different slices of the population, so they rarely collide, and the
+        # duplicate repair below catches the few that do.
+        first = await _batch(seg, sizes[0], hum_per_batch[0], seg_dicts, "spawn:plan")
+        seg_dicts.extend(first)
+        done_total += len(first)
+        await _note()
+        if len(sizes) > 1:
+            async def _rest(n: int, h: int):
+                nonlocal done_total
+                r = await _batch(seg, n, h, list(seg_dicts), "spawn:plan")
+                seg_dicts.extend(r)
+                done_total += len(r)
+                await _note()
+            await asyncio.gather(*[_rest(n, h) for n, h in zip(sizes[1:], hum_per_batch[1:])])
         for d in seg_dicts:
             d["stance"] = seg.get("stance", d.get("stance"))
             d["_segment"] = seg.get("name", "")
-        all_dicts.extend(seg_dicts)
+        return seg_dicts
+
+    for part in await asyncio.gather(*[_segment(seg) for seg in segments]):
+        all_dicts.extend(part)
 
     all_dicts, dupes = split_duplicates(all_dicts)
     if dupes:
