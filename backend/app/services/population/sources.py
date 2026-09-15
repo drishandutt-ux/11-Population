@@ -135,7 +135,7 @@ async def search_quant(
     query: str,
     source_keys: list[str],
     *,
-    run_id: Optional[str] = None,
+    build_id: Optional[str] = None,
     log: LogFn = _noop_log,
     region: Optional[str] = None,
     max_pages: int = QUANT_MAX_PAGES,
@@ -187,10 +187,12 @@ async def search_quant(
             n_facts = len(facts.get("facts") or [])
             relevant = bool(facts.get("relevant")) and n_facts > 0
             e = Evidence(
-                id=str(uuid.uuid4()), session_id=session_id, run_id=run_id, source_class="quant", source_ref=r.url,
+                # run_id is a foreign key to research_runs on Postgres, so a build id must not go
+                # there; the build that gathered the page is recorded in the payload instead.
+                id=str(uuid.uuid4()), session_id=session_id, run_id=None, source_class="quant", source_ref=r.url,
                 title=title, author=r.domain, published_at=(page.published_at if page else None) or r.published_at,
                 text=(facts.get("summary") or text[:600])[:600], full_text=(text[:20000] if text else None),
-                structured={"kind": "quant", "source": key, "source_label": src["label"], "provider": r.provider,
+                structured={"kind": "quant", "source": key, "source_label": src["label"], "provider": r.provider, "build_id": build_id,
                             "facts": facts.get("facts") or [], "demographic_signals": facts.get("demographic_signals") or [],
                             "fetched": bool(page)},
                 trust_tier="high", relevance=0.9 if relevant else 0.2, on_topic=relevant, query=query, attempt=1,

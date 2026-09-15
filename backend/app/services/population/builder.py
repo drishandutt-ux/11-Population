@@ -464,7 +464,7 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                     if _stopped(build_id):
                         return
                     chosen = [k for k in (q.get("sources") or keys) if k in keys] or keys
-                    rows = await search_quant(bld.session_id, question, q["query"], chosen, run_id=build_id, log=_lg, region=region)
+                    rows = await search_quant(bld.session_id, question, q["query"], chosen, build_id=build_id, log=_lg, region=region)
                     total += sum(1 for r in rows if r.on_topic)
                 await log(build_id, "gather", "ok" if total else "warn", f"{total} page(s) with usable statistics gathered" if total else "No usable statistics found — the plan will say so")
                 bld = await _load(build_id)
@@ -774,7 +774,7 @@ async def run_quant_search(session_id: str, query: str, source_keys: list[str], 
             await _emit(session_id, {"type": "population_log", "build_id": None, "entry": {"ts": datetime.utcnow().isoformat() + "Z", "stage": "gather", "level": level, "message": message, "detail": detail}})
 
     try:
-        rows = await search_quant(session_id, query, query, source_keys, run_id=(bld.id if bld else None), log=_lg)
+        rows = await search_quant(session_id, query, query, source_keys, build_id=(bld.id if bld else None), log=_lg)
         n = sum(1 for r in rows if r.on_topic)
         await _lg("ok" if n else "warn", f"Search done: {n} page(s) with usable statistics" if n else "Search done: nothing usable found", None)
     except Exception as e:  # noqa: BLE001
