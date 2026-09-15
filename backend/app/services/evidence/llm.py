@@ -121,19 +121,26 @@ async def analyze(
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     tool = {"name": "record", "description": "Record the analysis in the required structure.", "input_schema": schema}
-    resp = await tracked_messages_create(
-        client,
-        session_id=session_id,
-        label=label,
-        model=model or settings.model_fast,
-        max_tokens=max_tokens,
-        system=system,
-        tools=[tool],
-        tool_choice={"type": "tool", "name": "record"},
-        messages=[{"role": "user", "content": user}],
-    )
+    # A rich prompt can make the structured answer overrun its budget; a truncated tool-use
+    # JSON is unusable, so retry once with double the room before giving up.
+    budget = max_tokens
+    for _ in range(2):
+        resp = await tracked_messages_create(
+            client,
+            session_id=session_id,
+            label=label,
+            model=model or settings.model_fast,
+            max_tokens=budget,
+            system=system,
+            tools=[tool],
+            tool_choice={"type": "tool", "name": "record"},
+            messages=[{"role": "user", "content": user}],
+        )
+        if getattr(resp, "stop_reason", None) != "max_tokens":
+            break
+        budget = min(budget * 2, 16000)
     if getattr(resp, "stop_reason", None) == "max_tokens":
-        raise LlmTruncated(f"{label}: output hit max_tokens={max_tokens}; structured answer is incomplete")
+        raise LlmTruncated(f"{label}: output hit max_tokens={budget} even after a retry; structured answer is incomplete")
     for block in resp.content:
         if getattr(block, "type", "") == "tool_use":
             inp = block.input

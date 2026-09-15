@@ -639,7 +639,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
         kept_text = "\n\nSEGMENTS THE ANALYST ALREADY ACCEPTED (keep them exactly, same ids; add only what is missing around them):\n" + "\n".join(segment_for_prompt(k) for k in keep)
     user = (_inputs_text(inp, bld) + f"\n\nDetected:\n{bld.detected}\n\nTarget population size: {bld.target_count} agents." + kept_text)
     try:
-        p = await analyze(PLAN_SCHEMA, PLAN_SYSTEM, user, session_id=bld.session_id, label="population_plan", max_tokens=6000)
+        p = await analyze(PLAN_SCHEMA, PLAN_SYSTEM, user, session_id=bld.session_id, label="population_plan", max_tokens=9000)
     except Exception as e:  # noqa: BLE001
         from app.core.llm_errors import friendly_llm_error
         await log(build_id, "plan", "error", "Planning failed", friendly_llm_error(e))
