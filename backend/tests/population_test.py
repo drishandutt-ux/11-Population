@@ -270,3 +270,16 @@ def test_http_quant_search_requires_a_query(api_client):
     assert client.post(f"/api/v1/sessions/{sid}/population/quant-search", json={"query": "  ", "sources": ["ons"]}).status_code == 400
     cat = client.get("/api/v1/population/sources?geography=United%20Kingdom").json()
     assert "ons" in cat["default"] and any(s["key"] == "statista" for s in cat["sources"])
+
+
+def test_facts_without_a_number_are_dropped():
+    """Seen on prod: Statista's paywalled teaser gave '<redacted>' as the value."""
+    kept = sources.usable_facts([
+        {"statistic": "e-bike access, men", "value": "<redacted>"},
+        {"statistic": "e-bike access, women", "value": "not shown"},
+        {"statistic": "car club members", "value": "752,560"},
+        {"statistic": "unaware of subscriptions", "value": "78%"},
+        {"statistic": "blank", "value": ""},
+        "junk",
+    ])
+    assert [f["value"] for f in kept] == ["752,560", "78%"]

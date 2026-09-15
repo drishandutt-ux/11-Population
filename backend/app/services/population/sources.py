@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import uuid
 from datetime import datetime
 from typing import Awaitable, Callable, Optional
@@ -99,6 +100,23 @@ async def _noop_log(level: str, message: str, detail: Optional[str] = None) -> N
     return None
 
 
+_NO_VALUE = re.compile(r"^\s*$|redact|not (?:shown|available|visible)|paywall|n/?a$|unknown|\[.*\]$", re.I)
+
+
+def usable_facts(facts: list[dict]) -> list[dict]:
+    """Drop facts whose number never made it onto the page (Statista teasers hide the figure
+    and the model dutifully writes '<redacted>'). A fact without a value is not a fact."""
+    out = []
+    for f in facts:
+        if not isinstance(f, dict):
+            continue
+        value = str(f.get("value") or "").strip()
+        if _NO_VALUE.search(value) or not re.search(r"\d", value):
+            continue
+        out.append(f)
+    return out
+
+
 def quant_chunk(e: Evidence) -> Optional[str]:
     """Provenance-tagged knowledge-graph chunk for a quant evidence row."""
     st = e.structured or {}
@@ -184,7 +202,8 @@ async def search_quant(
             except Exception as e:  # noqa: BLE001
                 await log("warn", f"Fact extraction failed on {src['label']} page", str(e)[:160])
                 facts = {"relevant": False, "facts": [], "demographic_signals": [], "summary": "extraction failed"}
-            n_facts = len(facts.get("facts") or [])
+            facts["facts"] = usable_facts(facts.get("facts") or [])
+            n_facts = len(facts["facts"])
             relevant = bool(facts.get("relevant")) and n_facts > 0
             e = Evidence(
                 # run_id is a foreign key to research_runs on Postgres, so a build id must not go
