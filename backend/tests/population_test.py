@@ -152,6 +152,80 @@ def test_default_sources_follow_geography():
     assert "statista" in sources.default_sources("")
 
 
+# ── quant query decomposition ─────────────────────────────────────────────────
+
+def test_keyword_squeeze_strips_question_scaffolding_prices_and_parentheticals():
+    q = "Would London commuters switch to a £65/month e-bike subscription (theft cover and 24-hour swap included) instead of paying for TfL or driving?"
+    out = builder.keyword_squeeze(q)
+    assert "£" not in out and "(" not in out and "Would" not in out and "?" not in out
+    assert "London" in out and "e-bike" in out and len(out.split()) <= 7
+
+
+def test_looks_like_question_flags_questions_but_not_keyword_queries():
+    assert builder.looks_like_question("Would London commuters switch to an e-bike subscription?")
+    assert builder.looks_like_question("how many people cycle to work in the UK every single day")  # >7 words
+    assert not builder.looks_like_question("London travel to work mode share")
+    assert not builder.looks_like_question("")
+
+
+def test_adhoc_search_decomposes_a_question_into_fact_targets(monkeypatch):
+    """The Sources-panel box is prefilled with the session question; verbatim it matches nothing
+    on any publisher. It must be decomposed into per-publisher fact-target queries first."""
+    ran = []
+
+    async def fake_decompose(session_id, question, keys, context=""):
+        return [{"query": "London travel to work mode share", "sources": ["ons"], "why": "commute base rates"},
+                {"query": "UK e-bike market size", "sources": ["statista"], "why": "adoption"},
+                {"query": "not in ticked sources", "sources": ["gallup"], "why": "x"}]
+
+    async def fake_search_quant(session_id, question, query, source_keys, **kw):
+        ran.append((query, tuple(source_keys)))
+        return []
+
+    async def fake_load(build_id):
+        return None
+
+    monkeypatch.setattr(builder, "decompose_quant_query", fake_decompose)
+    monkeypatch.setattr(builder, "search_quant", fake_search_quant)
+    monkeypatch.setattr(builder, "latest_build", fake_load)
+
+    async def fake_emit(session_id, event):
+        return None
+
+    monkeypatch.setattr(builder, "_emit", fake_emit)
+    asyncio.new_event_loop().run_until_complete(
+        builder.run_quant_search("s1", "Would London commuters switch to a £65/month e-bike subscription?", ["ons", "statista"]))
+    assert ("London travel to work mode share", ("ons",)) in ran
+    assert ("UK e-bike market size", ("statista",)) in ran
+    # a target routed only to an unticked source falls back to the ticked ones
+    assert ("not in ticked sources", ("ons", "statista")) in ran
+
+
+def test_adhoc_search_runs_a_keyword_query_verbatim(monkeypatch):
+    """A terse analyst query is the analyst knowing what they want — no decomposition."""
+    ran = []
+
+    async def fake_search_quant(session_id, question, query, source_keys, **kw):
+        ran.append(query)
+        return []
+
+    async def fake_load(build_id):
+        return None
+
+    async def fake_emit(session_id, event):
+        return None
+
+    async def fail_decompose(*a, **k):  # pragma: no cover
+        raise AssertionError("must not decompose a keyword query")
+
+    monkeypatch.setattr(builder, "decompose_quant_query", fail_decompose)
+    monkeypatch.setattr(builder, "search_quant", fake_search_quant)
+    monkeypatch.setattr(builder, "latest_build", fake_load)
+    monkeypatch.setattr(builder, "_emit", fake_emit)
+    asyncio.new_event_loop().run_until_complete(builder.run_quant_search("s1", "London cycling mode share", ["ons"]))
+    assert ran == ["London cycling mode share"]
+
+
 # ── HTTP surface with the model stubbed ───────────────────────────────────────
 
 @pytest.fixture

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import traceback
 import uuid
 from datetime import datetime
@@ -72,13 +73,47 @@ DETECT_SYSTEM = """You are preparing to build a synthetic population that will d
 
 QUANT_QUERIES_SCHEMA = obj({
     "queries": arr(obj({
-        "query": s("Plain keyword query of 4-9 words a statistics site's search handles well, no operators"),
-        "sources": arr(s(), "Source keys to run it on, from the list given", 4),
-        "why": s("What population fact this should find"),
-    }), "1-3 queries that would pin down the population's size, demographics and attitudes", 3),
+        "query": s("3-7 keywords phrased the way that publisher titles its pages, no operators, no full questions"),
+        "sources": arr(s(), "Source keys most likely to hold this fact, from the list given", 4),
+        "why": s("The single population fact this query is meant to find"),
+    }), "2-5 queries, each hunting one base rate that helps describe the population", 5),
 })
 
-QUANT_QUERIES_SYSTEM = """You write search queries for statistics publishers (Statista, national statistics offices, polling houses) to find base rates for a synthetic population: how many people are in the group, their age and gender and regional distribution, incomes, adoption rates, and survey findings about attitudes. Prefer queries that name the country and the thing measured. No quotes, no site: operators."""
+QUANT_QUERIES_SYSTEM = """You decompose a research question into searches for statistics publishers. No publisher has a page answering the question itself — the goal is the base rates that help describe the population behind it: how many people are in each group, their age/gender/regional distribution, incomes, adoption or usage rates, and what surveys found about attitudes. Each query targets ONE measurable fact and is phrased the way that publisher titles its pages: official statistics offices (ONS, gov.uk, Census, Eurostat, OECD) use dataset noun phrases ("travel to work mode share London"); polling houses (YouGov, Gallup, Pew) use topic + poll/survey/attitudes ("cycling attitudes survey"); Statista uses market/usage phrases ("UK e-bike market size"). 3-7 words, name the country or region, never include prices, invented product or brand names, parentheses, quotes or site: operators. Route each query only to the sources likely to hold that kind of fact."""
+
+_QUANT_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "can", "could", "do", "does", "for", "from", "how",
+    "if", "in", "instead", "into", "is", "it", "many", "much", "of", "on", "or", "over", "paying", "per",
+    "should", "switch", "than", "that", "the", "their", "them", "they", "this", "to", "use", "was", "were",
+    "what", "when", "where", "which", "who", "why", "will", "with", "would",
+}
+
+
+def keyword_squeeze(text: str, max_words: int = 7) -> str:
+    """Mechanical fallback when the LLM cannot plan queries: strip a natural-language question
+    down to the content words a publisher's search can actually match (no prices, no
+    parentheticals, no question scaffolding)."""
+    text = re.sub(r"\([^)]*\)?", " ", text or "")
+    text = re.sub(r"[£$€]\s?\d[\d.,]*(?:\s*/\s*\w+|/\w+)?", " ", text)
+    words = re.findall(r"[A-Za-z][A-Za-z'-]+", text)
+    keep = [w for w in words if w.lower() not in _QUANT_STOPWORDS]
+    return " ".join(keep[:max_words])
+
+
+def looks_like_question(text: str) -> bool:
+    """A Sources-panel query that reads like a question needs decomposition first — publishers
+    index dataset titles, not questions."""
+    t = (text or "").strip()
+    return bool(t) and ("?" in t or len(t.split()) > 7
+                        or t.split()[0].lower() in ("would", "will", "how", "what", "why", "do", "does", "is", "are", "can", "could", "should"))
+
+
+async def decompose_quant_query(session_id: str, question: str, keys: list[str], context: str = "") -> list[dict]:
+    """One cheap call turning a question into per-publisher fact-target queries."""
+    qq = await analyze(QUANT_QUERIES_SCHEMA, QUANT_QUERIES_SYSTEM,
+                       f"Question: {question}\n{context}Sources available: {', '.join(keys)}",
+                       session_id=session_id, label="population_quant_plan", max_tokens=800)
+    return [q for q in qq.get("queries") or [] if q.get("query")]
 
 QUESTIONS_SCHEMA = obj({
     "questions": arr(obj({
@@ -573,22 +608,25 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 keys = list(src.get("quant_sources") or default_sources(detected.get("geography", "")))
                 await log(build_id, "gather", "info", f"Looking for base rates on {', '.join(keys)}")
                 try:
-                    qq = await analyze(QUANT_QUERIES_SCHEMA, QUANT_QUERIES_SYSTEM,
-                                       f"Question: {question}\nPopulation: {detected.get('target_population')} ({detected.get('geography')})\nSegments hinted: {'; '.join(detected.get('segments_hinted') or [])}\nSources available: {', '.join(keys)}",
-                                       session_id=bld.session_id, label="population_quant_plan", max_tokens=800)
-                    queries = [q for q in qq.get("queries") or [] if q.get("query")]
+                    context = f"Population: {detected.get('target_population')} ({detected.get('geography')})\nSegments hinted: {'; '.join(detected.get('segments_hinted') or [])}\n"
+                    queries = await decompose_quant_query(bld.session_id, question, keys, context)
+                    for q in queries:
+                        await log(build_id, "gather", "info", f"Fact target: {q.get('why') or q['query']}", f"“{q['query']}” → {', '.join(q.get('sources') or keys)}")
                 except Exception as e:  # noqa: BLE001
-                    await log(build_id, "gather", "warn", "Could not plan statistics queries; using the question itself", str(e)[:120])
-                    queries = [{"query": question[:80], "sources": keys}]
+                    await log(build_id, "gather", "warn", "Could not plan statistics queries; searching on the question's keywords", str(e)[:120])
+                    queries = [{"query": keyword_squeeze(question) or question[:60], "sources": keys}]
                 if src.get("quant_query"):
-                    queries.insert(0, {"query": src["quant_query"], "sources": keys, "why": "analyst's own query"})
+                    own = src["quant_query"]
+                    if looks_like_question(own):
+                        own = keyword_squeeze(own) or own
+                    queries.insert(0, {"query": own, "sources": keys, "why": "analyst's own query"})
                 region = "uk-en" if "uk" in (detected.get("geography") or "").lower() or "united kingdom" in (detected.get("geography") or "").lower() else None
 
                 async def _lg(level: str, message: str, detail: Optional[str]):
                     await log(build_id, "gather", level, message, detail)
 
                 total = 0
-                for q in queries[:3]:
+                for q in queries[:4]:
                     if _stopped(build_id):
                         return
                     chosen = [k for k in (q.get("sources") or keys) if k in keys] or keys
@@ -911,7 +949,28 @@ async def run_quant_search(session_id: str, query: str, source_keys: list[str], 
             await _emit(session_id, {"type": "population_log", "build_id": None, "entry": {"ts": datetime.utcnow().isoformat() + "Z", "stage": "gather", "level": level, "message": message, "detail": detail}})
 
     try:
-        rows = await search_quant(session_id, query, query, source_keys, build_id=(bld.id if bld else None), log=_lg)
+        # Publishers index dataset titles, not questions: a query that reads like a question is
+        # decomposed into per-publisher fact-target searches first (bits and pieces that help
+        # describe the population, not the question itself).
+        subqueries = [{"query": query, "sources": source_keys}]
+        if looks_like_question(query):
+            await _lg("info", "That reads like a question — breaking it into publisher searches", None)
+            try:
+                decomposed = await decompose_quant_query(session_id, query, source_keys)
+                if decomposed:
+                    subqueries = decomposed[:3]
+                    for q in subqueries:
+                        await _lg("info", f"Fact target: {q.get('why') or q['query']}", f"“{q['query']}” → {', '.join(q.get('sources') or source_keys)}")
+            except Exception as e:  # noqa: BLE001
+                squeezed = keyword_squeeze(query)
+                await _lg("warn", "Could not plan searches; searching on the question's keywords", f"“{squeezed}” — {str(e)[:100]}")
+                subqueries = [{"query": squeezed or query, "sources": source_keys}]
+        rows = []
+        from .sources import QUANT_MAX_PAGES
+        for q in subqueries:
+            chosen = [k for k in (q.get("sources") or source_keys) if k in source_keys] or source_keys
+            left = max(1, QUANT_MAX_PAGES - len(rows))
+            rows += await search_quant(session_id, query, q["query"], chosen, build_id=(bld.id if bld else None), log=_lg, max_pages=left)
         n = sum(1 for r in rows if r.on_topic)
         await _lg("ok" if n else "warn", f"Search done: {n} page(s) with usable statistics" if n else "Search done: nothing usable found", None)
     except Exception as e:  # noqa: BLE001
