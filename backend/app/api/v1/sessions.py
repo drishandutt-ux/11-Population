@@ -237,6 +237,9 @@ async def _apply_preset_task(session_id: str, agent_profiles: list[dict]):
                     energy=p["energy"],
                     avatar_color=p["avatar_color"],
                     dials=p.get("dials") or {},
+                    humanity=int(p.get("humanity") or 0),
+                    segment=p.get("segment") or None,
+                    demographics=p.get("demographics") or None,
                 )
                 db.add(agent_row)
                 await db.commit()
@@ -256,6 +259,9 @@ async def _apply_preset_task(session_id: str, agent_profiles: list[dict]):
                         "energy": p["energy"],
                         "avatar_color": p["avatar_color"],
                         "dials": p.get("dials") or {},
+                        "humanity": int(p.get("humanity") or 0),
+                        "segment": p.get("segment") or None,
+                        "demographics": p.get("demographics") or {},
                     },
                     "index": i,
                     "total": total,

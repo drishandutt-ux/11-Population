@@ -67,13 +67,22 @@ def segments_for(agent: SpawnedAgent) -> dict:
     dials = agent.dials or {}
     commercial = dials.get("commercial", {}) if isinstance(dials, dict) else {}
     stance = agent.stance.value if hasattr(agent.stance, "value") else str(agent.stance)
-    return {
+    out = {
         "stance": stance,
         "age_band": _age_band(agent.age or 30),
         "humanity_band": _humanity_band(getattr(agent, "humanity", 0) or 0),
         "purchase_intent_prior": _dial_bucket(commercial.get("purchase_intent")),
         "price_pain_prior": _dial_bucket(commercial.get("price_pain")),
     }
+    # Population Studio agents: split by the slice they were built from and its demographics.
+    demo = getattr(agent, "demographics", None) or {}
+    if getattr(agent, "segment", None):
+        out["segment"] = agent.segment
+    if isinstance(demo, dict):
+        for key in ("gender", "region", "income_band", "education"):
+            if demo.get(key):
+                out[key] = str(demo[key])
+    return out
 
 
 # ── per-agent context ─────────────────────────────────────────────────────────

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Agent, AgentDials, AgentPreset, SpawnOptions, SimMode, api } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, Upload, X, ChevronDown, ChevronUp, BarChart2, FileText,
-  Bookmark, Trash2, Clock, Heart, Rocket, Brain, AlertTriangle, MessageSquare, ThumbsUp, Swords, Reply,
+  Bookmark, Trash2, Clock, Heart, Rocket, Brain, AlertTriangle, MessageSquare, ThumbsUp, Swords, Reply, Wand2, MapPin,
 } from "lucide-react";
 
 // ── Activity ladder (mirrors backend orchestrator._build_phases) ──────────────
@@ -204,7 +205,18 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
             <Heart className="w-2.5 h-2.5" /> {humanity}% human
           </span>
         )}
+        {agent.segment && (
+          <span className="inline-flex text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5 truncate max-w-full" title="Population Studio segment">
+            {agent.segment}
+          </span>
+        )}
       </div>
+      {agent.demographics && (agent.demographics.gender || agent.demographics.region || agent.demographics.income_band) && (
+        <p className="flex items-center gap-1 text-[10px] text-muted-foreground/75 mb-2 truncate" title="Demographics fixed by the population plan">
+          <MapPin className="w-2.5 h-2.5 shrink-0" />
+          {[agent.demographics.gender, agent.demographics.region, agent.demographics.income_band ? `${agent.demographics.income_band} income` : null].filter(Boolean).join(" · ")}
+        </p>
+      )}
 
       <p className="text-xs text-muted-foreground line-clamp-2 mb-2.5">{agent.background}</p>
 
@@ -431,6 +443,7 @@ export default function AgentDirectory({
   onGoToReport,
   onApplyPreset,
 }: Props) {
+  const router = useRouter();
   const [agentCount, setAgentCount] = useState(50);
   const [intensity, setIntensity] = useState(2);
   const [mode, setMode] = useState<SimMode>("fast");
@@ -552,6 +565,33 @@ export default function AgentDirectory({
             <p className="text-sm text-muted-foreground">
               Define your audience, tune the stance mix, and optionally upload survey data to seed psychological profiles.
             </p>
+          </div>
+
+          {/* Population Studio — the realistic, human-in-the-loop route */}
+          <button
+            onClick={() => router.push(`/session/${sessionId}/population`)}
+            className="w-full text-left glass rounded-2xl p-5 border border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-all group"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                <Wand2 className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">Population Studio</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary">recommended for realism</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Builds the population from evidence and real statistics (ONS, Statista, gov.uk, Census…), shows what it detected and why, asks you
+                  what it can&apos;t infer, and proposes segments with demographics and mood you accept, edit or reject — then writes the agents.
+                </p>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-primary mt-2 group-hover:gap-2 transition-all">Open the Studio →</span>
+              </div>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground/50 uppercase tracking-wider">
+            <span className="flex-1 border-t border-border/40" /> or spawn quickly <span className="flex-1 border-t border-border/40" />
           </div>
 
           {/* Mode */}
@@ -1006,12 +1046,21 @@ export default function AgentDirectory({
             </div>
             <div className="flex gap-3 shrink-0">
               {!isPendingSimulation && (
-                <button
-                  onClick={handleSpawnClick}
-                  className="text-sm border border-border text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg transition-all"
-                >
-                  Re-spawn
-                </button>
+                <>
+                  <button
+                    onClick={() => router.push(`/session/${sessionId}/population`)}
+                    className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
+                    title="Rebuild this population in the Studio: evidence, statistics, dials and a plan you approve"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" /> Studio
+                  </button>
+                  <button
+                    onClick={handleSpawnClick}
+                    className="text-sm border border-border text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg transition-all"
+                  >
+                    Re-spawn
+                  </button>
+                </>
               )}
               <button
                 onClick={() => onStartSimulation(intensity, mode)}

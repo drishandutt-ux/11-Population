@@ -33,4 +33,8 @@ class SpawnedAgent(Base):
     humanity: Mapped[int] = mapped_column(default=0)
     # One-line Claude-generated verdict on the session query (Agent Opinions sidebar); None until generated.
     verdict: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    # Population Studio: the plan segment this agent was built from, and the demographics the
+    # segment fixed (gender, region, income_band, education, occupation). None for other spawns.
+    segment: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, default=None)
+    demographics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

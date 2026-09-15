@@ -3,6 +3,7 @@ import re
 import uuid
 import random
 import asyncio
+from typing import Optional
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 from app.services.agents.profiles import AgentProfile, AVATAR_COLORS
@@ -29,6 +30,24 @@ _SYSTEM_PROMPT = """You are an expert behavioral psychologist and simulation des
 human personas for multi-agent debate simulations. Each agent gets a full psychological dial profile (112 values, all integers 0-10)
 that reflects their emotional state, motivations, habits, trust patterns, friction points, identity fit,
 commercial intent, product experience, and composite readiness scores — all relative to the topic being debated."""
+
+
+_DIALS_INSTRUCTIONS = """DIALS INSTRUCTIONS:
+- All dial values are integers 0-10 (0=none/lowest, 10=extreme/highest)
+- Tune each dial to reflect this specific agent's psychological profile RELATIVE TO THE QUERY topic
+- sentiment: their current emotional state about this topic
+- motivation: what drives their engagement with this topic
+- habit: their behavioral patterns around this category
+- trust: their trust/skepticism profile
+- friction: barriers they personally experience
+- identity: how much the topic aligns with their self-concept
+- commercial: their commercial relationship with this space
+- product: how they experience products/services in this space
+- composite: aggregate derived scores (compute from other dials logically)
+- Make dials CONSISTENT with the agent's background, role, stance, and personality
+- Direct agents should have higher credibility/authority; neutral agents higher confusion/ambiguity friction
+- MAXIMIZE DIVERSITY: use the FULL 0-10 range ACROSS the population. Do NOT cluster values around 5. Make some agents intensely emotional (8-10 on several sentiment dials) and others cold and flat (0-2). Two agents discussing the same topic should have visibly DIFFERENT emotional and motivational profiles — no two agents should feel the same.
+- SENTIMENT IS PRIMARY: the sentiment group is the strongest driver of how an agent speaks. Give every agent a distinct emotional signature — a couple of dominant emotions that run hot (7-10) and others that are clearly low — rather than a flat, even spread."""
 
 
 #: How many characters of an uploaded survey reach the prompt. The frontend trims to the same
@@ -233,22 +252,7 @@ Return a JSON array with exactly {batch_count} objects. Each object MUST have AL
   "dials": {DIALS_SCHEMA}
 }}
 
-DIALS INSTRUCTIONS:
-- All dial values are integers 0-10 (0=none/lowest, 10=extreme/highest)
-- Tune each dial to reflect this specific agent's psychological profile RELATIVE TO THE QUERY topic
-- sentiment: their current emotional state about this topic
-- motivation: what drives their engagement with this topic
-- habit: their behavioral patterns around this category
-- trust: their trust/skepticism profile
-- friction: barriers they personally experience
-- identity: how much the topic aligns with their self-concept
-- commercial: their commercial relationship with this space
-- product: how they experience products/services in this space
-- composite: aggregate derived scores (compute from other dials logically)
-- Make dials CONSISTENT with the agent's background, role, stance, and personality
-- Direct agents should have higher credibility/authority; neutral agents higher confusion/ambiguity friction
-- MAXIMIZE DIVERSITY: use the FULL 0-10 range ACROSS the population. Do NOT cluster values around 5. Make some agents intensely emotional (8-10 on several sentiment dials) and others cold and flat (0-2). Two agents discussing the same topic should have visibly DIFFERENT emotional and motivational profiles — no two agents should feel the same.
-- SENTIMENT IS PRIMARY: the sentiment group is the strongest driver of how an agent speaks. Give every agent a distinct emotional signature — a couple of dominant emotions that run hot (7-10) and others that are clearly low — rather than a flat, even spread.
+{_DIALS_INSTRUCTIONS}
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -438,3 +442,280 @@ def _salvage_objects(raw: str) -> list[dict]:
                         pass
                     start = None
     return objs
+
+
+# ── Population Studio: build the roster from an approved segment plan ─────────────────────────
+
+_DEMOGRAPHIC_KEYS = ("gender", "region", "income_band", "education", "occupation")
+
+
+def _segment_block(seg: dict, n: int, humanized: int) -> str:
+    """The segment spec as the persona prompt sees it. Everything the plan fixed is stated as
+    a hard constraint so ten personas from one segment are ten different people from the SAME
+    slice of the population, not ten variations on the topic's obvious archetype."""
+    d = seg.get("demographics") or {}
+    sent = seg.get("sentiment") or {}
+    regions = ", ".join(d.get("regions") or []) or "unspecified"
+    occupations = ", ".join(d.get("occupations") or []) or "whatever fits the segment"
+    female = d.get("gender_female_pct")
+    female_line = f"roughly {female}% women, the rest men (a non-binary person is fine where plausible)" if isinstance(female, int) else "a plausible mix"
+    emotions = ", ".join(sent.get("top_emotions") or []) or "as fits each person"
+    args = "\n".join(f"  - {a}" for a in (seg.get("arguments") or [])[:5]) or "  - (none given; infer from the segment)"
+    evidence = "\n".join(f"  - {e}" for e in (seg.get("evidence") or [])[:4])
+    return f"""THE SEGMENT (every persona in this batch belongs to it):
+Name: {seg.get('name')}
+Who they are: {seg.get('description')}
+Stance: {seg.get('stance')} (every persona in this batch has this stance)
+Ages: {d.get('age_min', 18)} to {d.get('age_max', 75)} — spread the {n} personas across this range, not clustered
+Gender: {female_line}
+Where they live: {regions}
+Income band: {d.get('income_band', 'mixed')} · Education: {d.get('education', 'mixed')}
+Typical occupations: {occupations}
+Mood on the topic: {sent.get('mood', 'mixed')}, emotional temperature {sent.get('temperature', 5)}/10, dominant emotions: {emotions}
+Arguments this group actually makes (use their phrasing, vary it per person):
+{args}
+{('Evidence behind this segment:' + chr(10) + evidence) if evidence else ''}
+Why this segment exists: {seg.get('rationale', '')}
+Humanity: exactly {humanized} of the {n} personas are high-humanity everyday people (set "humanity" to the value given below); the rest are analytical (humanity 0).
+"""
+
+
+def _constraints_block(constraints: dict) -> str:
+    """Population-wide dials as prompt text. Only the dials that were moved off 'mixed' are
+    stated, so the model is not told to honour a constraint the user never set."""
+    if not constraints:
+        return ""
+    lines: list[str] = []
+    demo = constraints.get("demographics") or {}
+    if demo.get("age_min") is not None or demo.get("age_max") is not None:
+        lines.append(f"- Ages must fall between {demo.get('age_min', 18)} and {demo.get('age_max', 80)}.")
+    if demo.get("age_skew") and demo.get("age_skew") != "even":
+        lines.append(f"- The population skews {demo['age_skew']} within that range.")
+    if demo.get("regions"):
+        lines.append(f"- Everyone lives in: {', '.join(demo['regions'])}. Use real towns, cities and areas inside these places.")
+    if demo.get("urban_rural") and demo.get("urban_rural") != "mixed":
+        lines.append(f"- Settlement type: mostly {demo['urban_rural']}.")
+    if demo.get("income") and demo.get("income") != "mixed":
+        lines.append(f"- Household income: mostly {demo['income']}.")
+    if demo.get("education") and demo.get("education") != "mixed":
+        lines.append(f"- Education: mostly {demo['education']}.")
+    if demo.get("notes"):
+        lines.append(f"- Also: {demo['notes']}")
+    sent = constraints.get("sentiment") or {}
+    if not sent.get("follow_evidence", True) and isinstance(sent.get("mood"), dict):
+        m = sent["mood"]
+        lines.append(f"- Population mood target: {m.get('for', 0)}% for, {m.get('against', 0)}% against, {m.get('mixed', 0)}% mixed or undecided.")
+    for key, label in (("temperature", "emotional temperature (0 calm, 10 heated)"), ("trust_in_institutions", "trust in institutions and official bodies"),
+                       ("price_sensitivity", "price sensitivity"), ("tech_savviness", "comfort with technology"), ("openness_to_change", "openness to change")):
+        v = sent.get(key)
+        if isinstance(v, (int, float)) and int(v) != 5:
+            lines.append(f"- Population-wide {label}: {int(v)}/10 — shift the matching dials accordingly.")
+    if constraints.get("profile_query"):
+        lines.append(f"- Audience profile from the analyst: {constraints['profile_query']}")
+    if not lines:
+        return ""
+    return "POPULATION-WIDE DIALS (set by the analyst; honour them):\n" + "\n".join(lines) + "\n"
+
+
+def _plan_prompt(query: str, seg: dict, n: int, humanized: int, humanity: int, constraints: dict, kg_summary: str, evidence_text: str, taken: list[dict]) -> str:
+    doc = (constraints or {}).get("doc_context") or ""
+    doc_block = f"\nSURVEY / PROFILE DATA (translate to dial values where a respondent fits this segment):\n{doc[:SURVEY_CHAR_LIMIT]}\n" if doc else ""
+    return f"""Create {n} distinct personas for a synthetic population that will debate and be surveyed on this topic:
+
+QUERY: {query}
+
+{_segment_block(seg, n, humanized)}
+{_constraints_block(constraints)}
+KNOWLEDGE CONTEXT:
+{kg_summary[:2000]}
+{('EVIDENCE:' + chr(10) + evidence_text[:3500]) if evidence_text else ''}
+{doc_block}
+Rules:
+- All {n} are members of THIS segment: same stance, inside the age range, matching the gender split, living in the places named, with occupations and circumstances that fit. Within that, make them {n} clearly DIFFERENT people — different names, jobs, life situations, reasons for their view, and ways of talking.
+- Give each a specific, textured background (a real-sounding life, a concrete stake) and a believable reason to hold the view they hold. Some are sharp, some are muddled; some calm, some heated — match the segment's temperature on average.
+- High-humanity personas (humanity = {humanity}) react from feeling, keep trust.credibility and trust.authority LOW, and run 2-3 sentiment dials hot (7-10). Analytical personas (humanity = 0) are measured and evidence-led.
+- SENTIMENT IS PRIMARY: give every persona a distinct emotional signature with a couple of dominant emotions running hot and others clearly low. Use the full 0-10 range across the batch; do not cluster on 5.
+{_taken_block_text(taken)}
+Return a JSON array with exactly {n} objects. Each object MUST have ALL of these keys:
+{{
+  "name": "Full Name",
+  "age": <integer inside the segment's range>,
+  "gender": "female" | "male" | "non-binary",
+  "region": "town or area, country — inside the segment's places",
+  "income_band": "low" | "lower-middle" | "middle" | "upper-middle" | "high",
+  "education": "secondary" | "some college" | "degree" | "postgraduate",
+  "occupation": "their job or situation (e.g. 'retired', 'student', 'carer')",
+  "role": "Job Title / Role as it would appear on a panel card",
+  "background": "2-3 sentence life and professional background",
+  "stance": "{seg.get('stance', 'neutral')}",
+  "correlation": "1 sentence: how they relate to the topic",
+  "personality": ["trait1", "trait2", "trait3"],
+  "debate_style": "1 sentence describing how they argue",
+  "humanity": <integer 0-100>,
+  "dials": {DIALS_SCHEMA}
+}}
+
+{_DIALS_INSTRUCTIONS}
+
+Return ONLY the JSON array, no markdown, no explanation."""
+
+
+def _taken_block_text(taken: list[dict]) -> str:
+    if not taken:
+        return ""
+    listed = "\n".join(f"- {t.get('name')} — {t.get('role')} (age {t.get('age')})" for t in taken[-40:])
+    return f"""
+ALREADY IN THIS POPULATION — every persona you return must be a DIFFERENT person (different name, job and angle) from everyone below:
+{listed}
+"""
+
+
+def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -> Optional[AgentProfile]:
+    """One model-written persona dict → AgentProfile, or None when it is unusable."""
+    if not isinstance(d, dict) or not d.get("name"):
+        return None
+    stance = d.get("stance", "neutral")
+    if stance not in ("direct", "indirect", "neutral"):
+        stance = "neutral"
+    demographics = {k: str(d.get(k) or "").strip() for k in _DEMOGRAPHIC_KEYS if d.get(k)}
+    try:
+        return AgentProfile(
+            id=str(uuid.uuid4()),
+            session_id=session_id,
+            name=str(d.get("name", "Unnamed")),
+            age=int(d.get("age", 35) or 35),
+            role=str(d.get("role") or d.get("occupation") or "Participant"),
+            background=str(d.get("background", "")),
+            stance=stance,
+            correlation=str(d.get("correlation", "")),
+            personality=d.get("personality", []) or [],
+            debate_style=str(d.get("debate_style", "thoughtful")),
+            energy=round(random.uniform(0.3, 1.0), 2),
+            avatar_color=color,
+            dials=d.get("dials", {}) or {},
+            humanity=int(d.get("humanity", 0) or 0),
+            segment=segment,
+            demographics=demographics,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[agent_factory] skipping malformed agent: {type(e).__name__}: {e}")
+        return None
+
+
+async def generate_agents_from_plan(
+    session_id: str,
+    query: str,
+    segments: list[dict],
+    constraints: dict,
+    *,
+    mode: str = "fast",
+    evidence_text: str = "",
+    on_progress=None,
+) -> list[AgentProfile]:
+    """Build the roster segment by segment from an approved Population Studio plan.
+
+    Each segment's `count` is generated in batches of ≤10 on the mode's orchestration model
+    (Fast = Haiku, Pro = Sonnet), every batch told who is already in the roster. `on_progress`
+    (async, optional) is called as `(segment_name, done_in_segment, segment_count, done_total)`
+    after every batch so the Studio log can narrate the build."""
+    settings = get_settings()
+    gen_model = settings.orchestration_model(mode)
+    rag = await get_lightrag(session_id)
+    kg_summary = await query_rag(rag, query, mode="hybrid")
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    sem = asyncio.Semaphore(max(1, settings.spawn_concurrency))
+
+    humanity = max(0, min(100, int((constraints or {}).get("humanity") or 0)))
+    coverage = max(0, min(100, int((constraints or {}).get("humanity_coverage") or 0)))
+
+    all_dicts: list[dict] = []
+    done_total = 0
+    used_colors: list[str] = []
+    profiles: list[AgentProfile] = []
+
+    async def _batch(seg: dict, n: int, h: int, taken: list[dict], label: str) -> list[dict]:
+        async with sem:
+            try:
+                response = await tracked_messages_create(
+                    client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
+                    system=_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, h, humanity, constraints, kg_summary, evidence_text, taken)}],
+                )
+                return _parse_agents_json(response.content[0].text)
+            except Exception as e:  # noqa: BLE001
+                print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
+                return []
+
+    for seg in segments:
+        count = int(seg.get("count") or 0)
+        if count <= 0:
+            continue
+        # How many of this segment are high-humanity: the population-wide coverage, nudged by
+        # the segment's own register hint so an "expert" segment stays mostly analytical.
+        hint = (seg.get("humanity_hint") or "").lower()
+        seg_cov = coverage if humanity > 0 else 0
+        if hint == "expert":
+            seg_cov = min(seg_cov, 20)
+        elif hint in ("defensive", "reactive"):
+            seg_cov = max(seg_cov, 70) if humanity > 0 else 0
+        humanized_total = round(count * seg_cov / 100)
+        sizes = [_BATCH_SIZE] * (count // _BATCH_SIZE) + ([count % _BATCH_SIZE] if count % _BATCH_SIZE else [])
+        # Spread the humanized slots across the batches.
+        hum_per_batch: list[int] = []
+        left = humanized_total
+        for i, n in enumerate(sizes):
+            share = round(humanized_total * n / count) if i < len(sizes) - 1 else left
+            share = max(0, min(n, share, left))
+            hum_per_batch.append(share)
+            left -= share
+        seg_dicts: list[dict] = []
+        # First batch alone so the rest can build around it; the rest concurrently.
+        first = await _batch(seg, sizes[0], hum_per_batch[0], all_dicts + seg_dicts, "spawn:plan")
+        seg_dicts.extend(first)
+        done_total += len(first)
+        if on_progress:
+            await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
+        if len(sizes) > 1:
+            rest = await asyncio.gather(*[_batch(seg, n, h, all_dicts + seg_dicts, "spawn:plan") for n, h in zip(sizes[1:], hum_per_batch[1:])])
+            for r in rest:
+                seg_dicts.extend(r)
+                done_total += len(r)
+                if on_progress:
+                    await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
+        for d in seg_dicts:
+            d["stance"] = seg.get("stance", d.get("stance"))
+            d["_segment"] = seg.get("name", "")
+        all_dicts.extend(seg_dicts)
+
+    all_dicts, dupes = split_duplicates(all_dicts)
+    if dupes:
+        print(f"[agent_factory] {len(dupes)} duplicate persona(s) across plan batches — regenerating")
+        by_seg: dict[str, list[dict]] = {}
+        for d in dupes:
+            by_seg.setdefault(d.get("_segment", ""), []).append(d)
+        seg_by_name = {s.get("name", ""): s for s in segments}
+        for name, ds in by_seg.items():
+            seg = seg_by_name.get(name)
+            if not seg:
+                continue
+            h = sum(1 for d in ds if int(d.get("humanity") or 0) > 0)
+            try:
+                repl = await _batch(seg, len(ds), h, all_dicts, "spawn:plan:repair")
+                for d in repl:
+                    d["stance"] = seg.get("stance", d.get("stance"))
+                    d["_segment"] = name
+                all_dicts, _ = split_duplicates(all_dicts + repl)
+            except Exception as e:  # noqa: BLE001
+                print(f"[agent_factory] plan duplicate repair failed: {type(e).__name__}: {e}")
+                all_dicts = uniquify_names(all_dicts + ds)
+
+    if not all_dicts:
+        raise RuntimeError("Persona generation produced no valid personas — the model output could not be parsed (check the ANTHROPIC_API_KEY and try again).")
+
+    for d in all_dicts:
+        color = random.choice([c for c in AVATAR_COLORS if c not in used_colors] or AVATAR_COLORS)
+        used_colors.append(color)
+        p = profile_from_dict(d, session_id, color, segment=d.get("_segment", ""))
+        if p:
+            profiles.append(p)
+    return profiles

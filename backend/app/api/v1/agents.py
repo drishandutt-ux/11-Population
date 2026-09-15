@@ -69,6 +69,8 @@ async def list_agents(session_id: str, user: AuthUser = Depends(get_current_user
             "dials": a.dials or {},
             "humanity": getattr(a, "humanity", 0) or 0,
             "verdict": getattr(a, "verdict", None),
+            "segment": getattr(a, "segment", None),
+            "demographics": getattr(a, "demographics", None) or {},
         }
         for a in agents
     ]
@@ -86,6 +88,8 @@ async def get_agent(agent_id: str, user: AuthUser = Depends(get_current_user), d
         "dials": agent.dials or {},
         "humanity": getattr(agent, "humanity", 0) or 0,
         "verdict": getattr(agent, "verdict", None),
+        "segment": getattr(agent, "segment", None),
+        "demographics": getattr(agent, "demographics", None) or {},
     }
 
 

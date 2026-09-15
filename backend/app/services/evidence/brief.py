@@ -53,6 +53,10 @@ def _render(rows: list[Evidence]) -> str:
     for e in rows:
         if e.source_class == "web":
             parts.append(f"<web ref=\"{e.source_ref}\" domain=\"{e.author}\" date=\"{e.published_at or 'undated'}\">\n{e.title}\n{(e.full_text or e.text or '')[:1800]}\n</web>")
+        elif e.source_class == "quant":
+            st = e.structured or {}
+            facts = "\n".join(f"  - {f.get('statistic')}: {f.get('value')} ({f.get('group')}, {f.get('geography')}, {f.get('year') or 'n.d.'})" for f in (st.get("facts") or [])[:8])
+            parts.append(f"<statistics ref=\"{e.source_ref}\" publisher=\"{st.get('source_label') or e.author}\" date=\"{e.published_at or 'undated'}\">\n{e.title}\n{facts}\n</statistics>")
         else:
             st = e.structured or {}
             comments = "\n".join(f"  - ({c.get('likes', 0)} pts) {c.get('text', '')[:350]}" for c in (st.get('public_comments') or [])[:8])
@@ -106,7 +110,7 @@ def brief_for_prompt(b: Optional[dict], max_chars: int = 3500) -> str:
     b = normalise_brief(b) if b else None
     if not b or not b.get("groups") and not b.get("key_facts"):
         return ""
-    lines = ["OBSERVED PUBLIC EVIDENCE (real sources and real people, gathered for this question):", b.get("summary", "")]
+    lines = ["OBSERVED PUBLIC EVIDENCE (real sources, statistics and real people, gathered for this question):", b.get("summary", "")]
     if b.get("key_facts"):
         lines.append("Key facts: " + " | ".join(b["key_facts"][:8]))
     lines.append(f"Overall social sentiment: {b.get('overall_for_pct', 0)}% for, {b.get('overall_against_pct', 0)}% against, {b.get('overall_mixed_pct', 0)}% mixed.")

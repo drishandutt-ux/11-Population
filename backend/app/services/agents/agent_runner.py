@@ -269,6 +269,30 @@ _PROBE_DIRECTIVES = {
 }
 
 
+def _demographics_line(agent: SpawnedAgent) -> str:
+    """Population Studio agents carry where they live, their gender, income and education;
+    those shape the voice as much as the job does, so they go into the persona prompt."""
+    d = getattr(agent, "demographics", None) or {}
+    if not isinstance(d, dict) or not d:
+        return ""
+    bits = []
+    if d.get("gender"):
+        bits.append(str(d["gender"]))
+    if d.get("region"):
+        bits.append(f"living in {d['region']}")
+    if d.get("occupation") and str(d["occupation"]).lower() not in (agent.role or "").lower():
+        bits.append(str(d["occupation"]))
+    if d.get("income_band"):
+        bits.append(f"{d['income_band']} household income")
+    if d.get("education"):
+        bits.append(f"education: {d['education']}")
+    seg = getattr(agent, "segment", None)
+    line = "You are " + ", ".join(bits) + "." if bits else ""
+    if seg:
+        line += f" You belong to this slice of the population: {seg}."
+    return line + "\n" if line else ""
+
+
 def _build_system_prompt(agent: SpawnedAgent, task: str = "post") -> str:
     """Persona + dials + humanity register.
 
@@ -278,7 +302,7 @@ def _build_system_prompt(agent: SpawnedAgent, task: str = "post") -> str:
     personality = ", ".join(agent.personality) if agent.personality else "thoughtful"
     humanity = getattr(agent, "humanity", 0) or 0
     prompt = f"""You are {agent.name}, a {agent.age}-year-old {agent.role}.
-
+{_demographics_line(agent)}
 Background: {agent.background}
 
 Your relationship to the topic: {agent.correlation}

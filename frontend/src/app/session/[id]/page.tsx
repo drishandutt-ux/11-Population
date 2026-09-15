@@ -137,6 +137,12 @@ export default function SessionPage() {
     return () => clearInterval(interval);
   }, [refreshSession]);
 
+  // `?tab=agents` etc. opens straight on that tab (the Population Studio links back this way).
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    if (t && ["ingest", "agents", "simulation", "lab", "kg", "report"].includes(t)) setActiveTab(t);
+  }, []);
+
   // Auto-start simulation once ingestion completes (if user queued a start)
   useEffect(() => {
     if (

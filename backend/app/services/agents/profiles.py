@@ -25,3 +25,5 @@ class AgentProfile:
     avatar_color: str = field(default_factory=lambda: random.choice(AVATAR_COLORS))
     dials: dict = field(default_factory=dict)
     humanity: int = 0  # 0 = expert/analytical; higher = more human, emotional, gut-driven
+    segment: str = ""  # Population Studio: the plan segment this persona belongs to ("" otherwise)
+    demographics: dict = field(default_factory=dict)  # gender, region, income_band, education, occupation

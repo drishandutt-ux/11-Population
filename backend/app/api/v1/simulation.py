@@ -82,6 +82,7 @@ def _agent_payload(p) -> dict:
         "personality": p.personality, "debate_style": p.debate_style,
         "energy": p.energy, "avatar_color": p.avatar_color,
         "dials": p.dials or {}, "humanity": getattr(p, "humanity", 0) or 0,
+        "segment": getattr(p, "segment", None) or None, "demographics": getattr(p, "demographics", None) or {},
     }
 
 

@@ -201,6 +201,28 @@ export const api = {
       URL.revokeObjectURL(url);
     },
   },
+  population: {
+    sources: (geography = "") =>
+      request<{ sources: QuantSource[]; default: string[] }>(`/population/sources${geography ? `?geography=${encodeURIComponent(geography)}` : ""}`),
+    start: (sessionId: string, body: { mode: SimMode; count: number; constraints: PopulationConstraints; sources: PopulationSources }) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds`, { method: "POST", body: JSON.stringify(body) }),
+    latest: (sessionId: string) => request<{ build: PopulationBuild | null }>(`/sessions/${sessionId}/population/builds/latest`),
+    get: (sessionId: string, buildId: string) => request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}`),
+    answer: (sessionId: string, buildId: string, answers: Record<string, string>, skip = false) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/answers`, { method: "POST", body: JSON.stringify({ answers, skip }) }),
+    decide: (sessionId: string, buildId: string, segmentId: string, body: { decision: "accept" | "reject" | "edit"; edits?: Partial<PopulationSegment>; reason?: string }) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/segments/${segmentId}`, { method: "POST", body: JSON.stringify(body) }),
+    replan: (sessionId: string, buildId: string, body: { constraints?: PopulationConstraints; count?: number; keep_accepted?: boolean }) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/replan`, { method: "POST", body: JSON.stringify(body) }),
+    approve: (sessionId: string, buildId: string, body: { count?: number; mode?: SimMode }) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/approve`, { method: "POST", body: JSON.stringify(body) }),
+    stop: (sessionId: string, buildId: string) =>
+      request<{ stopped: boolean }>(`/sessions/${sessionId}/population/builds/${buildId}/stop`, { method: "POST" }),
+    quantSearch: (sessionId: string, query: string, sources: string[], buildId?: string | null) =>
+      request<{ queued: boolean }>(`/sessions/${sessionId}/population/quant-search`, { method: "POST", body: JSON.stringify({ query, sources, build_id: buildId ?? null }) }),
+    /** Statistics pages gathered for this session (`quant` evidence). */
+    facts: (sessionId: string) => request<EvidenceItem[]>(`/sessions/${sessionId}/evidence?source_class=quant&limit=200`),
+  },
   presets: {
     list: () => request<AgentPreset[]>("/presets"),
     save: (sessionId: string, name: string) =>
@@ -241,7 +263,7 @@ export type ResearchRun = {
 export type ResearchState = { run: ResearchRun | null; queries: ResearchQuery[]; counts: Record<string, { read: number; on_topic: number }>; in_graph?: number };
 
 export type EvidenceItem = {
-  id: string; run_id?: string | null; source_class: "web" | "social" | "personal" | "synthetic"; source_ref: string;
+  id: string; run_id?: string | null; source_class: "web" | "social" | "personal" | "synthetic" | "quant"; source_ref: string;
   title?: string | null; author?: string | null; published_at?: string | null; text: string; structured: any;
   trust_tier: string; relevance: number; on_topic: boolean; excluded: boolean; in_graph: boolean; query?: string | null; attempt: number;
   sub_questions: string[]; created_at?: string;
@@ -291,6 +313,17 @@ export type Agent = {
   dials?: AgentDials;
   humanity?: number; // 0 = expert/analytical, 100 = fully human/emotional
   verdict?: string | null; // persisted one-line verdict (Agent Opinions sidebar), null until generated
+  /** Population Studio: the plan segment this agent was built from, and the demographics it fixed. */
+  segment?: string | null;
+  demographics?: AgentDemographics;
+};
+
+export type AgentDemographics = {
+  gender?: string;
+  region?: string;
+  income_band?: string;
+  education?: string;
+  occupation?: string;
 };
 
 export type OpinionsResponse = {
@@ -360,7 +393,10 @@ export type WSEvent =
   | { type: "probe_answer"; probe_id: string; agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any>; segments: Record<string, string> }
   | { type: "probe_complete"; probe_id: string; status: string; answer_count: number; failed_count: number; sentence: string }
   | { type: "experiment_started"; experiment_id: string; probe_ids: string[]; agent_count: number; design: string }
-  | { type: "experiment_complete"; experiment_id: string; status: string; verdict?: string };
+  | { type: "experiment_complete"; experiment_id: string; status: string; verdict?: string }
+  | { type: "population_log"; build_id: string | null; entry: PopulationLogEntry }
+  | { type: "population_build"; build: PopulationBuild }
+  | { type: "population_quant_done"; build_id: string | null };
 
 
 // ── Behaviour Lab ────────────────────────────────────────────────────────────
@@ -687,4 +723,111 @@ export type SurveyQuestionResult = {
   responses?: { agent_id: string; name: string; role: string; text: string; theme: string }[];
   columns?: string[];
   rows?: { key: string; label: string; distribution: SurveyBucket[]; n: number }[];
+};
+
+
+// ── Population Studio ─────────────────────────────────────────────────────────
+
+export type QuantSource = { key: string; label: string; domain: string; regions: string[]; kind: string; description: string };
+
+export type PopulationSources = { quant: boolean; quant_sources: string[]; quant_query?: string };
+
+/** The dials. Anything left at its default ("mixed", 5, follow_evidence) is not imposed on the plan. */
+export type PopulationConstraints = {
+  stance?: { direct: number; indirect: number; neutral: number; follow_plan?: boolean };
+  humanity?: number;
+  humanity_coverage?: number;
+  demographics?: {
+    age_min?: number;
+    age_max?: number;
+    age_skew?: "even" | "younger" | "older";
+    gender?: { female: number; male: number; other: number };
+    regions?: string[];
+    urban_rural?: "mixed" | "urban" | "suburban" | "rural";
+    income?: "mixed" | "low" | "middle" | "high";
+    education?: "mixed" | "secondary" | "degree" | "postgraduate";
+    notes?: string;
+  };
+  sentiment?: {
+    follow_evidence?: boolean;
+    mood?: { for: number; against: number; mixed: number };
+    temperature?: number;
+    trust_in_institutions?: number;
+    price_sensitivity?: number;
+    tech_savviness?: number;
+    openness_to_change?: number;
+  };
+  profile_query?: string;
+  doc_context?: string;
+  skip_questions?: boolean;
+};
+
+export type PopulationSegment = {
+  id: string;
+  name: string;
+  share_pct: number;
+  count?: number;
+  stance: "direct" | "indirect" | "neutral";
+  description: string;
+  demographics: {
+    age_min?: number;
+    age_max?: number;
+    gender_female_pct?: number;
+    regions?: string[];
+    income_band?: string;
+    education?: string;
+    occupations?: string[];
+  };
+  sentiment: { mood: "for" | "against" | "mixed" | "uncertain"; temperature: number; top_emotions: string[] };
+  arguments: string[];
+  evidence: string[];
+  rationale: string;
+  humanity_hint?: string;
+  decision: "proposed" | "accepted" | "rejected" | "edited";
+  reason?: string | null;
+  /** Set on a segment that replaced a rejected one. */
+  replaced?: string;
+};
+
+export type PopulationQuestion = { id: string; text: string; why: string; suggested: string[]; default: string; answer: string | null };
+
+export type PopulationLogEntry = {
+  ts: string;
+  stage: "detect" | "gather" | "clarify" | "plan" | "review" | "spawn" | "error" | string;
+  level: "info" | "ok" | "warn" | "error" | "question" | "decision";
+  message: string;
+  detail?: string | null;
+};
+
+export type PopulationDetected = {
+  topic: string;
+  decision: string;
+  geography: string;
+  target_population: string;
+  population_kind: string;
+  segments_hinted: string[];
+  demographic_signals: { attribute: string; value: string; source: string }[];
+  sentiment_signals: string[];
+  gaps: string[];
+  confidence: number;
+};
+
+export type PopulationBuildStatus =
+  | "queued" | "detecting" | "gathering" | "clarifying" | "planning" | "awaiting_review" | "spawning" | "complete" | "stopped" | "error";
+
+export type PopulationBuild = {
+  id: string;
+  session_id: string;
+  status: PopulationBuildStatus;
+  mode: SimMode;
+  target_count: number;
+  constraints: PopulationConstraints;
+  sources: PopulationSources;
+  detected: PopulationDetected | null;
+  questions: PopulationQuestion[];
+  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string } | null;
+  log: PopulationLogEntry[];
+  error: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };

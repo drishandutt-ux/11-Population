@@ -60,6 +60,9 @@ async def save_preset(body: SavePresetRequest, user: AuthUser = Depends(get_curr
             "energy": a.energy,
             "avatar_color": a.avatar_color,
             "dials": a.dials,
+            "humanity": getattr(a, "humanity", 0) or 0,
+            "segment": getattr(a, "segment", None),
+            "demographics": getattr(a, "demographics", None) or {},
         }
         for a in agents
     ]
