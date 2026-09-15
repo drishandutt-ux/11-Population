@@ -22,6 +22,13 @@ async def lifespan(app: FastAPI):
         await create_tables()
         SCHEMA_ERROR = None
         print("[startup] Database tables ready.")
+        try:
+            from app.core.recovery import recover_interrupted
+            counts = await recover_interrupted()
+            if any(counts.values()):
+                print(f"[startup] Marked interrupted jobs from before the restart: {counts}")
+        except Exception as e:  # noqa: BLE001 — recovery must never stop the app
+            print(f"[startup] WARNING: interrupted-job recovery failed: {e}")
     except Exception as e:
         SCHEMA_ERROR = f"{type(e).__name__}: {str(e)[:300]}"
         print(f"[startup] WARNING: create_tables() failed: {e}")
