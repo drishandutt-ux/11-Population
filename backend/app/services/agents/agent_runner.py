@@ -294,6 +294,34 @@ def _demographics_line(agent: SpawnedAgent) -> str:
     return line + "\n" if line else ""
 
 
+def _geo_block(agent: SpawnedAgent) -> str:
+    """The persona's place, made behavioral.
+
+    Spawn writes a per-persona "geo_behavior" paragraph (the query analysed from their
+    region: local attitudes, habits, and the culture's way of voicing agreement or
+    disagreement). Older agents may carry a region without that paragraph — they get a
+    generic directive so location still colours the voice instead of being a label."""
+    d = getattr(agent, "demographics", None) or {}
+    if not isinstance(d, dict):
+        return ""
+    geo = str(d.get("geo_behavior") or "").strip()
+    region = str(d.get("region") or "").strip()
+    if not geo and not region:
+        return ""
+    if not geo:
+        geo = (
+            f"Let {region} shape how you react: the local cost of living, daily habits, values and "
+            "social norms there decide what you notice about this topic and how strongly you feel about it."
+        )
+    header = f"HOW YOUR PLACE SHAPES YOU ({region}):" if region else "HOW YOUR PLACE SHAPES YOU:"
+    return (
+        f"\n\n{header}\n{geo}\n"
+        "Stay true to this geography: your vocabulary, reference points, prices, currency, units and everyday "
+        "examples come from where you live, and you voice agreement or disagreement the way people there actually do — "
+        "never in a generic global register."
+    )
+
+
 def _build_system_prompt(agent: SpawnedAgent, task: str = "post") -> str:
     """Persona + dials + humanity register.
 
@@ -312,6 +340,7 @@ Your personality: {personality}
 Your debate style: {agent.debate_style}
 Your stance type: {agent.stance} ({"a first-hand stake — you live this decision or work inside it; that makes you experienced, not necessarily an expert" if agent.stance == "direct" else "an adjacent-field perspective" if agent.stance == "indirect" else "a neutral/skeptical observer"})"""
 
+    prompt += _geo_block(agent)
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
 
     band = _humanity_band(humanity)

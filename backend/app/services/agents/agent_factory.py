@@ -50,6 +50,12 @@ _DIALS_INSTRUCTIONS = """DIALS INSTRUCTIONS:
 - SENTIMENT IS PRIMARY: the sentiment group is the strongest driver of how an agent speaks. Give every agent a distinct emotional signature — a couple of dominant emotions that run hot (7-10) and others that are clearly low — rather than a flat, even spread."""
 
 
+_GEO_INSTRUCTIONS = """LOCATION INSTRUCTIONS — where a persona lives is a first-class driver of who they are:
+- "region" must be a real, specific place (town or city, country). Anchor the persona in it: the local economy, cost of living, dominant industries, climate, infrastructure, politics, religion and social norms of that place shape their life.
+- LOCATION MOVES THE DIALS: re-read the QUERY through the lens of each persona's place and shift their dials to match how this topic actually lands THERE. Examples: money_pain and price-sensitivity dials higher where local incomes are stretched; trust dials matching the local mood toward institutions, government and big brands; habit and friction dials matching local infrastructure, weather and daily routines; identity/cultural_fit reflecting whether the topic fits or clashes with local values. Two otherwise-similar personas living in different places must have visibly DIFFERENT dials.
+- "geo_behavior": one short paragraph (2-3 sentences) written TO the persona as "you", analysing this specific QUERY from their place: how people where they live actually talk and feel about this topic, the local habits, values, prices and reference points they carry into it, and their culture's way of voicing agreement or disagreement (blunt or polite, expressive or reserved, individualist or consensus-minded). Be concrete and specific to the place AND the topic — no tourist clichés, no generic lines that could apply anywhere."""
+
+
 #: How many characters of an uploaded survey reach the prompt. The frontend trims to the same
 #: number and says so, so a large survey is never silently cut twice.
 SURVEY_CHAR_LIMIT = 8000
@@ -243,16 +249,20 @@ Return a JSON array with exactly {batch_count} objects. Each object MUST have AL
   "name": "Full Name",
   "age": <integer 25-65>,
   "role": "Job Title / Role",
+  "region": "town or city, country — a real place consistent with the audience profile (or plausible for the topic)",
   "background": "2-3 sentence professional background",
   "stance": "direct" | "indirect" | "neutral",
   "correlation": "1 sentence: how they relate to the topic",
   "personality": ["trait1", "trait2", "trait3"],
   "debate_style": "1 sentence describing how they argue",
+  "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
   "humanity": <integer 0-100>,
   "dials": {DIALS_SCHEMA}
 }}
 
 {_DIALS_INSTRUCTIONS}
+
+{_GEO_INSTRUCTIONS}
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -354,6 +364,7 @@ name, a different job title, a different angle. Do not produce a variation of an
         stance = d.get("stance", "neutral")
         if stance not in ("direct", "indirect", "neutral"):
             stance = "neutral"
+        demographics = {k: str(d.get(k) or "").strip() for k in ("region", "geo_behavior") if d.get(k)}
         try:
             profiles.append(
                 AgentProfile(
@@ -371,6 +382,7 @@ name, a different job title, a different angle. Do not produce a variation of an
                     avatar_color=color,
                     dials=d.get("dials", {}) or {},
                     humanity=int(d.get("humanity", 0) or 0),
+                    demographics=demographics,
                 )
             )
         except Exception as e:
@@ -446,7 +458,7 @@ def _salvage_objects(raw: str) -> list[dict]:
 
 # ── Population Studio: build the roster from an approved segment plan ─────────────────────────
 
-_DEMOGRAPHIC_KEYS = ("gender", "region", "income_band", "education", "occupation")
+_DEMOGRAPHIC_KEYS = ("gender", "region", "income_band", "education", "occupation", "geo_behavior")
 
 # The segment's register (humanity_hint) IS the humanity dial in the Studio path. Each hint
 # maps to a band of the 0-100 humanity scale (matching agent_runner._humanity_band boundaries)
@@ -591,11 +603,14 @@ Return a JSON array with exactly {n} objects. Each object MUST have ALL of these
   "correlation": "1 sentence: how they relate to the topic",
   "personality": ["trait1", "trait2", "trait3"],
   "debate_style": "1 sentence describing how they argue",
+  "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
   "humanity": <integer 0-100>,
   "dials": {DIALS_SCHEMA}
 }}
 
 {_DIALS_INSTRUCTIONS}
+
+{_GEO_INSTRUCTIONS}
 
 Return ONLY the JSON array, no markdown, no explanation."""
 

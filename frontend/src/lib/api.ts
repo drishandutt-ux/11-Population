@@ -324,6 +324,8 @@ export type AgentDemographics = {
   income_band?: string;
   education?: string;
   occupation?: string;
+  /** Spawn-written paragraph: the query analysed from the agent's place — injected into their system prompt. */
+  geo_behavior?: string;
 };
 
 export type OpinionsResponse = {

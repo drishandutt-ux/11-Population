@@ -155,6 +155,7 @@ async def _spawn_agents_task(
                     personality=p.personality, debate_style=p.debate_style, energy=p.energy,
                     avatar_color=p.avatar_color, dials=p.dials or {},
                     humanity=getattr(p, "humanity", 0) or 0,
+                    demographics=getattr(p, "demographics", None) or None,
                 )
                 for p in profiles
             ])
