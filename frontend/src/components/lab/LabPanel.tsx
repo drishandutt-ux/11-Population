@@ -14,13 +14,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, Agent, Experiment, Instrument, Probe, ProbeAnswerRow, ProbeRequest, SimMode } from "@/lib/api";
-import { Beaker, Download, Loader2, Play, Square, AlertTriangle, RefreshCw, ChevronLeft, FlaskConical } from "lucide-react";
+import {
+  Beaker, Download, Loader2, Play, Square, AlertTriangle, RefreshCw, ChevronLeft, ChevronDown,
+  ChevronRight, History, Trash2, LucideIcon,
+} from "lucide-react";
 import { DotGrid, dotColor } from "./Charts";
 import ExperimentPanel from "./ExperimentPanel";
 import { initialValues, toSpec } from "./InstrumentForm";
 import { formFor } from "./forms";
 import { SEGMENT_FILTERS } from "./filters";
 import { pageFor } from "./pages";
+import { EXPERIMENT_ICON, iconFor } from "./icons";
 
 type LiveAnswer = { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> };
 
@@ -38,6 +42,22 @@ type PastRun =
   | { kind: "probe"; at: string; probe: Probe }
   | { kind: "experiment"; at: string; experiment: Experiment };
 
+const PAST_OPEN_KEY = "lab:pastRunsOpen";
+
+/** "3m ago" for the past-runs list. Timestamps come from the API without a zone suffix and
+ *  are UTC, so one is added before parsing or the browser would read them as local time. */
+function ago(iso: string): string {
+  if (!iso) return "";
+  const t = Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
 export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers, completedAt, experimentCompletedAt, onClearLive }: Props) {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [instrumentKey, setInstrumentKey] = useState<string>("");
@@ -53,6 +73,10 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   const [selected, setSelected] = useState<(Probe & { answers?: ProbeAnswerRow[] }) | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Past runs fold away under a header; the choice sticks per browser.
+  const [pastOpen, setPastOpen] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const selectedId = useRef<string | null>(null);
   selectedId.current = selected?.id || null;
   // Read through a ref so the completion effects below run once per completion tick, never
@@ -68,6 +92,17 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
       .then((r) => setInstruments(r.instruments))
       .catch((e) => setError(String(e.message || e)));
   }, []);
+
+  useEffect(() => {
+    try { setPastOpen(localStorage.getItem(PAST_OPEN_KEY) === "1"); } catch { /* private mode */ }
+  }, []);
+
+  function togglePast() {
+    setPastOpen((v) => {
+      try { localStorage.setItem(PAST_OPEN_KEY, v ? "0" : "1"); } catch { /* private mode */ }
+      return !v;
+    });
+  }
 
   // Choosing a tool resets to that tool's own declared inputs, prefilled from the session.
   function chooseInstrument(inst: Instrument) {
@@ -132,6 +167,29 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     return runs.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   }, [probes, experiments]);
 
+  /** Delete a past run. The backend refuses while it is still running, and refuses an arm of
+   *  an A/B test on its own; the list only offers the delete on rows it will accept. */
+  async function remove(r: PastRun) {
+    const id = r.kind === "probe" ? r.probe.id : r.experiment.id;
+    setDeleting(id); setError(null);
+    try {
+      if (r.kind === "probe") {
+        await api.lab.deleteProbe(sessionId, id);
+        setProbes((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        await api.lab.deleteExperiment(sessionId, id);
+        setExperiments((prev) => prev.filter((e) => e.id !== id));
+        setProbes((prev) => prev.filter((p) => p.experiment_id !== id));
+      }
+      if (selectedId.current === id) setSelected(null);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setDeleting(null);
+      setConfirming(null);
+    }
+  }
+
   function openExperiment(e: Experiment | null) {
     setInstrumentKey("");
     setSelected(null);
@@ -195,14 +253,16 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
 
   // ── Tool picker ───────────────────────────────────────────────────────────
   if (!instrument) {
+    const visible = instruments.filter((i) => !i.hidden);
+    const runsFor = (key: string) => probes.filter((p) => !p.experiment_id && p.instrument === key).length;
     return (
       <div className="h-full overflow-y-auto p-6">
-        <div className="max-w-3xl">
+        <div className="max-w-4xl">
           <div className="flex items-center gap-2 mb-1">
             <Beaker className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-medium">Behaviour Lab</h2>
           </div>
-          <p className="text-xs text-muted-foreground mb-5">
+          <p className="text-xs text-muted-foreground mb-5 max-w-2xl">
             Ask this population a structured question once, and every number that follows is computed
             from their answers. Each tool has its own inputs and its own results.
           </p>
@@ -214,77 +274,76 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            {instruments.filter((i) => !i.hidden).map((i) => (
-              <button
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {visible.map((i) => (
+              <ToolCard
                 key={i.key}
+                icon={iconFor(i.key)}
+                label={i.label}
+                description={i.description}
+                tags={i.kpis.slice(0, 3).map((k) => k.label)}
+                runs={runsFor(i.key)}
                 onClick={() => chooseInstrument(i)}
-                className="text-left rounded-xl border border-border/60 bg-card/40 hover:border-primary/50 hover:bg-card/70 transition-colors p-4"
-              >
-                <div className="text-sm font-medium text-foreground">{i.label}</div>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{i.description}</p>
-                <div className="flex flex-wrap gap-1 mt-2.5">
-                  {i.kpis.slice(0, 3).map((k) => (
-                    <span key={k.key} className="text-[10px] text-primary/80 bg-primary/10 rounded px-1.5 py-0.5">
-                      {k.label}
-                    </span>
-                  ))}
-                </div>
-              </button>
+              />
             ))}
-
             {canExperiment && (
-              <button
+              <ToolCard
+                icon={EXPERIMENT_ICON}
+                label="A/B test"
+                description="Two or more versions of the offer, answered by the same agents. Which wins, by how much, who flipped and why."
+                tags={["Lift with CI", "Who flipped", "By segment"]}
+                runs={experiments.length}
                 onClick={() => openExperiment(null)}
-                className="text-left rounded-xl border border-border/60 bg-card/40 hover:border-primary/50 hover:bg-card/70 transition-colors p-4"
-              >
-                <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  <FlaskConical className="w-3.5 h-3.5 text-primary" /> A/B test
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Two or more versions of the offer, answered by the same agents. Which wins, by how much, who flipped and why.
-                </p>
-                <div className="flex flex-wrap gap-1 mt-2.5">
-                  {["Lift with CI", "Who flipped", "By segment"].map((t) => (
-                    <span key={t} className="text-[10px] text-primary/80 bg-primary/10 rounded px-1.5 py-0.5">{t}</span>
-                  ))}
-                </div>
-              </button>
+              />
             )}
           </div>
 
           {pastRuns.length > 0 && (
-            <div className="mt-7">
-              <div className="text-xs text-muted-foreground mb-2">Past runs</div>
-              <div className="space-y-1">
-                {pastRuns.map((r) =>
-                  r.kind === "probe" ? (
-                    <button
-                      key={r.probe.id}
-                      onClick={() => select(r.probe)}
-                      className="w-full text-left px-3 py-2 rounded-lg text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex justify-between gap-3"
-                    >
-                      <span className="truncate">
-                        <span className="text-foreground/80">{instruments.find((i) => i.key === r.probe.instrument)?.label || r.probe.instrument}</span>
-                        {" · "}{r.probe.aggregates?.sentence || r.probe.status}
-                      </span>
-                      <span className="tabular-nums shrink-0">{r.probe.answer_count}/{r.probe.agent_count}</span>
-                    </button>
-                  ) : (
-                    <button
-                      key={r.experiment.id}
-                      onClick={() => openExperiment(r.experiment)}
-                      className="w-full text-left px-3 py-2 rounded-lg text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex justify-between gap-3"
-                    >
-                      <span className="truncate">
-                        <span className="text-foreground/80">A/B test{r.experiment.name ? ` · ${r.experiment.name}` : ""}</span>
-                        {" · "}{r.experiment.results?.verdict || r.experiment.status}
-                      </span>
-                      <span className="tabular-nums shrink-0">{r.experiment.variants.map((v) => v.label || v.key).join(" vs ")}</span>
-                    </button>
-                  )
-                )}
-              </div>
+            <div className="mt-6">
+              <button
+                onClick={togglePast}
+                aria-expanded={pastOpen}
+                className="w-full flex items-center gap-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="font-medium">Past runs</span>
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{pastRuns.length}</span>
+                <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${pastOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {pastOpen && (
+                <div className="rounded-xl border border-border/60 divide-y divide-border/40 overflow-hidden">
+                  {pastRuns.map((r) => {
+                    const id = r.kind === "probe" ? r.probe.id : r.experiment.id;
+                    const status = r.kind === "probe" ? r.probe.status : r.experiment.status;
+                    return (
+                      <PastRunRow
+                        key={id}
+                        icon={r.kind === "probe" ? iconFor(r.probe.instrument) : EXPERIMENT_ICON}
+                        title={
+                          r.kind === "probe"
+                            ? instruments.find((i) => i.key === r.probe.instrument)?.label || r.probe.instrument
+                            : `A/B test${r.experiment.name ? ` · ${r.experiment.name}` : ""}`
+                        }
+                        summary={r.kind === "probe" ? r.probe.aggregates?.sentence || "" : r.experiment.results?.verdict || ""}
+                        meta={
+                          r.kind === "probe"
+                            ? `${r.probe.answer_count}/${r.probe.agent_count}`
+                            : r.experiment.variants.map((v) => v.label || v.key).join(" vs ")
+                        }
+                        when={ago(r.at)}
+                        status={status}
+                        confirming={confirming === id}
+                        deleting={deleting === id}
+                        onOpen={() => (r.kind === "probe" ? select(r.probe) : openExperiment(r.experiment))}
+                        onAskDelete={() => setConfirming(id)}
+                        onCancelDelete={() => setConfirming(null)}
+                        onDelete={() => remove(r)}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -460,6 +519,103 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Picker pieces ─────────────────────────────────────────────────────────────
+
+function ToolCard({ icon: Icon, label, description, tags, runs, onClick }: {
+  icon: LucideIcon; label: string; description: string; tags: string[]; runs: number; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group text-left flex flex-col rounded-xl border border-border/60 bg-card/40 hover:border-primary/50 hover:bg-card/70 transition-colors p-4"
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4" />
+        </span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-2.5 leading-relaxed">{description}</p>
+      <div className="flex flex-wrap gap-1 mt-2.5">
+        {tags.map((t) => (
+          <span key={t} className="text-[10px] text-primary/80 bg-primary/10 rounded px-1.5 py-0.5">{t}</span>
+        ))}
+      </div>
+      <div className="mt-auto pt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+        <span className="tabular-nums">{runs === 0 ? "No runs yet" : `${runs} run${runs === 1 ? "" : "s"}`}</span>
+        <span className="flex items-center gap-0.5 text-primary opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+          Open <ChevronRight className="w-3 h-3" />
+        </span>
+      </div>
+    </button>
+  );
+}
+
+const STATUS_PILL: Record<string, string> = {
+  queued: "text-amber-300 bg-amber-500/10",
+  running: "text-amber-300 bg-amber-500/10",
+  failed: "text-red-400 bg-red-500/10",
+  stopped: "text-muted-foreground bg-muted",
+};
+
+function PastRunRow({
+  icon: Icon, title, summary, meta, when, status, confirming, deleting,
+  onOpen, onAskDelete, onCancelDelete, onDelete,
+}: {
+  icon: LucideIcon; title: string; summary: string; meta: string; when: string; status: string;
+  confirming: boolean; deleting: boolean;
+  onOpen: () => void; onAskDelete: () => void; onCancelDelete: () => void; onDelete: () => void;
+}) {
+  const running = status === "queued" || status === "running";
+  return (
+    <div className={`group flex items-center gap-3 px-3 py-2 transition-colors ${confirming ? "bg-red-500/5" : "hover:bg-muted/60"}`}>
+      <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 text-left">
+        <Icon className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] text-foreground/90 truncate">
+            <span className="font-medium">{title}</span>
+            {summary && <span className="text-muted-foreground"> · {summary}</span>}
+          </span>
+          <span className="block text-[10px] text-muted-foreground tabular-nums truncate">
+            {meta}{when ? ` · ${when}` : ""}
+          </span>
+        </span>
+      </button>
+
+      {STATUS_PILL[status] && (
+        <span className={`text-[10px] rounded px-1.5 py-0.5 shrink-0 ${STATUS_PILL[status]}`}>{status}</span>
+      )}
+
+      {confirming ? (
+        <span className="flex items-center gap-1.5 shrink-0 text-[11px]">
+          <span className="text-muted-foreground hidden sm:inline">Delete this run?</span>
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="flex items-center gap-1 rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 px-2 py-1 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />} Delete
+          </button>
+          <button onClick={onCancelDelete} disabled={deleting} className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:text-foreground">
+            Keep
+          </button>
+        </span>
+      ) : (
+        !running && (
+          <button
+            onClick={onAskDelete}
+            title="Delete this run"
+            aria-label="Delete this run"
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )
+      )}
     </div>
   );
 }

@@ -29,6 +29,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       const text = await res.text().catch(() => "");
       throw new Error(`Request failed (${res.status})${text ? `: ${text.slice(0, 300)}` : ""}`);
     }
+    if (res.status === 204) return undefined as T;
     return res.json();
   } catch (e: any) {
     if (e?.name === "AbortError") {
@@ -161,6 +162,9 @@ export const api = {
       request<Probe & { answers: ProbeAnswerRow[] }>(`/sessions/${sessionId}/probes/${probeId}`),
     stop: (sessionId: string, probeId: string) =>
       request<{ status: string }>(`/sessions/${sessionId}/probes/${probeId}/stop`, { method: "POST" }),
+    /** Standalone runs only; an arm of an A/B test goes with its experiment. 409 while running. */
+    deleteProbe: (sessionId: string, probeId: string) =>
+      request(`/sessions/${sessionId}/probes/${probeId}`, { method: "DELETE" }),
     // A/B/n experiments: one instrument, several variants, the same agents (or a seeded split).
     estimateExperiment: (sessionId: string, body: ExperimentRequest) =>
       request<ExperimentEstimate>(`/sessions/${sessionId}/experiments/estimate`, { method: "POST", body: JSON.stringify(body) }),
@@ -171,6 +175,9 @@ export const api = {
       request<Experiment>(`/sessions/${sessionId}/experiments/${experimentId}`),
     stopExperiment: (sessionId: string, experimentId: string) =>
       request<{ status: string }>(`/sessions/${sessionId}/experiments/${experimentId}/stop`, { method: "POST" }),
+    /** Removes the test, its arm probes and their answers. 409 while running. */
+    deleteExperiment: (sessionId: string, experimentId: string) =>
+      request(`/sessions/${sessionId}/experiments/${experimentId}`, { method: "DELETE" }),
     downloadExperimentCsv: async (sessionId: string, experimentId: string, filename: string) => {
       const res = await apiFetch(`/sessions/${sessionId}/experiments/${experimentId}/export.csv`);
       if (!res.ok) throw new Error(`Export failed: ${res.status}`);

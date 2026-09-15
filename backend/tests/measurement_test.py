@@ -405,6 +405,53 @@ def test_http_probe_round_trip(api_client):
     assert len(lines) == 4 and "too dear" in csv_res.text
 
 
+def test_http_delete_probe_removes_its_answers_and_refuses_what_it_should(api_client):
+    """A finished standalone run deletes with its answers. A running run and an arm of an A/B
+    test are refused with a 409 that says what to do instead."""
+    from sqlalchemy import func, select
+    from app.models.measurement import Experiment
+
+    client, Session = api_client
+    session_id = client.post("/api/v1/sessions", json={"title": "T", "query": "q", "auto_research": False}).json()["id"]
+
+    async def seed():
+        async with Session() as db:
+            for i in range(2):
+                db.add(_agent(session_id=session_id, name=f"P{i}"))
+            db.add(Probe(id="running", session_id=session_id, instrument="purchase_intent", status="running"))
+            db.add(Experiment(id="exp", session_id=session_id, instrument="purchase_intent",
+                              variants=[{"key": "A"}, {"key": "B"}], status="complete"))
+            db.add(Probe(id="arm", session_id=session_id, instrument="purchase_intent", status="complete",
+                         experiment_id="exp", variant_key="A"))
+            db.add(ProbeAnswer(probe_id="arm", session_id=session_id, agent_id="x", answer={"would_buy": "no"}))
+            await db.commit()
+    asyncio.run(seed())
+
+    body = {"instrument": "purchase_intent", "spec": {"stimulus": "A £12/month sleep tracker.", "price": 12}}
+    probe_id = client.post(f"/api/v1/sessions/{session_id}/probes", json=body).json()["id"]
+
+    async def answers(pid):
+        async with Session() as db:
+            return (await db.execute(select(func.count()).select_from(ProbeAnswer).where(ProbeAnswer.probe_id == pid))).scalar()
+    assert asyncio.run(answers(probe_id)) == 2
+
+    assert client.delete(f"/api/v1/sessions/{session_id}/probes/{probe_id}").status_code == 204
+    assert client.get(f"/api/v1/sessions/{session_id}/probes/{probe_id}").status_code == 404
+    assert asyncio.run(answers(probe_id)) == 0
+    assert client.delete(f"/api/v1/sessions/{session_id}/probes/{probe_id}").status_code == 404
+
+    r = client.delete(f"/api/v1/sessions/{session_id}/probes/running")
+    assert r.status_code == 409 and "Stop" in r.text
+    r = client.delete(f"/api/v1/sessions/{session_id}/probes/arm")
+    assert r.status_code == 409 and "A/B" in r.text
+
+    # The experiment takes its arms and their answers with it.
+    assert client.delete(f"/api/v1/sessions/{session_id}/experiments/exp").status_code == 204
+    assert client.get(f"/api/v1/sessions/{session_id}/experiments/exp").status_code == 404
+    assert client.get(f"/api/v1/sessions/{session_id}/probes/arm").status_code == 404
+    assert asyncio.run(answers("arm")) == 0
+
+
 def test_http_unknown_instrument_is_404(api_client):
     client, _ = api_client
     session_id = client.post("/api/v1/sessions", json={"title": "T", "query": "q", "auto_research": False}).json()["id"]

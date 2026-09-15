@@ -7,7 +7,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthUser, get_current_user, get_owned_session
@@ -270,6 +270,31 @@ async def stop_probe(
         p.status = "stopped"
         await db.commit()
     return {"status": p.status}
+
+
+@router.delete("/sessions/{session_id}/probes/{probe_id}", status_code=204)
+async def delete_probe(
+    session_id: str,
+    probe_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a standalone probe and every answer under it.
+
+    An arm of an A/B test is deleted with its experiment, never on its own — the comparison
+    would be left pointing at a missing probe. A run still in flight must be stopped first:
+    the runner keeps writing answers under the probe id until it notices the stop."""
+    await get_owned_session(session_id, user, db)
+    p = await db.get(Probe, probe_id)
+    if not p or p.session_id != session_id:
+        raise HTTPException(404, "Probe not found")
+    if p.experiment_id:
+        raise HTTPException(409, "This run is one arm of an A/B test. Delete the test instead.")
+    if p.status in ("queued", "running"):
+        raise HTTPException(409, "Stop the run before deleting it.")
+    await db.execute(delete(ProbeAnswer).where(ProbeAnswer.probe_id == probe_id))
+    await db.delete(p)
+    await db.commit()
 
 
 @router.get("/sessions/{session_id}/probes/{probe_id}/export.csv")
@@ -539,6 +564,26 @@ async def stop_experiment(
                 p.status = "stopped"
         await db.commit()
     return {"status": e.status}
+
+
+@router.delete("/sessions/{session_id}/experiments/{experiment_id}", status_code=204)
+async def delete_experiment(
+    session_id: str,
+    experiment_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an A/B test, its arm probes and every answer under them. Stop it first if it is
+    still running."""
+    await get_owned_session(session_id, user, db)
+    e = await _owned_experiment(session_id, experiment_id, db)
+    if e.status in ("queued", "running"):
+        raise HTTPException(409, "Stop the test before deleting it.")
+    arm_ids = select(Probe.id).where(Probe.experiment_id == experiment_id)
+    await db.execute(delete(ProbeAnswer).where(ProbeAnswer.probe_id.in_(arm_ids)))
+    await db.execute(delete(Probe).where(Probe.experiment_id == experiment_id))
+    await db.delete(e)
+    await db.commit()
 
 
 @router.get("/sessions/{session_id}/experiments/{experiment_id}/export.csv")
