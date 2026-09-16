@@ -71,6 +71,7 @@ async def list_agents(session_id: str, user: AuthUser = Depends(get_current_user
             "verdict": getattr(a, "verdict", None),
             "segment": getattr(a, "segment", None),
             "demographics": getattr(a, "demographics", None) or {},
+            "weight": getattr(a, "weight", None) or 1.0,
         }
         for a in agents
     ]

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { X, Network } from "lucide-react";
-import type { Agent, PopulationBuild } from "@/lib/api";
+import type { Agent, FrameCategory, FrameTarget, PopulationBuild, PopulationFrame } from "@/lib/api";
 
 /**
  * The sampling frame as a graph. Nodes are the cells the population is drawn from — the plan's
@@ -14,6 +14,8 @@ import type { Agent, PopulationBuild } from "@/lib/api";
 
 interface Props {
   build: PopulationBuild | null;
+  /** When the Studio has a sampling frame, its targets size the rings instead of the plan's own split. */
+  frame?: PopulationFrame | null;
   agents: Partial<Agent>[];
   targetCount: number;
   spawning: boolean;
@@ -36,7 +38,7 @@ const TYPE_META: Record<NodeType, { label: string; color: string }> = {
 };
 const OUTER_ORDER: NodeType[] = ["region", "age", "gender", "income", "education", "occupation", "stance", "mood"];
 
-interface FrameNode { id: string; type: NodeType; label: string; planned: number; actual: number }
+interface FrameNode { id: string; type: NodeType; label: string; planned: number; actual: number; source?: string }
 interface FrameEdge { from: string; to: string; planned: number; actual: number }
 
 function norm(s: string) { return s.trim().toLowerCase(); }
@@ -48,7 +50,55 @@ function bandsFor(min?: number, max?: number): string[] {
   return [...new Set(out)];
 }
 
-export function buildFrame(build: PopulationBuild | null, agents: Partial<Agent>[], targetCount: number): { nodes: FrameNode[]; edges: FrameEdge[] } {
+const ATTR_TYPE: Record<string, NodeType> = { region: "region", age: "age", gender: "gender", income: "income", education: "education", occupation: "occupation" };
+const INCOME_WORDS: Record<string, string[]> = { low: ["low", "lower", "bottom", "poor", "deprived", "under", "below"], middle: ["middle", "mid", "median", "average", "moderate"], high: ["high", "upper", "top", "affluent", "wealthy", "over", "above"] };
+const EDU_WORDS: Record<string, string[]> = { none: ["no qualification", "none"], secondary: ["secondary", "gcse", "school", "a-level", "a level", "college"], degree: ["degree", "graduate", "bachelor", "university", "higher"], postgraduate: ["postgraduate", "master", "phd", "doctor"] };
+
+function ageBounds(c: FrameCategory): [number, number] | null {
+  if (c.age_max && c.age_max >= (c.age_min || 0)) return [c.age_min || 0, c.age_max];
+  const m = c.label.match(/^\s*(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})/); if (m) return [+m[1], +m[2]];
+  const p = c.label.match(/^\s*(\d{1,3})\s*\+/); if (p) return [+p[1], 120];
+  const u = c.label.toLowerCase().match(/^\s*(?:under|<)\s*(\d{1,3})/); if (u) return [0, +u[1] - 1];
+  return null;
+}
+function genderKey(x: string): string {
+  const v = norm(x);
+  if (["f", "female", "females", "woman", "women", "girl"].includes(v) || v.startsWith("fem") || v.startsWith("wom")) return "f";
+  if (["m", "male", "males", "man", "men", "boy"].includes(v) || v.startsWith("mal") || v.startsWith("men")) return "m";
+  return "";
+}
+function keywordCategory(value: string, cats: FrameCategory[], words: Record<string, string[]>): string | null {
+  const v = norm(value); if (!v) return null;
+  for (const c of cats) { const l = norm(c.label); if (l && (l.includes(v) || v.includes(l))) return c.label; }
+  for (const c of cats) { const l = norm(c.label); for (const ws of Object.values(words)) if (ws.some((w) => l.includes(w)) && ws.some((w) => v.includes(w))) return c.label; }
+  return null;
+}
+/** Which target category a value falls in (same rules as the backend's frame.category_of). */
+function categoryOf(attr: string, t: FrameTarget, value?: string | null, age?: number | null): string | null {
+  const cats = t.categories || [];
+  if (attr === "age") { if (age == null) return null; for (const c of cats) { const b = ageBounds(c); if (b && age >= b[0] && age <= b[1]) return c.label; } return null; }
+  const v = norm(value || ""); if (!v) return null;
+  if (attr === "gender") { const g = genderKey(v); for (const c of cats) if (g && genderKey(c.label) === g) return c.label; return null; }
+  if (attr === "income") return keywordCategory(v, cats, INCOME_WORDS);
+  if (attr === "education") return keywordCategory(v, cats, EDU_WORDS);
+  for (const c of cats) { const l = norm(c.label); if (l && (v.includes(l) || (v.length >= 4 && l.includes(v)))) return c.label; }
+  return null;
+}
+/** The frame's active targets keyed by the node type they drive. */
+function targetsByType(frame?: PopulationFrame | null): Map<NodeType, { target: FrameTarget; attr: string; label: string }> {
+  const out = new Map<NodeType, { target: FrameTarget; attr: string; label: string }>();
+  for (const d of frame?.dimensions || []) {
+    const t = frame?.targets?.[d.key];
+    if (!t || !["found", "proxy", "uploaded", "estimated"].includes(t.status) || !t.categories?.length) continue;
+    const attr = t.status === "proxy" ? t.proxy_attribute : d.attribute;
+    const type = ATTR_TYPE[attr];
+    if (type && !out.has(type)) out.set(type, { target: t, attr, label: d.label });
+  }
+  return out;
+}
+
+export function buildFrame(build: PopulationBuild | null, agents: Partial<Agent>[], targetCount: number, frame?: PopulationFrame | null): { nodes: FrameNode[]; edges: FrameEdge[] } {
+  const framed = targetsByType(frame);
   const nodes = new Map<string, FrameNode>();
   const edges = new Map<string, FrameEdge>();
   const node = (type: NodeType, raw: string): FrameNode => {
@@ -71,16 +121,37 @@ export function buildFrame(build: PopulationBuild | null, agents: Partial<Agent>
     const sNode = node("segment", seg.name);
     sNode.planned += count;
     const d = seg.demographics || {};
+    // A type the frame drives: the segment's values are routed to the target's cells (edges only —
+    // the ring itself is the target's share); other types keep the plan's own split.
+    const routed = (type: NodeType, values: string[] | undefined) => {
+      const f = framed.get(type)!;
+      const vals = (values || []).filter(Boolean);
+      for (const v of vals) { const lab = categoryOf(f.attr, f.target, v); if (lab) edge(sNode, node(type, lab)).planned += count / vals.length; }
+    };
     const spread = (type: NodeType, values: string[] | undefined) => {
+      if (framed.has(type)) { routed(type, values); return; }
       const vals = (values || []).filter(Boolean);
       for (const v of vals) { const n = node(type, v); const share = count / vals.length; n.planned += share; edge(sNode, n).planned += share; }
     };
     spread("region", d.regions);
-    spread("age", bandsFor(d.age_min, d.age_max));
+    if (framed.has("age")) {
+      const f = framed.get("age")!;
+      if (d.age_min && d.age_max && d.age_max >= d.age_min) {
+        const span = d.age_max - d.age_min + 1;
+        for (const c of f.target.categories) { const b = ageBounds(c); if (!b) continue; const ov = Math.max(0, Math.min(d.age_max, b[1]) - Math.max(d.age_min, b[0]) + 1); if (ov) edge(sNode, node("age", c.label)).planned += (count * ov) / span; }
+      }
+    } else spread("age", bandsFor(d.age_min, d.age_max));
     if (typeof d.gender_female_pct === "number") {
       const f = (count * d.gender_female_pct) / 100;
-      const fn = node("gender", "female"); fn.planned += f; edge(sNode, fn).planned += f;
-      const mn = node("gender", "male"); mn.planned += count - f; edge(sNode, mn).planned += count - f;
+      if (framed.has("gender")) {
+        const g = framed.get("gender")!;
+        const fl = categoryOf("gender", g.target, "female"), ml = categoryOf("gender", g.target, "male");
+        if (fl) edge(sNode, node("gender", fl)).planned += f;
+        if (ml) edge(sNode, node("gender", ml)).planned += count - f;
+      } else {
+        const fn = node("gender", "female"); fn.planned += f; edge(sNode, fn).planned += f;
+        const mn = node("gender", "male"); mn.planned += count - f; edge(sNode, mn).planned += count - f;
+      }
     }
     if (d.income_band) spread("income", [d.income_band]);
     if (d.education) spread("education", [d.education]);
@@ -88,7 +159,11 @@ export function buildFrame(build: PopulationBuild | null, agents: Partial<Agent>
     spread("stance", [seg.stance]);
     if (seg.sentiment?.mood) spread("mood", [seg.sentiment.mood]);
   }
-  if (segments.length === 0) {
+  // The frame's targets: one node per cell, ring = the intended count, labelled with the source.
+  for (const [type, f] of framed) {
+    for (const c of f.target.categories) { const n = node(type, c.label); n.planned = (targetCount * c.share_pct) / 100; n.source = `${f.label} · ${f.target.status === "estimated" ? "model estimate" : f.target.source || f.target.status}`; }
+  }
+  if (segments.length === 0 && framed.size === 0) {
     for (const g of build?.detected?.segments_hinted || []) node("hinted", g);
   }
 
@@ -97,14 +172,17 @@ export function buildFrame(build: PopulationBuild | null, agents: Partial<Agent>
     const sNode = a.segment ? node("segment", a.segment) : null;
     if (sNode) sNode.actual += 1;
     const demo = (a.demographics || {}) as Record<string, string | undefined>;
-    const bump = (type: NodeType, raw?: string | null) => {
-      if (!raw) return;
-      const n = node(type, raw);
+    const bump = (type: NodeType, raw?: string | null, age?: number | null) => {
+      const f = framed.get(type);
+      let label: string | null = raw || null;
+      if (f) label = categoryOf(f.attr, f.target, raw, age);
+      if (!label) return;
+      const n = node(type, label);
       n.actual += 1;
       if (sNode) edge(sNode, n).actual += 1;
     };
     bump("region", demo.region);
-    bump("age", typeof a.age === "number" ? ageBand(a.age) : undefined);
+    bump("age", typeof a.age === "number" ? ageBand(a.age) : undefined, typeof a.age === "number" ? a.age : null);
     bump("gender", demo.gender && demo.gender !== "n/a" ? demo.gender : undefined);
     bump("income", demo.income_band);
     bump("education", demo.education);
@@ -126,8 +204,9 @@ function layout(nodes: FrameNode[]) {
   return pos;
 }
 
-export default function SamplingFrameGraph({ build, agents, targetCount, spawning, onClose }: Props) {
-  const { nodes, edges } = useMemo(() => buildFrame(build, agents, targetCount), [build, agents, targetCount]);
+export default function SamplingFrameGraph({ build, frame, agents, targetCount, spawning, onClose }: Props) {
+  const { nodes, edges } = useMemo(() => buildFrame(build, agents, targetCount, frame), [build, agents, targetCount, frame]);
+  const framedTypes = useMemo(() => targetsByType(frame), [frame]);
   const pos = useMemo(() => layout(nodes), [nodes]);
   const maxV = Math.max(1, ...nodes.map((n) => Math.max(n.planned, n.actual)));
   const radius = (v: number) => (v <= 0 ? 0 : 7 + 40 * Math.sqrt(v / maxV));
@@ -203,6 +282,14 @@ export default function SamplingFrameGraph({ build, agents, targetCount, spawnin
                 </div>
               ))}
             </div>
+            {framedTypes.size > 0 && (
+              <div className="mt-3 space-y-1">
+                <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Rings from the frame</div>
+                {[...framedTypes.entries()].map(([type, f]) => (
+                  <div key={type} className="text-[10.5px] text-muted-foreground/80 leading-snug"><span className="text-foreground/80">{TYPE_META[type].label}</span>: {f.target.status === "estimated" ? "model estimate" : f.target.source || f.target.status}{f.target.year ? ` (${f.target.year})` : ""}</div>
+                ))}
+              </div>
+            )}
             <p className="text-[10.5px] text-muted-foreground/70 leading-snug mt-4">A node's size is the number of personas in that cell, and nothing else. A place with more personas inflates more than one with fewer, whatever the sources say about it.</p>
             {nodes.some((n) => n.type !== "segment" && n.planned === 0 && n.actual > 0) && (
               <p className="text-[10.5px] text-amber-300/80 leading-snug mt-2">Solid nodes with no ring are cells the personas brought that the plan did not name.</p>

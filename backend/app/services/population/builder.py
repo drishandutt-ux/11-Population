@@ -25,6 +25,7 @@ from app.models.population import PopulationBuild
 from app.models.session import AnalysisSession, SessionStatus
 from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
 
+from . import frame as frame_mod
 from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts
 
 _tasks: dict[str, asyncio.Task] = {}
@@ -248,7 +249,7 @@ def build_payload(bld: PopulationBuild) -> dict:
     return {
         "id": bld.id, "session_id": bld.session_id, "status": bld.status, "mode": bld.mode, "target_count": bld.target_count,
         "constraints": bld.constraints or {}, "sources": bld.sources or {}, "detected": bld.detected, "questions": bld.questions or [],
-        "plan": bld.plan, "log": bld.log or [], "error": bld.error, "created_at": _iso(bld.created_at), "updated_at": _iso(bld.updated_at),
+        "plan": bld.plan, "frame": bld.frame, "log": bld.log or [], "error": bld.error, "created_at": _iso(bld.created_at), "updated_at": _iso(bld.updated_at),
     }
 
 
@@ -739,6 +740,29 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                     except Exception as e:  # noqa: BLE001
                         await log(build_id, "gather", "warn", "Could not re-read the dials against the statistics", str(e)[:120])
 
+            # ── sampling frame: the dimensions to match and the real distribution of each ──
+            bld = await _load(build_id)
+            try:
+                inp = await _gather_inputs(bld, question)
+                dims = await frame_mod.pick_dimensions(bld.session_id, question, detected, constraints_summary(bld.constraints or {}))
+                await log(build_id, "frame", "info", "Sampling frame — the dimensions this population must match: " + ", ".join(f"{k + 1}. {d['label']}" for k, d in enumerate(dims)),
+                          " · ".join(f"{d['label']}: {d.get('why', '')}" for d in dims)[:400])
+                targets = await frame_mod.derive_targets(bld.session_id, dims, detected.get("geography") or "", inp.get("facts_rows") or [])
+                for d in dims:
+                    tg = targets.get(d["key"]) or {}
+                    if tg.get("status") == "found":
+                        await log(build_id, "frame", "ok", f"Found · {d['label']}: {len(tg['categories'])} categories from {tg.get('source') or 'the statistics on file'}",
+                                  f"{tg.get('geography') or ''} {tg.get('year') or ''}".strip() + (" · " + tg["note"] if tg.get("note") else ""))
+                    elif tg.get("status") == "proxy":
+                        await log(build_id, "frame", "decision", f"Proxy · {d['label']} matched via {tg.get('proxy_attribute')}: {tg.get('source') or ''}", tg.get("note"))
+                    else:
+                        await log(build_id, "frame", "warn", f"No published distribution for {d['label']} — your call: estimate, upload, use a proxy, or skip", tg.get("note"))
+                bld = await _save(build_id, frame={"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or ""})
+            except Exception as e:  # noqa: BLE001
+                await log(build_id, "frame", "warn", "Could not build the sampling frame; the plan will not be matched to published distributions", str(e)[:120])
+            if _stopped(build_id):
+                return
+
             # ── clarifying questions ──
             bld = await _save(build_id, status="clarifying")
             inp = await _gather_inputs(bld, question)
@@ -752,12 +776,17 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 questions = []
             if _stopped(build_id):
                 return
-            if questions and not (bld.constraints or {}).get("skip_questions"):
+            gap_dims = frame_mod.gaps(bld.frame or {}) if bld.frame else []
+            if (questions or gap_dims) and not (bld.constraints or {}).get("skip_questions"):
                 for n, q in enumerate(questions, 1):
                     await log(build_id, "clarify", "question", f"Q{n}: {q['text']}", q.get("why"))
+                for d in gap_dims:
+                    await log(build_id, "clarify", "question", f"Frame gap · {d['label']}: no published distribution — estimate it, upload one, use a proxy, or skip", d.get("why"))
                 await log(build_id, "clarify", "info", "Waiting for your answers (or skip to plan on the defaults)")
                 await _save(build_id, questions=questions, status="clarifying")
                 return  # the answers endpoint resumes at "plan"
+            if gap_dims:
+                await _skip_open_gaps(build_id, "questions skipped")
             await log(build_id, "clarify", "ok", "No clarifying questions needed" if not questions else "Questions skipped — planning on the defaults")
             await _save(build_id, questions=questions)
             from_stage = "plan"
@@ -798,6 +827,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     for a in plan["assumptions"][:5]:
         await log(build_id, "plan", "warn", f"Assumed: {a}")
     await log(build_id, "plan", "ok", f"Plan ready: {len(segments)} segments for {bld.target_count} agents. Review each one — accept, edit or reject with a reason.", plan.get("evidence_coverage"))
+    await refresh_frame_report(build_id)
 
 
 async def answer_questions(build_id: str, answers: dict[str, str], skip: bool = False) -> Optional[PopulationBuild]:
@@ -816,10 +846,85 @@ async def answer_questions(build_id: str, answers: dict[str, str], skip: bool = 
     if skip or not answered:
         await log(build_id, "clarify", "decision", "Proceeding on the default assumptions")
     bld = await _save(build_id, questions=qs)
-    async with dbm.AsyncSessionLocal() as db:
-        sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == bld.session_id))).scalar_one_or_none()
+    if bld.frame and frame_mod.gaps(bld.frame):
+        bld = await _skip_open_gaps(build_id, "left open when you moved on to the plan")
     _stop[build_id] = False
     _tasks[build_id] = asyncio.create_task(_run_to_review(build_id, from_stage="plan"))
+    return bld
+
+
+async def _skip_open_gaps(build_id: str, why: str) -> Optional[PopulationBuild]:
+    bld = await _load(build_id)
+    if not bld or not bld.frame:
+        return bld
+    fr = dict(bld.frame)
+    targets = dict(fr.get("targets") or {})
+    for d in frame_mod.gaps(fr):
+        targets[d["key"]] = frame_mod.skipped_target()
+        await log(build_id, "frame", "decision", f"Skipped · {d['label']}: not matched ({why})", "Nothing was invented; the population is weighted on the dimensions that have data")
+    fr["targets"] = targets
+    return await _save(build_id, frame=fr)
+
+
+async def refresh_frame_report(build_id: str) -> Optional[PopulationBuild]:
+    """Recompute target vs planned for the current plan (called after plan / re-plan / segment edits)."""
+    bld = await _load(build_id)
+    if not bld or not bld.frame or not bld.plan:
+        return bld
+    fr = dict(bld.frame)
+    fr["report"] = frame_mod.build_report(fr, bld.plan.get("segments") or [], bld.target_count)
+    bld = await _save(build_id, frame=fr)
+    rep = fr["report"]
+    if rep.get("level") != "none":
+        await log(build_id, "frame", "ok" if rep["level"] == "good" else "warn",
+                  f"Plan vs frame: {rep['level']} — worst cell {rep['worst_deviation_pts']} pts off the target",
+                  f"matched exactly on {', '.join(rep['matched_exactly']) or 'none'}; weighted on {', '.join(rep['weighted_only']) or 'none'}")
+    return bld
+
+
+async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories: Optional[list] = None, source: str = "", proxy_of: Optional[str] = None) -> Optional[PopulationBuild]:
+    """The ladder for one dimension: estimate (model, labelled) · upload (analyst's table) · proxy (another dimension's data) · skip."""
+    bld = await _load(build_id)
+    if not bld or not bld.frame:
+        raise ValueError("this build has no sampling frame")
+    fr = dict(bld.frame)
+    dim = next((d for d in fr.get("dimensions") or [] if d["key"] == key), None)
+    if not dim:
+        raise ValueError(f"unknown frame dimension {key!r}")
+    targets = dict(fr.get("targets") or {})
+    if action == "estimate":
+        tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "")
+        if tg["status"] == "estimated":
+            await log(build_id, "frame", "decision", f"Estimated · {dim['label']} from the model's knowledge — labelled model_inference, lowers confidence", tg.get("note"))
+        else:
+            await log(build_id, "frame", "warn", f"The model declined to estimate {dim['label']}", tg.get("note"))
+    elif action == "upload":
+        tg = frame_mod.uploaded_target(categories or [], source, fr.get("geography") or "")
+        await log(build_id, "frame", "decision", f"Uploaded · {dim['label']}: {len(tg['categories'])} categories from {tg['source']}", None)
+    elif action == "proxy":
+        if not proxy_of:
+            raise ValueError("proxy needs the dimension to stand in (proxy_of)")
+        tg = frame_mod.proxy_target(fr, proxy_of)
+        await log(build_id, "frame", "decision", f"Proxy · {dim['label']} matched via {proxy_of}", tg.get("note"))
+    elif action == "skip":
+        tg = frame_mod.skipped_target()
+        await log(build_id, "frame", "decision", f"Skipped · {dim['label']}: not matched", None)
+    else:
+        raise ValueError("action must be estimate, upload, proxy or skip")
+    targets[key] = tg
+    fr["targets"] = targets
+    bld = await _save(build_id, frame=fr)
+    if bld.plan:
+        bld = await refresh_frame_report(build_id)
+    return bld
+
+
+async def frame_estimate_all(build_id: str) -> Optional[PopulationBuild]:
+    bld = await _load(build_id)
+    if not bld or not bld.frame:
+        raise ValueError("this build has no sampling frame")
+    for d in list(frame_mod.gaps(bld.frame)):
+        bld = await resolve_frame_gap(build_id, d["key"], "estimate")
     return bld
 
 
@@ -1004,15 +1109,24 @@ async def _spawn(build_id: str):
         await log(build_id, "spawn", "info", f"Writing {len(profiles)} agents to the session")
         planned = sum(int(sg.get("count") or 0) for sg in segments)
         stopped_early = _stopped(build_id)
+        # Raking weights to the sampling frame: what the roster could not match exactly is corrected in every weighted number.
+        weights = [1.0] * len(profiles)
+        if bld.frame and frame_mod.active_targets(bld.frame):
+            try:
+                weights, _ = frame_mod.weights_for(bld.frame, profiles)
+            except Exception as e:  # noqa: BLE001
+                await log(build_id, "frame", "warn", "Could not compute frame weights; agents count as one person each", str(e)[:120])
+        for p, w in zip(profiles, weights):
+            setattr(p, "weight", w)
         async with dbm.AsyncSessionLocal() as db:
             db.add_all([
                 SpawnedAgent(
                     id=p.id, session_id=session_id, name=p.name, age=p.age, role=p.role, background=p.background, stance=p.stance,
                     correlation=p.correlation, personality=p.personality, debate_style=p.debate_style, energy=p.energy,
                     avatar_color=p.avatar_color, dials=p.dials or {}, humanity=p.humanity or 0, segment=p.segment or None,
-                    demographics=p.demographics or None,
+                    demographics=p.demographics or None, weight=w,
                 )
-                for p in profiles
+                for p, w in zip(profiles, weights)
             ])
             sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
             if sess:
@@ -1032,7 +1146,15 @@ async def _spawn(build_id: str):
             await log(build_id, "spawn", "warn", f"Stopped early: {total} of {planned} planned agents were written and kept", " · ".join(f"{k}: {v}" for k, v in by_seg.items()))
         else:
             await log(build_id, "spawn", "ok", f"Population built: {total} agents", " · ".join(f"{k}: {v}" for k, v in by_seg.items()))
-        await _save(build_id, status="complete")
+        fields: dict = {"status": "complete"}
+        if bld.frame:
+            fr = dict(bld.frame)
+            fr["report"] = frame_mod.build_report(fr, segments, total, profiles)
+            fields["frame"] = fr
+            rep = fr["report"]
+            await log(build_id, "frame", "ok" if rep.get("level") in ("good", "none") else "warn", "Representativeness: " + frame_mod.summary_line(rep),
+                      ("Cells not safe to cut by: " + "; ".join(rep["thin_cells"])) if rep.get("thin_cells") else None)
+        await _save(build_id, **fields)
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         await log(build_id, "spawn", "error", f"Build failed: {type(e).__name__}: {str(e)[:200]}")

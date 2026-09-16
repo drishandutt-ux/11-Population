@@ -388,6 +388,23 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
 
         rows.sort(key=lambda r: r["agent_id"])
         aggregates = instrument.aggregate(rows, spec)
+        # Weighted to the Studio's sampling frame (L2-02): the primary metric with each agent counting
+        # for the people it stands for, beside the one-agent-one-vote figure, plus the effective n.
+        try:
+            wmap = {a.id: float(getattr(a, "weight", None) or 1.0) for a in chosen}
+            primary = next((m for m in (getattr(instrument, "metrics", None) or []) if getattr(m, "primary", False)), None)
+            if rows and primary and any(abs(w - 1.0) > 1e-6 for w in wmap.values()):
+                from app.services.population import frame as frame_mod
+                vals = [primary.value(r["answer"]) for r in rows]
+                ws = [wmap.get(r["agent_id"], 1.0) for r in rows]
+                aggregates["weighted"] = {
+                    "metric": primary.key, "label": primary.label, "format": primary.format,
+                    "weighted": frame_mod.weighted_level(primary.format, vals, ws),
+                    "unweighted": frame_mod.weighted_level(primary.format, vals, [1.0] * len(vals)),
+                    "ess": frame_mod.ess_of(ws), "n": len(rows),
+                }
+        except Exception as e:  # noqa: BLE001
+            print(f"[probe] weighted headline skipped: {type(e).__name__}: {e}")
         status = "stopped" if (failed + len(rows)) < len(chosen) else "complete"
         await _set_status(
             probe_id, status=status, answer_count=len(rows), failed_count=failed,

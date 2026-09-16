@@ -514,6 +514,17 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
                   {selected.failed_count ? `, ${selected.failed_count} failed and are excluded from every number above` : ""} ·
                   model {selected.model} · seed {selected.seed} · schema {selected.schema_id}
                 </p>
+                {selected.aggregates.weighted && selected.aggregates.weighted.weighted !== null && (
+                  <p className="text-[11px] text-foreground/85 bg-muted/30 border border-border/60 rounded-lg px-3 py-2">
+                    <span className="font-medium">Weighted to the sampling frame:</span> {selected.aggregates.weighted.label}{" "}
+                    <span className="font-semibold text-primary tabular-nums">
+                      {selected.aggregates.weighted.format === "share" ? `${Math.round((selected.aggregates.weighted.weighted || 0) * 100)}%` : selected.aggregates.weighted.weighted}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      (one agent one vote: {selected.aggregates.weighted.format === "share" ? `${Math.round((selected.aggregates.weighted.unweighted || 0) * 100)}%` : selected.aggregates.weighted.unweighted} · effective n {selected.aggregates.weighted.ess} of {selected.aggregates.weighted.n})
+                    </span>
+                  </p>
+                )}
               </>
             )}
           </div>

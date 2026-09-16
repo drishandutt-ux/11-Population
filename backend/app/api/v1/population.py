@@ -105,6 +105,40 @@ async def decide_segment(session_id: str, build_id: str, segment_id: str, body: 
     if bld.status not in ("awaiting_review", "planning", "stopped", "complete", "error"):
         raise HTTPException(status_code=409, detail=f"Build is {bld.status}; segments can only be reviewed once the plan exists")
     out = await builder.decide_segment(build_id, segment_id, body.decision, body.edits, body.reason)
+    out = (await builder.refresh_frame_report(build_id)) or out
+    return builder.build_payload(out)
+
+
+class FrameActionRequest(BaseModel):
+    action: str                                   # estimate | upload | proxy | skip
+    categories: Optional[list[dict]] = None       # upload: [{label, share_pct, age_min?, age_max?}]
+    source: Optional[str] = ""
+    proxy_of: Optional[str] = None                # proxy: the dimension key whose distribution stands in
+
+
+@router.post("/sessions/{session_id}/population/builds/{build_id}/frame/estimate-all")
+async def frame_estimate_all(session_id: str, build_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Resolve every open frame gap with a labelled model estimate (the model may decline attitudinal ones)."""
+    bld = await _owned_build(session_id, build_id, user, db)
+    if bld.status in ("spawning", "detecting", "gathering", "planning"):
+        raise HTTPException(status_code=409, detail=f"Build is {bld.status}")
+    try:
+        out = await builder.frame_estimate_all(build_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return builder.build_payload(out)
+
+
+@router.post("/sessions/{session_id}/population/builds/{build_id}/frame/{dim_key}")
+async def frame_action(session_id: str, build_id: str, dim_key: str, body: FrameActionRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The ladder for one frame dimension: estimate · upload · proxy · skip."""
+    bld = await _owned_build(session_id, build_id, user, db)
+    if bld.status in ("spawning", "detecting", "gathering", "planning"):
+        raise HTTPException(status_code=409, detail=f"Build is {bld.status}")
+    try:
+        out = await builder.resolve_frame_gap(build_id, dim_key, body.action, categories=body.categories, source=body.source or "", proxy_of=body.proxy_of)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return builder.build_payload(out)
 
 

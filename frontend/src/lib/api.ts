@@ -225,6 +225,10 @@ export const api = {
     get: (sessionId: string, buildId: string) => request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}`),
     answer: (sessionId: string, buildId: string, answers: Record<string, string>, skip = false) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/answers`, { method: "POST", body: JSON.stringify({ answers, skip }) }),
+    frameAction: (sessionId: string, buildId: string, dimKey: string, body: { action: "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/frame/${encodeURIComponent(dimKey)}`, { method: "POST", body: JSON.stringify(body) }),
+    frameEstimateAll: (sessionId: string, buildId: string) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/frame/estimate-all`, { method: "POST" }),
     decide: (sessionId: string, buildId: string, segmentId: string, body: { decision: "accept" | "reject" | "edit"; edits?: Partial<PopulationSegment>; reason?: string }) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/segments/${segmentId}`, { method: "POST", body: JSON.stringify(body) }),
     replan: (sessionId: string, buildId: string, body: { constraints?: PopulationConstraints; count?: number; keep_accepted?: boolean }) =>
@@ -331,6 +335,8 @@ export type Agent = {
   /** Population Studio: the plan segment this agent was built from, and the demographics it fixed. */
   segment?: string | null;
   demographics?: AgentDemographics;
+  /** Raking weight to the Studio's sampling frame; 1 when the population was not weighted. */
+  weight?: number;
 };
 
 export type AgentDemographics = {
@@ -507,6 +513,8 @@ export type Interval = { share: number; low: number; high: number; n: number; su
 export type MeanInterval = { mean: number; low: number; high: number; median: number; p25: number; p75: number; sd: number; n: number };
 
 export type ProbeAggregates = {
+  /** The primary metric weighted to the sampling frame, beside the one-agent-one-vote figure. */
+  weighted?: { metric: string; label: string; format: string; weighted: number | null; unweighted: number | null; ess: number; n: number };
   n: number;
   sentence: string;
   headline?: Interval & { metric: string; label: string };
@@ -845,6 +853,15 @@ export type PopulationDetected = {
   confidence: number;
 };
 
+// ── The sampling frame (Studio; brief L2-01…L2-05) ───────────────────────────
+export type FrameCategory = { label: string; share_pct: number; age_min?: number; age_max?: number };
+export type FrameDimension = { key: string; label: string; attribute: string; kind: "demographic" | "behavioural" | "attitudinal"; why: string; matchable: boolean; proxy_attribute: string };
+export type FrameTarget = { status: "found" | "proxy" | "uploaded" | "estimated" | "skipped" | "missing"; categories: FrameCategory[]; source: string; year: string; geography: string; proxy_attribute: string; note: string; provenance?: string; confidence?: number };
+export type FrameReportCell = { label: string; target_pct: number; planned_pct: number; achieved_pct: number | null; achieved_n: number | null; expected_n: number; thin: boolean };
+export type FrameReportDim = { key: string; label: string; attribute: string; status: string; source: string; year: string; geography: string; provenance: string; priority: number; mode: "exact" | "weighted" | "unmatched"; cells?: FrameReportCell[]; max_deviation_planned?: number; max_deviation_achieved?: number | null; unplaced?: number | null };
+export type FrameReport = { level: "good" | "fair" | "poor" | "none"; worst_deviation_pts: number; matched_exactly: string[]; weighted_only: string[]; unmatched: string[]; estimated: string[]; dimensions: FrameReportDim[]; thin_cells: string[]; stage: "planned" | "achieved"; n: number | null; ess: number | null };
+export type PopulationFrame = { dimensions: FrameDimension[]; targets: Record<string, FrameTarget>; report: FrameReport | null; geography: string };
+
 export type PopulationBuildStatus =
   | "queued" | "detecting" | "gathering" | "clarifying" | "planning" | "awaiting_review" | "spawning" | "complete" | "stopped" | "error";
 
@@ -859,6 +876,7 @@ export type PopulationBuild = {
   detected: PopulationDetected | null;
   questions: PopulationQuestion[];
   plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string } | null;
+  frame?: PopulationFrame | null;
   log: PopulationLogEntry[];
   error: string | null;
   created_at: string | null;

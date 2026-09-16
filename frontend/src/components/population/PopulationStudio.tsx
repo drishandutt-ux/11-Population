@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, apiFetch, Agent, AgentPreset, EvidenceItem, PopulationBuild, PopulationConstraints, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState, Session, SimMode, WSEvent } from "@/lib/api";
+import { api, apiFetch, Agent, AgentPreset, EvidenceItem, FrameCategory, PopulationBuild, PopulationConstraints, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState, Session, SimMode, WSEvent } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import DialsPanel, { DEFAULT_CONSTRAINTS } from "@/components/population/DialsPanel";
 import SourcesPanel from "@/components/population/SourcesPanel";
 import { BuildLog, QuestionsCard, STATUS_LABEL, Stepper, isActive } from "@/components/population/BuildLog";
 import PlanReview from "@/components/population/PlanReview";
 import SamplingFrameGraph from "@/components/population/SamplingFrameGraph";
+import FrameCard from "@/components/population/FrameCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { ArrowLeft, Users, Sparkles, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Bookmark, Network } from "lucide-react";
 
@@ -148,9 +149,11 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
     return () => { unsub(); };
   }, [id, loadFacts, loadAgents]);
 
-  // Backstop poll while something runs (the socket can drop a burst).
+  // Backstop poll while something runs (the socket can drop a burst). Clarifying counts: the
+  // answers call returns before the plan stage starts, so the move to awaiting_review arrives
+  // over the socket — or, if that dropped, from this poll.
   useEffect(() => {
-    if (!build || !isActive(build.status)) return;
+    if (!build || !(isActive(build.status) || build.status === "clarifying")) return;
     const t = setInterval(loadBuild, 6000);
     return () => clearInterval(t);
   }, [build?.status, build?.id, loadBuild]);
@@ -209,6 +212,10 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   const replan = () => guard(async () => { if (build) setBuild(await api.population.replan(id, build.id, { constraints: fullConstraints, count, keep_accepted: true })); });
   const approve = () => guard(async () => { if (build) { setSpawn({ current: 0, total: keptCount }); setLiveAgents([]); setBuild(await api.population.approve(id, build.id, { count, mode })); } });
   const stop = () => guard(async () => { if (build) await api.population.stop(id, build.id); });
+  const frameAction = async (dimKey: string, body: { action: "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) => {
+    await guard(async () => { if (build) setBuild(await api.population.frameAction(id, build.id, dimKey, body)); });
+  };
+  const estimateAll = () => guard(async () => { if (build) setBuild(await api.population.frameEstimateAll(id, build.id)); });
   const search = async () => {
     setSearching(true); setError(null);
     try { await api.population.quantSearch(id, quantQuery, selectedSources, build?.id ?? null); }
@@ -342,6 +349,12 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
             </div>
           )}
 
+          {build?.frame && (
+            <ErrorBoundary label="The sampling frame">
+              <FrameCard build={build} busy={busy} readOnly={active} onAction={frameAction} onEstimateAll={estimateAll} />
+            </ErrorBoundary>
+          )}
+
           {build && status === "clarifying" && (
             <ErrorBoundary label="The questions">
               <QuestionsCard build={build} onAnswer={answer} busy={busy} />
@@ -419,7 +432,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
         </aside>
       </div>
       {frameOpen && (
-        <SamplingFrameGraph build={build} agents={liveAgents} targetCount={count} spawning={status === "spawning" || !!spawn} onClose={() => setFrameOpen(false)} />
+        <SamplingFrameGraph build={build} frame={build?.frame || null} agents={liveAgents} targetCount={count} spawning={status === "spawning" || !!spawn} onClose={() => setFrameOpen(false)} />
       )}
     </div>
   );

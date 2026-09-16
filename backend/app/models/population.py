@@ -30,6 +30,8 @@ class PopulationBuild(Base):
     detected: Mapped[Optional[dict]] = mapped_column(_JSON, nullable=True)
     questions: Mapped[list] = mapped_column(_JSON, default=list)         # [{id, text, why, suggested, default, answer}]
     plan: Mapped[Optional[dict]] = mapped_column(_JSON, nullable=True)   # {segments: [...], rationale, assumptions, evidence_coverage}
+    # The sampling frame (services/population/frame.py): {dimensions[], targets{key: {status, categories, source, …}}, report, geography}
+    frame: Mapped[Optional[dict]] = mapped_column(_JSON, nullable=True)
     log: Mapped[list] = mapped_column(_JSON, default=list)               # [{ts, stage, level, message, detail}]
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

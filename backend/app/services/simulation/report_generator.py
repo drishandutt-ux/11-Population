@@ -37,6 +37,24 @@ async def answer_report_query(
         for a in agents_list
     )
 
+    # ── 3b. The sampling frame the population was matched to (Studio) ──────
+    frame_text = "No sampling frame: the population was not matched to published distributions."
+    try:
+        from app.services.population.builder import latest_build
+        from app.services.population import frame as frame_mod
+        bld = await latest_build(session_id)
+        if bld and bld.frame:
+            rep = (bld.frame or {}).get("report")
+            frame_text = frame_mod.summary_line(rep)
+            lines = []
+            for d in (bld.frame.get("dimensions") or []):
+                tg = (bld.frame.get("targets") or {}).get(d["key"]) or {}
+                lines.append(f"- {d['label']}: {tg.get('status', 'missing')}" + (f" — {tg.get('source')} ({tg.get('geography') or ''} {tg.get('year') or ''})".rstrip() if tg.get("source") else ""))
+            if lines:
+                frame_text += "\n" + "\n".join(lines)
+    except Exception as e:  # noqa: BLE001
+        print(f"[report] frame summary unavailable: {type(e).__name__}: {e}")
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     system = (
@@ -51,6 +69,9 @@ async def answer_report_query(
 
 == KNOWLEDGE GRAPH CONTEXT ==
 {kg_context}
+
+== POPULATION FRAME (how representative the panel is — state this under SOURCE MATERIALS, including any model-estimated distribution) ==
+{frame_text}
 
 == AGENT PROFILES ({len(agents_list)} agents) ==
 {agent_profiles}

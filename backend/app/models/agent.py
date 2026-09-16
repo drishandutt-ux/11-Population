@@ -40,4 +40,6 @@ class SpawnedAgent(Base):
     # Scoped retrieval (L1-04): an optional override of the twin's derived exposure profile —
     # any subset of {geography, role, channel, register, condition, stage, segment, time, arm}.
     exposure: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    # Raking weight to the Studio's sampling frame (1.0 = counts as one person); the Lab's weighted headline reads it.
+    weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
