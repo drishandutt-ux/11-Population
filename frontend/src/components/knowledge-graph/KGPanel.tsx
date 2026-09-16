@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Network, Zap, X, ArrowRight, ArrowLeft, FileText, Layers } from "lucide-react";
+import { Network, Zap, X, ArrowRight, ArrowLeft, FileText, Layers, Filter } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import OntologyView from "./OntologyView";
+import ScopingView from "./ScopingView";
+import type { Agent } from "@/lib/api";
 
 interface Activity {
   time: number;
@@ -21,6 +23,7 @@ interface EntityDetail {
 
 interface Props {
   sessionId: string;
+  agents?: Agent[];
   entities: string[];
   relations: string[][];
   activity: Activity[];
@@ -407,11 +410,12 @@ function EntityGraph({ sessionId, entities, relations, activity }: Props) {
   );
 }
 
-type GraphView = "entities" | "ontology";
+type GraphView = "entities" | "ontology" | "scoping";
 
 const VIEWS: { key: GraphView; label: string; hint: string }[] = [
   { key: "entities", label: "Knowledge graph", hint: "Every entity and relation extracted from the sources and the debate, as written" },
   { key: "ontology", label: "Ontology", hint: "The same graph typed into classes — geography, HCP role, condition, journey stage, intervention, channel, attitude segment" },
+  { key: "scoping", label: "Scoping", hint: "What each twin is allowed to know — knowledge tagged by place, role, channel and register, matched to every twin's exposure profile" },
 ];
 
 /** The Graph tab: a view picker, then the free-text entity graph or the typed ontology over it. */
@@ -421,7 +425,7 @@ export default function KGPanel(props: Props) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0 bg-muted/20">
-        {view === "ontology" ? <Layers className="w-3.5 h-3.5 text-primary" /> : <Network className="w-3.5 h-3.5 text-primary" />}
+        {view === "ontology" ? <Layers className="w-3.5 h-3.5 text-primary" /> : view === "scoping" ? <Filter className="w-3.5 h-3.5 text-primary" /> : <Network className="w-3.5 h-3.5 text-primary" />}
         <select
           value={view}
           onChange={(e) => setView(e.target.value as GraphView)}
@@ -433,7 +437,9 @@ export default function KGPanel(props: Props) {
         <span className="text-xs text-muted-foreground truncate">{current.hint}</span>
       </div>
       <div className="flex-1 min-h-0">
-        {view === "entities" ? <EntityGraph {...props} /> : <OntologyView sessionId={props.sessionId} liveEntityCount={props.entities.length} />}
+        {view === "entities" && <EntityGraph {...props} />}
+        {view === "ontology" && <OntologyView sessionId={props.sessionId} liveEntityCount={props.entities.length} />}
+        {view === "scoping" && <ScopingView sessionId={props.sessionId} agents={props.agents || []} />}
       </div>
     </div>
   );

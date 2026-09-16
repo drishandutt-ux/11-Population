@@ -552,7 +552,7 @@ export default function SessionPage() {
           />
         )}
         {activeTab === "kg" && (
-          <KGPanel sessionId={id} entities={kgEntities} relations={kgRelations} activity={kgActivity} />
+          <KGPanel sessionId={id} agents={agents} entities={kgEntities} relations={kgRelations} activity={kgActivity} />
         )}
         {activeTab === "report" && session && (
           <ReportChat

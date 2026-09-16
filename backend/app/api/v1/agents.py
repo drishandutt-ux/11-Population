@@ -106,6 +106,10 @@ async def chat_with_agent(
     from app.services.knowledge_graph.lightrag_service import get_kg_context_string, get_lightrag
     await get_lightrag(agent.session_id)  # warm the KG cache (DB-backed)
     kg_context = get_kg_context_string(agent.session_id)
+    from app.services.scoping import service as scoping
+    if await scoping.is_scoped(agent.session_id):
+        session_row = await db.get(AnalysisSession, agent.session_id)
+        kg_context = (await scoping.context_for_agent(agent.session_id, agent, session_row.query if session_row else "", purpose="chat")) or kg_context
     history = _agent_conversations.setdefault(agent_id, [])
     reply = await chat_as_agent(agent, body.message, history, kg_context)
     history.append({"role": "user", "content": body.message})

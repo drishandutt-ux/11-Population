@@ -37,4 +37,7 @@ class SpawnedAgent(Base):
     # segment fixed (gender, region, income_band, education, occupation). None for other spawns.
     segment: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, default=None)
     demographics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    # Scoped retrieval (L1-04): an optional override of the twin's derived exposure profile —
+    # any subset of {geography, role, channel, register, condition, stage, segment, time, arm}.
+    exposure: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -252,6 +252,12 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
                 brief_text = brief_for_prompt(run.brief, 2200)
         except Exception as e:  # noqa: BLE001
             print(f"[orchestrator] research context unavailable: {e}")
+        # Scoped retrieval (L1-04): once a session's knowledge has been facet-tagged, each twin
+        # gets what its own profile can reach, with a route per item, instead of one shared block.
+        from app.services.scoping import service as scoping
+        scoped = await scoping.is_scoped(session_id)
+        if scoped:
+            print(f"[orchestrator] session {session_id} is scoped — per-twin knowledge blocks")
         watcher.start()
 
         for round_num, action in enumerate(phases):
@@ -276,10 +282,13 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
                     return
                 async with sem:
                     try:
+                        ctx = kg_context
+                        if scoped:
+                            ctx = (await scoping.context_for_agent(session_id, agent, query, purpose="post")) or kg_context
                         await _agent_action(
                             agent, action,
                             session_id=session_id, query=query,
-                            thread_context=thread_context, kg_context=kg_context,
+                            thread_context=thread_context, kg_context=ctx,
                             posts=posts, round_num=round_num, mode=mode,
                             watcher=watcher, kg_sem=kg_sem, kg_sample=kg_sample,
                         )

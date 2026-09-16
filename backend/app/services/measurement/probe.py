@@ -332,6 +332,8 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
         # One KG snapshot for the whole probe: every agent answers the same question against
         # the same evidence, which is what makes the comparison between them meaningful.
         kg_context = await _probe_kg_context(session_id, query, spec)
+        from app.services.scoping import service as scoping
+        scoped = bool(kg_context) and await scoping.is_scoped(session_id)
 
         await _set_status(probe_id, status="running", agent_count=len(chosen))
         await publish(session_channel(session_id), {
@@ -352,9 +354,12 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
             async with sem:
                 if await_stop.is_set():
                     return
+                ctx = kg_context
+                if scoped:
+                    ctx = (await scoping.context_for_agent(session_id, agent, query, purpose="probe")) or kg_context
                 row = await answer_one(
                     agent, instrument=instrument, spec=spec, probe_id=probe_id,
-                    session_id=session_id, query=query, kg_context=kg_context, model=model,
+                    session_id=session_id, query=query, kg_context=ctx, model=model,
                     experiment_id=experiment_id,
                 )
             async with lock:

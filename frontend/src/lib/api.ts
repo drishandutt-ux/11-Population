@@ -155,6 +155,17 @@ export const api = {
     ontology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology`),
     buildOntology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology/build`, { method: "POST" }),
   },
+  scoping: {
+    state: (sessionId: string) => request<ScopingState>(`/sessions/${sessionId}/scoping`),
+    tag: (sessionId: string) => request<ScopingState>(`/sessions/${sessionId}/scoping/tag`, { method: "POST" }),
+    preview: (sessionId: string, agentId: string) => request<ScopingPreview>(`/sessions/${sessionId}/scoping/preview?agent_id=${encodeURIComponent(agentId)}`),
+    setPolicy: (sessionId: string, rules: ScopeRule[], note = "") =>
+      request<{ version: number; rules: ScopeRule[] }>(`/sessions/${sessionId}/scoping/policy`, { method: "PUT", body: JSON.stringify({ rules, note }) }),
+    setExposure: (sessionId: string, agentId: string, exposure: Record<string, unknown> | null) =>
+      request<{ agent_id: string; exposure: Record<string, unknown> | null }>(`/sessions/${sessionId}/scoping/agents/${agentId}/exposure`, { method: "PUT", body: JSON.stringify({ exposure }) }),
+    retrievals: (sessionId: string, agentId?: string) =>
+      request<{ retrievals: RetrievalRow[] }>(`/sessions/${sessionId}/scoping/retrievals${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ""}`),
+  },
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -872,3 +883,32 @@ export interface Ontology {
   typed: number;
 }
 export interface OntologyState { schema: OntologySchema; ontology: Ontology | null; stale: boolean; entity_count: number }
+
+// ── Scoped retrieval (typed knowledge units, exposure profiles, policies) ─────
+export interface ScopeDimension { key: string; label: string; ontology_class?: string; semantics: string; default: string; values?: string[]; description: string }
+export interface KnowledgeUnit { id: string; text: string; source_ref: string; provenance_class: string; trust_tier: string; facets: Record<string, string[] | string>; snapshot_id: string }
+export interface ScopeRule { dimension: string; when?: "own" | "unscoped" | "any" | string[]; effect: "deny" | "require" | "allow" | "boost" | "route"; weight?: number; route?: string; override?: string[]; note?: string }
+export interface ScopingState {
+  dimensions: ScopeDimension[];
+  chunk_count: number;
+  tagged: boolean;
+  units: KnowledgeUnit[];
+  unit_count: number;
+  counts: Record<string, Record<string, number>>;
+  policy: { version: number; rules: ScopeRule[] } | null;
+  snapshot_id: string | null;
+  stale: boolean;
+}
+export interface ExposureProfile { values: Record<string, unknown>; basis: Record<string, string>; band: string }
+export interface ScopingPreview {
+  tagged: boolean;
+  profile: ExposureProfile | null;
+  visible: { unit: KnowledgeUnit; score: number; route: string; applied: string[] }[];
+  visible_total?: number;
+  hidden: { unit: KnowledgeUnit; failed: [string, string][] }[];
+  hidden_total?: number;
+  block: string;
+  policy_version?: number;
+  snapshot_id?: string;
+}
+export interface RetrievalRow { id: string; agent_id: string; purpose: string; snapshot_id: string; policy_version: number; unit_ids: string[]; routes: string[]; created_at: string }
