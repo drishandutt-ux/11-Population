@@ -675,6 +675,16 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
             if _stopped(build_id):
                 return
 
+            # ── sampling frame, step 1: which dimensions must this population match? ──
+            frame_dims: list[dict] = []
+            try:
+                frame_dims = await frame_mod.pick_dimensions(bld.session_id, question, detected, constraints_summary(bld.constraints or {}))
+                await log(build_id, "frame", "info", "Sampling frame — the dimensions this population must match: " + ", ".join(f"{k + 1}. {d['label']}" for k, d in enumerate(frame_dims)),
+                          " · ".join(f"{d['label']}: {d.get('why', '')}" for d in frame_dims)[:400])
+                bld = await _save(build_id, frame={"dimensions": frame_dims, "targets": {}, "report": None, "geography": detected.get("geography") or "", "sizing": None})
+            except Exception as e:  # noqa: BLE001
+                await log(build_id, "frame", "warn", "Could not choose the frame's dimensions; the statistics search runs on the detected gaps alone", str(e)[:120])
+
             # ── gather quantitative facts ──
             src = bld.sources or {}
             if src.get("quant"):
@@ -704,6 +714,17 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 except Exception as e:  # noqa: BLE001
                     await log(build_id, "gather", "warn", "Could not plan statistics searches; searching on the question's keywords", str(e)[:120])
                     targets = fallback_targets(question, keys)
+                # The frame's dimensions are searched first — one distribution target each, plus the
+                # TAM / SAM / SOM sizing trio — ahead of the planner's own gap targets.
+                if frame_dims:
+                    try:
+                        ftargets = await frame_mod.search_targets(bld.session_id, frame_dims, geography, detected.get("topic") or question, keys, catalogue_for_prompt(keys))
+                        for ft in ftargets:
+                            await log(build_id, "frame", "info", f"Frame search · {ft.get('frame_key', '').upper() if ft.get('frame_key') in ('tam', 'sam', 'som') else ft.get('frame_key')}: {ft['fact']}",
+                                      " | ".join(f"“{q['query']}” → {', '.join(q.get('sources') or keys)}" for q in ft["queries"]))
+                        targets = ftargets + [t for t in targets if t.get("dimension") not in {ft["dimension"] for ft in ftargets if ft["dimension"] != "size"}]
+                    except Exception as e:  # noqa: BLE001
+                        await log(build_id, "frame", "warn", "Could not plan the frame's searches; the planner's targets run alone", str(e)[:120])
                 if src.get("quant_query"):
                     own = src["quant_query"]
                     if looks_like_question(own):
@@ -715,7 +736,7 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 async def _lg(level: str, message: str, detail: Optional[str]):
                     await log(build_id, "gather", level, message, detail)
 
-                rows = await gather_targets(bld.session_id, question, targets[:5], keys, build_id=build_id, log=_lg, region=region, geography=geography,
+                rows = await gather_targets(bld.session_id, question, targets[: (9 if frame_dims else 5)], keys, build_id=build_id, log=_lg, region=region, geography=geography,
                                             should_stop=lambda: _stopped(build_id))
                 if _stopped(build_id):
                     return
@@ -740,14 +761,20 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                     except Exception as e:  # noqa: BLE001
                         await log(build_id, "gather", "warn", "Could not re-read the dials against the statistics", str(e)[:120])
 
-            # ── sampling frame: the dimensions to match and the real distribution of each ──
+            # ── sampling frame, step 2: the real distribution of each dimension, from what was found ──
             bld = await _load(build_id)
             try:
                 inp = await _gather_inputs(bld, question)
-                dims = await frame_mod.pick_dimensions(bld.session_id, question, detected, constraints_summary(bld.constraints or {}))
-                await log(build_id, "frame", "info", "Sampling frame — the dimensions this population must match: " + ", ".join(f"{k + 1}. {d['label']}" for k, d in enumerate(dims)),
-                          " · ".join(f"{d['label']}: {d.get('why', '')}" for d in dims)[:400])
+                dims = list((bld.frame or {}).get("dimensions") or frame_dims)
+                if not dims:
+                    raise ValueError("no frame dimensions")
                 targets = await frame_mod.derive_targets(bld.session_id, dims, detected.get("geography") or "", inp.get("facts_rows") or [])
+                sizing = await frame_mod.extract_sizing(bld.session_id, detected.get("geography") or "", detected.get("topic") or question, inp.get("facts_rows") or [])
+                found_sz = [k for k in ("tam", "sam", "som") if sizing.get(k)]
+                if found_sz:
+                    await log(build_id, "frame", "ok", "Sizing funnel: " + " · ".join(f"{k.upper()} {sizing[k]['value']} ({sizing[k].get('label') or ''}, {sizing[k].get('source') or ''})" for k in found_sz), sizing.get("note"))
+                else:
+                    await log(build_id, "frame", "warn", "Sizing funnel (TAM / SAM / SOM): nothing usable found on file", sizing.get("note"))
                 for d in dims:
                     tg = targets.get(d["key"]) or {}
                     if tg.get("status") == "found":
@@ -757,7 +784,7 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                         await log(build_id, "frame", "decision", f"Proxy · {d['label']} matched via {tg.get('proxy_attribute')}: {tg.get('source') or ''}", tg.get("note"))
                     else:
                         await log(build_id, "frame", "warn", f"No published distribution for {d['label']} — your call: estimate, upload, use a proxy, or skip", tg.get("note"))
-                bld = await _save(build_id, frame={"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or ""})
+                bld = await _save(build_id, frame={"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or "", "sizing": sizing})
             except Exception as e:  # noqa: BLE001
                 await log(build_id, "frame", "warn", "Could not build the sampling frame; the plan will not be matched to published distributions", str(e)[:120])
             if _stopped(build_id):

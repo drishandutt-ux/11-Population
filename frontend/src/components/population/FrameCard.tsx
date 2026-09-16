@@ -110,6 +110,29 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
         The dimensions this population must be representative on, most important first. The top three are matched exactly; the rest are corrected by weighting. Every distribution says where it came from.
       </p>
 
+      {/* sizing funnel: TAM / SAM / SOM */}
+      {frame.sizing && (
+        <div className="grid grid-cols-3 gap-2">
+          {(["tam", "sam", "som"] as const).map((k) => {
+            const c = frame.sizing![k] || {};
+            const title = { tam: "TAM · everyone in the place", sam: "SAM · with the condition / in scope", som: "SOM · reached by the system today" }[k];
+            return (
+              <div key={k} className={`rounded-lg border px-2.5 py-2 ${c.value ? "border-border/50 bg-muted/20" : "border-dashed border-border/40"}`} title={c.label || title}>
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{title}</div>
+                {c.value ? (
+                  <>
+                    <div className="text-sm font-semibold text-foreground tabular-nums">{c.value}</div>
+                    <div className="text-[10px] text-muted-foreground/80 truncate">{c.label}{c.source ? ` · ${c.source}` : ""}{c.year ? ` ${c.year}` : ""}</div>
+                  </>
+                ) : (
+                  <div className="text-[11px] text-muted-foreground/60">not on file</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* dimensions */}
       <div className="space-y-2">
         {dims.map((d, k) => {

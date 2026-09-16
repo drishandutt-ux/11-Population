@@ -176,3 +176,4 @@ Last updated: 2026-09-16 (L1 and L2 discussed; L1-03, L1-04 and the L2-01 sampli
 - **2026-09-16** — L1-04 scoping architecture agreed (generic: facets on knowledge, exposure profiles on twins, stacked policies, routes) and built as step 1 with a Scoping view for manual testing.
 - **2026-09-16** — L2 walked through. First: the Population Studio became the Agents screen and the old quick-spawn form was deleted. L2-01 sampling-frame graph built; L2-02 / L2-03 / L2-06 answered; L2-04 kept as is; L2-05 explained.
 - **2026-09-16** — L2 direction agreed (frame from researched distributions; flag gaps → upload / model estimate, all labelled) and built as step 1: L2-01, L2-02, L2-03, L2-05. L2-06 remains the design only.
+- **2026-09-16** — Closed the loop on Drishan's idea: the frame's ranked dimensions now drive the statistics search (find first, flag only what the web doesn't have), with a TAM / SAM / SOM sizing trio read from the material and shown on the frame card.

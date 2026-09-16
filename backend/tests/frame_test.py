@@ -172,3 +172,47 @@ def test_estimate_refuses_attitudinal_and_labels_demographic(monkeypatch):
     assert est["status"] == "estimated" and est["provenance"] == "model_inference" and est["confidence"] == 55
     refused = asyncio.run(frame.estimate_target("s", PRICE, "Blackpool"))
     assert refused["status"] == "missing" and "declined" in refused["note"]
+
+
+# ── the frame drives the search ───────────────────────────────────────────────
+
+def test_search_targets_lead_with_dimensions_then_sizing(monkeypatch):
+    async def fake_analyze(schema, system, user, **kw):
+        assert "FRAME DIMENSIONS" in user and "PUBLISHERS TICKED" in user
+        return {"targets": [
+            {"key": "age", "fact": "population by age, Blackpool mid-2023", "queries": [{"query": "population estimates by single year of age Blackpool", "sources": ["ons", "bogus"]}]},
+            {"key": "tam", "fact": "population of Blackpool", "queries": [{"query": "Blackpool mid-year population estimate", "sources": ["nomis"]}]},
+            {"key": "som", "fact": "GLP-1 prescribing Blackpool", "queries": [{"query": "GLP-1 items prescribed Blackpool", "sources": []}]},
+        ]}
+    monkeypatch.setattr(frame, "analyze", fake_analyze)
+    out = asyncio.run(frame.search_targets("s", [PLACE, AGE, PRICE], "Blackpool", "oral GLP-1", ["ons", "nomis"], "catalogue"))
+    keys = [t["frame_key"] for t in out]
+    assert keys == ["place", "age", "tam", "sam", "som"]                 # place via fallback, price (attitudinal) not searched
+    age = next(t for t in out if t["frame_key"] == "age")
+    assert age["dimension"] == "age" and age["priority"] == 1 and age["queries"][0]["sources"] == ["ons"]   # unknown key dropped
+    som = next(t for t in out if t["frame_key"] == "som")
+    assert som["dimension"] == "size" and som["queries"][0]["sources"] == ["ons", "nomis"]              # empty → all ticked
+    place = next(t for t in out if t["frame_key"] == "place")
+    assert "population estimates local authority Blackpool" in place["queries"][0]["query"]
+
+
+def test_search_targets_fall_back_when_the_planner_fails(monkeypatch):
+    async def boom(*a, **k):
+        raise RuntimeError("no model")
+    monkeypatch.setattr(frame, "analyze", boom)
+    out = asyncio.run(frame.search_targets("s", [AGE], "Oxford", "topic", ["ons"], ""))
+    assert [t["frame_key"] for t in out] == ["age", "tam", "sam", "som"] and all(t["queries"] for t in out)
+
+
+def test_extract_sizing_reads_only_what_is_stated(monkeypatch):
+    async def fake_analyze(schema, system, user, **kw):
+        return {"tam": {"value": "141,100", "label": "Blackpool residents", "source": "ONS MYE", "year": "2023"}, "sam": {"value": "", "label": "", "source": "", "year": ""},
+                "som": {"value": "3,200", "label": "patients prescribed", "source": "OpenPrescribing", "year": "2026"}, "note": "no prevalence figure on file"}
+    monkeypatch.setattr(frame, "analyze", fake_analyze)
+
+    class E:
+        structured = {"facts": [{"statistic": "population", "value": "141,100", "group": "residents", "geography": "Blackpool", "year": "2023"}], "source_label": "ONS"}
+        author = "ONS"; excerpt = ""; source_ref = ""; title = ""
+    sz = asyncio.run(frame.extract_sizing("s", "Blackpool", "GLP-1", [E()]))
+    assert sz["tam"]["value"] == "141,100" and sz["sam"] == {} and sz["som"]["source"] == "OpenPrescribing"
+    assert asyncio.run(frame.extract_sizing("s", "Blackpool", "GLP-1", []))["tam"] == {}

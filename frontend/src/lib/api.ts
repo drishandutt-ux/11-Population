@@ -860,7 +860,9 @@ export type FrameTarget = { status: "found" | "proxy" | "uploaded" | "estimated"
 export type FrameReportCell = { label: string; target_pct: number; planned_pct: number; achieved_pct: number | null; achieved_n: number | null; expected_n: number; thin: boolean };
 export type FrameReportDim = { key: string; label: string; attribute: string; status: string; source: string; year: string; geography: string; provenance: string; priority: number; mode: "exact" | "weighted" | "unmatched"; cells?: FrameReportCell[]; max_deviation_planned?: number; max_deviation_achieved?: number | null; unplaced?: number | null };
 export type FrameReport = { level: "good" | "fair" | "poor" | "none"; worst_deviation_pts: number; matched_exactly: string[]; weighted_only: string[]; unmatched: string[]; estimated: string[]; dimensions: FrameReportDim[]; thin_cells: string[]; stage: "planned" | "achieved"; n: number | null; ess: number | null };
-export type PopulationFrame = { dimensions: FrameDimension[]; targets: Record<string, FrameTarget>; report: FrameReport | null; geography: string };
+export type FrameSizingCell = { value?: string; label?: string; source?: string; year?: string };
+export type FrameSizing = { tam: FrameSizingCell; sam: FrameSizingCell; som: FrameSizingCell; note?: string };
+export type PopulationFrame = { dimensions: FrameDimension[]; targets: Record<string, FrameTarget>; report: FrameReport | null; geography: string; sizing?: FrameSizing | null };
 
 export type PopulationBuildStatus =
   | "queued" | "detecting" | "gathering" | "clarifying" | "planning" | "awaiting_review" | "spawning" | "complete" | "stopped" | "error";
