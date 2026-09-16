@@ -1,7 +1,8 @@
 """Web search providers behind one interface, walked as one chain: a query is answered by the
 first engine that returns plausible results. Keyed APIs (Brave API, Tavily) when their key is
-set, then keyless HTML engines (Brave, DuckDuckGo), then two more keyless engines on other
-hosts (Yahoo, Bing). When every engine fails the whole chain retries once after a pause.
+set, then Claude's server-side web search (keyed by ANTHROPIC_API_KEY, so production always has
+it), then the keyless HTML engines (DuckDuckGo, Bing, Yahoo, Brave). When every engine fails the
+whole chain retries once after a pause.
 
 Decisions carried over from SuperMind (each cost an afternoon):
   * Bench, don't retry: after a 429/captcha an engine is benched (120 s scraped, 15 s keyed)
@@ -20,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional
 from urllib.parse import urlparse
 
-ProviderName = str  # brave_api | tavily | brave | duckduckgo | yahoo | bing
+ProviderName = str  # brave_api | tavily | anthropic | brave | duckduckgo | yahoo | bing
 
 
 @dataclass
@@ -43,7 +44,7 @@ class SearchProvider:
 COOLDOWN_MS = int(os.environ.get("SEARCH_COOLDOWN_MS", 120_000))
 API_COOLDOWN_MS = int(os.environ.get("SEARCH_API_COOLDOWN_MS", 15_000))
 CHAIN_RETRY_MS = int(os.environ.get("SEARCH_CHAIN_RETRY_MS", 10_000))
-API_PROVIDERS = {"brave_api", "tavily"}
+API_PROVIDERS = {"brave_api", "tavily", "anthropic"}
 _cooling_until: dict[str, float] = {}
 
 _RATE_LIMIT_RE = re.compile(r"429|rate.?limit|captcha|challenged", re.I)
@@ -129,9 +130,19 @@ def chain_of(providers: list[SearchProvider]) -> SearchProvider:
     return SearchProvider(name=providers[0].name, search=search, composite=True)
 
 
+def _anthropic_key() -> str:
+    try:
+        from app.core.config import get_settings
+        return get_settings().anthropic_api_key or ""
+    except Exception:  # noqa: BLE001
+        return os.environ.get("ANTHROPIC_API_KEY", "")
+
+
 def get_search_provider() -> SearchProvider:
-    """Engine order: SEARCH_PROVIDER first when set, keyed APIs whose keys are present, then the
-    keyless engines. SEARCH_DISABLE=a,b drops engines."""
+    """Engine order: SEARCH_PROVIDER first when set, keyed APIs whose keys are present (Brave
+    API, Tavily, then Claude web search whenever ANTHROPIC_API_KEY is set — measured 2026-09-16:
+    every keyless engine is blocked or rate-limited from Railway's datacenter IP, so the keyed
+    engine goes ahead of them), then the keyless engines. SEARCH_DISABLE=a,b drops engines."""
     from . import engines
 
     disabled = {x.strip() for x in os.environ.get("SEARCH_DISABLE", "").split(",") if x.strip()}
@@ -148,6 +159,8 @@ def get_search_provider() -> SearchProvider:
         push("brave_api")
     if os.environ.get("TAVILY_API_KEY"):
         push("tavily")
+    if _anthropic_key():
+        push("anthropic")
     # Measured 2026-09-09: DuckDuckGo, Bing and Yahoo answer in <1 s; Brave's HTML page spends
     # up to a minute in 429 back-off, so it goes last as the fallback of last resort.
     push("duckduckgo")
@@ -158,4 +171,5 @@ def get_search_provider() -> SearchProvider:
 
 
 def has_keyed_engine() -> bool:
-    return bool(os.environ.get("BRAVE_API_KEY") or os.environ.get("TAVILY_API_KEY"))
+    disabled = {x.strip() for x in os.environ.get("SEARCH_DISABLE", "").split(",") if x.strip()}
+    return bool(os.environ.get("BRAVE_API_KEY") or os.environ.get("TAVILY_API_KEY") or (_anthropic_key() and "anthropic" not in disabled))

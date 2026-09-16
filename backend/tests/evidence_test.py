@@ -411,3 +411,83 @@ def test_second_stop_press_force_cancels_a_stuck_step(client, monkeypatch):
             break
         time.sleep(0.1)
     assert state["run"]["status"] == "stopped" and state["run"]["note"] == "force-stopped by user"
+
+
+# ── Anthropic web search engine + Bing "no results" guard (2026-09-16) ─────
+
+def test_parse_anthropic_search_takes_hits_from_tool_result_and_snippets_from_text():
+    class B:  # SDK-style object blocks
+        def __init__(self, **kw): self.__dict__.update(kw)
+    content = [
+        B(type="server_tool_use", name="web_search", input={"query": "x"}),
+        B(type="web_search_tool_result", content=[
+            B(type="web_search_result", url="https://www.nomisweb.co.uk/reports/lmp/la/1946157257/report.aspx", title="Labour Market Profile - Nomis", page_age="2026-03-01", encrypted_content="…"),
+            B(type="web_search_result", url="https://www.nomisweb.co.uk/reports/lmp/la/1946157257/report.aspx", title="dup", page_age=None, encrypted_content="…"),
+            {"type": "web_search_result", "url": "https://www.ons.gov.uk/x", "title": "ONS page", "page_age": None},
+        ]),
+        B(type="text", text='Here you go:\n[{"url": "https://www.nomisweb.co.uk/reports/lmp/la/1946157257/report.aspx", "title": "LMP", "snippet": "Employment by occupation for London."}]'),
+    ]
+    r = engines.parse_anthropic_search(content, 5)
+    assert [x.domain for x in r] == ["nomisweb.co.uk", "ons.gov.uk"]
+    assert r[0].snippet == "Employment by occupation for London." and r[0].provider == "anthropic" and r[0].published_at.startswith("2026-03-01")
+    assert r[1].snippet == "" and r[1].title == "ONS page"
+    # the gate keeps them: domain/title share terms with a site: query
+    assert len(prov.plausible_results("Labour Market Profile London site:nomisweb.co.uk", r)) == 1
+
+
+def test_parse_anthropic_search_raises_on_tool_error_so_the_chain_benches_it():
+    content = [{"type": "web_search_tool_result", "content": {"type": "web_search_tool_result_error", "error_code": "too_many_requests"}}]
+    with pytest.raises(RuntimeError) as e:
+        engines.parse_anthropic_search(content, 5)
+    assert prov.is_rate_limit(e.value)
+    assert engines.parse_anthropic_search([{"type": "text", "text": "no search happened"}], 5) == []
+
+
+def test_web_search_tool_type_by_model():
+    assert engines.web_search_tool_type("claude-haiku-4-5-20251001") == "web_search_20250305"
+    assert engines.web_search_tool_type("claude-sonnet-4-6") == "web_search_20260209"
+    assert engines.web_search_tool_type("claude-opus-5") == "web_search_20260209"
+
+
+def test_bing_no_results_block_is_not_an_answer():
+    html = '<ol id="b_results"><li class="b_no"><h1>There are no results for <strong>x</strong></h1></li><li class="b_algo"><h2><a href="https://labour.org.uk/">The Labour Party</a></h2></li></ol>'
+    assert engines.bing_says_no_results(html)
+    assert not engines.bing_says_no_results('<li class="b_algo"><h2><a href="https://a">A</a></h2></li>')
+
+
+def test_anthropic_engine_joins_the_chain_after_keyed_apis_and_before_keyless(monkeypatch):
+    monkeypatch.delenv("SEARCH_PROVIDER", raising=False)
+    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setenv("SEARCH_DISABLE", "")
+    built = []
+    monkeypatch.setattr(engines, "build", lambda name: (built.append(name), prov.SearchProvider(name, None))[1])
+    monkeypatch.setattr(prov, "_anthropic_key", lambda: "sk-test")
+    prov.get_search_provider()
+    assert built == ["anthropic", "duckduckgo", "bing", "yahoo", "brave"]
+    assert prov.has_keyed_engine()
+    monkeypatch.setenv("SEARCH_DISABLE", "anthropic")
+    built.clear()
+    prov.get_search_provider()
+    assert built[0] == "duckduckgo" and not prov.has_keyed_engine()
+    monkeypatch.setattr(prov, "_anthropic_key", lambda: "")
+    monkeypatch.setenv("SEARCH_DISABLE", "")
+    assert not prov.has_keyed_engine()
+
+
+def test_anthropic_engine_calls_claude_with_the_web_search_tool(monkeypatch):
+    seen = {}
+
+    async def fake_create(client, *, label="", **kw):
+        seen.update(kw); seen["label"] = label
+        class R: content = [{"type": "web_search_tool_result", "content": [{"type": "web_search_result", "url": "https://www.ons.gov.uk/a", "title": "ONS a", "page_age": None}]}, {"type": "text", "text": '[{"url":"https://www.ons.gov.uk/a","snippet":"Share of X."}]'}]
+        return R()
+
+    import app.core.monitoring as mon
+    import app.core.config as cfg
+    monkeypatch.setattr(mon, "tracked_messages_create", fake_create)
+    monkeypatch.setattr(cfg, "get_settings", lambda: type("S", (), {"anthropic_api_key": "sk-test", "model_fast": "claude-haiku-4-5-20251001"})())
+    r = asyncio.run(engines.build("anthropic").search("ONS a site:ons.gov.uk", {"max_results": 5, "region": "uk-en"}))
+    assert r[0].url == "https://www.ons.gov.uk/a" and r[0].snippet == "Share of X."
+    assert seen["label"] == "search" and seen["tools"] == [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1, "user_location": {"type": "approximate", "country": "GB"}}]
+    assert seen["messages"] == [{"role": "user", "content": "ONS a site:ons.gov.uk"}]
