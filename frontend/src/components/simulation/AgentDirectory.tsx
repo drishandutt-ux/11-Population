@@ -599,13 +599,22 @@ export default function AgentDirectory({
               <span className="font-semibold text-foreground">Simulation running</span>
               <span className="text-sm text-muted-foreground">— agents are debating in the Thread tab</span>
             </div>
-            <button
-              onClick={onGoToThread}
-              className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 text-blue-400 text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-all"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Watch Thread →
-            </button>
+            <div className="flex gap-2">
+              <button
+                disabled
+                className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground/60 px-4 py-2 rounded-lg cursor-not-allowed"
+                title="Stop the simulation first — rebuilding replaces the agents that are debating"
+              >
+                <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio
+              </button>
+              <button
+                onClick={onGoToThread}
+                className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 text-blue-400 text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Watch Thread →
+              </button>
+            </div>
           </div>
         )}
 
@@ -616,6 +625,13 @@ export default function AgentDirectory({
               <span className="font-semibold text-foreground">Simulation complete</span>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => setStudioOpen(true)}
+                className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
+                title="Change the lineup and rebuild: the Studio keeps this plan, so you can edit segments, move the dials and build again"
+              >
+                <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio
+              </button>
               <button onClick={onGoToThread} className="text-sm border border-border text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg transition-all">
                 View Thread
               </button>
