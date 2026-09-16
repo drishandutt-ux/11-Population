@@ -60,7 +60,9 @@ export default function PopulationStudioPage() {
   }, [id]);
 
   useEffect(() => {
-    api.sessions.get(id).then((s) => { setSession(s as Session); setAgentCount((s as Session).agent_count || 0); setQuantQuery((s as Session).query.slice(0, 90)); }).catch(() => {});
+    // The lookup box is left empty on purpose: the build gathers statistics on its own, and a
+    // prefilled question made the optional lookup read like a required step.
+    api.sessions.get(id).then((s) => { setSession(s as Session); setAgentCount((s as Session).agent_count || 0); }).catch(() => {});
     api.research.state(id).then(setResearch).catch(() => {});
     apiFetch(`/sessions/${id}/kg`).then((r) => r.json()).then((d) => setKgCounts({ entities: (d.entities || []).length, relations: (d.relations || []).length })).catch(() => {});
     loadBuild();
@@ -226,6 +228,7 @@ export default function PopulationStudioPage() {
               onQuantOnBuild={setQuantOnBuild}
               onSearch={search}
               searching={searching}
+              buildStatus={build?.status ?? null}
               facts={facts}
               onToggleFact={toggleFact}
               profileQuery={constraints.profile_query || ""}

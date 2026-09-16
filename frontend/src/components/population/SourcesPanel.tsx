@@ -20,6 +20,8 @@ interface Props {
   onQuantOnBuild: (v: boolean) => void;
   onSearch: () => Promise<void>;
   searching: boolean;
+  /** The latest build's status, so the panel can say "gathering…" while the build reads publishers. */
+  buildStatus?: string | null;
   facts: EvidenceItem[];
   onToggleFact: (item: EvidenceItem) => Promise<void>;
   profileQuery: string;
@@ -204,23 +206,44 @@ export default function SourcesPanel(p: Props) {
             );
           });
         })()}
+        {/* Gathering is automatic: it is part of Detect & plan. The checkbox only turns it off. */}
         <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={p.quantOnBuild} disabled={p.disabled} onChange={(e) => p.onQuantOnBuild(e.target.checked)} className="mt-0.5 accent-[hsl(var(--primary))]" />
-          <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Search these while planning.</span> The build writes its own queries from what it detects and reads the ticked publishers before it proposes segments.</span>
+          <span className="text-[10px] text-muted-foreground leading-relaxed">
+            <span className="text-foreground/80">Gather automatically when you press Detect &amp; plan.</span> The build plans its own fact targets from your dials, audience profile and upload, reads the ticked publishers, and re-tries when one comes back empty — nothing to type here.
+          </span>
         </label>
-        <div className="flex gap-1.5">
-          <input value={p.quantQuery} onChange={(e) => p.onQuantQuery(e.target.value)} placeholder="Search now, e.g. UK cyclists by age 2025" onKeyDown={(e) => { if (e.key === "Enter" && !p.searching && p.quantQuery.trim()) p.onSearch(); }} className="flex-1 bg-muted/50 border border-border rounded-lg px-2.5 py-1.5 text-[11px] text-foreground placeholder-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50" />
-          <button disabled={p.searching || !p.quantQuery.trim() || p.selected.length === 0} onClick={() => p.onSearch()} className="shrink-0 flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40 transition-colors">
-            {p.searching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />} Search
-          </button>
-        </div>
-        {p.facts.length > 0 ? (
+        {(() => {
+          const gathering = p.buildStatus === "gathering" || p.searching;
+          const usableFacts = p.facts.filter((f) => f.on_topic && !f.excluded).length;
+          if (gathering) return <p className="text-[10px] text-emerald-300/90 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Gathering statistics… {p.facts.length ? `${p.facts.length} page${p.facts.length === 1 ? "" : "s"} read so far` : "planning fact targets"}</p>;
+          if (p.facts.length === 0) {
+            if (!p.quantOnBuild) return <p className="text-[10px] text-yellow-400/80">Automatic gathering is off — the plan will rest on the evidence brief, your uploads and general knowledge.</p>;
+            if (p.buildStatus === "detecting" || p.buildStatus === "queued") return <p className="text-[10px] text-muted-foreground/60">Detecting the population first — statistics come next.</p>;
+            return <p className="text-[10px] text-muted-foreground/50">Nothing gathered yet — statistics arrive during Detect &amp; plan.</p>;
+          }
+          return <p className="text-[10px] text-muted-foreground/70">{usableFacts} page{usableFacts === 1 ? "" : "s"} with usable facts{p.facts.length > usableFacts ? ` · ${p.facts.length - usableFacts} read but not usable` : ""}</p>;
+        })()}
+        {p.facts.length > 0 && (
           <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-0.5">
             {[...p.facts].sort((a, b) => Number(b.on_topic) - Number(a.on_topic)).map((f) => <FactCard key={f.id} item={f} onToggle={p.onToggleFact} />)}
           </div>
-        ) : (
-          <p className="text-[10px] text-muted-foreground/50">Nothing gathered yet.</p>
         )}
+        {/* The manual lookup is an extra, not a step: folded away by default. */}
+        <details className="group">
+          <summary className="text-[10px] text-muted-foreground/60 hover:text-foreground cursor-pointer list-none flex items-center gap-1 select-none">
+            <ChevronDown className="w-3 h-3 transition-transform group-open:rotate-180" /> Look something up yourself <span className="text-muted-foreground/40">(optional)</span>
+          </summary>
+          <div className="mt-2 space-y-1">
+            <div className="flex gap-1.5">
+              <input value={p.quantQuery} onChange={(e) => p.onQuantQuery(e.target.value)} placeholder="e.g. UK cyclists by age 2025" onKeyDown={(e) => { if (e.key === "Enter" && !p.searching && p.quantQuery.trim()) p.onSearch(); }} className="flex-1 bg-muted/50 border border-border rounded-lg px-2.5 py-1.5 text-[11px] text-foreground placeholder-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              <button disabled={p.searching || !p.quantQuery.trim() || p.selected.length === 0} onClick={() => p.onSearch()} className="shrink-0 flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40 transition-colors">
+                {p.searching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />} Search
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground/50">A keyword query runs as written on the ticked publishers; a question is planned into fact targets about its audience first. Results join the facts above.</p>
+          </div>
+        </details>
       </div>
     </div>
   );
