@@ -256,6 +256,7 @@ Return a JSON array with exactly {batch_count} objects. Each object MUST have AL
   "personality": ["trait1", "trait2", "trait3"],
   "debate_style": "1 sentence describing how they argue",
   "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
+  "frame": {{"<sampling-frame dimension key>": "<the category this persona falls in>", ...}} — one entry per frame dimension listed above; {{}} when no frame was given,
   "humanity": <integer 0-100>,
   "dials": {DIALS_SCHEMA}
 }}
@@ -491,9 +492,15 @@ def finalise_segment_dicts(seg: dict, dicts: list[dict]) -> None:
     and a humanity value inside the segment's register band (the model varies it per person;
     the band is guaranteed here)."""
     lo, hi = hint_band(seg.get("humanity_hint"))
+    seg_frame = seg.get("frame_values") or {}
     for d in dicts:
         d["stance"] = seg.get("stance", d.get("stance"))
         d["_segment"] = seg.get("name", "")
+        if seg_frame:   # a persona that skipped a frame dimension inherits the segment's cell
+            fr = dict(d.get("frame") or {}) if isinstance(d.get("frame"), dict) else {}
+            for k, v in seg_frame.items():
+                fr.setdefault(k, v)
+            d["frame"] = fr
         try:
             h = int(d.get("humanity") or lo)
         except (TypeError, ValueError):
@@ -529,6 +536,7 @@ Arguments this group actually makes (use their phrasing, vary it per person):
 {('Evidence behind this segment:' + chr(10) + evidence) if evidence else ''}
 Why this segment exists: {seg.get('rationale', '')}
 Register: {(seg.get('humanity_hint') or 'tempered')} — {_HINT_REGISTER_DESC.get((seg.get('humanity_hint') or 'tempered').lower(), _HINT_REGISTER_DESC['tempered'])}. Set every persona's "humanity" to a value between {hint_band(seg.get('humanity_hint'))[0]} and {hint_band(seg.get('humanity_hint'))[1]}, varied per person — not all the same number.
+{('Sampling-frame cells this segment mostly sits in: ' + ', '.join(f"{k} = {v}" for k, v in (seg.get('frame_values') or {}).items()) + ' — most personas take these; vary a few where the population shares call for it.') if seg.get('frame_values') else ''}
 """
 
 
@@ -578,6 +586,7 @@ QUERY: {query}
 
 {_segment_block(seg, n)}
 {_constraints_block(constraints)}
+{(constraints or {}).get('frame_prompt') or ''}
 KNOWLEDGE CONTEXT:
 {kg_summary[:2000]}
 {('EVIDENCE:' + chr(10) + evidence_text[:3500]) if evidence_text else ''}
@@ -633,6 +642,8 @@ def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -
     if stance not in ("direct", "indirect", "neutral"):
         stance = "neutral"
     demographics = {k: str(d.get(k) or "").strip() for k in _DEMOGRAPHIC_KEYS if d.get(k)}
+    if isinstance(d.get("frame"), dict) and d["frame"]:
+        demographics["frame"] = {str(k).strip(): str(v).strip()[:60] for k, v in d["frame"].items() if str(k).strip() and str(v or "").strip()}
     try:
         return AgentProfile(
             id=str(uuid.uuid4()),

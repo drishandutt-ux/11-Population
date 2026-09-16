@@ -200,6 +200,44 @@ def category_of(dim: dict, target: dict, *, value: Any = None, age: Any = None) 
     return None
 
 
+def explicit_value(dim: dict, target: dict, raw: Any) -> Optional[str]:
+    """A value the planner or the persona writer assigned on this dimension, matched to the
+    target's categories when there are any (exact, then containment either way); when the
+    dimension has no published categories the value itself is the cell."""
+    v = _norm(raw)
+    if not v:
+        return None
+    cats = target.get("categories") or []
+    if not cats:
+        return str(raw).strip()[:60]
+    for c in cats:
+        if _norm(c.get("label")) == v:
+            return c["label"]
+    for c in cats:
+        lab = _norm(c.get("label"))
+        if lab and (lab in v or v in lab):
+            return c["label"]
+    return None
+
+
+def frame_block_for_prompt(frame: Optional[dict]) -> str:
+    """The frame as the planner and the persona writer see it: every dimension with its
+    categories (from the published distribution when found, else free labels)."""
+    if not frame or not frame.get("dimensions"):
+        return ""
+    targets = frame.get("targets") or {}
+    lines = []
+    for d in frame["dimensions"]:
+        tg = targets.get(d["key"]) or {}
+        cats = tg.get("categories") or []
+        if cats:
+            lines.append(f"- {d['key']} ({d['label']}): categories " + " | ".join(f"{c['label']} ({c.get('share_pct', 0)}%)" for c in cats)
+                         + f" — from {tg.get('source') or tg.get('status')}; place every persona in exactly one of these categories, and match these shares across the population")
+        else:
+            lines.append(f"- {d['key']} ({d['label']}): no published distribution — assign each persona a short, consistent category label of your own (2-4 words; reuse the same labels across personas)")
+    return "SAMPLING FRAME (the dimensions this population must be representative on, most important first):\n" + "\n".join(lines) + "\n"
+
+
 def _agent_value(dim: dict, target: dict, agent: Any) -> tuple[Any, Any]:
     attr = target.get("proxy_attribute") if target.get("status") == "proxy" else dim.get("attribute")
     demo = getattr(agent, "demographics", None) or {}
@@ -225,6 +263,12 @@ def planned_distribution(dim: dict, target: dict, segments: list[dict], total: i
         if count <= 0:
             continue
         d = seg.get("demographics") or {}
+        fv = (seg.get("frame_values") or {}).get(dim["key"])
+        if fv:
+            lab = explicit_value(dim, target, fv)
+            if lab is not None:
+                out[lab] = out.get(lab, 0.0) + count; placed += count
+                continue
         if attr == "age":
             lo, hi = int(d.get("age_min") or 0), int(d.get("age_max") or 0)
             if hi <= 0 or hi < lo:
@@ -271,17 +315,29 @@ def planned_distribution(dim: dict, target: dict, segments: list[dict], total: i
     return {k: round(100.0 * v / denom, 1) for k, v in out.items()}
 
 
+def agent_cell(dim: dict, target: dict, agent: Any) -> Optional[str]:
+    """The cell an agent falls in on a dimension: its explicit frame value first (written by
+    the persona writer into demographics.frame), else its demographic attribute."""
+    demo = agent.get("demographics") if isinstance(agent, dict) else getattr(agent, "demographics", None)
+    fv = ((demo or {}).get("frame") or {}).get(dim["key"]) if isinstance(demo, dict) else None
+    if fv:
+        lab = explicit_value(dim, target, fv)
+        if lab is not None:
+            return lab
+    value, age = _agent_value(dim, target, agent)
+    return category_of(dim, target, value=value, age=age)
+
+
 def achieved_distribution(dim: dict, target: dict, agents: list[Any]) -> tuple[dict[str, int], int]:
-    """Agents per target category, and how many could not be placed."""
+    """Agents per cell, and how many could not be placed."""
     counts = {c["label"]: 0 for c in (target.get("categories") or [])}
     unplaced = 0
     for a in agents:
-        value, age = _agent_value(dim, target, a)
-        lab = category_of(dim, target, value=value, age=age)
+        lab = agent_cell(dim, target, a)
         if lab is None:
             unplaced += 1
         else:
-            counts[lab] += 1
+            counts[lab] = counts.get(lab, 0) + 1
     return counts, unplaced
 
 
@@ -305,8 +361,7 @@ def weights_for(frame: dict, agents: list[Any]) -> tuple[list[float], float]:
     for a in agents:
         segs = {}
         for dim, t in pairs:
-            value, age = _agent_value(dim, t, a)
-            lab = category_of(dim, t, value=value, age=age)
+            lab = agent_cell(dim, t, a)
             if lab is not None:
                 segs[dim["key"]] = lab
         rows.append({"segments": segs})

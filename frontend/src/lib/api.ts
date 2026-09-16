@@ -347,6 +347,8 @@ export type AgentDemographics = {
   occupation?: string;
   /** Spawn-written paragraph: the query analysed from the agent's place — injected into their system prompt. */
   geo_behavior?: string;
+  /** The persona's cell on each sampling-frame dimension (dimension key → category). */
+  frame?: Record<string, string>;
 };
 
 export type OpinionsResponse = {
@@ -824,6 +826,8 @@ export type PopulationSegment = {
   rationale: string;
   /** The segment's register (expert | tempered | balanced | defensive | reactive) — sets its agents' humanity band. */
   humanity_hint?: string;
+  /** The cell this segment mostly sits in on each sampling-frame dimension (dimension key → category). */
+  frame_values?: Record<string, string>;
   decision: "proposed" | "accepted" | "rejected" | "edited";
   reason?: string | null;
   /** Set on a segment that replaced a rejected one. */

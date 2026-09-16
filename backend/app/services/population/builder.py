@@ -221,6 +221,8 @@ SEGMENT_OBJ = obj({
     "arguments": arr(s(), "The arguments and phrases this group actually uses, in their words", 5),
     "evidence": arr(s(), "Facts or quotes from the inputs that support this segment existing at this share, each naming its source; empty when assumed", 4),
     "rationale": s("Why this segment exists at this share — the logic the analyst can accept or reject"),
+    "frame_values": arr(obj({"dimension": s("a frame dimension key, exactly as listed"), "value": s("the category this segment mostly falls in — one of the dimension's categories when they are listed, else a short label")}),
+                        "one entry per sampling-frame dimension; empty when no frame was given", 6),
     "humanity_hint": enum(["expert", "tempered", "balanced", "defensive", "reactive"], "The register this group argues in — it directly sets how analytical vs emotional their agents sound in the debate: expert = evidence-first analyst (reserve for groups whose day job IS the domain), tempered = logic leads but feeling colours it, balanced = gut and reason equal, defensive = feeling decides and logic defends it, reactive = pure gut, snap judgments. Ordinary consumers are rarely 'expert'"),
 })
 
@@ -383,6 +385,8 @@ def segment_from_model(m: dict, decision: str = "proposed") -> dict:
         "evidence": [e for e in (m.get("evidence") or []) if e],
         "rationale": m.get("rationale") or "",
         "humanity_hint": m.get("humanity_hint") or "tempered",
+        "frame_values": {str(fv.get("dimension")).strip(): str(fv.get("value")).strip() for fv in (m.get("frame_values") or [])
+                         if isinstance(fv, dict) and fv.get("dimension") and fv.get("value")},
         "decision": decision,
         "reason": None,
     }
@@ -392,7 +396,8 @@ def segment_for_prompt(seg: dict) -> str:
     d = seg.get("demographics") or {}
     se = seg.get("sentiment") or {}
     return (f"[{seg.get('id')}] {seg.get('name')} — {seg.get('share_pct')}% · {seg.get('stance')} · ages {d.get('age_min')}-{d.get('age_max')} · "
-            f"{d.get('gender_female_pct')}% women · {', '.join(d.get('regions') or [])} · {d.get('income_band')} · {se.get('mood')} ({se.get('temperature')}/10) · register {seg.get('humanity_hint') or 'tempered'}")
+            f"{d.get('gender_female_pct')}% women · {', '.join(d.get('regions') or [])} · {d.get('income_band')} · {se.get('mood')} ({se.get('temperature')}/10) · register {seg.get('humanity_hint') or 'tempered'}"
+            + (" · frame: " + ", ".join(f"{k}={v}" for k, v in (seg.get("frame_values") or {}).items()) if seg.get("frame_values") else ""))
 
 
 def constraints_summary(c: dict) -> str:
@@ -835,7 +840,11 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     kept_text = ""
     if keep:
         kept_text = "\n\nSEGMENTS THE ANALYST ALREADY ACCEPTED (keep them exactly, same ids; add only what is missing around them):\n" + "\n".join(segment_for_prompt(k) for k in keep)
-    user = (_inputs_text(inp, bld) + f"\n\nDetected:\n{bld.detected}\n\nTarget population size: {bld.target_count} agents." + kept_text)
+    frame_text = frame_mod.frame_block_for_prompt(bld.frame)
+    if frame_text:
+        frame_text = ("\n\n" + frame_text + "For EVERY segment return frame_values with one entry per dimension above. Where a dimension has published categories, "
+                      "size and place the segments so that, summed over the plan, the population lands close to those shares.")
+    user = (_inputs_text(inp, bld) + f"\n\nDetected:\n{bld.detected}\n\nTarget population size: {bld.target_count} agents." + frame_text + kept_text)
     try:
         p = await analyze(PLAN_SCHEMA, PLAN_SYSTEM, user, session_id=bld.session_id, label="population_plan", max_tokens=9000)
     except Exception as e:  # noqa: BLE001
@@ -1131,7 +1140,10 @@ async def _spawn(build_id: str):
         async def note(message: str, detail: Optional[str]):
             await log(build_id, "spawn", "info", message, detail)
 
-        profiles = await generate_agents_from_plan(session_id, question, segments, bld.constraints or {}, mode=bld.mode, evidence_text=evidence_text,
+        persona_constraints = dict(bld.constraints or {})
+        if bld.frame:
+            persona_constraints["frame_prompt"] = frame_mod.frame_block_for_prompt(bld.frame)
+        profiles = await generate_agents_from_plan(session_id, question, segments, persona_constraints, mode=bld.mode, evidence_text=evidence_text,
                                                    on_progress=progress, should_stop=lambda: _stopped(build_id), on_note=note)
         await log(build_id, "spawn", "info", f"Writing {len(profiles)} agents to the session")
         planned = sum(int(sg.get("count") or 0) for sg in segments)

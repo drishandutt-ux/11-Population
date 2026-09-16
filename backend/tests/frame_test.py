@@ -216,3 +216,38 @@ def test_extract_sizing_reads_only_what_is_stated(monkeypatch):
     sz = asyncio.run(frame.extract_sizing("s", "Blackpool", "GLP-1", [E()]))
     assert sz["tam"]["value"] == "141,100" and sz["sam"] == {} and sz["som"]["source"] == "OpenPrescribing"
     assert asyncio.run(frame.extract_sizing("s", "Blackpool", "GLP-1", []))["tam"] == {}
+
+
+# ── dynamic cells: explicit frame values on segments and personas ─────────────
+
+def test_explicit_values_and_agent_cell():
+    work = {"key": "work_pattern", "label": "Work pattern", "attribute": "other", "kind": "behavioural", "why": "", "matchable": False, "proxy_attribute": "other"}
+    no_target = {"status": "missing", "categories": []}
+    assert frame.explicit_value(work, no_target, "Hybrid office") == "Hybrid office"           # no categories: the value is the cell
+    tgt = {"status": "found", "categories": [{"label": "Hybrid", "share_pct": 40}, {"label": "Shift", "share_pct": 35}, {"label": "Remote", "share_pct": 25}]}
+    assert frame.explicit_value(work, tgt, "hybrid office worker") == "Hybrid"                 # containment onto a published category
+    assert frame.explicit_value(work, tgt, "freelance") is None
+    a = A(40, region="Oxford", frame={"work_pattern": "shift"})
+    assert frame.agent_cell(work, tgt, a) == "Shift"
+    assert frame.agent_cell(PLACE, T_PLACE, a) == "Oxford"                                      # falls back to the demographic attribute
+    counts, unplaced = frame.achieved_distribution(work, no_target, [A(30, frame={"work_pattern": "Remote"}), A(30, frame={"work_pattern": "Remote"}), A(30)])
+    assert counts == {"Remote": 2} and unplaced == 1
+
+
+def test_planned_distribution_uses_segment_frame_values_first():
+    work = {"key": "work_pattern", "label": "Work pattern", "attribute": "other", "kind": "behavioural", "why": "", "matchable": False, "proxy_attribute": "other"}
+    tgt = {"status": "uploaded", "categories": [{"label": "Hybrid", "share_pct": 50}, {"label": "Shift", "share_pct": 50}]}
+    segs = [{"count": 30, "decision": "accepted", "frame_values": {"work_pattern": "hybrid"}, "demographics": {}},
+            {"count": 20, "decision": "accepted", "frame_values": {"work_pattern": "night shift"}, "demographics": {}}]
+    assert frame.planned_distribution(work, tgt, segs, 50) == {"Hybrid": 60.0, "Shift": 40.0}
+    # a segment whose explicit value fits no category falls through to the attribute path (none here) and is left unplaced
+    segs[1]["frame_values"] = {"work_pattern": "freelance"}
+    assert frame.planned_distribution(work, tgt, segs, 50) == {"Hybrid": 60.0, "Shift": 0.0}
+
+
+def test_frame_block_for_prompt_lists_categories_or_asks_for_labels():
+    fr = {"dimensions": [PLACE, {"key": "work_pattern", "label": "Work pattern", "attribute": "other", "kind": "behavioural"}], "targets": {"place": T_PLACE}}
+    text = frame.frame_block_for_prompt(fr)
+    assert "place (Place): categories Blackpool (70%) | Oxford (30%)" in text
+    assert "work_pattern (Work pattern): no published distribution" in text
+    assert frame.frame_block_for_prompt(None) == ""

@@ -757,3 +757,19 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
     assert client.get(f"/api/v1/sessions/{sid}/population/builds/b2").json()["status"] == "awaiting_review"
     # a stopped build with a plan can still be approved
     assert client.post(f"/api/v1/sessions/{sid}/population/builds/b1/approve", json={}).status_code == 400  # empty plan → nothing to build, but not a 409
+
+
+def test_segment_from_model_keeps_frame_values():
+    seg = builder.segment_from_model({"id": "s1", "name": "X", "share_pct": 50, "stance": "direct", "frame_values": [{"dimension": "work_pattern", "value": "Hybrid"}, {"dimension": "", "value": "x"}, "junk"]})
+    assert seg["frame_values"] == {"work_pattern": "Hybrid"}
+    assert "frame: work_pattern=Hybrid" in builder.segment_for_prompt(seg)
+
+
+def test_persona_dict_keeps_frame_and_inherits_segment_cells():
+    d = {"name": "A", "age": 30, "gender": "female", "region": "Oxford", "frame": {"work_pattern": "Remote", "": "x"}}
+    p = agent_factory.profile_from_dict(d, "s", "#fff", segment="Seg")
+    assert p.demographics["frame"] == {"work_pattern": "Remote"}
+    dicts = [{"name": "B", "humanity": 30}, {"name": "C", "humanity": 30, "frame": {"work_pattern": "Shift"}}]
+    agent_factory.finalise_segment_dicts({"stance": "direct", "name": "Seg", "humanity_hint": "tempered", "frame_values": {"work_pattern": "Hybrid", "age": "30s"}}, dicts)
+    assert dicts[0]["frame"] == {"work_pattern": "Hybrid", "age": "30s"}
+    assert dicts[1]["frame"] == {"work_pattern": "Shift", "age": "30s"}
