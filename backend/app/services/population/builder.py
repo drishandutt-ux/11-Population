@@ -25,6 +25,7 @@ from app.models.population import PopulationBuild
 from app.models.session import AnalysisSession, SessionStatus
 from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
 
+from . import facets as facets_mod
 from . import frame as frame_mod
 from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts
 
@@ -857,7 +858,14 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
         segments = [k for k in keep] + [sg for sg in segments if sg.get("id") not in kept_ids and sg.get("name") not in {k.get("name") for k in keep}]
     segments = normalise_segments(segments, bld.target_count, bld.constraints)
     plan = {"segments": segments, "rationale": p.get("rationale", ""), "assumptions": p.get("assumptions") or [], "evidence_coverage": p.get("evidence_coverage", "")}
+    # The population facets: the 5–15 cell types the analyst reads the population by (the Studio's map).
+    facets = (bld.plan or {}).get("facets") if keep and (bld.plan or {}).get("facets") else None
+    if not facets:
+        facets = await facets_mod.pick_facets(bld.session_id, question, bld.detected, segments)
+    plan["facets"] = facets
     await _save(build_id, plan=plan, status="awaiting_review")
+    await log(build_id, "plan", "info", "Population map — cells the analyst reads the population by: " + ", ".join(f"{k + 1}. {f['label']}" for k, f in enumerate(facets)),
+              "persona-level: " + (", ".join(f["label"] for f in facets if f.get("kind") == "persona") or "none — all read from what personas carry"))
     for sg in segments:
         await log(build_id, "plan", "info", f"Proposed · {sg['name']} — {sg['share_pct']}% ({sg['count']} agents), {sg['stance']}", sg.get("rationale"))
     for a in plan["assumptions"][:5]:
@@ -1143,6 +1151,8 @@ async def _spawn(build_id: str):
         persona_constraints = dict(bld.constraints or {})
         if bld.frame:
             persona_constraints["frame_prompt"] = frame_mod.frame_block_for_prompt(bld.frame)
+        if (bld.plan or {}).get("facets"):
+            persona_constraints["facets_prompt"] = facets_mod.facets_block_for_prompt(bld.plan["facets"])
         profiles = await generate_agents_from_plan(session_id, question, segments, persona_constraints, mode=bld.mode, evidence_text=evidence_text,
                                                    on_progress=progress, should_stop=lambda: _stopped(build_id), on_note=note)
         await log(build_id, "spawn", "info", f"Writing {len(profiles)} agents to the session")

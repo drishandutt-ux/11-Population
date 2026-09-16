@@ -349,6 +349,8 @@ export type AgentDemographics = {
   geo_behavior?: string;
   /** The persona's cell on each sampling-frame dimension (dimension key → category). */
   frame?: Record<string, string>;
+  /** The persona's label on each question-specific population facet (facet key → label). */
+  facets?: Record<string, string>;
 };
 
 export type OpinionsResponse = {
@@ -868,6 +870,9 @@ export type FrameSizingCell = { value?: string; label?: string; source?: string;
 export type FrameSizing = { tam: FrameSizingCell; sam: FrameSizingCell; som: FrameSizingCell; note?: string };
 export type PopulationFrame = { dimensions: FrameDimension[]; targets: Record<string, FrameTarget>; report: FrameReport | null; geography: string; sizing?: FrameSizing | null };
 
+/** One cell type of the population map: what personas are counted by (5–15 per plan, ranked). */
+export type PopulationFacet = { key: string; label: string; why: string; kind: "attribute" | "persona"; attribute: string; values_hint: string[] };
+
 export type PopulationBuildStatus =
   | "queued" | "detecting" | "gathering" | "clarifying" | "planning" | "awaiting_review" | "spawning" | "complete" | "stopped" | "error";
 
@@ -881,7 +886,7 @@ export type PopulationBuild = {
   sources: PopulationSources;
   detected: PopulationDetected | null;
   questions: PopulationQuestion[];
-  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string } | null;
+  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string; facets?: PopulationFacet[] } | null;
   frame?: PopulationFrame | null;
   log: PopulationLogEntry[];
   error: string | null;

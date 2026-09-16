@@ -257,6 +257,7 @@ Return a JSON array with exactly {batch_count} objects. Each object MUST have AL
   "debate_style": "1 sentence describing how they argue",
   "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
   "frame": {{"<sampling-frame dimension key>": "<the category this persona falls in>", ...}} — one entry per frame dimension listed above; {{}} when no frame was given,
+  "facets": {{"<population facet key>": "<one of its labels>", ...}} — one entry per POPULATION FACET listed above; {{}} when none were given,
   "humanity": <integer 0-100>,
   "dials": {DIALS_SCHEMA}
 }}
@@ -587,6 +588,7 @@ QUERY: {query}
 {_segment_block(seg, n)}
 {_constraints_block(constraints)}
 {(constraints or {}).get('frame_prompt') or ''}
+{(constraints or {}).get('facets_prompt') or ''}
 KNOWLEDGE CONTEXT:
 {kg_summary[:2000]}
 {('EVIDENCE:' + chr(10) + evidence_text[:3500]) if evidence_text else ''}
@@ -644,6 +646,8 @@ def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -
     demographics = {k: str(d.get(k) or "").strip() for k in _DEMOGRAPHIC_KEYS if d.get(k)}
     if isinstance(d.get("frame"), dict) and d["frame"]:
         demographics["frame"] = {str(k).strip(): str(v).strip()[:60] for k, v in d["frame"].items() if str(k).strip() and str(v or "").strip()}
+    if isinstance(d.get("facets"), dict) and d["facets"]:
+        demographics["facets"] = {str(k).strip(): str(v).strip()[:60] for k, v in d["facets"].items() if str(k).strip() and str(v or "").strip()}
     try:
         return AgentProfile(
             id=str(uuid.uuid4()),
