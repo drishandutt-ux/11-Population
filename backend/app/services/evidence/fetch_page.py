@@ -1,8 +1,9 @@
 """Fetch a result page and reduce it to readable text for the evidence pool.
 HTML: httpx + trafilatura (main content, boilerplate stripped). PDF: Claude skims it for the
 query. Thin pages (teaser cards, cookie walls, 404s) are rejected so they never become
-evidence. On 403 / bot walls / thin pages, one retry in headless Chromium when Playwright is
-installed (it is in the production image; optional locally)."""
+evidence. On 403 / bot walls / thin pages: Tavily Extract (advanced depth keeps tables) when
+TAVILY_API_KEY is set, then one retry in headless Chromium when Playwright is installed (it is
+in the production image; optional locally)."""
 from __future__ import annotations
 
 import base64
@@ -161,12 +162,33 @@ async def fetch_with_browser(url: str) -> FetchedPage:
             await browser.close()
 
 
+async def fetch_with_tavily(url: str, query: str = "") -> FetchedPage:
+    from . import tavily
+
+    if not tavily.configured():
+        raise FetchError("Tavily not configured")
+    ok, failed = await tavily.extract([url], query=query, depth="advanced")
+    if url not in ok:
+        raise FetchError(f"Tavily extract: {failed.get(url, 'no content')[:80]}")
+    md = ok[url]
+    h = re.search(r"^#+\s+(.+)$", md, re.M)
+    title = (h.group(1).strip() if h else "") or url
+    return _finish(url, title, md, 200, "html")
+
+
+_RETRY_WORTH = re.compile(r"HTTP 40[13]|HTTP 429|HTTP 5\d\d|Thin page|Not HTML \(unknown\)|Unusable page|Timeout|ReadTimeout|ConnectTimeout")
+
+
 async def fetch_page(url: str, query: str = "", browser_fallback: bool = True) -> FetchedPage:
     try:
         return await fetch_plain(url, query)
     except Exception as e:  # noqa: BLE001
         msg = str(e)
-        if browser_fallback and not re.search(r"\.pdf(\?|#|$)", url, re.I) and re.search(r"HTTP 40[13]|Thin page|Not HTML \(unknown\)", msg):
+        if browser_fallback and not re.search(r"\.pdf(\?|#|$)", url, re.I) and _RETRY_WORTH.search(msg):
+            try:
+                return await fetch_with_tavily(url, query)
+            except Exception as e_t:  # noqa: BLE001
+                msg = f"{msg}; tavily: {e_t}" if "not configured" not in str(e_t) else msg
             try:
                 return await fetch_with_browser(url)
             except Exception as e2:  # noqa: BLE001

@@ -107,18 +107,11 @@ async def _brave_api(query: str, opts: dict, retried: bool = False) -> list[Sear
     return out
 
 
-# ── Tavily (keyed) ──────────────────────────────────────────────────────────────
+# ── Tavily (keyed; shared rate-limited client in evidence/tavily.py) ────────────
 async def _tavily(query: str, opts: dict) -> list[SearchResult]:
-    key = os.environ.get("TAVILY_API_KEY", "")
-    if not key:
-        raise RuntimeError("TAVILY_API_KEY is not set")
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        res = await client.post("https://api.tavily.com/search", headers={"Authorization": f"Bearer {key}"},
-                                json={"api_key": key, "query": query, "max_results": opts.get("max_results", 8), "search_depth": "basic", "include_answer": False})
-    if res.status_code != 200:
-        raise RuntimeError(f"Tavily HTTP {res.status_code}: {res.text[:200]}")
-    return [SearchResult(title=r.get("title", ""), url=r["url"], domain=domain_of(r["url"]), snippet=r.get("content", ""), provider="tavily", published_at=_iso(r.get("published_date")))
-            for r in res.json().get("results", [])]
+    from .. import tavily
+
+    return await tavily.search(query, opts)
 
 
 # ── Brave HTML (keyless) ────────────────────────────────────────────────────────

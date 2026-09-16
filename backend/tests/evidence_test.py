@@ -5,6 +5,7 @@ and LLM call mocked.
 Run:  cd backend && pytest tests/evidence_test.py -q
 """
 import asyncio
+import httpx
 import os
 import sys
 import time
@@ -491,3 +492,120 @@ def test_anthropic_engine_calls_claude_with_the_web_search_tool(monkeypatch):
     assert r[0].url == "https://www.ons.gov.uk/a" and r[0].snippet == "Share of X."
     assert seen["label"] == "search" and seen["tools"] == [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1, "user_location": {"type": "approximate", "country": "GB"}}]
     assert seen["messages"] == [{"role": "user", "content": "ONS a site:ons.gov.uk"}]
+
+
+# ── Tavily: rate-limited client, site: → include_domains, extract fallback (2026-09-16) ──
+from app.services.evidence import tavily  # noqa: E402
+from app.services.evidence import fetch_page as fp  # noqa: E402
+
+
+def test_tavily_limiter_paces_the_101st_request_into_the_next_minute():
+    t = {"now": 0.0}
+    slept = []
+
+    async def fake_sleep(d):
+        slept.append(d); t["now"] += d
+
+    lim = tavily.RateLimiter(100, clock=lambda: t["now"], sleep=fake_sleep)
+
+    async def run():
+        for _ in range(100):
+            assert await lim.acquire() == 0.0
+        assert lim.in_window() == 100
+        w = await lim.acquire()              # 101st: must wait until the first slot is 60 s old
+        assert w > 0 and t["now"] >= 60.0 and lim.in_window() <= 100
+        t["now"] += 61
+        assert await lim.acquire() == 0.0    # a minute later, free again
+    asyncio.run(run())
+    assert slept and all(d > 0 for d in slept)
+
+
+def test_tavily_limiter_serialises_concurrent_callers():
+    t = {"now": 0.0}
+
+    async def fake_sleep(d):
+        t["now"] += d
+        await asyncio.sleep(0)
+
+    lim = tavily.RateLimiter(3, clock=lambda: t["now"], sleep=fake_sleep)
+
+    async def run():
+        waits = await asyncio.gather(*(lim.acquire() for _ in range(5)))
+        # FIFO under the lock: three free slots, the fourth waits a full window (the fake clock
+        # jumps a minute, which frees the window again), the fifth is then free
+        assert waits.count(0.0) == 4 and sum(1 for w in waits if w > 0) == 1 and lim.in_window() <= 3
+    asyncio.run(run())
+
+
+def test_tavily_search_payload_turns_site_operator_into_domain_filter(monkeypatch):
+    monkeypatch.delenv("TAVILY_SEARCH_DEPTH", raising=False)
+    p = tavily.search_payload("Labour Market Profile London site:nomisweb.co.uk", {"max_results": 5, "region": "uk-en"})
+    assert p["query"] == "Labour Market Profile London" and p["include_domains"] == ["nomisweb.co.uk"] and p["include_domains_mode"] == "filter"
+    assert p["search_depth"] == "advanced" and p["country"] == "united kingdom" and p["max_results"] == 5 and p["chunks_per_source"] == 3
+    p2 = tavily.search_payload("Census 2021 working from home site:gov.uk/government/statistics", {"max_results": 30})
+    assert p2["include_domains"] == ["gov.uk"] and "government statistics" in p2["query"] and p2["max_results"] == 20
+    p3 = tavily.search_payload("Crown Estate leasing round 2026", {"region": "us-en"})
+    assert "include_domains" not in p3 and p3["search_depth"] == "basic" and p3["country"] == "united states"
+    monkeypatch.setenv("TAVILY_SEARCH_DEPTH", "basic")
+    assert tavily.search_payload("x site:ons.gov.uk", {})["search_depth"] == "basic"
+
+
+def test_tavily_parse_search_and_engine_wiring(monkeypatch):
+    calls = []
+
+    async def fake_post(path, payload, **kw):
+        calls.append((path, payload))
+        return {"results": [{"url": "https://www.ons.gov.uk/a", "title": "A", "content": "Share of X was 42%.", "published_date": "2026-03-01"},
+                            {"url": "https://www.ons.gov.uk/a", "title": "dup", "content": ""}, {"url": "mailto:x", "title": "bad"}]}
+    monkeypatch.setattr(tavily, "post", fake_post)
+    r = asyncio.run(engines.build("tavily").search("share of X site:ons.gov.uk", {"max_results": 5}))
+    assert len(r) == 1 and r[0].provider == "tavily" and r[0].snippet == "Share of X was 42%." and r[0].published_at == "2026-03-01"
+    assert calls[0][0] == "/search" and calls[0][1]["include_domains"] == ["ons.gov.uk"]
+
+
+def test_tavily_post_honours_retry_after_then_raises_rate_limit(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+    responses = [httpx.Response(429, headers={"retry-after": "2"}, text="slow down"), httpx.Response(429, headers={"retry-after": "2"}, text="slow down")]
+    slept = []
+
+    async def fake_sleep(d):
+        slept.append(d)
+
+    class FakeClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, *a, **k): return responses.pop(0)
+
+    monkeypatch.setattr(tavily.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(tavily.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(tavily, "limiter", tavily.RateLimiter(100, clock=lambda: 0.0, sleep=fake_sleep))
+    with pytest.raises(RuntimeError) as e:
+        asyncio.run(tavily.post("/search", {"query": "x"}))
+    assert prov.is_rate_limit(e.value) and slept == [2.0]
+
+
+def test_fetch_page_falls_back_to_tavily_extract_before_the_browser(monkeypatch):
+    async def plain_403(url, query=""):
+        raise fp.FetchError("HTTP 403")
+
+    async def fake_extract(urls, *, query="", depth="advanced", fmt="markdown"):
+        assert urls == ["https://www.ons.gov.uk/x"] and depth == "advanced" and query
+        return {urls[0]: "# Employment by occupation\n\n" + "London had 4.5 million jobs in 2025. " * 30}, {}
+
+    async def no_browser(url):
+        raise AssertionError("browser must not run when Tavily extracted the page")
+
+    monkeypatch.setattr(fp, "fetch_plain", plain_403)
+    monkeypatch.setattr(fp, "fetch_with_browser", no_browser)
+    monkeypatch.setattr(tavily, "configured", lambda: True)
+    monkeypatch.setattr(tavily, "extract", fake_extract)
+    page = asyncio.run(fp.fetch_page("https://www.ons.gov.uk/x", "jobs by occupation London"))
+    assert page.title == "Employment by occupation" and page.chars > 400 and page.kind == "html"
+
+    # without a key the old path (straight to the browser) is unchanged
+    monkeypatch.setattr(tavily, "configured", lambda: False)
+    async def browser_ok(url):
+        return fp.FetchedPage(url=url, title="B", markdown="x" * 500, chars=500, truncated=False, status=200, kind="html")
+    monkeypatch.setattr(fp, "fetch_with_browser", browser_ok)
+    assert asyncio.run(fp.fetch_page("https://www.ons.gov.uk/x")).title == "B"
