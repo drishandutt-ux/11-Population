@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Agent, AgentDials, AgentPreset, SpawnOptions, SimMode, api } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { Agent, AgentDials, AgentPreset, SimMode, api } from "@/lib/api";
+import PopulationStudio from "@/components/population/PopulationStudio";
 import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
-  MessageCircle, Upload, X, ChevronDown, ChevronUp, BarChart2, FileText,
-  Bookmark, Trash2, Clock, Heart, Rocket, Brain, AlertTriangle, MessageSquare, ThumbsUp, Swords, Reply, Wand2, MapPin,
+  MessageCircle, X, ChevronDown, ChevronUp, BarChart2,
+  Bookmark, Clock, Heart, Rocket, Brain, AlertTriangle, Wand2, MapPin,
 } from "lucide-react";
 
 // ── Activity ladder (mirrors backend orchestrator._build_phases) ──────────────
@@ -29,16 +29,6 @@ const INTENSITY_STEPS: { level: number; label: string; adds: string }[] = [
 ];
 const MAX_INTENSITY = 6;
 
-// ── Humanity register bands (mirrors backend agent_runner._humanity_band) ─────
-function humanityBand(h: number): { label: string; desc: string; color: string } {
-  if (h >= 70) return { label: "Reactive", desc: "pure gut — here to judge & react, logic ignored", color: "text-rose-400" };
-  if (h >= 60) return { label: "Defensive", desc: "defends their feelings with logic at any cost", color: "text-orange-400" };
-  if (h >= 50) return { label: "Balanced", desc: "50 / 50 feeling and logic", color: "text-amber-400" };
-  if (h >= 20) return { label: "Tempered", desc: "a bit sentimental, but logic stays in control", color: "text-teal-400" };
-  if (h > 0) return { label: "Mostly logical", desc: "barely sentimental — analytical below 20%", color: "text-sky-400" };
-  return { label: "Off", desc: "pure analytical experts", color: "text-muted-foreground" };
-}
-
 interface Props {
   agents: Agent[];
   sessionId: string;
@@ -49,7 +39,8 @@ interface Props {
   spawnStartTime?: number | null;
   spawnCount?: number;
   isPendingSimulation?: boolean;
-  onSpawn: (count: number, opts?: SpawnOptions) => void;
+  /** The session row's agent_count, null until the session has loaded — decides whether the Studio or the roster opens first. */
+  expectedAgentCount?: number | null;
   onStartSimulation: (intensity: number, mode: SimMode) => void;
   onGoToThread: () => void;
   onGoToReport: () => void;
@@ -267,132 +258,6 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
 /** How much of an uploaded survey reaches the prompt. Matches SURVEY_CHAR_LIMIT in
  *  agent_factory.py — the file used to be cut to 12,000 here and then to 8,000 again on the
  *  server, silently, so a large survey lost rows twice with nothing said about it. */
-const SURVEY_CHAR_LIMIT = 8000;
-
-function ProfileDocUpload({
-  docContext,
-  onDocContext,
-  mode,
-  mirrorSurvey,
-  onMirrorSurvey,
-}: {
-  docContext: string;
-  onDocContext: (text: string, name: string) => void;
-  /** Survey data is translated to dials by Claude during Pro curation. Fast mode samples the
-   *  pre-built bank with no LLM call, so an uploaded doc is discarded — say so rather than
-   *  letting it look like it was used. */
-  mode: SimMode;
-  mirrorSurvey: boolean;
-  onMirrorSurvey: (v: boolean) => void;
-}) {
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
-  const [trimmed, setTrimmed] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function handleFile(file: File) {
-    if (file.type === "application/pdf") {
-      setWarning("PDF not supported for profile docs. Please convert to .txt or .csv.");
-      return;
-    }
-    setWarning(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = (e.target?.result as string) || "";
-      const truncated = text.slice(0, SURVEY_CHAR_LIMIT);
-      if (text.length > SURVEY_CHAR_LIMIT) {
-        const keptRows = truncated.split("\n").length - 1;
-        const totalRows = text.split("\n").length - 1;
-        setTrimmed(`Trimmed to the first ${SURVEY_CHAR_LIMIT.toLocaleString()} characters — about ${keptRows} of ${totalRows} rows reach the model.`);
-      } else {
-        setTrimmed(null);
-      }
-      setFileName(file.name);
-      onDocContext(truncated, file.name);
-    };
-    reader.readAsText(file);
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-muted-foreground">Profile / Survey Doc</span>
-        <span className="text-[10px] text-muted-foreground/50">.txt, .csv only</span>
-      </div>
-
-      {docContext ? (
-        <div className="flex items-center gap-2 text-xs bg-muted/50 border border-border rounded-lg px-3 py-2">
-          <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-foreground truncate flex-1">{fileName}</span>
-          <button
-            onClick={() => { setFileName(null); setTrimmed(null); onDocContext("", ""); }}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="w-full flex items-center gap-2 text-xs border border-dashed border-border/60 rounded-lg px-3 py-2.5 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
-        >
-          <Upload className="w-3.5 h-3.5 shrink-0" />
-          Upload survey or profile data (optional)
-        </button>
-      )}
-
-      {warning && (
-        <p className="text-[10px] text-yellow-400 mt-1">{warning}</p>
-      )}
-
-      {trimmed && <p className="text-[10px] text-yellow-400 mt-1">{trimmed}</p>}
-
-      {docContext && mode === "pro" && (
-        // Two competing sources of truth for who the population is — the survey and the stance
-        // quota. This decides which one wins.
-        <label className="flex items-start gap-2 mt-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={mirrorSurvey}
-            onChange={(e) => onMirrorSurvey(e.target.checked)}
-            className="mt-0.5 accent-[hsl(var(--primary))]"
-          />
-          <span className="text-[10px] text-muted-foreground leading-relaxed">
-            <span className="text-foreground/80">Mirror the panel.</span> Build agents from these
-            respondents — their demographics, circumstances and answers — and let stance follow
-            from each person rather than the sliders. Uncheck to use the survey as flavour and
-            keep the stance mix above.
-          </span>
-        </label>
-      )}
-
-      {docContext && mode === "fast" ? (
-        <p className="text-[10px] text-yellow-400 mt-1">
-          Fast mode samples the pre-built persona bank and ignores this file. Switch to Pro to
-          have Claude translate these responses into dial values.
-        </p>
-      ) : (
-        <p className="text-[10px] text-muted-foreground/50 mt-1">
-          CSV/text with survey responses — Claude will translate to dial values (Pro mode only)
-        </p>
-      )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".txt,.csv,text/plain,text/csv"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFile(f);
-          e.target.value = "";
-        }}
-      />
-    </div>
-  );
-}
-
-// ── Mode toggle (Fast / Pro) ──────────────────────────────────────────────────
 function ModeToggle({
   mode, onChange, compact = false,
 }: { mode: SimMode; onChange: (m: SimMode) => void; compact?: boolean }) {
@@ -437,26 +302,19 @@ export default function AgentDirectory({
   spawnStartTime,
   spawnCount,
   isPendingSimulation = false,
-  onSpawn,
+  expectedAgentCount = null,
   onStartSimulation,
   onGoToThread,
   onGoToReport,
   onApplyPreset,
 }: Props) {
-  const router = useRouter();
-  const [agentCount, setAgentCount] = useState(50);
   const [intensity, setIntensity] = useState(2);
   const [mode, setMode] = useState<SimMode>("fast");
-  const [profileQuery, setProfileQuery] = useState("");
-  const [directPct, setDirectPct] = useState(33);
-  const [indirectPct, setIndirectPct] = useState(33);
-  const [docContext, setDocContext] = useState("");
-  // Pro + survey: build the population FROM the respondents rather than applying the stance
-  // quota over the top of them. Defaults on, because uploading a panel implies wanting it.
-  const [mirrorSurvey, setMirrorSurvey] = useState(true);
-  const [humanity, setHumanity] = useState(50);          // 0 = expert, 100 = fully human
-  const [humanityCoverage, setHumanityCoverage] = useState(60); // % of agents it applies to
   const [search, setSearch] = useState("");
+  // The Population Studio is the Agents screen until a population exists; the roster can reopen it
+  // to rebuild. It stays open through a build (agents streaming in must not flip the tab away
+  // from the build log) until the analyst presses "View agents".
+  const [studioOpen, setStudioOpen] = useState(false);
 
   // Preset state
   const [presets, setPresets] = useState<AgentPreset[]>([]);
@@ -509,9 +367,6 @@ export default function AgentDirectory({
     }
   }
 
-  const neutralPct = Math.max(0, 100 - directPct - indirectPct);
-  const overflowPct = directPct + indirectPct > 100;
-
   const isSimulating = sessionStatus === "simulating";
   const isComplete = sessionStatus === "complete";
   const isIngesting = sessionStatus === "ingesting";
@@ -523,373 +378,33 @@ export default function AgentDirectory({
       a.role.toLowerCase().includes(search.toLowerCase())
   );
 
-  function handleSpawnClick() {
-    onSpawn(agentCount, {
-      mode,
-      profile_query: profileQuery.trim(),
-      direct_pct: directPct,
-      indirect_pct: indirectPct,
-      neutral_pct: neutralPct,
-      doc_context: docContext,
-      humanity,
-      humanity_coverage: humanityCoverage,
-      mirror_survey: mirrorSurvey,
-    });
-  }
+  // "Loaded" = the session row is known and, if it says there are agents, the roster has arrived.
+  const loaded = expectedAgentCount !== null && (expectedAgentCount === 0 || hasAgents);
+  useEffect(() => {
+    if (loaded && !hasAgents && !isSpawning) setStudioOpen(true);
+  }, [loaded, hasAgents, isSpawning]);
 
   const phases = buildPhases(intensity);
   const postPhases = phases.filter((p) => p !== "like").length;
   const likePhases = phases.length - postPhases;
-  const estPosts = agentCount * postPhases;
-  const estReactions = agentCount * likePhases;
-  const proHeavy = mode === "pro" && agentCount > 150;
-  const hBand = humanityBand(humanity);
+  const estPosts = agents.length * postPhases;
+  const estReactions = agents.length * likePhases;
 
-  // ── Phase 1: No agents yet ────────────────────────────────────────────────
-  if (!hasAgents && !isSpawning) {
-    const dCnt = Math.max(1, Math.round(agentCount * directPct / 100));
-    const iCnt = Math.max(1, Math.round(agentCount * indirectPct / 100));
-    const nCnt = Math.max(0, agentCount - dCnt - iCnt);
-    const humanizedCount = humanity > 0 ? Math.round(agentCount * humanityCoverage / 100) : 0;
+  if (!loaded && !isSpawning && !studioOpen) {
+    return <div className="h-full flex items-center justify-center text-xs text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading the population…</div>;
+  }
 
+  // ── Phase 1: the Population Studio is the Agents screen ──────────────────
+  if (studioOpen || (!hasAgents && !isSpawning)) {
     return (
-      <div className="h-full overflow-y-auto px-6 py-8">
-        <div className="max-w-xl mx-auto space-y-6">
-
-          {/* Header */}
-          <div className="text-center">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-4">
-              <Users className="w-8 h-8 text-primary" />
-            </div>
-            <h2 className="text-xl font-bold text-foreground mb-1.5">Spawn Your Army</h2>
-            <p className="text-sm text-muted-foreground">
-              Define your audience, tune the stance mix, and optionally upload survey data to seed psychological profiles.
-            </p>
-          </div>
-
-          {/* Population Studio — the realistic, human-in-the-loop route */}
-          <button
-            onClick={() => router.push(`/session/${sessionId}/population`)}
-            className="w-full text-left glass rounded-2xl p-5 border border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-all group"
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                <Wand2 className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">Population Studio</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary">recommended for realism</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Builds the population from evidence and real statistics (ONS, Statista, gov.uk, Census…), shows what it detected and why, asks you
-                  what it can&apos;t infer, and proposes segments with demographics and mood you accept, edit or reject — then writes the agents.
-                </p>
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-primary mt-2 group-hover:gap-2 transition-all">Open the Studio →</span>
-              </div>
-            </div>
-          </button>
-
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground/50 uppercase tracking-wider">
-            <span className="flex-1 border-t border-border/40" /> or spawn quickly <span className="flex-1 border-t border-border/40" />
-          </div>
-
-          {/* Mode */}
-          <div className="glass rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Mode</span>
-              <span className="text-[10px] text-muted-foreground/50">
-                {mode === "fast" ? "speed first" : "quality first"}
-              </span>
-            </div>
-            <ModeToggle mode={mode} onChange={setMode} />
-            {mode === "pro" && (
-              <div className="flex items-start gap-2 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                <span>
-                  Pro curates every agent with Sonnet and runs the debate on Sonnet too — far richer, but
-                  <strong className="text-amber-200"> noticeably slower and more costly</strong>
-                  {agentCount > 150 ? ` at ${agentCount} agents (several minutes + significant API spend).` : "."}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Saved lineups */}
-          {presets.length > 0 && (
-            <div className="glass rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Bookmark className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Saved Lineups
-                </span>
-              </div>
-              <div className="space-y-2">
-                {presets.map((preset) => (
-                  <div
-                    key={preset.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/40 bg-muted/30"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{preset.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {preset.agent_count} agents · {new Date(preset.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => onApplyPreset(preset.id)}
-                      className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-colors"
-                    >
-                      Load
-                    </button>
-                    <button
-                      onClick={() => handleDeletePreset(preset.id)}
-                      className="shrink-0 text-muted-foreground/50 hover:text-red-400 transition-colors p-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Profile query */}
-          <div className="glass rounded-2xl p-5 space-y-4">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                Audience Profile <span className="text-muted-foreground/50">(optional)</span>
-              </label>
-              <textarea
-                value={profileQuery}
-                onChange={(e) => setProfileQuery(e.target.value)}
-                rows={3}
-                placeholder={`e.g. "30% Aspirational early adopters, 20% Paranoid skeptics, rest neutral"\nor "Teenagers aged 15–19 living in the UK, moderate income"`}
-                className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
-              />
-            </div>
-
-            <ProfileDocUpload
-              docContext={docContext}
-              onDocContext={(text) => setDocContext(text)}
-              mode={mode}
-              mirrorSurvey={mirrorSurvey}
-              onMirrorSurvey={setMirrorSurvey}
-            />
-          </div>
-
-          {/* Stance distribution */}
-          <div className="glass rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Stance Distribution</span>
-              {overflowPct && (
-                <span className="text-[10px] text-yellow-400">Direct + Indirect exceed 100%</span>
-              )}
-            </div>
-
-            {/* Direct */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-blue-400 font-medium">Direct</span>
-                <span className="text-blue-400 font-bold">{directPct}%</span>
-              </div>
-              <input
-                type="range" min={0} max={100} step={5}
-                value={directPct}
-                onChange={(e) => {
-                  const v = +e.target.value;
-                  setDirectPct(v);
-                  if (v + indirectPct > 100) setIndirectPct(Math.max(0, 100 - v));
-                }}
-                className="w-full accent-blue-500 cursor-pointer h-1.5"
-              />
-            </div>
-
-            {/* Indirect */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-purple-400 font-medium">Indirect</span>
-                <span className="text-purple-400 font-bold">{indirectPct}%</span>
-              </div>
-              <input
-                type="range" min={0} max={100} step={5}
-                value={indirectPct}
-                onChange={(e) => {
-                  const v = +e.target.value;
-                  setIndirectPct(v);
-                  if (directPct + v > 100) setDirectPct(Math.max(0, 100 - v));
-                }}
-                className="w-full accent-purple-500 cursor-pointer h-1.5"
-              />
-            </div>
-
-            {/* Neutral (derived) */}
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400 font-medium">Neutral</span>
-              <span className="text-slate-400 font-bold">{neutralPct}% (auto)</span>
-            </div>
-
-            {/* Preview counts */}
-            <div className="grid grid-cols-3 gap-2 text-xs text-center pt-1">
-              {[
-                { label: "Direct",   count: dCnt, color: "text-blue-400",   desc: "Domain experts" },
-                { label: "Indirect", count: iCnt, color: "text-purple-400", desc: "Adjacent fields" },
-                { label: "Neutral",  count: nCnt, color: "text-slate-400",  desc: "Skeptics & press" },
-              ].map((g) => (
-                <div key={g.label} className="bg-muted/60 rounded-lg p-2">
-                  <div className={`font-bold text-lg ${g.color}`}>{g.count}</div>
-                  <div className="font-medium text-foreground text-[11px]">{g.label}</div>
-                  <div className="text-muted-foreground text-[10px]">{g.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Humanity + Coverage */}
-          <div className="glass rounded-2xl p-5 space-y-5">
-            <div className="flex items-center gap-2">
-              <Heart className="w-3.5 h-3.5 text-pink-400" />
-              <span className="text-xs font-medium text-muted-foreground">Humanity</span>
-              <span className="text-[10px] text-muted-foreground/50 ml-auto">feeling over logic</span>
-            </div>
-
-            {/* Humanity intensity */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-pink-400 font-medium">Intensity</span>
-                <span className="text-pink-400 font-bold">{humanity === 0 ? "Off" : `${humanity}%`}</span>
-              </div>
-              <input
-                type="range" min={0} max={100} step={5}
-                value={humanity}
-                onChange={(e) => setHumanity(+e.target.value)}
-                className="w-full accent-pink-500 cursor-pointer h-1.5"
-              />
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>0 · expert &amp; logical</span>
-                <span>100 · pure emotion</span>
-              </div>
-              {humanity > 0 && (
-                <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-2.5 py-1.5">
-                  <span className={`text-[11px] font-semibold ${hBand.color}`}>{hBand.label}</span>
-                  <span className="text-[10px] text-muted-foreground/70 leading-snug">{hBand.desc}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Coverage */}
-            <div className={`space-y-2 transition-opacity ${humanity === 0 ? "opacity-40 pointer-events-none" : ""}`}>
-              <div className="flex justify-between text-xs">
-                <span className="text-pink-300 font-medium">Coverage</span>
-                <span className="text-pink-300 font-bold">{humanityCoverage}%</span>
-              </div>
-              <input
-                type="range" min={0} max={100} step={5}
-                value={humanityCoverage}
-                onChange={(e) => setHumanityCoverage(+e.target.value)}
-                className="w-full accent-pink-400 cursor-pointer h-1.5"
-              />
-            </div>
-
-            <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
-              {humanity === 0
-                ? "All agents stay analytical experts — citations, frameworks, measured tone."
-                : `≈ ${humanizedCount} of ${agentCount} agents will be ${hBand.label.toLowerCase()} — ${hBand.desc}. The rest stay analytical experts.`}
-            </p>
-          </div>
-
-          {/* Agent count + Intensity */}
-          <div className="glass rounded-2xl p-5 space-y-5">
-            {/* Agent count */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Number of agents</span>
-                <input
-                  type="number" min={1} max={1000}
-                  value={agentCount}
-                  onChange={(e) => setAgentCount(Math.max(1, Math.min(1000, +e.target.value || 0)))}
-                  className="w-24 text-right text-3xl font-bold text-primary bg-transparent focus:outline-none tabular-nums"
-                />
-              </div>
-              <input
-                type="range" min={5} max={1000} step={5}
-                value={Math.min(agentCount, 1000)}
-                onChange={(e) => setAgentCount(+e.target.value)}
-                className="w-full accent-purple-500 cursor-pointer"
-              />
-              <div className="flex gap-1.5 flex-wrap">
-                {[10, 50, 100, 250, 500, 1000].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setAgentCount(n)}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
-                      agentCount === n
-                        ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-border/50 text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t border-border/40" />
-
-            {/* Activity intensity */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-muted-foreground">Activity intensity</span>
-                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                    ≈ {estPosts.toLocaleString()} posts{estReactions > 0 ? ` + ${estReactions.toLocaleString()} reactions` : ""}
-                  </p>
-                </div>
-                <span className="text-3xl font-bold text-primary tabular-nums">L{intensity}</span>
-              </div>
-              <input
-                type="range" min={1} max={MAX_INTENSITY} step={1}
-                value={intensity}
-                onChange={(e) => setIntensity(+e.target.value)}
-                className="w-full accent-teal-500 cursor-pointer"
-              />
-              <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px]">
-                {INTENSITY_STEPS.slice(0, intensity).map((s) => {
-                  const icon =
-                    s.level === 1 ? <MessageSquare className="w-3 h-3 text-blue-400" />
-                    : s.level === 2 ? <ThumbsUp className="w-3 h-3 text-pink-400" />
-                    : s.level % 2 === 1 ? <Swords className="w-3 h-3 text-orange-400" />
-                    : <Reply className="w-3 h-3 text-emerald-400" />;
-                  return (
-                    <div key={s.level} className="contents">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">{icon}<span className="text-foreground/80 font-medium">{s.label}</span></span>
-                      <span className="text-muted-foreground/60 self-center">{s.adds}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-muted-foreground/50">
-                Every agent is guaranteed to act at each level — higher = more posts, debates and replies per agent.
-              </p>
-            </div>
-          </div>
-
-          {spawnError && (
-            <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {spawnError}
-            </div>
-          )}
-
-          <button
-            onClick={handleSpawnClick}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-all text-base"
-          >
-            {mode === "fast" ? <Rocket className="w-5 h-5" /> : <Brain className="w-5 h-5" />}
-            Spawn {agentCount.toLocaleString()} Agents · {mode === "fast" ? "Fast" : "Pro"}
-          </button>
-        </div>
-      </div>
+      <PopulationStudio
+        sessionId={sessionId}
+        embedded
+        presets={presets}
+        onApplyPreset={(presetId) => { setStudioOpen(false); onApplyPreset(presetId); }}
+        onDeletePreset={handleDeletePreset}
+        onViewAgents={() => setStudioOpen(false)}
+      />
     );
   }
 
@@ -1048,17 +563,11 @@ export default function AgentDirectory({
               {!isPendingSimulation && (
                 <>
                   <button
-                    onClick={() => router.push(`/session/${sessionId}/population`)}
+                    onClick={() => setStudioOpen(true)}
                     className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
                     title="Rebuild this population in the Studio: evidence, statistics, dials and a plan you approve"
                   >
-                    <Wand2 className="w-3.5 h-3.5" /> Studio
-                  </button>
-                  <button
-                    onClick={handleSpawnClick}
-                    className="text-sm border border-border text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg transition-all"
-                  >
-                    Re-spawn
+                    <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio
                   </button>
                 </>
               )}

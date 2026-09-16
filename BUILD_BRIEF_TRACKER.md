@@ -6,7 +6,7 @@ Requirement IDs are the brief's own and are stable. Status is what the codebase 
 Status key: **Have** = in place · **Partial** = exists in a different shape · **Missing** = nothing yet.
 Decision key: **Built** · **Deferred** · **Pinned** (future) · **Open** (not discussed yet) · **Answered** (a question was asked and answered, no build decision).
 
-Last updated: 2026-09-16 (L1 discussed; L1-03 and L1-04 built).
+Last updated: 2026-09-16 (L1 and L2 discussed; L1-03, L1-04 and the L2-01 sampling-frame graph built; the Studio is now the Agents screen).
 
 ---
 
@@ -29,12 +29,12 @@ Last updated: 2026-09-16 (L1 discussed; L1-03 and L1-04 built).
 
 | ID | The brief asks for | What we have today | Status | Decision |
 |---|---|---|---|---|
-| L2-01 | A sampling frame per geography from L1: real marginals for age, sex, ethnicity, IMD decile, employment, tenure, household, long-term condition prevalence, HCP counts per capita | Nothing. The Studio proposes segments from evidence and dials; no frame. | Missing | Open |
-| L2-02 | Quota sampling against those marginals with post-stratification weights; weights appear in aggregation | One agent one vote everywhere. `stats.rake_weights` (IPF) exists but nothing calls it. | Missing | Open |
-| L2-03 | Population editor: set size, sample to the true frame or deliberately over-sample a cohort, distortion made explicit and corrected in weighting | Studio: accept / edit / reject segments, re-plan, dials. No frame, no over-sampling tracking, no weight correction. | Partial | Open |
-| L2-04 | Populations named, saved, versioned, reusable across questions and projects | Presets: named rosters, reusable. Not versioned, not linked to the session/build/evidence that made them. | Partial | Open |
-| L2-05 | Representativeness report at construction: achieved vs target marginals, under-filled cells, effective sample size; warn or refuse on unsupportable cuts | Nothing. Lab flags thin buckets (n < 3) at analysis time only. | Missing | Open |
-| L2-06 | Dyad / network structure linking patient twins to the HCP twins who would treat them | No relations between agents. | Missing | Open |
+| L2-01 | A sampling frame per geography from L1: real marginals for age, sex, ethnicity, IMD decile, employment, tenure, household, long-term condition prevalence, HCP counts per capita | No frame from real marginals. **Built 2026-09-16:** the *Sampling frame* graph in the Studio — the plan's cells (segments × place / age / gender / income / education / occupation / stance / mood) as a graph whose nodes inflate only with personas, live during a build. | Missing (frame) / Built (graph) | **Action taken** — Drishan asked for the live sampling-frame graph first; the real-marginals frame itself is not decided. |
+| L2-02 | Quota sampling against those marginals with post-stratification weights; weights appear in aggregation | One agent one vote everywhere. `stats.rake_weights` (IPF) exists but nothing calls it. | Missing | **Questioned** — "do we need it if the Lab records one vote per agent?" Answered: weights matter when the panel's mix differs from the real population's; without them a Lab share is a share of the panel, not of the place. No build decision. |
+| L2-03 | Population editor: set size, sample to the true frame or deliberately over-sample a cohort, distortion made explicit and corrected in weighting | Studio: accept / edit / reject segments, re-plan, dials. No frame, no over-sampling tracking, no weight correction. | Partial | **Answered** — what is missing (a true-frame target to sample toward, an explicit over-sample control, the distortion shown and corrected). No build decision. |
+| L2-04 | Populations named, saved, versioned, reusable across questions and projects | Presets: named rosters, reusable. Not versioned, not linked to the session/build/evidence that made them. | Partial | **Keep as is** for now. |
+| L2-05 | Representativeness report at construction: achieved vs target marginals, under-filled cells, effective sample size; warn or refuse on unsupportable cuts | Nothing. Lab flags thin buckets (n < 3) at analysis time only. | Missing | **Explained** in plain terms; no build decision. |
+| L2-06 | Dyad / network structure linking patient twins to the HCP twins who would treat them | No relations between agents. | Missing | **Liked** — asked how to make it happen; answered with the design (agent-to-agent edges from the plan, treat/knows/lives-near, used in the debate and the Lab). No build decision. |
 
 ---
 
@@ -174,3 +174,4 @@ Last updated: 2026-09-16 (L1 discussed; L1-03 and L1-04 built).
 
 - **2026-09-16** — L1 walked through. L1-01 / L1-04 / L1-07 answered; L1-02 deferred; L1-03 built (ontology view, commit `e5ba865`); L1-06 linkage page published; cumulative knowledge pinned; L1-05 left open. Tracker created.
 - **2026-09-16** — L1-04 scoping architecture agreed (generic: facets on knowledge, exposure profiles on twins, stacked policies, routes) and built as step 1 with a Scoping view for manual testing.
+- **2026-09-16** — L2 walked through. First: the Population Studio became the Agents screen and the old quick-spawn form was deleted. L2-01 sampling-frame graph built; L2-02 / L2-03 / L2-06 answered; L2-04 kept as is; L2-05 explained.

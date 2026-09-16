@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, apiFetch, Session, Agent, Post, WSEvent, SpawnOptions, SimMode, ResearchState, EvidenceItem } from "@/lib/api";
+import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
@@ -357,22 +357,6 @@ export default function SessionPage() {
     }
   }
 
-  async function handleSpawn(count: number, opts?: SpawnOptions) {
-    setIsSpawning(true);
-    setSpawnProgress(null);
-    setSpawnError(null);
-    setSpawnStartTime(Date.now());
-    setSpawnCount(count);
-    setAgents([]);
-    setAgentsMap({});
-    try {
-      await api.simulation.spawnAgents(id, count, opts);
-    } catch (e: any) {
-      setIsSpawning(false);
-      setSpawnError(e.message || "Failed to start spawning");
-    }
-  }
-
   async function handleApplyPreset(presetId: string) {
     setIsSpawning(true);
     setSpawnProgress(null);
@@ -519,7 +503,7 @@ export default function SessionPage() {
             spawnStartTime={spawnStartTime}
             spawnCount={spawnCount}
             isPendingSimulation={pendingSim !== null}
-            onSpawn={(count, opts) => handleSpawn(count, opts)}
+            expectedAgentCount={session ? (session.agent_count ?? 0) : null}
             onStartSimulation={(it, md) => handleStartSimulation(it, md)}
             onGoToThread={() => setActiveTab("simulation")}
             onGoToReport={() => setActiveTab("report")}
