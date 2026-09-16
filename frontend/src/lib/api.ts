@@ -151,6 +151,10 @@ export const api = {
       }),
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
   },
+  kg: {
+    ontology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology`),
+    buildOntology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology/build`, { method: "POST" }),
+  },
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -849,3 +853,22 @@ export type PopulationBuild = {
   created_at: string | null;
   updated_at: string | null;
 };
+
+// ── Ontology (typed layer over the session knowledge graph) ───────────────────
+export interface OntologyClass { key: string; label: string; color: string; description: string; levels?: string[] }
+export interface OntologyPredicate { key: string; label: string; domain: string[]; range: string[]; description: string }
+export interface OntologySchema { classes: OntologyClass[]; predicates: OntologyPredicate[]; geo_levels: string[] }
+export interface OntologyNode { id: string; cls: string; level: string | null; mentions: number; inferred: boolean }
+export interface OntologyEdge { head: string; predicate: string; tail: string; verb: string; inferred: boolean }
+export interface Ontology {
+  nodes: OntologyNode[];
+  edges: OntologyEdge[];
+  counts: Record<string, number>;
+  built_at: string;
+  model: string;
+  entity_count: number;
+  relation_count: number;
+  classified: number;
+  typed: number;
+}
+export interface OntologyState { schema: OntologySchema; ontology: Ontology | null; stale: boolean; entity_count: number }

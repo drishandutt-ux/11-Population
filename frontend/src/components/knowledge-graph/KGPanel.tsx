@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Network, Zap, X, ArrowRight, ArrowLeft, FileText } from "lucide-react";
+import { Network, Zap, X, ArrowRight, ArrowLeft, FileText, Layers } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import OntologyView from "./OntologyView";
 
 interface Activity {
   time: number;
@@ -73,7 +74,7 @@ function timeAgo(ts: number): string {
   return `${Math.floor(s / 60)}m ago`;
 }
 
-export default function KGPanel({ sessionId, entities, relations, activity }: Props) {
+function EntityGraph({ sessionId, entities, relations, activity }: Props) {
   const [newEntitySet, setNewEntitySet] = useState<Set<string>>(new Set());
   const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
   const [entityDetail, setEntityDetail] = useState<EntityDetail | null>(null);
@@ -401,6 +402,38 @@ export default function KGPanel({ sessionId, entities, relations, activity }: Pr
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+type GraphView = "entities" | "ontology";
+
+const VIEWS: { key: GraphView; label: string; hint: string }[] = [
+  { key: "entities", label: "Knowledge graph", hint: "Every entity and relation extracted from the sources and the debate, as written" },
+  { key: "ontology", label: "Ontology", hint: "The same graph typed into classes — geography, HCP role, condition, journey stage, intervention, channel, attitude segment" },
+];
+
+/** The Graph tab: a view picker, then the free-text entity graph or the typed ontology over it. */
+export default function KGPanel(props: Props) {
+  const [view, setView] = useState<GraphView>("entities");
+  const current = VIEWS.find((v) => v.key === view)!;
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0 bg-muted/20">
+        {view === "ontology" ? <Layers className="w-3.5 h-3.5 text-primary" /> : <Network className="w-3.5 h-3.5 text-primary" />}
+        <select
+          value={view}
+          onChange={(e) => setView(e.target.value as GraphView)}
+          className="bg-input border border-border rounded-lg px-2 py-1 text-xs text-foreground"
+          aria-label="Graph view"
+        >
+          {VIEWS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+        </select>
+        <span className="text-xs text-muted-foreground truncate">{current.hint}</span>
+      </div>
+      <div className="flex-1 min-h-0">
+        {view === "entities" ? <EntityGraph {...props} /> : <OntologyView sessionId={props.sessionId} liveEntityCount={props.entities.length} />}
       </div>
     </div>
   );

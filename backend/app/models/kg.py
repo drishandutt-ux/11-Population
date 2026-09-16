@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, DateTime, JSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -18,4 +19,8 @@ class KnowledgeGraph(Base):
     entities: Mapped[list] = mapped_column(_JSON, default=list)
     relations: Mapped[list] = mapped_column(_JSON, default=list)
     chunks: Mapped[list] = mapped_column(_JSON, default=list)
+    # The typed ontology built over the entities/relations (services/knowledge_graph/ontology.py):
+    # nodes with a class + geography level, edges with a predicate, and the entity_count it was
+    # built from so the UI can flag it stale. NULL until the analyst builds it.
+    ontology: Mapped[Optional[dict]] = mapped_column(_JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

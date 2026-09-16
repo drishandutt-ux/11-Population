@@ -106,6 +106,30 @@ async def get_kg_entity(session_id: str, entity_name: str, user: AuthUser = Depe
     return get_entity_details(session_id, entity_name)
 
 
+@router.get("/{session_id}/kg/ontology")
+async def get_kg_ontology(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The typed ontology over the session graph: `{schema, ontology|null, stale, entity_count}`."""
+    from app.services.knowledge_graph import ontology
+    await get_owned_session(session_id, user, db)
+    return await ontology.state(session_id)
+
+
+@router.post("/{session_id}/kg/ontology/build")
+async def build_kg_ontology(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Classify every entity and type every relation against the ontology schema, add the implied
+    geography containment, persist, and return the same shape as GET. 400 on an empty graph,
+    502 when the model fails."""
+    from app.services.knowledge_graph import ontology
+    session = await get_owned_session(session_id, user, db)
+    try:
+        await ontology.build(session_id, session.query)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ontology.LlmError as e:
+        raise HTTPException(status_code=502, detail=f"The model could not build the ontology: {e}")
+    return await ontology.state(session_id)
+
+
 @router.get("/{session_id}/posts")
 async def get_session_posts(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from app.services.simulation.thread_manager import get_posts
