@@ -171,15 +171,39 @@ export default function SourcesPanel(p: Props) {
           <Database className="w-3.5 h-3.5 text-emerald-400" />
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Statistics & surveys</span>
         </div>
-        <p className="text-[10px] text-muted-foreground/70 leading-snug">Base rates from statistics publishers: how big each group is, ages, regions, incomes, what polls found. Every fact keeps its quote.</p>
-        <div className="flex flex-wrap gap-1">
-          {p.catalogue.map((src) => {
-            const on = p.selected.includes(src.key);
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">Base rates from statistics publishers: how big each group is, ages, regions, incomes, what polls found. The build plans its searches from your dials, audience profile and upload, then hunts each fact and tries another route when a publisher comes back empty. Every fact keeps its quote.</p>
+        {(() => {
+          const UK = new Set(["uk", "england", "scotland", "wales", "ni"]);
+          const groups: { title: string; test: (s: QuantSource) => boolean }[] = [
+            { title: "United Kingdom", test: (s) => s.regions.some((r) => UK.has(r)) && !s.regions.includes("global") },
+            { title: "United States", test: (s) => s.regions.includes("us") && !s.regions.includes("global") },
+            { title: "Europe & global", test: () => true },
+          ];
+          const placed = new Set<string>();
+          return groups.map((g) => {
+            const items = p.catalogue.filter((s) => !placed.has(s.key) && g.test(s)).sort((a, b) => (b.fit ?? 3) - (a.fit ?? 3));
+            items.forEach((s) => placed.add(s.key));
+            if (items.length === 0) return null;
             return (
-              <button key={src.key} disabled={p.disabled} title={`${src.domain} · ${src.description}`} onClick={() => p.onSelected(on ? p.selected.filter((k) => k !== src.key) : [...p.selected, src.key])} className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${on ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-border/50 text-muted-foreground hover:text-foreground"}`}>{src.label}</button>
+              <div key={g.title} className="space-y-1">
+                <span className="text-[9px] uppercase tracking-wide text-muted-foreground/50">{g.title}</span>
+                <div className="flex flex-wrap gap-1">
+                  {items.map((src) => {
+                    const on = p.selected.includes(src.key);
+                    const fit = src.fit ?? 3;
+                    const tip = `${src.domain} · ${src.kind} · readability ${fit}/5\n${src.description}${src.covers?.length ? `\nCovers: ${src.covers.join(", ")}` : ""}${src.note ? `\n${src.note}` : ""}`;
+                    return (
+                      <button key={src.key} disabled={p.disabled} title={tip} onClick={() => p.onSelected(on ? p.selected.filter((k) => k !== src.key) : [...p.selected, src.key])} className={`text-[10px] px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${on ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : `border-border/50 hover:text-foreground ${fit <= 2 ? "text-muted-foreground/50" : "text-muted-foreground"}`}`}>
+                        {src.label}
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${fit >= 4 ? "bg-emerald-400/80" : fit === 3 ? "bg-yellow-400/70" : "bg-muted-foreground/40"}`} aria-label={`readability ${fit} of 5`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
-          })}
-        </div>
+          });
+        })()}
         <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={p.quantOnBuild} disabled={p.disabled} onChange={(e) => p.onQuantOnBuild(e.target.checked)} className="mt-0.5 accent-[hsl(var(--primary))]" />
           <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Search these while planning.</span> The build writes its own queries from what it detects and reads the ticked publishers before it proposes segments.</span>

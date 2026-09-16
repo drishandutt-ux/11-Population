@@ -35,6 +35,8 @@ export default function PopulationStudioPage() {
   const [spawn, setSpawn] = useState<{ current: number; total: number } | null>(null);
   const [agentCount, setAgentCount] = useState(0);
   const seededRef = useRef(false);
+  /** True once the analyst ticks or unticks a publisher; until then the selection follows the geography. */
+  const sourcesTouchedRef = useRef(false);
 
   // ── load ──
   const loadBuild = useCallback(async () => {
@@ -65,14 +67,19 @@ export default function PopulationStudioPage() {
     loadFacts();
   }, [id, loadBuild, loadFacts]);
 
-  // Default source ticks follow the geography once detected (or the research frame's region before that).
+  // Default source ticks follow the geography: what detect found, else the research frame's region,
+  // else the question itself (UK regions and cities count as UK). An untouched selection keeps
+  // following it; once the analyst ticks a publisher the choice is theirs. A build that re-derived
+  // its publishers (quant_auto) reports them back in its sources.
+  const buildSources = build?.sources?.quant_sources?.join("|") || "";
   useEffect(() => {
-    const geo = build?.detected?.geography || (research?.run?.plan?.web_region as string | undefined) || "";
+    const geo = build?.detected?.geography || (research?.run?.plan?.web_region as string | undefined) || session?.query || "";
     api.population.sources(geo).then(({ sources, default: def }) => {
       setCatalogue(sources);
-      setSelectedSources((prev) => (prev.length ? prev : def));
+      if (sourcesTouchedRef.current) return;
+      setSelectedSources(buildSources ? buildSources.split("|") : def);
     }).catch(() => {});
-  }, [build?.detected?.geography, research?.run?.plan?.web_region]);
+  }, [build?.detected?.geography, research?.run?.plan?.web_region, session?.query, buildSources]);
 
   // ── live events ──
   useEffect(() => {
@@ -155,7 +162,7 @@ export default function PopulationStudioPage() {
 
   const startBuild = () => guard(async () => {
     setLooseLog([]);
-    const b = await api.population.start(id, { mode, count, constraints: fullConstraints, sources: { quant: quantOnBuild, quant_sources: selectedSources, quant_query: "" } });
+    const b = await api.population.start(id, { mode, count, constraints: fullConstraints, sources: { quant: quantOnBuild, quant_sources: selectedSources, quant_query: "", quant_auto: !sourcesTouchedRef.current } });
     seededRef.current = true;
     setBuild(b);
   });
@@ -212,7 +219,7 @@ export default function PopulationStudioPage() {
               kgCounts={kgCounts}
               catalogue={catalogue}
               selected={selectedSources}
-              onSelected={setSelectedSources}
+              onSelected={(keys) => { sourcesTouchedRef.current = true; setSelectedSources(keys); }}
               quantQuery={quantQuery}
               onQuantQuery={setQuantQuery}
               quantOnBuild={quantOnBuild}

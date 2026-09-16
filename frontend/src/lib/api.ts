@@ -730,9 +730,21 @@ export type SurveyQuestionResult = {
 
 // ── Population Studio ─────────────────────────────────────────────────────────
 
-export type QuantSource = { key: string; label: string; domain: string; regions: string[]; kind: string; description: string };
+export type QuantSource = {
+  key: string; label: string; domain: string; regions: string[]; kind: string; description: string;
+  /** Narrower `site:` prefix than the domain, where the publisher mixes statistics with policy pages. */
+  site?: string;
+  /** Population dimensions the publisher covers (size, age, income, attitude, tech, …). */
+  covers?: string[];
+  /** How the publisher titles its pages — the planner phrases queries to match. */
+  phrasing?: string[];
+  /** 1–5: how well an automated search-and-read works against it. */
+  fit?: number;
+  note?: string;
+};
 
-export type PopulationSources = { quant: boolean; quant_sources: string[]; quant_query?: string };
+/** `quant_auto`: the analyst never changed the ticked publishers, so the build may re-derive them from the detected geography. */
+export type PopulationSources = { quant: boolean; quant_sources: string[]; quant_query?: string; quant_auto?: boolean };
 
 /** The dials. Anything left at its default ("mixed", 5, follow_evidence) is not imposed on the plan. */
 export type PopulationConstraints = {

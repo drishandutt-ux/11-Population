@@ -148,8 +148,55 @@ def test_quant_chunk_and_prompt_carry_the_source():
 
 
 def test_default_sources_follow_geography():
-    assert "ons" in sources.default_sources("United Kingdom") and "census" in sources.default_sources("United States")
-    assert "statista" in sources.default_sources("")
+    uk = sources.default_sources("United Kingdom")
+    assert {"ons", "nomis", "govuk", "fca", "ofcom", "moreincommon", "opinium"} <= set(uk)
+    assert "statista" not in uk and "yougov" not in uk  # opt-in: teasers hide the number / headline without crossbreaks
+    assert "scot_census" in sources.default_sources("Scotland") and "nisra" in sources.default_sources("Northern Ireland") and "london" in sources.default_sources("London, UK")
+    assert "census" in sources.default_sources("United States")
+    assert "statista" not in sources.default_sources("") and "oecd" in sources.default_sources("")
+    # the question itself is a usable hint: UK regions and cities count as UK, whole words only
+    assert "ons" in sources.default_sources("Would parents in the North West pay £12 a month for a kids' bike subscription?")
+    assert "ons" in sources.default_sources("Manchester commuters and the tram")
+    assert "ons" not in sources.default_sources("Milwaukee brewers in Bukhara")  # 'uk' inside words must not fire
+
+
+def test_catalogue_entries_are_complete_and_unique():
+    keys = [s["key"] for s in sources.QUANT_SOURCES]
+    assert len(keys) == len(set(keys))
+    for src in sources.QUANT_SOURCES:
+        assert src["domain"] and src["label"] and src["description"]
+        assert 1 <= int(src["fit"]) <= 5
+        assert src["covers"] and set(src["covers"]) <= set(sources.DIMENSIONS)
+        assert src["phrasing"]
+        if src.get("site"):
+            assert src["site"].startswith(src["domain"]), src["key"]  # results are filtered on the domain the site: prefix lives in
+
+
+def test_route_sources_prefers_named_then_dimension_then_all_ordered_by_fit():
+    ticked = ["yougov", "ons", "govuk", "brc"]
+    # named publishers that are ticked, best readability first
+    assert sources.route_sources(["govuk", "yougov", "pew"], ticked, "income") == ["govuk", "yougov"]
+    # nothing named is ticked → every ticked publisher that covers the dimension
+    assert sources.route_sources(["pew"], ticked, "income") == ["ons", "govuk"]
+    # nobody covers it → all ticked, by fit
+    assert sources.route_sources([], ticked, "transport") == ["govuk"]
+    assert sources.route_sources([], ticked, "nonsense") == ["ons", "govuk", "yougov", "brc"]
+
+
+def test_catalogue_for_prompt_teaches_coverage_and_phrasing():
+    txt = sources.catalogue_for_prompt(["govuk", "nope"])
+    assert "govuk (gov.uk statistics" in txt and "Households below average income" in txt and "covers income" in txt
+    assert "nope" not in txt
+
+
+def test_heuristic_rank_puts_statistics_pages_before_press():
+    class R:
+        def __init__(self, url, title, snippet=""):
+            self.url, self.title, self.snippet = url, title, snippet
+    rs = [R("https://www.gov.uk/government/news/minister-hails-cycling", "Minister hails cycling boom"),
+          R("https://www.gov.uk/government/statistics/national-travel-survey-2024", "National Travel Survey: 2024", "2% of trips were by bicycle"),
+          R("https://www.gov.uk/guidance/cycle-to-work", "Cycle to work scheme guidance")]
+    assert sources.heuristic_rank(rs)[0] == 1
 
 
 # ── quant query decomposition ─────────────────────────────────────────────────
@@ -168,26 +215,63 @@ def test_looks_like_question_flags_questions_but_not_keyword_queries():
     assert not builder.looks_like_question("")
 
 
-def test_adhoc_search_decomposes_a_question_into_fact_targets(monkeypatch):
+def test_targets_context_reads_configuration_before_research():
+    """The planner must see the analyst's dials, audience profile and upload before the detected
+    gaps and the publishers — the order of the prompt is the order of precedence."""
+    c = {"demographics": {"age_min": 25, "age_max": 44, "regions": ["North West"]}, "profile_query": "parents of under-5s, mostly renting",
+         "doc_context": "respondent,age,town\n1,31,Bolton", "derived_from_research": {"gender": "Census"}}
+    d = {"target_population": "parents in the North West", "geography": "United Kingdom", "population_kind": "consumers",
+         "segments_hinted": ["renting parents"], "gaps": ["household income of these families"], "confidence": 55,
+         "demographic_signals": [{"attribute": "region", "value": "North West", "source": "query"}]}
+    txt = builder.targets_context("Would parents pay £12 a month?", ["ons", "govuk"], constraints=c, detected=d, facts_text="QUANTITATIVE FACTS: x", brief_text="EVIDENCE BRIEF: y")
+    i_cfg, i_det, i_facts, i_pub = txt.index("ANALYST'S CONFIGURATION"), txt.index("DETECTED FROM THE INPUTS"), txt.index("QUANTITATIVE FACTS"), txt.index("PUBLISHERS TICKED")
+    assert i_cfg < i_det < i_facts < i_pub
+    assert "ages 25-44" in txt and "parents of under-5s" in txt and "1,31,Bolton" in txt
+    assert "do not search for them again): gender" in txt
+    assert "GAPS (priority 1): household income of these families" in txt
+    assert "Households below average income" in txt  # the publisher's own phrasing reaches the planner
+
+
+def test_fallback_targets_squeeze_the_question():
+    t = builder.fallback_targets("Would London commuters switch to a £65/month e-bike subscription?", ["ons", "govuk"])
+    assert len(t) == 1 and "£" not in t[0]["fact"] and t[0]["queries"][0]["sources"] == ["ons", "govuk"]
+
+
+def test_adhoc_search_plans_targets_about_the_audience(monkeypatch):
     """The Sources-panel box is prefilled with the session question; verbatim it matches nothing
-    on any publisher. It must be decomposed into per-publisher fact-target queries first."""
-    ran = []
+    on any publisher. It must become fact targets about the audience, planned against the
+    latest build's configuration, and each target runs through the gathering loop."""
+    seen = {}
 
-    async def fake_decompose(session_id, question, keys, context=""):
-        return [{"query": "London travel to work mode share", "sources": ["ons"], "why": "commute base rates"},
-                {"query": "UK e-bike market size", "sources": ["statista"], "why": "adoption"},
-                {"query": "not in ticked sources", "sources": ["gallup"], "why": "x"}]
+    async def fake_plan(session_id, question, keys, *, constraints=None, detected=None, facts_text="", brief_text=""):
+        seen["constraints"], seen["detected"] = constraints, detected
+        return {"audience": "London commuters", "skipped": [],
+                "targets": [{"dimension": "transport", "fact": "London travel to work mode share", "why": "w", "priority": 1,
+                             "queries": [{"query": "travel to work mode share London", "sources": ["ons"]}]},
+                            {"dimension": "consumer", "fact": "UK e-bike ownership", "why": "w", "priority": 2,
+                             "queries": [{"query": "e-bike ownership UK", "sources": ["gallup"]}]}]}
 
-    async def fake_search_quant(session_id, question, query, source_keys, **kw):
-        ran.append((query, tuple(source_keys)))
+    async def fake_gather(session_id, question, targets, keys, **kw):
+        seen["targets"], seen["keys"] = targets, keys
         return []
 
+    class B:
+        id = "b1"; constraints = {"profile_query": "commuters"}; detected = {"geography": "United Kingdom"}
+
     async def fake_load(build_id):
+        return B()
+
+    async def fake_log(*a, **k):
         return None
 
-    monkeypatch.setattr(builder, "decompose_quant_query", fake_decompose)
-    monkeypatch.setattr(builder, "search_quant", fake_search_quant)
+    async def fake_facts(session_id, limit=40):
+        return []
+
+    monkeypatch.setattr(builder, "plan_quant_targets", fake_plan)
+    monkeypatch.setattr(builder, "gather_targets", fake_gather)
     monkeypatch.setattr(builder, "latest_build", fake_load)
+    monkeypatch.setattr(builder, "load_quant_facts", fake_facts)
+    monkeypatch.setattr(builder, "log", fake_log)
 
     async def fake_emit(session_id, event):
         return None
@@ -195,18 +279,17 @@ def test_adhoc_search_decomposes_a_question_into_fact_targets(monkeypatch):
     monkeypatch.setattr(builder, "_emit", fake_emit)
     asyncio.new_event_loop().run_until_complete(
         builder.run_quant_search("s1", "Would London commuters switch to a £65/month e-bike subscription?", ["ons", "statista"]))
-    assert ("London travel to work mode share", ("ons",)) in ran
-    assert ("UK e-bike market size", ("statista",)) in ran
-    # a target routed only to an unticked source falls back to the ticked ones
-    assert ("not in ticked sources", ("ons", "statista")) in ran
+    assert seen["constraints"] == {"profile_query": "commuters"} and seen["detected"] == {"geography": "United Kingdom"}
+    assert [t["fact"] for t in seen["targets"]] == ["London travel to work mode share", "UK e-bike ownership"]
+    assert seen["keys"] == ["ons", "statista"]
 
 
 def test_adhoc_search_runs_a_keyword_query_verbatim(monkeypatch):
-    """A terse analyst query is the analyst knowing what they want — no decomposition."""
-    ran = []
+    """A terse analyst query is the analyst knowing what they want — one round, no planning."""
+    seen = {}
 
-    async def fake_search_quant(session_id, question, query, source_keys, **kw):
-        ran.append(query)
+    async def fake_gather(session_id, question, targets, keys, **kw):
+        seen["targets"] = targets
         return []
 
     async def fake_load(build_id):
@@ -215,15 +298,148 @@ def test_adhoc_search_runs_a_keyword_query_verbatim(monkeypatch):
     async def fake_emit(session_id, event):
         return None
 
-    async def fail_decompose(*a, **k):  # pragma: no cover
-        raise AssertionError("must not decompose a keyword query")
+    async def fail_plan(*a, **k):  # pragma: no cover
+        raise AssertionError("must not plan a keyword query")
 
-    monkeypatch.setattr(builder, "decompose_quant_query", fail_decompose)
-    monkeypatch.setattr(builder, "search_quant", fake_search_quant)
+    monkeypatch.setattr(builder, "plan_quant_targets", fail_plan)
+    monkeypatch.setattr(builder, "gather_targets", fake_gather)
     monkeypatch.setattr(builder, "latest_build", fake_load)
     monkeypatch.setattr(builder, "_emit", fake_emit)
     asyncio.new_event_loop().run_until_complete(builder.run_quant_search("s1", "London cycling mode share", ["ons"]))
-    assert ran == ["London cycling mode share"]
+    assert len(seen["targets"]) == 1
+    t = seen["targets"][0]
+    assert t["queries"] == [{"query": "London cycling mode share", "sources": ["ons"]}] and t["rounds"] == 1
+
+
+class _Result:
+    def __init__(self, url, title, snippet="", domain=None):
+        self.url, self.title, self.snippet = url, title, snippet
+        self.domain = domain or url.split("/")[2].replace("www.", "")
+        self.provider, self.published_at = "test", None
+
+
+def _gather_harness(monkeypatch, *, results_by_query, facts_by_url, refine):
+    """Stub the search chain, the page reader, the model and the database around gather_target."""
+    searched, read, logged = [], [], []
+
+    class Provider:
+        async def search(self, q, opts):
+            searched.append(q)
+            return results_by_query.get(q.split(" site:")[0], [])
+
+    monkeypatch.setattr(sources, "get_search_provider", lambda: Provider())
+
+    class Page:
+        def __init__(self, url):
+            self.markdown, self.title, self.published_at = f"text of {url}", f"title of {url}", None
+
+    async def fake_fetch(url, query="", browser_fallback=True):
+        read.append(url)
+        return Page(url)
+
+    monkeypatch.setattr(sources, "fetch_page", fake_fetch)
+
+    async def fake_analyze(schema, system, user, **kw):
+        label = kw.get("label")
+        if label == "population_triage":
+            n = user.count("\n[")
+            return {"picks": list(range(n)), "why": "all statistics"}
+        if label == "population_facts":
+            url = next(u for u in facts_by_url if u in user)
+            return facts_by_url[url]
+        if label == "population_refine":
+            return refine
+        raise AssertionError(label)
+
+    monkeypatch.setattr(sources, "analyze", fake_analyze)
+
+    async def fake_seen(session_id):
+        return set()
+
+    monkeypatch.setattr(sources, "_seen_urls", fake_seen)
+
+    class FakeDB:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def add(self, e):
+            pass
+
+        async def commit(self):
+            pass
+
+        async def refresh(self, e):
+            pass
+
+    monkeypatch.setattr(sources.dbm, "AsyncSessionLocal", lambda: FakeDB())
+
+    async def fake_publish(channel, event):
+        return None
+
+    monkeypatch.setattr(sources, "publish", fake_publish)
+    monkeypatch.setattr(sources, "_ingest_to_graph", lambda e: asyncio.sleep(0))
+
+    async def log(level, message, detail=None):
+        logged.append((level, message, detail))
+
+    return searched, read, logged, log
+
+
+def test_gather_target_refires_with_another_route_when_the_first_round_misses(monkeypatch):
+    """Round 1 finds a page with related facts but not the target; the refine step proposes a new
+    query on another publisher; round 2 finds the figure and the loop stops."""
+    ok = {"relevant": True, "answers_target": False, "relevance": 55, "facts": [{"statistic": "households renting", "value": "19%", "group": "households", "geography": "England", "year": "2023", "quote": "q"}], "demographic_signals": [], "summary": "related"}
+    hit = {"relevant": True, "answers_target": True, "relevance": 90, "facts": [{"statistic": "median income NW families", "value": "£31,400", "group": "families", "geography": "North West", "year": "2024", "quote": "q"}], "demographic_signals": [], "summary": "answers"}
+    searched, read, logged, log = _gather_harness(
+        monkeypatch,
+        results_by_query={"household income North West": [_Result("https://www.ons.gov.uk/a", "Housing tenure bulletin")],
+                          "Households below average income North West": [_Result("https://www.gov.uk/government/statistics/hbai", "HBAI 2024")]},
+        facts_by_url={"https://www.ons.gov.uk/a": ok, "https://www.gov.uk/government/statistics/hbai": hit},
+        refine={"queries": [{"query": "Households below average income North West", "sources": ["govuk"]}], "verdict": "use the survey's proper name"},
+    )
+    target = {"dimension": "income", "fact": "median household income of families in the North West", "why": "income dial untouched", "priority": 1,
+              "queries": [{"query": "household income North West", "sources": ["ons"]}]}
+    rows = asyncio.new_event_loop().run_until_complete(
+        sources.gather_target("s1", "Would parents pay £12?", target, ["ons", "govuk"], log=log, region="uk-en", max_pages=6))
+    assert searched == ["household income North West site:ons.gov.uk", "Households below average income North West site:gov.uk/government/statistics"]
+    assert read == ["https://www.ons.gov.uk/a", "https://www.gov.uk/government/statistics/hbai"]
+    assert [r.on_topic for r in rows] == [True, True]
+    assert [(r.structured or {}).get("answers_target") for r in rows] == [False, True]
+    assert rows[1].structured["target"]["dimension"] == "income" and rows[1].relevance == 0.9
+    assert any(m.startswith("Target found") for _, m, _ in logged)
+    assert any("another route" in m for _, m, _ in logged)
+
+
+def test_gather_target_stops_after_one_round_when_told_to(monkeypatch):
+    """A keyword target runs once; an irrelevant page is kept greyed and no refine call is made."""
+    miss = {"relevant": True, "answers_target": False, "relevance": 10, "facts": [{"statistic": "x", "value": "3%", "group": "g", "geography": "US", "year": "", "quote": "q"}], "demographic_signals": [], "summary": "wrong country"}
+    searched, read, logged, log = _gather_harness(
+        monkeypatch,
+        results_by_query={"London cycling mode share": [_Result("https://www.ons.gov.uk/b", "Cycling")]},
+        facts_by_url={"https://www.ons.gov.uk/b": miss},
+        refine={"queries": [{"query": "must not run", "sources": ["ons"]}], "verdict": "no"},
+    )
+    rows = asyncio.new_event_loop().run_until_complete(
+        sources.gather_target("s1", "q", sources.keyword_target("London cycling mode share", ["ons"]), ["ons"], log=log, max_pages=4))
+    assert searched == ["London cycling mode share site:ons.gov.uk"] and read == ["https://www.ons.gov.uk/b"]
+    assert rows[0].on_topic is False and rows[0].relevance < 0.3  # low relevance to this population → greyed, not used by the plan
+    assert any(m.startswith("Target not found") for _, m, _ in logged)
+
+
+def test_gather_targets_shares_the_page_budget_by_priority(monkeypatch):
+    order = []
+
+    async def fake_gather_target(session_id, question, target, keys, **kw):
+        order.append((target["fact"], kw["max_pages"]))
+        return []
+
+    monkeypatch.setattr(sources, "gather_target", fake_gather_target)
+    targets = [{"fact": "b", "priority": 2, "queries": [{"query": "b"}]}, {"fact": "a", "priority": 1, "queries": [{"query": "a"}]}, {"fact": "none", "priority": 1, "queries": []}]
+    asyncio.new_event_loop().run_until_complete(sources.gather_targets("s", "q", targets, ["ons"], max_pages=8))
+    assert order == [("a", 4), ("b", 8)]  # priority first; unused pages roll over
 
 
 # ── HTTP surface with the model stubbed ───────────────────────────────────────
