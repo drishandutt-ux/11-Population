@@ -132,7 +132,9 @@ export default function SamplingFrameGraph({ build, agents, targetCount, spawnin
             <span className="text-muted-foreground"><span className="text-foreground font-semibold tabular-nums">{total}</span>{targetCount > total ? <> of <span className="text-foreground font-semibold tabular-nums">{targetCount}</span></> : null} personas</span>
             <label className="flex items-center gap-1.5 text-muted-foreground">show
               <select value={topN} onChange={(e) => { setTopN(+e.target.value); setOnly(null); }} className="bg-input border border-border rounded-lg px-2 py-1 text-xs text-foreground">
-                {[5, 8, 10, 15].filter((n) => n <= all.length || n === 5).map((n) => <option key={n} value={Math.min(n, all.length)}>top {Math.min(n, all.length)}</option>)}
+                {Array.from(new Set([5, 8, 10, 15].filter((n) => n < all.length).concat([all.length]))).sort((a, b) => a - b).map((n) => (
+                  <option key={n} value={n}>{n === all.length ? `all ${n}` : `top ${n}`}</option>
+                ))}
               </select>
             </label>
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Close"><X className="w-4 h-4" /></button>
