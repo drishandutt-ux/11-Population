@@ -441,7 +441,7 @@ def constraints_summary(c: dict) -> str:
     if c.get("doc_context"):
         lines.append("A survey / profile document was uploaded (its respondents should be reflected in the segments).")
     auto, v = voice_setting(c)
-    lines.append("Expert ↔ Reactive: " + ("let the system decide from the question" if auto else f"{v}/100 (0 experts · 50 as the real population · 100 ordinary people reacting)"))
+    lines.append("Expert ↔ Reactive (voice only, not composition): " + ("let the system decide from the question" if auto else f"{v}/100 (0 measured, evidence-led · 50 each group's natural voice · 100 feeling-led, from their own lives)"))
     return "\n".join(lines) if lines else "none set"
 
 
@@ -458,29 +458,20 @@ def voice_setting(c: Optional[dict]) -> tuple[bool, int]:
 
 
 def voice_instruction(c: Optional[dict]) -> str:
-    """How the planner must compose to the dial. At 50 nothing is imposed; either side pulls the
-    expert share and the registers proportionally; auto asks the planner to choose from the question."""
+    """What the planner is told about the dial. The dial never changes WHO is in the population —
+    composition always aims at the most realistic, quantified mix for this demographic — only how
+    the personas feel and speak once written; the planner echoes or, on auto, chooses the value."""
+    base = ("COMPOSITION: compose the population as the most realistic mix for this demographic that the evidence, the statistics "
+            "and the sampling frame support — the real shares of experts and ordinary people, places, ages, incomes and occupations. "
+            "The Expert ↔ Reactive dial does NOT change who is in the population; it is applied afterwards to how each persona feels and speaks "
+            "(their sentiment dials and description). Set each segment's register from who the group honestly is, as usual. ")
     auto, v = voice_setting(c)
     if auto:
-        return ("EXPERT ↔ REACTIVE (auto): decide from the question how expert this population should be, on a 0-100 scale where "
-                "0 = domain experts and professionals arguing from evidence, 50 = exactly the real mix of experts and ordinary people that this "
-                "demographic actually has, 100 = ordinary people reacting from their own lives, skills and experience with no domain expertise. "
-                "A clinical-guideline or policy-design question leans toward 0-35; a consumer product, a local service or a public mood question "
-                "leans toward 60-85; when unsure, sit at 50. Return the value you used as voice_value and say why in voice_reason, then compose to it exactly as below.")
-    if 40 <= v <= 60:
-        return ("EXPERT ↔ REACTIVE = 50 (as the real population): compose the expert / ordinary-person mix and each segment's register EXACTLY as the "
-                "evidence and statistics say this demographic is — do not add experts for balance and do not strip them out. Return voice_value = 50.")
-    if v < 40:
-        strength = round((50 - v) / 50, 2)   # 0.2 … 1.0
-        return (f"EXPERT ↔ REACTIVE = {v} (leaning expert, strength {strength}): raise the share of the population who are domain experts, professionals "
-                f"and practitioners above the real mix in proportion to the strength (at 0 nearly everyone works in or studies the domain; at 25 roughly "
-                f"half do), give those segments the 'expert' or 'tempered' register, and keep the remaining ordinary-people segments as they really are. "
-                f"Return voice_value = {v}.")
-    strength = round((v - 50) / 50, 2)
-    return (f"EXPERT ↔ REACTIVE = {v} (leaning reactive, strength {strength}): lower the share of domain experts below the real mix in proportion to the "
-            f"strength (at 100 there are no expert segments at all; at 75 only a token few) and fill the population with ordinary people from this "
-            f"demographic who react to the topic from their own lives — their job, their money, their family, their neighbourhood, what they have "
-            f"tried — with 'balanced', 'defensive' or 'reactive' registers, the more reactive the further toward 100. Return voice_value = {v}.")
+        return base + ("EXPERT ↔ REACTIVE (auto): choose the value the personas should be written at, 0-100 — 0 = measured, evidence-led voices, "
+                       "50 = each group's natural voice, 100 = feeling-led people reacting from their own lives — from what the question is for "
+                       "(a guideline or policy design leans 20-40; a consumer product, a local service or a public-mood question leans 60-80; when unsure, 50). "
+                       "Return it as voice_value and say why in voice_reason.")
+    return base + f"EXPERT ↔ REACTIVE = {v} (set by the analyst): return voice_value = {v} and note in voice_reason that it shapes voice, not composition."
 
 
 def answers_summary(questions: list[dict]) -> str:
@@ -906,7 +897,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
         v_used = v_set
     plan = {"segments": segments, "rationale": p.get("rationale", ""), "assumptions": p.get("assumptions") or [], "evidence_coverage": p.get("evidence_coverage", ""),
             "voice": {"auto": auto, "value": v_used, "reason": str(p.get("voice_reason") or "")[:300]}}
-    await log(build_id, "plan", "decision", f"Expert ↔ Reactive: {v_used}/100" + (" — chosen by the system" if auto else " — set by you") + (" (as the real population)" if 40 <= v_used <= 60 else " (leaning expert)" if v_used < 40 else " (leaning reactive)"), plan["voice"]["reason"] or None)
+    await log(build_id, "plan", "decision", f"Expert ↔ Reactive: {v_used}/100" + (" — chosen by the system" if auto else " — set by you") + (" (natural voices; the population is composed as the real demographic)" if 40 <= v_used <= 60 else " (voices lean measured and evidence-led)" if v_used < 40 else " (voices lean feeling-led, from their own lives)") + " — shapes how personas speak, not who they are", plan["voice"]["reason"] or None)
     # The population facets: the 5–15 cell types the analyst reads the population by (the Studio's map).
     facets = (bld.plan or {}).get("facets") if keep and (bld.plan or {}).get("facets") else None
     if not facets:

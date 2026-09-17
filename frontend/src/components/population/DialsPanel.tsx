@@ -195,19 +195,19 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
           </div>
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" checked={voice.auto} disabled={disabled} onChange={(e) => set({ voice: { ...voice, auto: e.target.checked } })} className="mt-0.5 accent-[hsl(var(--primary))]" />
-            <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Let the system decide</span> from the question how expert this population should be.</span>
+            <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Let the system decide</span> from the question how measured or feeling-led the voices should be.</span>
           </label>
           <input type="range" min={0} max={100} step={5} value={voice.value} disabled={disabled || voice.auto} onChange={(e) => set({ voice: { auto: false, value: +e.target.value } })} className={`w-full accent-pink-500 cursor-pointer h-1.5 ${voice.auto ? "opacity-40" : ""}`} />
-          <div className="flex justify-between text-[10px] text-muted-foreground/70"><span>experts</span><span>as the real population</span><span>reactive</span></div>
+          <div className="flex justify-between text-[10px] text-muted-foreground/70"><span>expert</span><span>natural</span><span>reactive</span></div>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Shapes <span className="text-foreground/80">how the personas feel and speak</span> — their sentiment dials and descriptions — never who is in the population: the plan always composes the most realistic mix for this demographic from the statistics.{" "}
             {voice.auto
-              ? "The plan chooses a value from the question and says why; you can then set it yourself and re-plan."
+              ? "The plan chooses a value from the question and says why; set it yourself and re-plan to override."
               : voice.value >= 40 && voice.value <= 60
-                ? "The mix of experts and ordinary people, and how analytically each segment argues, will be exactly what the evidence says this demographic is."
+                ? "In the middle nothing is imposed: each group speaks in its natural register."
                 : voice.value < 40
-                  ? "More of the population will be practitioners and domain experts arguing from evidence, in proportion to how far left this sits."
-                  : "Fewer experts, more ordinary people from this demographic reacting from their own lives, jobs and money, in proportion to how far right this sits."}
-            {" "}Each segment&apos;s <span className="text-pink-300">register</span> is still shown on its card and can be edited there.
+                  ? "Toward expert: cooler sentiment, higher credibility, measured evidence-led descriptions, in proportion to how far left this sits."
+                  : "Toward reactive: hotter sentiment, lower credibility, people reacting from their own jobs, money and lives, in proportion to how far right this sits."}
           </p>
         </div>
       </div>

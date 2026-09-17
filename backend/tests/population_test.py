@@ -775,18 +775,27 @@ def test_persona_dict_keeps_frame_and_inherits_segment_cells():
     assert dicts[1]["frame"] == {"work_pattern": "Shift", "age": "30s"}
 
 
-def test_voice_dial_instruction_and_summary():
+def test_voice_dial_shapes_voice_not_composition():
     auto, v = builder.voice_setting({})
     assert (auto, v) == (True, 50)
-    assert "auto" in builder.voice_instruction({}) and "voice_value" in builder.voice_instruction({})
-    assert "as the real population" in builder.voice_instruction({"voice": {"auto": False, "value": 55}})
-    lean_x = builder.voice_instruction({"voice": {"auto": False, "value": 10}})
-    assert "leaning expert" in lean_x and "strength 0.8" in lean_x
-    lean_r = builder.voice_instruction({"voice": {"auto": False, "value": 90}})
-    assert "leaning reactive" in lean_r and "strength 0.8" in lean_r and "no expert segments" in lean_r
+    ins = builder.voice_instruction({"voice": {"auto": False, "value": 10}})
+    assert "does NOT change who is in the population" in ins and "voice_value = 10" in ins
+    assert "choose the value" in builder.voice_instruction({})
     assert builder.voice_setting({"voice": {"auto": False, "value": "999"}}) == (False, 100)
-    assert "Expert ↔ Reactive: 20/100" in builder.constraints_summary({"voice": {"auto": False, "value": 20}})
-    block = agent_factory._constraints_block({"voice_used": 85})
-    assert "ordinary members of the public" in block
-    assert "practitioners" in agent_factory._constraints_block({"voice_used": 15})
+    assert "voice only" in builder.constraints_summary({"voice": {"auto": False, "value": 20}})
+    assert "never who they are" in agent_factory._constraints_block({"voice_used": 85})
     assert agent_factory._constraints_block({"voice_used": 52}) == ""
+
+    def persona():
+        return {"humanity": 40, "dials": {"sentiment": {"anger": 8, "joy": 2, "hope": 5}, "trust": {"credibility": 6, "authority": 6, "safety": 5}}}
+    d = [persona()]
+    agent_factory.apply_voice(d, 52)
+    assert d[0]["humanity"] == 40 and d[0]["dials"]["sentiment"]["anger"] == 8          # middle: untouched
+    d = [persona()]
+    agent_factory.apply_voice(d, 100)
+    assert d[0]["humanity"] == 80 and d[0]["dials"]["sentiment"]["anger"] == 10 and d[0]["dials"]["sentiment"]["joy"] == 1
+    assert d[0]["dials"]["trust"]["credibility"] == 2 and d[0]["dials"]["trust"]["safety"] == 5
+    d = [persona()]
+    agent_factory.apply_voice(d, 0)
+    assert d[0]["humanity"] == 0 and d[0]["dials"]["sentiment"]["anger"] == 5 and d[0]["dials"]["trust"]["authority"] == 10
+    agent_factory.apply_voice([{"humanity": "x", "dials": None}], 0)                 # never raises

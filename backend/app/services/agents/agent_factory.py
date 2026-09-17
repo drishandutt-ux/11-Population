@@ -509,6 +509,50 @@ def finalise_segment_dicts(seg: dict, dicts: list[dict]) -> None:
         d["humanity"] = max(lo, min(hi, h))
 
 
+_SENTIMENT_GROUP = "sentiment"
+_TRUST_KEYS = ("credibility", "authority")
+
+
+def apply_voice(dicts: list[dict], voice) -> None:
+    """Deterministic pass for the Expert ↔ Reactive dial, after the segment's register band is
+    applied: shifts each persona's humanity, scales its sentiment dials (cooler toward expert,
+    hotter toward reactive) and counter-scales trust.credibility / trust.authority. Touches
+    nothing about who the persona is. No-op within 10 of the middle."""
+    try:
+        v = int(voice)
+    except (TypeError, ValueError):
+        return
+    if abs(v - 50) < 10:
+        return
+    lean = (v - 50) / 50.0                    # -1 … +1
+    for d in dicts:
+        try:
+            h = int(d.get("humanity") or 0)
+        except (TypeError, ValueError):
+            h = 0
+        d["humanity"] = max(0, min(100, round(h + 40 * lean)))
+        dials = d.get("dials") if isinstance(d.get("dials"), dict) else None
+        if not dials:
+            continue
+        sent = dials.get(_SENTIMENT_GROUP)
+        if isinstance(sent, dict):
+            for k, val in list(sent.items()):
+                try:
+                    x = float(val)
+                except (TypeError, ValueError):
+                    continue
+                # toward reactive: push high dials higher and keep low ones low (hot signature); toward expert: flatten toward 3
+                sent[k] = max(0, min(10, round(x + lean * (x - 3) * 0.6 if lean > 0 else x + lean * (x - 3) * 0.6)))
+        trust = dials.get("trust")
+        if isinstance(trust, dict):
+            for k in _TRUST_KEYS:
+                if k in trust:
+                    try:
+                        trust[k] = max(0, min(10, round(float(trust[k]) - 4 * lean)))
+                    except (TypeError, ValueError):
+                        pass
+
+
 def _segment_block(seg: dict, n: int) -> str:
     """The segment spec as the persona prompt sees it. Everything the plan fixed is stated as
     a hard constraint so ten personas from one segment are ten different people from the SAME
@@ -576,8 +620,9 @@ def _constraints_block(constraints: dict) -> str:
     voice = constraints.get("voice_used")
     if isinstance(voice, (int, float)) and abs(int(voice) - 50) >= 10:
         v = int(voice)
-        lines.append(f"- Expert ↔ Reactive is {v}/100: " + ("write these people as practitioners who know the domain — credentials, precise vocabulary, evidence-led reasoning; even the less analytical ones argue from professional experience." if v < 50
-                     else "write these people as ordinary members of the public — no domain credentials; they react from their own job, money, family, neighbourhood and what they have personally tried, in everyday words."))
+        lines.append(f"- Expert ↔ Reactive is {v}/100. This changes HOW each persona feels and speaks, never who they are (keep every job, place, income and segment exactly as given): "
+                     + ("their sentiment dials run cool and even, trust.credibility and trust.authority high, and the background and debate_style describe someone measured and evidence-led who reasons before reacting." if v < 50
+                        else "2-3 sentiment dials run hot per persona, trust.credibility and trust.authority low, and the background and debate_style describe someone who reacts from their own experience — what this has meant for their job, money, family and neighbourhood — in everyday words."))
     if not lines:
         return ""
     return "POPULATION-WIDE DIALS (set by the analyst; honour them):\n" + "\n".join(lines) + "\n"
@@ -755,6 +800,7 @@ async def generate_agents_from_plan(
                 await _note()
             await asyncio.gather(*[_rest(n) for n in sizes[1:]])
         finalise_segment_dicts(seg, seg_dicts)
+        apply_voice(seg_dicts, (constraints or {}).get('voice_used'))
         return seg_dicts
 
     for part in await asyncio.gather(*[_segment(seg) for seg in segments]):
