@@ -773,3 +773,20 @@ def test_persona_dict_keeps_frame_and_inherits_segment_cells():
     agent_factory.finalise_segment_dicts({"stance": "direct", "name": "Seg", "humanity_hint": "tempered", "frame_values": {"work_pattern": "Hybrid", "age": "30s"}}, dicts)
     assert dicts[0]["frame"] == {"work_pattern": "Hybrid", "age": "30s"}
     assert dicts[1]["frame"] == {"work_pattern": "Shift", "age": "30s"}
+
+
+def test_voice_dial_instruction_and_summary():
+    auto, v = builder.voice_setting({})
+    assert (auto, v) == (True, 50)
+    assert "auto" in builder.voice_instruction({}) and "voice_value" in builder.voice_instruction({})
+    assert "as the real population" in builder.voice_instruction({"voice": {"auto": False, "value": 55}})
+    lean_x = builder.voice_instruction({"voice": {"auto": False, "value": 10}})
+    assert "leaning expert" in lean_x and "strength 0.8" in lean_x
+    lean_r = builder.voice_instruction({"voice": {"auto": False, "value": 90}})
+    assert "leaning reactive" in lean_r and "strength 0.8" in lean_r and "no expert segments" in lean_r
+    assert builder.voice_setting({"voice": {"auto": False, "value": "999"}}) == (False, 100)
+    assert "Expert ↔ Reactive: 20/100" in builder.constraints_summary({"voice": {"auto": False, "value": 20}})
+    block = agent_factory._constraints_block({"voice_used": 85})
+    assert "ordinary members of the public" in block
+    assert "practitioners" in agent_factory._constraints_block({"voice_used": 15})
+    assert agent_factory._constraints_block({"voice_used": 52}) == ""

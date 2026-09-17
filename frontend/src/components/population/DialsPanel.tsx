@@ -62,6 +62,7 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
   const st = c.stance ?? DEFAULT_CONSTRAINTS.stance!;
   const demo = c.demographics ?? DEFAULT_CONSTRAINTS.demographics!;
   const sent = c.sentiment ?? DEFAULT_CONSTRAINTS.sentiment!;
+  const voice = c.voice ?? { auto: true, value: 50 };
   const neutral = Math.max(0, 100 - st.direct - st.indirect);
   const gender = demo.gender ?? { female: 50, male: 48, other: 2 };
 
@@ -186,14 +187,27 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
             <div className="flex justify-between text-[11px]"><span className="text-muted-foreground">Neutral</span><span className="text-slate-400 font-semibold">{neutral}% (auto)</span></div>
           </div>
         )}
-        <div className="border-t border-border/40 pt-3 space-y-1.5">
+        <div className="border-t border-border/40 pt-3 space-y-2">
           <div className="flex items-center gap-2">
             <Heart className="w-3.5 h-3.5 text-pink-400" />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Humanity</span>
-            <span className="text-[10px] text-muted-foreground/50 ml-auto">feeling over logic</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expert ↔ Reactive</span>
+            <span className={`ml-auto text-[11px] font-semibold ${voice.auto ? "text-muted-foreground" : "text-pink-300"}`}>{voice.auto ? "auto" : `${voice.value}`}</span>
           </div>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={voice.auto} disabled={disabled} onChange={(e) => set({ voice: { ...voice, auto: e.target.checked } })} className="mt-0.5 accent-[hsl(var(--primary))]" />
+            <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Let the system decide</span> from the question how expert this population should be.</span>
+          </label>
+          <input type="range" min={0} max={100} step={5} value={voice.value} disabled={disabled || voice.auto} onChange={(e) => set({ voice: { auto: false, value: +e.target.value } })} className={`w-full accent-pink-500 cursor-pointer h-1.5 ${voice.auto ? "opacity-40" : ""}`} />
+          <div className="flex justify-between text-[10px] text-muted-foreground/70"><span>experts</span><span>as the real population</span><span>reactive</span></div>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Set <span className="text-foreground/80">per segment</span> by the plan: each group&apos;s <span className="text-pink-300">register</span> (expert → reactive) decides how analytical or emotional its people argue. Review it on the segment cards — edit a segment to change it.
+            {voice.auto
+              ? "The plan chooses a value from the question and says why; you can then set it yourself and re-plan."
+              : voice.value >= 40 && voice.value <= 60
+                ? "The mix of experts and ordinary people, and how analytically each segment argues, will be exactly what the evidence says this demographic is."
+                : voice.value < 40
+                  ? "More of the population will be practitioners and domain experts arguing from evidence, in proportion to how far left this sits."
+                  : "Fewer experts, more ordinary people from this demographic reacting from their own lives, jobs and money, in proportion to how far right this sits."}
+            {" "}Each segment&apos;s <span className="text-pink-300">register</span> is still shown on its card and can be edited there.
           </p>
         </div>
       </div>

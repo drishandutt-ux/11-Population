@@ -799,6 +799,8 @@ export type PopulationConstraints = {
     tech_savviness?: number;
     openness_to_change?: number;
   };
+  /** Expert ↔ Reactive: 0 = experts, 50 = exactly as the real population is, 100 = ordinary people reacting from their own lives. `auto` lets the planner choose from the question. */
+  voice?: { auto: boolean; value: number };
   profile_query?: string;
   doc_context?: string;
   skip_questions?: boolean;
@@ -886,7 +888,7 @@ export type PopulationBuild = {
   sources: PopulationSources;
   detected: PopulationDetected | null;
   questions: PopulationQuestion[];
-  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string; facets?: PopulationFacet[] } | null;
+  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string; facets?: PopulationFacet[]; voice?: { auto: boolean; value: number; reason: string } } | null;
   frame?: PopulationFrame | null;
   log: PopulationLogEntry[];
   error: string | null;

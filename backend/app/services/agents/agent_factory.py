@@ -573,6 +573,11 @@ def _constraints_block(constraints: dict) -> str:
             lines.append(f"- Population-wide {label}: {int(v)}/10 — shift the matching dials accordingly.")
     if constraints.get("profile_query"):
         lines.append(f"- Audience profile from the analyst: {constraints['profile_query']}")
+    voice = constraints.get("voice_used")
+    if isinstance(voice, (int, float)) and abs(int(voice) - 50) >= 10:
+        v = int(voice)
+        lines.append(f"- Expert ↔ Reactive is {v}/100: " + ("write these people as practitioners who know the domain — credentials, precise vocabulary, evidence-led reasoning; even the less analytical ones argue from professional experience." if v < 50
+                     else "write these people as ordinary members of the public — no domain credentials; they react from their own job, money, family, neighbourhood and what they have personally tried, in everyday words."))
     if not lines:
         return ""
     return "POPULATION-WIDE DIALS (set by the analyst; honour them):\n" + "\n".join(lines) + "\n"

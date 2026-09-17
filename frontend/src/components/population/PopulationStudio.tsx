@@ -384,6 +384,9 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
           <div className="flex-1 min-h-0 xl:overflow-y-auto p-4">
             <ErrorBoundary label="The dials">
               <DialsPanel constraints={constraints} onChange={setConstraints} count={count} onCount={setCount} mode={mode} onMode={setMode} disabled={active} />
+              {build?.plan?.voice && (
+                <p className="text-[10px] text-pink-300/80 mt-3 leading-relaxed"><span className="font-semibold">Expert ↔ Reactive in this plan: {build.plan.voice.value}/100</span>{build.plan.voice.auto ? " (chosen by the system)" : " (set by you)"}{build.plan.voice.reason ? ` — ${build.plan.voice.reason}` : ""}</p>
+              )}
               {constraints.derived_from_research && Object.keys(constraints.derived_from_research).length > 0 && (
                 <p className="text-[10px] text-emerald-300/80 mt-3 leading-relaxed"><span className="font-semibold">Set from the research:</span> {Object.keys(constraints.derived_from_research).map((k) => k.replace(/_/g, " ")).join(", ")}. Move any dial to override it; Re-plan applies your change.</p>
               )}
