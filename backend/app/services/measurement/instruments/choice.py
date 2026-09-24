@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from app.services.evidence.llm import enum, i, obj, s
 from app.services.measurement import stats
+from app.services.measurement.probe import split_keys
 from app.services.measurement.instruments import Instrument, register
 from app.services.measurement.themes import THEME_KEY, apply_themes
 
@@ -69,7 +70,7 @@ def aggregate(rows: list[dict], spec: dict) -> dict:
             "confidence": stats.mean_ci([a.get("confidence", 0) for a in answers if a.get("choice") == k], seed=seed),
             "segments": {
                 sk: stats.segment(rows, sk, lambda rs, k=k: stats.share_of([r["answer"].get("choice") for r in rs], lambda v: v == k))
-                for sk in ("stance", "age_band", "humanity_band", "purchase_intent_prior")
+                for sk in split_keys(rows)
             },
             "verbatims": _verbatims(rows, k),
         })

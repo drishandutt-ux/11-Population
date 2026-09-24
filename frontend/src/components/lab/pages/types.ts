@@ -1,4 +1,4 @@
-import { Instrument, Probe, ProbeAnswerRow } from "@/lib/api";
+import { DynamicDial, Instrument, Probe, ProbeAnswerRow } from "@/lib/api";
 
 /** What every instrument results page receives. The shell owns running, streaming, cost,
  *  export and provenance; the page owns everything that is specific to the tool — its
@@ -6,4 +6,6 @@ import { Instrument, Probe, ProbeAnswerRow } from "@/lib/api";
 export interface InstrumentPageProps {
   instrument: Instrument;
   probe: Probe & { answers?: ProbeAnswerRow[] };
+  /** The question's own dials (brief L3-04) — so a split reads as the dial's own name. */
+  dynamicDials?: DynamicDial[];
 }

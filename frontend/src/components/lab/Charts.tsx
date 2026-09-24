@@ -5,6 +5,7 @@
  *  can quote verbatim. */
 
 import { Interval, MeanInterval } from "@/lib/api";
+import { segmentLabel } from "./filters";
 
 export const pct = (v: number) => `${Math.round(v * 100)}%`;
 export const money = (v: number, currency = "GBP") =>
@@ -246,7 +247,8 @@ export function SegmentTable({ title, rows }: { title: string; rows: { value: st
   if (!rows?.length) return null;
   return (
     <div>
-      <div className="text-xs text-muted-foreground mb-1.5 capitalize">{title.replace(/_/g, " ")}</div>
+      {/* first-letter, not capitalize: an authored dial label reads "Waiting-list fatigue", not "Waiting-List Fatigue". */}
+      <div className="text-xs text-muted-foreground mb-1.5 first-letter:uppercase">{segmentLabel(title)}</div>
       <div className="space-y-1">
         {rows.map((r) => (
           <div key={r.value} className={`flex items-center gap-2 ${r.thin ? "opacity-45" : ""}`} title={r.thin ? "Too few agents to read confidently" : undefined}>

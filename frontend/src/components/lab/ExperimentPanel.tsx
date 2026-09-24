@@ -10,12 +10,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  api, Agent, Experiment, ExperimentDesign, ExperimentEstimate, ExperimentRequest, Instrument, SimMode,
-} from "@/lib/api";
+  api, Agent, Experiment, ExperimentDesign, ExperimentEstimate, ExperimentRequest, Instrument, SimMode, DynamicDial } from "@/lib/api";
 import { AlertTriangle, ChevronLeft, Download, FlaskConical, Loader2, Play, Plus, RefreshCw, Square, X } from "lucide-react";
 import { PairedDots, DotGrid, optionColor } from "./Charts";
 import InstrumentForm, { initialValues, toSpec } from "./InstrumentForm";
-import { SEGMENT_FILTERS } from "./filters";
+import { SEGMENT_FILTERS, dynamicFilters } from "./filters";
 import ExperimentPage from "./pages/ExperimentPage";
 
 type LiveAnswer = { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> };
@@ -31,6 +30,8 @@ interface Props {
   onClearLive: (probeId: string) => void;
   initial: Experiment | null;
   onBack: () => void;
+  /** The question's own dials (brief L3-04): extra "who answers" filters and split headings. */
+  dynamicDials?: DynamicDial[];
 }
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
@@ -44,6 +45,7 @@ const DESIGNS: { key: ExperimentDesign; label: string; help: string }[] = [
 
 export default function ExperimentPanel({
   sessionId, sessionQuery, agents, instruments, liveAnswers, completedAt, onClearLive, initial, onBack,
+  dynamicDials = [],
 }: Props) {
   // Any tool that declares metrics, hidden or not: Ask left the picker when the survey arrived
   // but is still the right base for a text-material A/B ("Reaction").
@@ -260,8 +262,9 @@ export default function ExperimentPanel({
         <div>
           <label className="text-xs text-muted-foreground block mb-1.5">Who answers</label>
           <div className="space-y-2">
-            {SEGMENT_FILTERS.map((f) => (
+            {[...SEGMENT_FILTERS, ...dynamicFilters(dynamicDials)].map((f) => (
               <select key={f.key} value={filters[f.key] || ""} onChange={(e) => setFilters((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                title={(f as { title?: string }).title}
                 className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs">
                 <option value="">{f.label}: everyone</option>
                 {f.options.map((o) => <option key={o} value={o}>{f.label}: {o}</option>)}

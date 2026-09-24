@@ -92,3 +92,57 @@ def test_a_cast_persona_stays_within_drift_of_the_moulds_dynamic_dials():
 def test_a_mould_authored_for_another_question_does_not_erase_the_new_dials():
     out = ar._enforce_dynamic({}, {"dynamic": {"formulary_pressure": 6}})
     assert out == {"formulary_pressure": 6}
+
+
+# ── The Behaviour Lab reads a result by the question's own dials ──────────────
+
+def test_a_twins_dynamic_dials_become_lab_splits():
+    from types import SimpleNamespace
+    from app.services.measurement.probe import segments_for, DYNAMIC_PREFIX
+    agent = SimpleNamespace(
+        id="a1", name="X", age=44, role="GP", stance="direct", humanity=30, demographics={"region": "Blackpool"},
+        segment="Coastal GPs",
+        dials={"commercial": {"purchase_intent": 8, "price_pain": 2},
+               "dynamic": {"formulary_pressure": 9, "transport_friction": 5, "peer_pull": 1}},
+    )
+    seg = segments_for(agent)
+    assert seg[f"{DYNAMIC_PREFIX}formulary_pressure"] == "high"
+    assert seg[f"{DYNAMIC_PREFIX}transport_friction"] == "mid"
+    assert seg[f"{DYNAMIC_PREFIX}peer_pull"] == "low"
+    assert seg["stance"] == "direct" and seg["region"] == "Blackpool"   # the old splits are untouched
+
+
+def test_a_dial_named_like_a_demographic_cannot_overwrite_it():
+    from types import SimpleNamespace
+    from app.services.measurement.probe import segments_for, DYNAMIC_PREFIX
+    agent = SimpleNamespace(id="a1", name="X", age=44, role="GP", stance="direct", humanity=30,
+                            demographics={"region": "Blackpool"}, segment=None,
+                            dials={"dynamic": {"region": 9}})
+    seg = segments_for(agent)
+    assert seg["region"] == "Blackpool" and seg[f"{DYNAMIC_PREFIX}region"] == "high"
+
+
+def test_split_keys_are_the_base_splits_plus_whatever_the_answers_carry():
+    from app.services.measurement.probe import split_keys, BASE_SPLIT_KEYS, DYNAMIC_PREFIX
+    rows = [{"segments": {"stance": "direct", f"{DYNAMIC_PREFIX}transport_friction": "high"}},
+            {"segments": {"stance": "neutral", f"{DYNAMIC_PREFIX}formulary_pressure": "low"}}]
+    assert split_keys(rows) == (*BASE_SPLIT_KEYS, f"{DYNAMIC_PREFIX}formulary_pressure", f"{DYNAMIC_PREFIX}transport_friction")
+    assert split_keys([{"segments": {"stance": "direct"}}]) == BASE_SPLIT_KEYS
+
+
+def test_a_lab_result_splits_by_a_dynamic_dial():
+    from app.services.measurement import stats
+    from app.services.measurement.probe import split_keys, DYNAMIC_PREFIX
+    key = f"{DYNAMIC_PREFIX}transport_friction"
+    rows = [{"segments": {"stance": "direct", key: "high"}, "answer": {"would_buy": "no"}} for _ in range(4)]
+    rows += [{"segments": {"stance": "direct", key: "low"}, "answer": {"would_buy": "yes"}} for _ in range(4)]
+    out = {k: stats.segment(rows, k, lambda rs: stats.share_of([r["answer"]["would_buy"] for r in rs], lambda v: v == "yes"))
+           for k in split_keys(rows)}
+    by_friction = {r["value"]: r["share"] for r in out[key]}
+    assert by_friction == {"high": 0.0, "low": 1.0}
+
+
+def test_the_experiment_sentence_names_the_dial_not_the_key():
+    from app.services.measurement.experiment import _bucket_list
+    from app.services.measurement.probe import DYNAMIC_PREFIX
+    assert _bucket_list({f"{DYNAMIC_PREFIX}transport_friction": ["high"]}) == "high transport friction"

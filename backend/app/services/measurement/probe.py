@@ -20,7 +20,7 @@ import random
 import time
 import traceback
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import or_, select
 
@@ -59,10 +59,19 @@ def _dial_bucket(v: Optional[float]) -> str:
     return "low" if v <= 3 else "mid" if v <= 6 else "high"
 
 
+#: The splits every population has, in report order.
+BASE_SPLIT_KEYS = ("stance", "age_band", "humanity_band", "purchase_intent_prior")
+#: Splits made from this session's dynamic dials (brief L3-04) are namespaced, so a dial
+#: called "region" or "segment" can never collide with a demographic split.
+DYNAMIC_PREFIX = "dyn:"
+
+
 def segments_for(agent: SpawnedAgent) -> dict:
-    """Every attribute a result can be split by. Kept on the answer row so a split never
-    needs the agent table, and so a segment survives the agent being respawned."""
+    """Every attribute a result can be split by — and filtered by, since `_select_agents`
+    reads the same map. Kept on the answer row so a split never needs the agent table, and
+    so a segment survives the agent being respawned."""
     from app.services.agents.agent_runner import _humanity_band
+    from app.services.agents import dynamic_dials as dyn_mod
 
     dials = agent.dials or {}
     commercial = dials.get("commercial", {}) if isinstance(dials, dict) else {}
@@ -74,6 +83,10 @@ def segments_for(agent: SpawnedAgent) -> dict:
         "purchase_intent_prior": _dial_bucket(commercial.get("purchase_intent")),
         "price_pain_prior": _dial_bucket(commercial.get("price_pain")),
     }
+    # This question's own dials (L3-04): each one is a low / mid / high split of its own, so
+    # the Lab can read a result by formulary pressure or transport friction, not only by age.
+    for key, value in dyn_mod.values_of(dials).items():
+        out[f"{DYNAMIC_PREFIX}{key}"] = _dial_bucket(value)
     # Population Studio agents: split by the slice they were built from and its demographics.
     demo = getattr(agent, "demographics", None) or {}
     if getattr(agent, "segment", None):
@@ -83,6 +96,20 @@ def segments_for(agent: SpawnedAgent) -> dict:
             if demo.get(key):
                 out[key] = str(demo[key])
     return out
+
+
+def split_keys(rows: Sequence[dict]) -> tuple[str, ...]:
+    """The keys an instrument should split its result by: the base splits, then whichever of
+    this session's dynamic dials the answered agents actually carry."""
+    dynamic = sorted({
+        k for r in rows for k in (r.get("segments") or {}) if str(k).startswith(DYNAMIC_PREFIX)
+    })
+    return (*BASE_SPLIT_KEYS, *dynamic)
+
+
+def split_label(key: str) -> str:
+    """'dyn:transport_friction' → 'transport friction'; anything else unchanged."""
+    return key[len(DYNAMIC_PREFIX):].replace("_", " ") if key.startswith(DYNAMIC_PREFIX) else key.replace("_", " ")
 
 
 # ── per-agent context ─────────────────────────────────────────────────────────

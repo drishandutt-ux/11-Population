@@ -7,6 +7,7 @@
 import { useMemo, useState } from "react";
 import { ProbeAnswerRow, SurveyQuestionResult } from "@/lib/api";
 import { CategoryBars, Donut, Histogram, OptionBars, SegmentTable, ShareBar, StackedRows, pct } from "../Charts";
+import { segmentLabel } from "../filters";
 import { InstrumentPageProps } from "./types";
 
 type Tab = "summary" | "question" | "individual";
@@ -34,7 +35,7 @@ function matches(q: SurveyQuestionResult, v: any, f: Filter): boolean {
   return String(v) === f.value;
 }
 
-export default function SurveyPage({ probe }: InstrumentPageProps) {
+export default function SurveyPage({ probe, dynamicDials = []}: InstrumentPageProps) {
   const a: any = probe.aggregates;
   const answers: ProbeAnswerRow[] = probe.answers || [];
   const [tab, setTab] = useState<Tab>("summary");
@@ -92,7 +93,7 @@ export default function SurveyPage({ probe }: InstrumentPageProps) {
             <div className="rounded-xl border border-border/60 bg-card/40 p-4">
               <div className="text-xs text-muted-foreground mb-3">Who answered "{a.headline?.label?.split(" — ").pop()}" — by segment</div>
               <div className="grid grid-cols-2 gap-5">
-                {Object.entries(a.segments).map(([key, rows]) => <SegmentTable key={key} title={key} rows={rows as any} />)}
+                {Object.entries(a.segments).map(([key, rows]) => <SegmentTable key={key} title={segmentLabel(key, dynamicDials)} rows={rows as any} />)}
               </div>
             </div>
           )}

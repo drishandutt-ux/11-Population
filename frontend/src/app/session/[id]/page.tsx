@@ -533,6 +533,7 @@ export default function SessionPage() {
             liveAnswers={probeAnswers}
             completedAt={probeCompletedAt}
             experimentCompletedAt={experimentCompletedAt}
+            dynamicDials={session?.dynamic_dials || []}
             onClearLive={clearLiveAnswers}
           />
         )}

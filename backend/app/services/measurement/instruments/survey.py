@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 from app.services.evidence.llm import arr, enum, i, n, obj, s
 from app.services.measurement import stats
+from app.services.measurement.probe import split_keys
 from app.services.measurement.instruments import InputField, Instrument, Kpi, register
 from app.services.measurement.themes import apply_themes, theme_key_for
 
@@ -270,7 +271,7 @@ def aggregate(rows: list[dict], spec: dict) -> dict:
             def _share(rs, key=pq["key"], want=want, multi=(primary["type"] == "multi")):
                 vals = [r["answer"].get(key) for r in rs]
                 return stats.share_of(vals, (lambda v: isinstance(v, list) and want in v) if multi else (lambda v: str(v) == want))
-            segments = {k: stats.segment(rows, k, _share) for k in ("stance", "age_band", "humanity_band", "purchase_intent_prior")}
+            segments = {k: stats.segment(rows, k, _share) for k in split_keys(rows)}
             segments = {k: v for k, v in segments.items() if v}
         elif primary["type"] in ("scale", "number") and primary.get("mean"):
             headline = {"metric": primary["key"], "label": primary["text"], "mean": primary["mean"]}

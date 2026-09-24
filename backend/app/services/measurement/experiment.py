@@ -31,12 +31,14 @@ from app.core.redis_client import publish, session_channel
 from app.models.agent import SpawnedAgent
 from app.models.measurement import Experiment, Probe, ProbeAnswer
 from app.services.measurement import instruments, stats
-from app.services.measurement.probe import PROBE_CONCURRENCY, _select_agents, run_probe, segments_for
+from app.services.measurement.probe import (
+    PROBE_CONCURRENCY, BASE_SPLIT_KEYS, _select_agents, run_probe, segments_for, split_keys, split_label,
+)
 
 DESIGNS = ("within", "between", "choice")
 CHOICE_ARM = "all"   # the single arm of a choose-between-them experiment
 MIN_VARIANTS, MAX_VARIANTS = 2, 6
-SEGMENT_KEYS = ("stance", "age_band", "humanity_band", "purchase_intent_prior")
+SEGMENT_KEYS = BASE_SPLIT_KEYS   # plus this session's dynamic dials, from the rows themselves
 SEGMENT_ITERATIONS = 600   # per-bucket bootstraps are many and small; this keeps analysis fast
 MAX_FLIP_ROWS = 60
 
@@ -128,7 +130,7 @@ def _segment_lifts(design: str, metric, control_rows: dict, variant_rows: dict, 
     """The primary metric's lift inside every segment bucket — the heat-map. Thin buckets are
     flagged, not hidden."""
     out: dict[str, list[dict]] = {}
-    for key in SEGMENT_KEYS:
+    for key in split_keys(list(control_rows.values()) + list(variant_rows.values())):
         buckets: dict[str, tuple[dict, dict]] = {}
         for agent_id, row in control_rows.items():
             label = (row.get("segments") or {}).get(key)
@@ -203,13 +205,18 @@ _SEGMENT_LABELS = {
 }
 
 
+def _segment_label(key: str) -> str:
+    """What a bucket is a bucket OF, in the sentence — dynamic dials read as their own name."""
+    return _SEGMENT_LABELS.get(key) or split_label(key)
+
+
 def _bucket_list(by_key: dict[str, list[str]], limit: int = 3) -> str:
     """'direct and neutral stance, 45-54 age' — the bucket AND what it is a bucket of."""
     parts = []
     for key, values in list(by_key.items())[:limit]:
         vals = values[:3]
         joined = " and ".join(vals) if len(vals) <= 2 else ", ".join(vals[:-1]) + " and " + vals[-1]
-        parts.append(f"{joined} {_SEGMENT_LABELS.get(key, key.replace('_', ' '))}")
+        parts.append(f"{joined} {_segment_label(key)}")
     return "; ".join(parts)
 
 

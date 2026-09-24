@@ -7,9 +7,10 @@
  *  said and what they would actually pay. No other instrument inherits any of it. */
 
 import { CategoryBars, DemandCurve, MeanStat, SegmentTable, ShareBar, pct } from "../Charts";
+import { segmentLabel } from "../filters";
 import { InstrumentPageProps } from "./types";
 
-export default function PurchaseIntentPage({ probe }: InstrumentPageProps) {
+export default function PurchaseIntentPage({ probe, dynamicDials = []}: InstrumentPageProps) {
   const a = probe.aggregates;
   if (!a || !a.n) return null;
   const currency = a.max_price?.currency || probe.spec?.currency || "GBP";
@@ -59,7 +60,7 @@ export default function PurchaseIntentPage({ probe }: InstrumentPageProps) {
       {a.segments && Object.keys(a.segments).length > 0 && (
         <div className="grid grid-cols-2 gap-5">
           {Object.entries(a.segments).map(([key, rows]) => (
-            <SegmentTable key={key} title={key} rows={rows} />
+            <SegmentTable key={key} title={segmentLabel(key, dynamicDials)} rows={rows} />
           ))}
         </div>
       )}

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from app.services.evidence.llm import enum, i, n, obj, s
 from app.services.measurement import stats
+from app.services.measurement.probe import split_keys
 from app.services.measurement.instruments import InputField, Instrument, Kpi, Metric, register
 from app.services.measurement.themes import THEME_KEY, apply_themes
 
@@ -85,7 +86,7 @@ def aggregate(rows: list[dict], spec: dict) -> dict:
 
     segments = {
         key: stats.segment(rows, key, lambda rs: _yes_share(rs))
-        for key in ("stance", "age_band", "humanity_band", "purchase_intent_prior")
+        for key in split_keys(rows)
     }
     segments = {k: v for k, v in segments.items() if v}
 

@@ -13,7 +13,7 @@
  *  A/B tool is itself generic over instruments. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, Agent, Experiment, Instrument, Probe, ProbeAnswerRow, ProbeRequest, SimMode } from "@/lib/api";
+import { api, Agent, Experiment, Instrument, Probe, ProbeAnswerRow, ProbeRequest, SimMode, DynamicDial } from "@/lib/api";
 import {
   Beaker, Download, Loader2, Play, Square, AlertTriangle, RefreshCw, ChevronLeft, ChevronDown,
   ChevronRight, History, Trash2, LucideIcon,
@@ -22,7 +22,7 @@ import { DotGrid, dotColor } from "./Charts";
 import ExperimentPanel from "./ExperimentPanel";
 import { initialValues, toSpec } from "./InstrumentForm";
 import { formFor } from "./forms";
-import { SEGMENT_FILTERS } from "./filters";
+import { SEGMENT_FILTERS, dynamicFilters } from "./filters";
 import { pageFor } from "./pages";
 import { EXPERIMENT_ICON, iconFor } from "./icons";
 
@@ -36,6 +36,8 @@ interface Props {
   completedAt: number;
   experimentCompletedAt: number;
   onClearLive: (probeId: string) => void;
+  /** The question's own dials (brief L3-04): extra "who answers" filters and split headings. */
+  dynamicDials?: DynamicDial[];
 }
 
 type PastRun =
@@ -58,7 +60,7 @@ function ago(iso: string): string {
   return new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers, completedAt, experimentCompletedAt, onClearLive }: Props) {
+export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers, completedAt, experimentCompletedAt, onClearLive, dynamicDials = [] }: Props) {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [instrumentKey, setInstrumentKey] = useState<string>("");
   // The A/B tool is the shell's second primitive: open it fresh, or on a past experiment.
@@ -246,6 +248,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         completedAt={experimentCompletedAt}
         onClearLive={onClearLive}
         initial={initialExperiment}
+        dynamicDials={dynamicDials}
         onBack={() => { setExperimentOpen(false); setInitialExperiment(null); loadProbes(); }}
       />
     );
@@ -380,11 +383,12 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         <div>
           <label className="text-xs text-muted-foreground block mb-1.5">Who answers</label>
           <div className="space-y-2">
-            {SEGMENT_FILTERS.map((f) => (
+            {[...SEGMENT_FILTERS, ...dynamicFilters(dynamicDials)].map((f) => (
               <select
                 key={f.key}
                 value={filters[f.key] || ""}
                 onChange={(e) => setFilters((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                title={(f as { title?: string }).title}
                 className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs"
               >
                 <option value="">{f.label}: everyone</option>
@@ -508,7 +512,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
             {/* The tool's own results page. */}
             {selected.aggregates && selected.aggregates.n > 0 && (
               <>
-                <Page instrument={instrument} probe={selected} />
+                <Page instrument={instrument} probe={selected} dynamicDials={dynamicDials} />
                 <p className="text-[10px] text-muted-foreground/70">
                   {selected.answer_count} answered
                   {selected.failed_count ? `, ${selected.failed_count} failed and are excluded from every number above` : ""} ·

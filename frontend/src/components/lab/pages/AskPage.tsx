@@ -4,9 +4,10 @@
  *  the reasons coded into themes, segments, and the answers in their own words. */
 
 import { CategoryBars, MeanStat, SegmentTable, ShareBar, pct } from "../Charts";
+import { segmentLabel } from "../filters";
 import { InstrumentPageProps } from "./types";
 
-export default function AskPage({ probe }: InstrumentPageProps) {
+export default function AskPage({ probe, dynamicDials = []}: InstrumentPageProps) {
   const a: any = probe.aggregates;
   if (!a || !a.n) return null;
   const question = probe.spec?.question;
@@ -43,7 +44,7 @@ export default function AskPage({ probe }: InstrumentPageProps) {
       {a.segments && Object.keys(a.segments).length > 0 && (
         <div className="grid grid-cols-2 gap-5">
           {Object.entries(a.segments).map(([key, rows]) => (
-            <SegmentTable key={key} title={key} rows={rows as any} />
+            <SegmentTable key={key} title={segmentLabel(key, dynamicDials)} rows={rows as any} />
           ))}
         </div>
       )}
