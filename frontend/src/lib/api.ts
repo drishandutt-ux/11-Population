@@ -281,6 +281,17 @@ export type Session = {
   updated_at: string;
   owner_email?: string | null; // admins listing everyone's sessions
   is_mine?: boolean | null;
+  /** The question's own dials (brief L3-04) — chosen by the model for this session. */
+  dynamic_dials?: DynamicDial[] | null;
+};
+
+/** One dynamic dial: a question-specific 0-10 scale every twin in the session carries. */
+export type DynamicDial = {
+  key: string;
+  label: string;
+  why: string;
+  low: string;
+  high: string;
 };
 
 export type ResearchQuery = {
@@ -321,6 +332,8 @@ export type DialCategory = {
 
 export type AgentDials = {
   sentiment?: DialCategory;
+  /** This session's dynamic dials (brief L3-04), keyed by dial key. */
+  dynamic?: DialCategory;
   motivation?: DialCategory;
   habit?: DialCategory;
   trust?: DialCategory;
@@ -385,7 +398,7 @@ export type AuthoredAgentDraft = {
   dials?: AgentDials;
 };
 
-export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string };
+export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string; dynamic_dials?: DynamicDial[] };
 
 /** A hand-authored twin promoted to a mould the Population Studio casts personas from (§7.10 / L3-02). */
 export type Archetype = { id: string; name: string; role: string; summary: string; created_at: string };

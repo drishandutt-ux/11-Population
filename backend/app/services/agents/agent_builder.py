@@ -17,6 +17,7 @@ import random
 from typing import Any, Optional
 
 from app.core.config import get_settings
+from app.services.agents import dynamic_dials as dyn_mod
 from app.services.agents.agent_factory import DIALS_SCHEMA
 from app.services.agents.profiles import AVATAR_COLORS
 from app.services.evidence.llm import analyze, clip, i, obj, s
@@ -68,6 +69,15 @@ def clean_fixed_dials(fixed: Any) -> dict[str, dict[str, int]]:
         for k in keys:
             if k in grp and grp[k] is not None and str(grp[k]).strip() != "":
                 out.setdefault(g, {})[k] = _int(grp[k], 0, 10, 5)
+    return out
+
+
+def with_dynamic(fixed: dict[str, dict[str, int]], dynamic: dict[str, int]) -> dict[str, dict[str, int]]:
+    """The dial profile as it is stored: the fixed 112 plus this question's dynamic dials
+    (brief L3-04), which live in their own group beside them."""
+    out = dict(fixed)
+    if dynamic:
+        out[dyn_mod.GROUP] = dict(dynamic)
     return out
 
 
@@ -151,7 +161,7 @@ def normalise_authored_agent(d: dict, *, taken_colors: Optional[list[str]] = Non
         "debate_style": _text(d.get("debate_style"), _TEXT_LIMITS["debate_style"]) or "Says what they think, in their own words.",
         "energy": energy,
         "avatar_color": color,
-        "dials": clean_fixed_dials(dials),
+        "dials": with_dynamic(clean_fixed_dials(dials), dyn_mod.values_of(dials)),
         "humanity": _int(d.get("humanity"), 0, 100, 50),
         "segment": _text(d.get("segment"), 120) or None,
         "demographics": demographics,
@@ -194,6 +204,16 @@ def _fixed_block(fixed: dict[str, dict[str, int]]) -> str:
     return "DIALS THE ANALYST FIXED (do not change; make the rest consistent with them):\n" + "\n".join(lines)
 
 
+def _fixed_dynamic_block(fixed: dict[str, int], dynamic: list[dict]) -> str:
+    if not dynamic:
+        return ""
+    if not fixed:
+        return "The analyst fixed none of the dynamic dials; set them all."
+    by_key = {d["key"]: d for d in dynamic}
+    return ("DYNAMIC DIALS THE ANALYST FIXED (do not change):\n"
+            + "\n".join(f"- {by_key[k]['label'] if k in by_key else k} = {v}" for k, v in fixed.items()))
+
+
 def describe_draft(d: dict) -> str:
     """The persona as prose for the model, only the fields the analyst filled."""
     demo = d.get("demographics") if isinstance(d.get("demographics"), dict) else {}
@@ -214,26 +234,38 @@ def describe_draft(d: dict) -> str:
 
 
 async def build_profile(session_id: str, query: str, draft: dict) -> dict:
-    """Read the draft and return `{dials, humanity, reading}`: the full 112-dial profile with the
-    analyst's fixed dials kept verbatim, a suggested Expert↔Reactive value (the analyst's own when
-    they fixed it), and one sentence on the signature."""
+    """Read the draft and return `{dials, humanity, reading, dynamic_dials}`: the full 112-dial
+    profile plus this session's dynamic dials (brief L3-04), with the analyst's fixed dials kept
+    verbatim, a suggested Expert↔Reactive value (the analyst's own when they fixed it), and one
+    sentence on the signature.
+
+    The dynamic dials are chosen for the session on first use — the same set every twin here
+    carries — and then tuned to this person exactly like the sentiment dials."""
     fixed = clean_fixed_dials(draft.get("dials"))
     prose = describe_draft(draft) or "(the analyst wrote nothing yet)"
-    schema = obj({
+    dynamic = await dyn_mod.ensure(session_id, query, context=f"One authored twin for this population:\n{prose}")
+    fixed_dyn = dyn_mod.values_of(draft.get("dials"), dynamic)
+    props = {
         "dials": _dials_schema(),
         "humanity": i("0-100 Expert↔Reactive placement for this person"),
         "reading": s("One sentence for the analyst: the emotional signature and what drove it"),
-    })
+    }
+    if dynamic:
+        props["dynamic"] = obj({d["key"]: i(f"{d['label']} 0-10 — 0 = {d['low']}; 10 = {d['high']}") for d in dynamic})
+    schema = obj(props)
     user = f"""QUERY (the topic every dial is relative to): {clip(query, 1500)}
 
 THE PERSON, AS THE ANALYST WROTE THEM:
 {prose}
 
 {_fixed_block(fixed)}
-
-{_RULES}"""
+{_fixed_dynamic_block(fixed_dyn, dynamic)}
+{_RULES}
+{dyn_mod.prompt_block(dynamic)}"""
     settings = get_settings()
     out = await analyze(schema, _SYSTEM, user, session_id=session_id, label="agent_builder", model=settings.model_pro_orchestration, max_tokens=6000)
     dials = merge_fixed_dials(out.get("dials"), fixed)
+    if dynamic:
+        dials = with_dynamic(dials, {**dyn_mod.clean_values(out.get("dynamic"), dynamic), **fixed_dyn})
     humanity = _int(draft.get("humanity"), 0, 100, 50) if draft.get("humanity_fixed") else _int(out.get("humanity"), 0, 100, 50)
-    return {"dials": dials, "humanity": humanity, "reading": _text(out.get("reading"), 400)}
+    return {"dials": dials, "humanity": humanity, "reading": _text(out.get("reading"), 400), "dynamic_dials": dynamic}

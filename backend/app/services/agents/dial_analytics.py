@@ -14,12 +14,15 @@ import statistics
 from typing import Iterable
 
 GROUP_ORDER = [
-    "sentiment", "motivation", "habit", "trust",
+    # "dynamic" sits directly under sentiment: the question's own dials, chosen per session
+    # (brief L3-04), read alongside the fixed 112.
+    "sentiment", "dynamic", "motivation", "habit", "trust",
     "friction", "identity", "commercial", "product", "composite",
 ]
 
 GROUP_LABELS = {
     "sentiment": "Sentiment",
+    "dynamic": "Dynamic",
     "motivation": "Motivation",
     "habit": "Habit",
     "trust": "Trust",

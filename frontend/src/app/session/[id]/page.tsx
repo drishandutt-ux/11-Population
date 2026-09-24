@@ -504,6 +504,7 @@ export default function SessionPage() {
             spawnCount={spawnCount}
             isPendingSimulation={pendingSim !== null}
             expectedAgentCount={session ? (session.agent_count ?? 0) : null}
+            dynamicDials={session?.dynamic_dials || []}
             onStartSimulation={(it, md) => handleStartSimulation(it, md)}
             onGoToThread={() => setActiveTab("simulation")}
             onGoToReport={() => setActiveTab("report")}

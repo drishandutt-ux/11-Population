@@ -113,7 +113,8 @@ A separate full-page route lets you **chat 1:1 with any single agent** (`/sessio
 │                                                                                │
 │  Services:                                                                     │
 │    • agents/      agent_factory (spawn population), agent_runner (write posts), │
-│                   profiles, dial_analytics (population dashboard)               │
+│                   profiles, dial_analytics (population dashboard),              │
+│                   dynamic_dials (the dials this question needs)                 │
 │    • simulation/  orchestrator (round loop), thread_manager, report_generator,  │
 │                   citations (twin ↔ claim traceability)                         │
 │    • ingestion/   text_processor, document_parser, youtube_extractor,           │
@@ -150,7 +151,7 @@ The relational schema has **five tables**. There are **no DB-level foreign keys 
 
 ### 6.1 `AnalysisSession` (`analysis_sessions`)
 Owner column: **`user_id`** (UUID → `auth.users.id`, nullable, indexed). Rows created in dev mode have no owner; with auth on, ownerless rows are invisible to everyone.
-The top-level unit of work. Columns: `id`, `title`, `query` (the question/hypothesis), `status` (enum), `agent_count`, `created_at`, `updated_at`.
+The top-level unit of work. Columns: `id`, `title`, `query` (the question/hypothesis), `status` (enum), `agent_count`, `dynamic_dials` (the question's own dials, §7.2a), `created_at`, `updated_at`.
 
 **`SessionStatus` enum** — the lifecycle state machine:
 
@@ -230,6 +231,19 @@ This is the product's crown jewel. Code: `backend/app/services/agents/{profiles,
 (23+16+11+11+11+10+10+10+10 = **112**.)
 
 **How dial values are set:** not random and not algorithmic — they are **LLM-chosen per agent**, tuned relative to the query topic, kept consistent with the agent's background/stance/personality, with `composite` instructed to be logically derived from the other groups. There is **no code-side validation** of the 0–10 range or schema completeness — it is enforced only by prompt instruction (missing dials fall back to `{}`).
+
+### 7.2a Dynamic dials — the dials this question needs (brief L3-04)
+
+Code: `backend/app/services/agents/dynamic_dials.py`. The 112 are generic by design and cannot say *formulary pressure*, *transport friction*, *waiting-list fatigue* or *shift rigidity* — usually the forces a study turns on. So the model **chooses 6–12 extra dials for the session's question**, and every twin then carries an integer 0–10 on each, tuned by the same persona-writing call as the sentiment dials. They are generic in kind, not in content: a pricing question gets pricing dials, a policy question gets policy dials — nothing is hard-coded per audience.
+
+- **Definition** — `{key (snake_case), label, why, low (what 0 is), high (what 10 is)}`. Keys are slugged and deduplicated and **may not shadow a fixed dial**; fewer than 3 usable dials means none (an invented dial is worse than no dial).
+- **Chosen once per session**, stored on `analysis_sessions.dynamic_dials` (Alembic `0012_dynamic_dials`) and cached in-process. The **Studio picks them at plan time** from the question, the detected population and the segments, logs them (`Dynamic dials — N chosen for this question…`) and carries them on `plan.dynamic_dials`; the Pro quick-spawn path and the Agent Builder pick them on first use.
+- **Values** — the persona prompt states each dial with both ends and asks for one value per persona (`"dynamic": {…}` in the returned JSON), which `attach` moves into `dials["dynamic"]` beside the 112. Unknown keys are dropped, values clamp to 0–10.
+- **Cast personas (L3-02)** obey the mould here too: where an archetype carries a dynamic value the cast twin stays within ±`DIAL_DRIFT` of it; where the mould was authored for another question, the writer's value stands.
+- **The Agent Builder** shows them as a **Dynamic** group directly under Sentiment — set by hand or left to the system, filled by *Build sentiment profile*, saved with the twin into its lineup.
+- **They reach the persona** at debate, chat and Lab time as a prompt block (`Formulary pressure: 9/10 — blocked in practice`), so a twin's own constraints shape what it raises and resists.
+- **Read-out**: the roster's dial viewer and the population dial dashboard (`GET /sessions/{id}/dials`) show Dynamic as a group under Sentiment, with the authored labels and `why` rather than title-cased keys.
+- **Limits**: the Fast **bank** spawn path has no LLM, so bank populations carry no dynamic dials; they are not yet a Lab cut.
 
 ### 7.3 Agent creation flow — two paths (Fast bank vs Pro LLM)
 
@@ -945,6 +959,7 @@ The app runs Alembic at startup over the **asyncpg** driver, and asyncpg execute
 │   │       │                        #   facts), builder (detect → gather → clarify → plan → review → spawn)
 │   │       ├── agents/              # profiles, agent_factory, agent_runner,
 │   │       │                        #   seed_bank (Fast bank), dial_analytics,
+│   │       │                        #   dynamic_dials (the question's own dials),
 │   │       │                        #   agent_builder (hand-authored twins → lineups),
 │   │       │                        #   archetypes (match · sample attributes · cast prompt · enforce)
 │   │       ├── simulation/          # orchestrator, thread_manager, report_generator, citations, opinions
@@ -987,6 +1002,7 @@ The app runs Alembic at startup over the **asyncpg** driver, and asyncpg execute
 
 ## 19. Changelog
 
+- **2026-09-24** — **Dynamic dials (§7.2a, §6.1, §12.2, §13.3; brief L3-04).** The brief's typed HCP / patient fields, generalised on Drishan's direction: instead of a fixed clinical schema, the model **chooses 6–12 dials for the session's question** — what blocks these people, what pushes them, what they must fit it around — and every twin carries a 0–10 value on each, tuned exactly like the sentiment dials. New `services/agents/dynamic_dials.py`; `analysis_sessions.dynamic_dials` (Alembic `0012_dynamic_dials`); chosen and logged by the Studio at plan time and carried on `plan.dynamic_dials`; stated in the persona prompt (plan, quick-spawn and archetype-cast paths) and stored in `dials["dynamic"]`; clamped to an archetype's priors where it has them; injected into the persona's system prompt at debate, chat and probe time; shown as a **Dynamic** group directly under Sentiment in the Agent Builder (hand-settable, filled by *Build sentiment profile*), on every roster card and in the population dial dashboard. Tests: `dynamic_dials_test.py` (11). Also: the Studio flips a plan to *awaiting review* only after its whole log is written, so the review never opens on a half-written log.
 - **2026-09-24** — **The report cites twins, not names (§11, §12.2; brief L3-03).** The surname drift in the Blackpool report was the report call paraphrasing names, not agents re-sampling. Fixed at the source: new `services/simulation/citations.py` hands the model short handles for the roster and the transcript and forbids typing names; the answer comes back as `[[twin:<id>]]` / `[[twin:<id>|post:<id>]]` citations, any typed name (including a drifted surname) is repaired into one, and the frontend renders each citation as the name read from the agent row. Clicking it opens a trace card — who the twin is, **where they came from** (archetype / hand-authored / segment), and the verbatim line being cited, with *Talk to this twin*. Tests: `citations_test.py` (15).
 - **2026-09-24** — **Archetypes: the Studio casts segments from authored twins (§7.11, §6.5a, §12.2, §13.3; brief L3-02).** Build your own agent gets a *use as an archetype* tick (on by default; lineups unchanged) that also stores the agent as an `Archetype` (`0011_archetypes`, `/archetypes`). At plan time each segment is matched to an archetype by job (synonym-aware), shown as a *cast from …* chip with a picker on the segment card (`archetype_id` edit; manual choices survive re-plans) and logged. At build time a cast segment's personas get their facts **drawn before the model runs** (age, gender, place, income, education, and a cell per frame dimension from the published shares), a per-place slice of the graph as local context, and a texture-only prompt; the mould's character is copied verbatim, dials clamp to ±2 of its priors, Expert↔Reactive to ±10, and `character.archetype` records the source (roster chip *cast from …*). Cast personas skip the register band, the voice pass and the role-at-same-age clone rule. New service `agents/archetypes.py`; tests `archetypes_test.py` (11).
 - **2026-09-24** — **Build your own agent (§7.10, §4, §6.2, §6.5, §12.2, §13.3).** Brief L3 opened with L3-01 explained; Drishan's direction: instead of a template library first, let the analyst author a twin by hand. New page `/session/{id}/agents/builder` from a **Build your own agent** button on the Agents tab (Studio empty state and roster): the person in words — identity, description, relationship to the topic, personality, debate style, stance, Expert ↔ Reactive, place, and five **Character** fields (how they decide / behave / talk, information diet, failure modes) — plus all 112 dials, each either set by hand or left to the system; **Build sentiment profile** reads the text and tunes the system's dials relative to the session query, keeping the fixed ones. An agent is never saved loose: it joins a new or existing **lineup** (`POST /presets/custom`, `POST /presets/{id}/agents`; `GET /presets/{id}`), and saving builds the profile first when any dial is still the system's. New `spawned_agents.character` (Alembic `0010_character`), carried through presets → `apply-preset` and injected into every persona prompt by `agent_runner._character_block`. New service `agents/agent_builder.py`; tests `agent_builder_test.py` (9).

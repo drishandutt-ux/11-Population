@@ -27,6 +27,7 @@ from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
 from app.services.agents import archetypes as archetypes_mod
 
 from . import facets as facets_mod
+from app.services.agents import dynamic_dials as dyn_mod
 from . import frame as frame_mod
 from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts
 
@@ -927,15 +928,28 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     if not facets:
         facets = await facets_mod.pick_facets(bld.session_id, question, bld.detected, segments)
     plan["facets"] = facets
-    await _save(build_id, plan=plan, status="awaiting_review")
+    # Dynamic dials (brief L3-04): the dials this question needs that the fixed 112 do not have.
+    # Chosen once per session from the question and the plan; every persona is then tuned on them.
+    seg_text = "\n".join(f"- {sg.get('name')}: {sg.get('description', '')}" for sg in segments[:10])
+    dynamic = await dyn_mod.ensure(bld.session_id, question, context=f"Detected population: {bld.detected or {}}\n\nSegments:\n{seg_text}")
+    plan["dynamic_dials"] = dynamic
+    await _save(build_id, plan=plan)
     await log(build_id, "plan", "info", "Population map — cells the analyst reads the population by: " + ", ".join(f"{k + 1}. {f['label']}" for k, f in enumerate(facets)),
               "persona-level: " + (", ".join(f["label"] for f in facets if f.get("kind") == "persona") or "none — all read from what personas carry"))
+    if dynamic:
+        await log(build_id, "plan", "info", f"Dynamic dials — {len(dynamic)} chosen for this question, on top of the fixed 112: " + dyn_mod.summary_line(dynamic),
+                  " · ".join(f"{d['label']}: {d['why']}" for d in dynamic))
+    else:
+        await log(build_id, "plan", "warn", "No dynamic dials for this question — personas run on the fixed 112 only")
     for sg in segments:
         await log(build_id, "plan", "info", f"Proposed · {sg['name']} — {sg['share_pct']}% ({sg['count']} agents), {sg['stance']}", sg.get("rationale"))
     await _cast_log(build_id, segments)
     for a in plan["assumptions"][:5]:
         await log(build_id, "plan", "warn", f"Assumed: {a}")
     await log(build_id, "plan", "ok", f"Plan ready: {len(segments)} segments for {bld.target_count} agents. Review each one — accept, edit or reject with a reason.", plan.get("evidence_coverage"))
+    # Flip last: the Studio opens the review the moment it sees this status, and the plan's log
+    # (facets, dynamic dials, every segment, what was cast) must already be there to read.
+    await _save(build_id, status="awaiting_review")
     await refresh_frame_report(build_id)
 
 
@@ -1228,6 +1242,9 @@ async def _spawn(build_id: str):
             persona_constraints["frame_prompt"] = frame_mod.frame_block_for_prompt(bld.frame)
         if (bld.plan or {}).get("facets"):
             persona_constraints["facets_prompt"] = facets_mod.facets_block_for_prompt(bld.plan["facets"])
+        # The question's dynamic dials (L3-04) travel with the plan: the persona writer tunes
+        # every one of them per persona, exactly as it does the sentiment dials.
+        persona_constraints["dynamic_dials"] = (bld.plan or {}).get("dynamic_dials") or await dyn_mod.for_session(session_id)
         wanted = {sg.get("archetype_id") for sg in segments if sg.get("archetype_id")}
         if wanted:
             persona_constraints["archetypes"] = {a["id"]: a for a in await load_archetypes(session_id) if a["id"] in wanted}

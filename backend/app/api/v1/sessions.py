@@ -31,6 +31,8 @@ class SessionResponse(BaseModel):
     updated_at: datetime
     owner_email: Optional[str] = None   # only populated for admins listing ?scope=all
     is_mine: Optional[bool] = None
+    #: The question's dynamic dials (brief L3-04): [{key, label, why, low, high}], [] until chosen.
+    dynamic_dials: Optional[list[dict]] = None
 
     class Config:
         from_attributes = True
@@ -151,12 +153,14 @@ async def get_session_posts(session_id: str, user: AuthUser = Depends(get_curren
 
 @router.get("/{session_id}/dials")
 async def get_session_dials(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Population-level aggregation of the 112 dials across this session's agents.
+    """Population-level aggregation of the dials across this session's agents.
 
-    Powers the psychographic dashboard: per-dial distributions, group means,
-    a market-research scorecard, and a stance x dial heatmap.
+    Powers the psychographic dashboard: per-dial distributions, group means, a market-research
+    scorecard, and a stance x dial heatmap. Covers the fixed 112 plus this session's dynamic
+    dials (brief L3-04), which carry their authored labels rather than title-cased keys.
     """
     from app.services.agents.dial_analytics import aggregate_dials
+    from app.services.agents import dynamic_dials as dyn_mod
 
     session = await get_owned_session(session_id, user, db)
 
@@ -166,6 +170,16 @@ async def get_session_dials(session_id: str, user: AuthUser = Depends(get_curren
     agents = agents_result.scalars().all()
 
     agg = aggregate_dials(agents)
+    dynamic = dyn_mod.clean_definitions(session.dynamic_dials or [])
+    grp = (agg.get("groups") or {}).get(dyn_mod.GROUP)
+    if grp and dynamic:
+        by_key = {d["key"]: d for d in dynamic}
+        for key, dial in (grp.get("dials") or {}).items():
+            d = by_key.get(key)
+            if d:
+                dial["label"] = d["label"]
+                dial["why"] = d["why"]
+    agg["dynamic_dials"] = dynamic
     agg["session_id"] = session_id
     agg["query"] = session.query
     return agg

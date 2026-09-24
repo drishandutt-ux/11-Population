@@ -336,7 +336,7 @@ def _character_block(agent: SpawnedAgent) -> str:
     return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"
 
 
-def _build_system_prompt(agent: SpawnedAgent, task: str = "post") -> str:
+def _build_system_prompt(agent: SpawnedAgent, task: str = "post", dynamic: Optional[list[dict]] = None) -> str:
     """Persona + dials + humanity register.
 
     `task="post"` ends with the Reddit-style writing instruction the debate uses.
@@ -357,6 +357,9 @@ Your stance type: {agent.stance} ({"a first-hand stake — you live this decisio
     prompt += _geo_block(agent)
     prompt += _character_block(agent)
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
+    if dynamic:
+        from app.services.agents import dynamic_dials as dyn_mod
+        prompt += dyn_mod.guidance(dynamic, (agent.dials or {}).get(dyn_mod.GROUP))
 
     band = _humanity_band(humanity)
 
@@ -479,7 +482,8 @@ Thread discussion so far:
 
 Share your perspective on this topic as {agent.name}. Start a new thread or add a top-level comment."""
 
-    system_prompt = _build_system_prompt(agent)
+    from app.services.agents import dynamic_dials as dyn_mod
+    system_prompt = _build_system_prompt(agent, dynamic=await dyn_mod.for_session(getattr(agent, "session_id", "")))
     if is_pro:
         system_prompt += _PRO_POST_DIRECTIVE
     length = random.choices([c for c, _ in _LENGTH_CHOICES[band]], weights=[w for _, w in _LENGTH_CHOICES[band]])[0]
@@ -505,7 +509,8 @@ async def chat_as_agent(agent: SpawnedAgent, message: str, history: list[dict], 
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    system = _build_system_prompt(agent)
+    from app.services.agents import dynamic_dials as dyn_mod
+    system = _build_system_prompt(agent, dynamic=await dyn_mod.for_session(getattr(agent, "session_id", "")))
     if kg_context:
         system += f"\n\n--- KNOWLEDGE GRAPH (use this to ground your answers) ---\n{kg_context}"
 

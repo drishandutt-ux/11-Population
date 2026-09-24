@@ -172,10 +172,14 @@ async def generate_agents(
     """Curate a population with the LLM. This is the PRO path (FAST mode samples the
     pre-built bank instead — see seed_bank.sample_bank). Pro uses the Sonnet tier and a
     deeper prompt that pushes a wide spread of expertise, intelligence and emotion."""
+    from app.services.agents import dynamic_dials as dyn_mod
+
     settings = get_settings()
     gen_model = settings.orchestration_model(mode)
     rag = await get_lightrag(session_id)
     kg_summary = await query_rag(rag, query, mode="hybrid")
+    # The dials this question needs that the fixed 112 do not have (brief L3-04).
+    dynamic = await dyn_mod.ensure(session_id, query, context=f"Audience profile: {profile_query}\n\n{kg_summary[:1500]}")
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
@@ -243,7 +247,7 @@ Generate exactly:
 - {n} NEUTRAL agents: skeptics, journalists, general public, contrarians
 {_humanity_block(batch_count, h)}
 {pro_depth_block}
-
+{dyn_mod.prompt_block(dynamic)}
 Return a JSON array with exactly {batch_count} objects. Each object MUST have ALL of these keys:
 {{
   "name": "Full Name",
@@ -259,7 +263,7 @@ Return a JSON array with exactly {batch_count} objects. Each object MUST have AL
   "frame": {{"<sampling-frame dimension key>": "<the category this persona falls in>", ...}} — one entry per frame dimension listed above; {{}} when no frame was given,
   "facets": {{"<population facet key>": "<one of its labels>", ...}} — one entry per POPULATION FACET listed above; {{}} when none were given,
   "humanity": <integer 0-100>,
-  "dials": {DIALS_SCHEMA}
+{dyn_mod.schema_block(dynamic)}  "dials": {DIALS_SCHEMA}
 }}
 
 {_DIALS_INSTRUCTIONS}
@@ -317,7 +321,7 @@ name, a different job title, a different angle. Do not produce a variation of an
                     system=_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h) + _taken_block(taken)}],
                 )
-                return _parse_agents_json(response.content[0].text)
+                return dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:
                 print(f"[agent_factory] batch generation failed ({bcount} agents): {type(e).__name__}: {e}")
                 return []
@@ -631,7 +635,10 @@ def _constraints_block(constraints: dict) -> str:
     return "POPULATION-WIDE DIALS (set by the analyst; honour them):\n" + "\n".join(lines) + "\n"
 
 
-def _plan_prompt(query: str, seg: dict, n: int, constraints: dict, kg_summary: str, evidence_text: str, taken: list[dict]) -> str:
+def _plan_prompt(query: str, seg: dict, n: int, constraints: dict, kg_summary: str, evidence_text: str, taken: list[dict],
+                 dyn_mod=None, dynamic: Optional[list[dict]] = None) -> str:
+    dyn_prompt = dyn_mod.prompt_block(dynamic) if dyn_mod else ""
+    dyn_schema = dyn_mod.schema_block(dynamic) if dyn_mod else ""
     doc = (constraints or {}).get("doc_context") or ""
     doc_block = f"\nSURVEY / PROFILE DATA (translate to dial values where a respondent fits this segment):\n{doc[:SURVEY_CHAR_LIMIT]}\n" if doc else ""
     return f"""Create {n} distinct personas for a synthetic population that will debate and be surveyed on this topic:
@@ -642,6 +649,7 @@ QUERY: {query}
 {_constraints_block(constraints)}
 {(constraints or {}).get('frame_prompt') or ''}
 {(constraints or {}).get('facets_prompt') or ''}
+{dyn_prompt}
 KNOWLEDGE CONTEXT:
 {kg_summary[:2000]}
 {('EVIDENCE:' + chr(10) + evidence_text[:3500]) if evidence_text else ''}
@@ -669,7 +677,7 @@ Return a JSON array with exactly {n} objects. Each object MUST have ALL of these
   "debate_style": "1 sentence describing how they argue",
   "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
   "humanity": <integer 0-100>,
-  "dials": {DIALS_SCHEMA}
+{dyn_schema}  "dials": {DIALS_SCHEMA}
 }}
 
 {_DIALS_INSTRUCTIONS}
@@ -745,11 +753,15 @@ async def generate_agents_from_plan(
     (async, optional) is called as `(segment_name, done_in_segment, segment_count, done_total)`
     after every batch so the Studio log can narrate the build."""
     from app.services.agents import archetypes as arch_mod
+    from app.services.agents import dynamic_dials as dyn_mod
 
     settings = get_settings()
     gen_model = settings.orchestration_model(mode)
     rag = await get_lightrag(session_id)
     kg_summary = await query_rag(rag, query, mode="hybrid")
+    # The question's own dials (brief L3-04). The planner chose them; the factory only reads
+    # them, so a build never spends a call on the picker.
+    dynamic = dyn_mod.clean_definitions((constraints or {}).get("dynamic_dials")) or await dyn_mod.for_session(session_id)
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     sem = asyncio.Semaphore(max(1, settings.spawn_concurrency))
     # Archetypes (L3-02): {id: {id, name, role, profile}} for the segments cast from a mould.
@@ -769,9 +781,9 @@ async def generate_agents_from_plan(
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
                     system=_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, kg_summary, evidence_text, taken)}],
+                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, kg_summary, evidence_text, taken, dyn_mod, dynamic)}],
                 )
-                return _parse_agents_json(response.content[0].text)
+                return dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
                 return []
@@ -783,14 +795,15 @@ async def generate_agents_from_plan(
             return []
         contexts = {r: arch_mod.local_context(session_id, r, arch.get("role", "")) for r in {s_.get("region") or "" for s_ in slots} if r}
         prompt = arch_mod.cast_prompt(query, seg, arch, slots, contexts, _constraints_block(constraints), _taken_block_text(taken),
-                                      (constraints or {}).get("facets_prompt") or "")
+                                      (constraints or {}).get("facets_prompt") or "",
+                                      dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))
         async with sem:
             try:
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
                     system=_SYSTEM_PROMPT, messages=[{"role": "user", "content": prompt}],
                 )
-                raw = _parse_agents_json(response.content[0].text)
+                raw = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] cast batch failed ({seg.get('name')}, {len(slots)}): {type(e).__name__}: {e}")
                 return []

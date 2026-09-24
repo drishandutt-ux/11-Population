@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, AgentCharacter, AgentDials, AgentPreset, AuthoredAgentDraft, BuiltProfile, Session } from "@/lib/api";
+import { api, AgentCharacter, AgentDials, AgentPreset, AuthoredAgentDraft, BuiltProfile, DynamicDial, Session } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import {
   ArrowLeft, Wand2, Loader2, Bookmark, Check, AlertCircle, RotateCcw, UserPlus, Sparkles, MapPin, Brain, Heart,
 } from "lucide-react";
 
 /** The 112 dials, grouped — the same schema the backend's spawn prompts use (`agent_factory.DIALS_SCHEMA`). */
-const DIAL_KEYS: Record<keyof AgentDials, string[]> = {
+const DIAL_KEYS: Record<string, string[]> = {
   sentiment: ["joy", "sadness", "anger", "fear", "disgust", "surprise", "trust", "anticipation", "pride", "shame", "guilt", "envy", "awe", "nostalgia", "relief", "boredom", "loneliness", "love", "hope", "anxiety", "confusion", "curiosity", "frustration"],
   motivation: ["desire", "urgency", "need_intensity", "aspiration", "self_improvement", "escape", "comfort", "pleasure", "mastery", "autonomy", "status", "belonging", "security", "novelty", "convenience", "control"],
   habit: ["cue_strength", "action_simplicity", "reward_immediacy", "reward_intensity", "repeat_frequency", "environmental_fit", "ritual_potential", "dependency_risk", "switching_cost", "routine_compatibility", "habit_pull"],
@@ -88,7 +88,10 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
   const [built, setBuilt] = useState<AgentDials | null>(null);
   const [reading, setReading] = useState("");
   const [building, setBuilding] = useState(false);
-  const [openGroup, setOpenGroup] = useState<keyof AgentDials>("sentiment");
+  const [openGroup, setOpenGroup] = useState<string>("sentiment");
+  // The question's own dials (brief L3-04): chosen by the system for this session, tuned here
+  // exactly like the sentiment dials.
+  const [dynamicDials, setDynamicDials] = useState<DynamicDial[]>([]);
   const [presets, setPresets] = useState<AgentPreset[]>([]);
   const [target, setTarget] = useState<"new" | "existing">("new");
   const [newName, setNewName] = useState("");
@@ -102,7 +105,10 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
   const builtFromRef = useRef<string>("");
 
   useEffect(() => {
-    api.sessions.get(sessionId).then((s) => setSession(s as Session)).catch(() => {});
+    api.sessions.get(sessionId).then((s) => {
+      setSession(s as Session);
+      setDynamicDials(((s as Session).dynamic_dials || []) as DynamicDial[]);
+    }).catch(() => {});
     api.presets.list().then((p) => { setPresets(p); if (p.length && !presetId) setPresetId(p[0].id); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
@@ -110,21 +116,36 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
   const set = (patch: Partial<Text>) => setText((t) => ({ ...t, ...patch }));
   const setChar = (k: CharacterTextKey, v: string) => setText((t) => ({ ...t, character: { ...t.character, [k]: v } }));
 
-  const fixedCount = Object.keys(fixed).length;
+  const fixedCount = Object.keys(fixed).filter((id) => !id.startsWith("dynamic.")).length;
   const autoCount = DIAL_TOTAL - fixedCount;
   const textKey = JSON.stringify({ text, humanity: humanityFixed ? humanity : null });
   const stale = built !== null && builtFromRef.current !== textKey;
   const ready = text.name.trim() && text.role.trim() && text.background.trim();
 
-  const valueOf = (g: keyof AgentDials, k: string): number | null => {
+  /** Sentiment first, then this question's dynamic dials, then the rest of the fixed 112. */
+  const groups = useMemo(() => {
+    const dyn = dynamicDials.length
+      ? [{ key: "dynamic" as const, label: "Dynamic", accent: "accent-primary", text: "text-primary", hint: "Chosen by the system for this question" }]
+      : [];
+    return [GROUPS[0], ...dyn, ...GROUPS.slice(1)];
+  }, [dynamicDials.length]);
+  const keysOf = (g: string): string[] => (g === "dynamic" ? dynamicDials.map((d) => d.key) : DIAL_KEYS[g as keyof AgentDials]);
+  const dialLabel = (g: string, k: string) => (g === "dynamic" ? dynamicDials.find((d) => d.key === k)?.label || toLabel(k) : toLabel(k));
+  const dialHint = (g: string, k: string) => {
+    if (g !== "dynamic") return toLabel(k);
+    const d = dynamicDials.find((x) => x.key === k);
+    return d ? `${d.why} 0 = ${d.low}; 10 = ${d.high}` : toLabel(k);
+  };
+
+  const valueOf = (g: string, k: string): number | null => {
     const id = `${g}.${k}`;
     if (id in fixed) return fixed[id];
-    const v = built?.[g]?.[k];
+    const v = built?.[g as keyof AgentDials]?.[k];
     return typeof v === "number" ? v : null;
   };
-  const fixDial = (g: keyof AgentDials, k: string, v: number) => setFixed((f) => ({ ...f, [`${g}.${k}`]: v }));
-  const releaseDial = (g: keyof AgentDials, k: string) => setFixed((f) => { const n = { ...f }; delete n[`${g}.${k}`]; return n; });
-  const releaseGroup = (g: keyof AgentDials) => setFixed((f) => Object.fromEntries(Object.entries(f).filter(([id]) => !id.startsWith(`${g}.`))));
+  const fixDial = (g: string, k: string, v: number) => setFixed((f) => ({ ...f, [`${g}.${k}`]: v }));
+  const releaseDial = (g: string, k: string) => setFixed((f) => { const n = { ...f }; delete n[`${g}.${k}`]; return n; });
+  const releaseGroup = (g: string) => setFixed((f) => Object.fromEntries(Object.entries(f).filter(([id]) => !id.startsWith(`${g}.`))));
 
   function fixedAsDials(): AgentDials {
     const out: AgentDials = {};
@@ -162,6 +183,7 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
     setError(null);
     try {
       const p = await api.agents.buildProfile(sessionId, draft(null, humanity));
+      if (p.dynamic_dials?.length) setDynamicDials(p.dynamic_dials);
       setBuilt(p.dials);
       setReading(p.reading);
       if (!humanityFixed) setHumanity(p.humanity);
@@ -192,6 +214,11 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
         dials = { ...p.dials };
         for (const [id, v] of Object.entries(fixed)) { const [g, k] = id.split(".") as [keyof AgentDials, string]; (dials[g] ??= {})[k] = v; }
         h = humanityFixed ? humanity : p.humanity;
+      } else {
+        // fullDials() covers the fixed 112; the question's dynamic dials ride along with it.
+        const dyn: Record<string, number> = { ...(built?.dynamic || {}) };
+        for (const [id, v] of Object.entries(fixed)) { const [g, k] = id.split("."); if (g === "dynamic") dyn[k] = v; }
+        if (Object.keys(dyn).length) dials.dynamic = dyn;
       }
       setSaving("saving");
       const body = draft(dials, h);
@@ -306,8 +333,8 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
           </section>
 
           <section className="glass rounded-2xl p-2 max-h-[52vh] overflow-y-auto">
-            {GROUPS.map((g) => {
-              const keys = DIAL_KEYS[g.key];
+            {groups.map((g) => {
+              const keys = keysOf(g.key);
               const setHere = keys.filter((k) => `${g.key}.${k}` in fixed).length;
               const open = openGroup === g.key;
               return (
@@ -319,6 +346,11 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
                   </button>
                   {open && (
                     <div className="px-2 pb-2 space-y-1.5">
+                      {g.key === "dynamic" && (
+                        <p className="text-[10px] text-muted-foreground/70 leading-relaxed pb-1">
+                          The dials this question needs that the fixed 112 do not have. The system chose them for this session; every twin here carries the same ones.
+                        </p>
+                      )}
                       {setHere > 0 && <button type="button" onClick={() => releaseGroup(g.key)} className="text-[10px] text-muted-foreground hover:text-foreground">leave this group to the system</button>}
                       {keys.map((k) => {
                         const id = `${g.key}.${k}`;
@@ -326,7 +358,7 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
                         const v = valueOf(g.key, k);
                         return (
                           <div key={k} className="flex items-center gap-2">
-                            <span className="text-[11px] text-muted-foreground w-[132px] truncate" title={toLabel(k)}>{toLabel(k)}</span>
+                            <span className="text-[11px] text-muted-foreground w-[132px] truncate" title={dialHint(g.key, k)}>{dialLabel(g.key, k)}</span>
                             <input type="range" min={0} max={10} step={1} value={v ?? 5} onChange={(e) => fixDial(g.key, k, +e.target.value)} className={`flex-1 ${g.accent} cursor-pointer h-1.5 ${isFixed ? "" : v === null ? "opacity-30" : "opacity-60"}`} title={isFixed ? "Set by hand" : v === null ? "Left to the system" : "Set by the system — move it to take over"} />
                             <span className={`text-[10px] w-7 text-right tabular-nums ${isFixed ? "text-foreground font-semibold" : "text-muted-foreground/70"}`}>{v === null ? "auto" : v}</span>
                             <button type="button" onClick={() => releaseDial(g.key, k)} className={`text-[10px] w-7 text-left ${isFixed ? "text-muted-foreground hover:text-foreground" : "invisible"}`} title="Leave this dial to the system">auto</button>

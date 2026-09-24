@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Agent, AgentDials, AgentPreset, SimMode, api } from "@/lib/api";
+import { Agent, AgentDials, AgentPreset, DynamicDial, SimMode, api } from "@/lib/api";
 import PopulationStudio from "@/components/population/PopulationStudio";
 import { stanceColor } from "@/lib/utils";
 import {
@@ -42,6 +42,8 @@ interface Props {
   isPendingSimulation?: boolean;
   /** The session row's agent_count, null until the session has loaded — decides whether the Studio or the roster opens first. */
   expectedAgentCount?: number | null;
+  /** The question's own dials (brief L3-04) — labels for the Dynamic group on every agent card. */
+  dynamicDials?: DynamicDial[];
   onStartSimulation: (intensity: number, mode: SimMode) => void;
   onGoToThread: () => void;
   onGoToReport: () => void;
@@ -68,6 +70,8 @@ function fmtDuration(totalSec: number) {
 // ── Dial category config ─────────────────────────────────────────────────────
 const DIAL_CATEGORIES: { key: keyof AgentDials; label: string; color: string; bar: string }[] = [
   { key: "sentiment",   label: "Sentiment",         color: "text-rose-400",    bar: "bg-rose-500"    },
+  // The question's own dials (brief L3-04), directly under sentiment; absent when the session has none.
+  { key: "dynamic",     label: "Dynamic",           color: "text-primary",     bar: "bg-primary"     },
   { key: "motivation",  label: "Motivation",        color: "text-amber-400",   bar: "bg-amber-500"   },
   { key: "habit",       label: "Habit",             color: "text-emerald-400", bar: "bg-emerald-500" },
   { key: "trust",       label: "Trust",             color: "text-blue-400",    bar: "bg-blue-500"    },
@@ -98,7 +102,12 @@ function DialBar({ value, barClass }: { value: number; barClass: string }) {
 }
 
 // ── Dial viewer ───────────────────────────────────────────────────────────────
-function DialViewer({ dials }: { dials: AgentDials }) {
+function DialViewer({ dials, dynamicDials = [] }: { dials: AgentDials; dynamicDials?: DynamicDial[] }) {
+  const dynLabel = (key: string) => dynamicDials.find((d) => d.key === key)?.label;
+  const dynWhy = (key: string) => {
+    const d = dynamicDials.find((x) => x.key === key);
+    return d ? `${d.why} 0 = ${d.low}; 10 = ${d.high}` : undefined;
+  };
   const [openCat, setOpenCat] = useState<string | null>(null);
 
   return (
@@ -137,7 +146,10 @@ function DialViewer({ dials }: { dials: AgentDials }) {
               <div className="ml-1 pl-3 border-l border-border/30 mt-1 mb-1.5 space-y-1.5">
                 {keys.map((k) => (
                   <div key={k} className="grid grid-cols-[1fr_3fr] gap-2 items-center">
-                    <span className="text-[9px] text-muted-foreground/70 truncate">{toLabel(k)}</span>
+                    <span className="text-[9px] text-muted-foreground/70 truncate"
+                      title={key === "dynamic" ? dynWhy(k) : undefined}>
+                      {(key === "dynamic" && dynLabel(k)) || toLabel(k)}
+                    </span>
                     <DialBar value={cat[k] ?? 0} barClass={bar} />
                   </div>
                 ))}
@@ -151,7 +163,7 @@ function DialViewer({ dials }: { dials: AgentDials }) {
 }
 
 // ── Agent card ────────────────────────────────────────────────────────────────
-function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean }) {
+function AgentCard({ agent, animate = false, dynamicDials = [] }: { agent: Agent; animate?: boolean; dynamicDials?: DynamicDial[] }) {
   const [showDials, setShowDials] = useState(false);
   const hasDials = agent.dials && Object.keys(agent.dials).length > 0;
   const humanity = agent.humanity ?? 0;
@@ -255,7 +267,7 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
         </button>
       )}
 
-      {showDials && agent.dials && <DialViewer dials={agent.dials} />}
+      {showDials && agent.dials && <DialViewer dials={agent.dials} dynamicDials={dynamicDials} />}
     </div>
   );
 }
@@ -309,6 +321,7 @@ export default function AgentDirectory({
   spawnCount,
   isPendingSimulation = false,
   expectedAgentCount = null,
+  dynamicDials = [],
   onStartSimulation,
   onGoToThread,
   onGoToReport,
@@ -491,7 +504,7 @@ export default function AgentDirectory({
         )}
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {agents.slice(-60).map((agent, i, arr) => (
-            <AgentCard key={agent.id} agent={agent} animate={i === arr.length - 1} />
+            <AgentCard key={agent.id} agent={agent} animate={i === arr.length - 1} dynamicDials={dynamicDials} />
           ))}
         </div>
       </div>
@@ -731,7 +744,7 @@ export default function AgentDirectory({
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {shown.map((agent) => (
-                  <AgentCard key={agent.id} agent={agent} />
+                  <AgentCard key={agent.id} agent={agent} dynamicDials={dynamicDials} />
                 ))}
               </div>
               {group.length > CAP && (

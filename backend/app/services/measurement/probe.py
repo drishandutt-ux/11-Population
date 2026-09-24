@@ -202,7 +202,9 @@ async def answer_one(
     async with AsyncSessionLocal() as db:
         said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id)
 
-    system = _build_system_prompt(agent, task="probe") + instrument.directive
+    from app.services.agents import dynamic_dials as dyn_mod
+    # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
+    system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive
     user = _build_user_message(
         agent=agent, instrument=instrument, spec=spec, query=query,
         kg_context=kg_context, said=said, decided=decided,

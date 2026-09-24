@@ -248,7 +248,8 @@ def slots_block(slots: list[dict], contexts: dict[str, str]) -> str:
     return "\n".join(lines)
 
 
-def cast_prompt(query: str, seg: dict, arch: dict, slots: list[dict], contexts: dict[str, str], constraints_text: str, taken_text: str, facets_prompt: str = "") -> str:
+def cast_prompt(query: str, seg: dict, arch: dict, slots: list[dict], contexts: dict[str, str], constraints_text: str, taken_text: str,
+                facets_prompt: str = "", dynamic_prompt: str = "", dynamic_schema: str = "") -> str:
     from app.services.agents.agent_factory import DIALS_SCHEMA
     n = len(slots)
     return f"""Cast {n} personas from ONE archetype for a synthetic population that will debate and be surveyed on this topic:
@@ -259,7 +260,7 @@ QUERY: {query}
 THE SEGMENT they belong to: {seg.get('name')} — {seg.get('description', '')}
 Stance: {seg.get('stance')} (every persona in this batch has this stance)
 Mood on the topic: {(seg.get('sentiment') or {}).get('mood', 'mixed')}; arguments this group makes: {'; '.join((seg.get('arguments') or [])[:4]) or 'infer from the archetype'}
-{constraints_text}{facets_prompt}
+{constraints_text}{facets_prompt}{dynamic_prompt}
 THE FIXED FACTS for each persona (drawn from the sampling frame — do NOT change any of them):
 {slots_block(slots, contexts)}
 {taken_text}
@@ -288,7 +289,7 @@ Return a JSON array with exactly {n} objects, one per slot, in slot order. Each 
   "geo_behavior": "2-3 sentence paragraph addressed to the persona as 'you'",
   "facets": {{"<population facet key>": "<one of its labels>", ...}} — one entry per POPULATION FACET listed above; {{}} when none were given,
   "humanity": <integer 0-100>,
-  "dials": {DIALS_SCHEMA}
+{dynamic_schema}  "dials": {DIALS_SCHEMA}
 }}
 
 Return ONLY the JSON array, no markdown, no explanation."""
@@ -301,6 +302,31 @@ def _int(v: Any, default: int) -> int:
         return int(round(float(v)))
     except (TypeError, ValueError):
         return default
+
+
+def _dynamic_values(dials: Any) -> dict[str, int]:
+    grp = (dials or {}).get("dynamic") if isinstance(dials, dict) else None
+    if not isinstance(grp, dict):
+        return {}
+    out: dict[str, int] = {}
+    for k, v in grp.items():
+        try:
+            out[str(k)] = max(0, min(10, int(round(float(v)))))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _enforce_dynamic(prior_dials: Any, got_dials: Any) -> dict[str, int]:
+    """The question's dynamic dials (L3-04) obey the mould exactly like the fixed 112: where the
+    archetype carries a value the cast persona stays within DIAL_DRIFT of it; where it does not
+    (the mould was authored for another question), the persona writer's value stands."""
+    prior, got = _dynamic_values(prior_dials), _dynamic_values(got_dials)
+    out = dict(got)
+    for k, p in prior.items():
+        v = got.get(k, p)
+        out[k] = max(0, min(10, max(p - DIAL_DRIFT, min(p + DIAL_DRIFT, v))))
+    return out
 
 
 def enforce_archetype(arch: dict, slot: dict, d: dict) -> dict:
@@ -335,6 +361,9 @@ def enforce_archetype(arch: dict, slot: dict, d: dict) -> dict:
             p = prior.get(g, {}).get(k, 5)
             v = got.get(g, {}).get(k, p)
             dials[g][k] = max(0, min(10, max(p - DIAL_DRIFT, min(p + DIAL_DRIFT, v))))
+    dyn = _enforce_dynamic(prof.get("dials"), d.get("dials"))
+    if dyn:
+        dials["dynamic"] = dyn
     d["dials"] = dials
     ch = {k: str(prof["character"][k]).strip() for k in CHARACTER_KEYS if isinstance(prof.get("character"), dict) and str(prof["character"].get(k) or "").strip()}
     ch["archetype"] = {"id": arch.get("id", ""), "name": arch.get("name", "")}
