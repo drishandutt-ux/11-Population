@@ -565,7 +565,7 @@ export default function AgentDirectory({
               {!isPendingSimulation && (
                 <>
                   <button
-                    onClick={() => router.push(`/session/${sessionId}/agents/build`)}
+                    onClick={() => router.push(`/session/${sessionId}/agents/builder`)}
                     className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground hover:text-foreground hover:border-border px-4 py-2 rounded-lg transition-all"
                     title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup"
                   >
@@ -635,7 +635,7 @@ export default function AgentDirectory({
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => router.push(`/session/${sessionId}/agents/build`)}
+                onClick={() => router.push(`/session/${sessionId}/agents/builder`)}
                 className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground hover:text-foreground hover:border-border px-4 py-2 rounded-lg transition-all"
                 title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup"
               >
