@@ -84,6 +84,7 @@ def _agent_payload(p) -> dict:
         "dials": p.dials or {}, "humanity": getattr(p, "humanity", 0) or 0,
         "segment": getattr(p, "segment", None) or None, "demographics": getattr(p, "demographics", None) or {},
         "weight": getattr(p, "weight", None) or 1.0,
+        "character": getattr(p, "character", None) or None,
     }
 
 

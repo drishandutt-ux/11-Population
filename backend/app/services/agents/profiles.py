@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Optional
 
 AVATAR_COLORS = [
     "#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f97316",
@@ -27,3 +27,4 @@ class AgentProfile:
     humanity: int = 0  # 0 = expert/analytical; higher = more human, emotional, gut-driven
     segment: str = ""  # Population Studio: the plan segment this persona belongs to ("" otherwise)
     demographics: dict = field(default_factory=dict)  # gender, region, income_band, education, occupation
+    character: Optional[dict] = None  # hand-authored / archetype character (Agent Builder, §7.10; cast twins carry character.archetype)

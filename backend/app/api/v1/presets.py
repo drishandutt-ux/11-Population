@@ -99,6 +99,14 @@ async def delete_preset(preset_id: str, user: AuthUser = Depends(get_current_use
 class AuthoredAgentsRequest(BaseModel):
     agents: list[dict[str, Any]]
     name: Optional[str] = None  # new lineup only
+    #: Also keep each agent as an archetype the Population Studio can cast personas from (§7.10 / L3-02).
+    as_archetype: bool = False
+
+
+async def _store_archetypes(profiles: list[dict], user: AuthUser, db: AsyncSession) -> None:
+    from app.models.archetype import Archetype
+    for prof in profiles:
+        db.add(Archetype(id=str(uuid.uuid4()), user_id=None if user.is_dev else user.id, name=prof["name"], role=prof["role"], profile=prof))
 
 
 def _normalise_all(raw: list[dict], taken_colors: list[str]) -> list[dict]:
@@ -136,6 +144,8 @@ async def create_custom_preset(body: AuthoredAgentsRequest, user: AuthUser = Dep
     profiles = _normalise_all(body.agents, [])
     preset = AgentPreset(id=str(uuid.uuid4()), user_id=None if user.is_dev else user.id, name=name[:100], agent_count=len(profiles), agents=profiles)
     db.add(preset)
+    if body.as_archetype:
+        await _store_archetypes(profiles, user, db)
     await db.commit()
     await db.refresh(preset)
     return preset
@@ -158,6 +168,8 @@ async def add_agents_to_preset(preset_id: str, body: AuthoredAgentsRequest, user
         taken_names.add(prof["name"].lower())
     preset.agents = existing + profiles
     preset.agent_count = len(preset.agents)
+    if body.as_archetype:
+        await _store_archetypes(profiles, user, db)
     await db.commit()
     await db.refresh(preset)
     return preset

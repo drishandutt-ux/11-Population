@@ -249,11 +249,11 @@ export const api = {
     list: () => request<AgentPreset[]>("/presets"),
     get: (presetId: string) => request<AgentPreset & { agents: Record<string, any>[] }>(`/presets/${presetId}`),
     /** A new lineup made only of hand-authored agents. */
-    createCustom: (name: string, agents: AuthoredAgentDraft[]) =>
-      request<AgentPreset>("/presets/custom", { method: "POST", body: JSON.stringify({ name, agents }) }),
+    createCustom: (name: string, agents: AuthoredAgentDraft[], asArchetype = false) =>
+      request<AgentPreset>("/presets/custom", { method: "POST", body: JSON.stringify({ name, agents, as_archetype: asArchetype }) }),
     /** Append hand-authored agents to an existing lineup (a name already in it is refused). */
-    addAgents: (presetId: string, agents: AuthoredAgentDraft[]) =>
-      request<AgentPreset>(`/presets/${presetId}/agents`, { method: "POST", body: JSON.stringify({ agents }) }),
+    addAgents: (presetId: string, agents: AuthoredAgentDraft[], asArchetype = false) =>
+      request<AgentPreset>(`/presets/${presetId}/agents`, { method: "POST", body: JSON.stringify({ agents, as_archetype: asArchetype }) }),
     save: (sessionId: string, name: string) =>
       request("/presets", { method: "POST", body: JSON.stringify({ session_id: sessionId, name }) }),
     delete: (presetId: string) =>
@@ -263,6 +263,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ preset_id: presetId }),
       }),
+  },
+  /** Archetypes (brief L3-02): hand-authored twins the Studio casts personas from. */
+  archetypes: {
+    list: () => request<Archetype[]>("/archetypes"),
+    delete: (id: string) => request(`/archetypes/${id}`, { method: "DELETE" }),
   },
 };
 
@@ -358,6 +363,8 @@ export type AgentCharacter = {
   vocabulary?: string;
   information_diet?: string;
   failure_modes?: string;
+  /** Set on a persona the Studio cast from an archetype. */
+  archetype?: { id: string; name: string };
 };
 
 /** What the Agent Builder sends: the person in words plus `dials` holding only the values the analyst fixed. */
@@ -379,6 +386,9 @@ export type AuthoredAgentDraft = {
 };
 
 export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string };
+
+/** A hand-authored twin promoted to a mould the Population Studio casts personas from (§7.10 / L3-02). */
+export type Archetype = { id: string; name: string; role: string; summary: string; created_at: string };
 
 export type AgentDemographics = {
   gender?: string;
@@ -873,6 +883,10 @@ export type PopulationSegment = {
   humanity_hint?: string;
   /** The cell this segment mostly sits in on each sampling-frame dimension (dimension key → category). */
   frame_values?: Record<string, string>;
+  /** The archetype this segment is cast from ("" = the model invents its personas); `archetype_manual` once the analyst chose. */
+  archetype_id?: string;
+  archetype_name?: string;
+  archetype_manual?: boolean;
   decision: "proposed" | "accepted" | "rejected" | "edited";
   reason?: string | null;
   /** Set on a segment that replaced a rejected one. */

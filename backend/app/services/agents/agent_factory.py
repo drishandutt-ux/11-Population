@@ -502,6 +502,8 @@ def finalise_segment_dicts(seg: dict, dicts: list[dict]) -> None:
             for k, v in seg_frame.items():
                 fr.setdefault(k, v)
             d["frame"] = fr
+        if d.get("_cast"):
+            continue  # cast from an archetype: its Expert↔Reactive value is the mould's, not the segment band's
         try:
             h = int(d.get("humanity") or lo)
         except (TypeError, ValueError):
@@ -514,6 +516,7 @@ _TRUST_KEYS = ("credibility", "authority")
 
 
 def apply_voice(dicts: list[dict], voice) -> None:
+    dicts = [d for d in dicts if not d.get("_cast")]  # an archetype's temperament is authored; the voice dial does not move it
     """Deterministic pass for the Expert ↔ Reactive dial, after the segment's register band is
     applied: shifts each persona's humanity, scales its sentiment dials (cooler toward expert,
     hotter toward reactive) and counter-scales trust.credibility / trust.authority. Touches
@@ -716,6 +719,7 @@ def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -
             humanity=int(d.get("humanity", 0) or 0),
             segment=segment,
             demographics=demographics,
+            character=d.get("character") if isinstance(d.get("character"), dict) and d.get("character") else None,
         )
     except Exception as e:  # noqa: BLE001
         print(f"[agent_factory] skipping malformed agent: {type(e).__name__}: {e}")
@@ -740,12 +744,17 @@ async def generate_agents_from_plan(
     (Fast = Haiku, Pro = Sonnet), every batch told who is already in the roster. `on_progress`
     (async, optional) is called as `(segment_name, done_in_segment, segment_count, done_total)`
     after every batch so the Studio log can narrate the build."""
+    from app.services.agents import archetypes as arch_mod
+
     settings = get_settings()
     gen_model = settings.orchestration_model(mode)
     rag = await get_lightrag(session_id)
     kg_summary = await query_rag(rag, query, mode="hybrid")
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     sem = asyncio.Semaphore(max(1, settings.spawn_concurrency))
+    # Archetypes (L3-02): {id: {id, name, role, profile}} for the segments cast from a mould.
+    archetypes: dict[str, dict] = (constraints or {}).get("archetypes") or {}
+    frame = (constraints or {}).get("frame") or None
 
     all_dicts: list[dict] = []
     done_total = 0
@@ -767,6 +776,26 @@ async def generate_agents_from_plan(
                 print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
                 return []
 
+    async def _cast_batch(seg: dict, arch: dict, slots: list[dict], taken: list[dict], label: str) -> list[dict]:
+        """One batch cast from an archetype: the facts are drawn already, the model writes texture,
+        and the mould's rules are enforced on what comes back."""
+        if should_stop and should_stop():
+            return []
+        contexts = {r: arch_mod.local_context(session_id, r, arch.get("role", "")) for r in {s_.get("region") or "" for s_ in slots} if r}
+        prompt = arch_mod.cast_prompt(query, seg, arch, slots, contexts, _constraints_block(constraints), _taken_block_text(taken),
+                                      (constraints or {}).get("facets_prompt") or "")
+        async with sem:
+            try:
+                response = await tracked_messages_create(
+                    client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
+                    system=_SYSTEM_PROMPT, messages=[{"role": "user", "content": prompt}],
+                )
+                raw = _parse_agents_json(response.content[0].text)
+            except Exception as e:  # noqa: BLE001
+                print(f"[agent_factory] cast batch failed ({seg.get('name')}, {len(slots)}): {type(e).__name__}: {e}")
+                return []
+        return [arch_mod.enforce_archetype(arch, slot, d) for slot, d in arch_mod.pair_slots(slots, raw)]
+
     progress_lock = asyncio.Lock()
 
     async def _segment(seg: dict) -> list[dict]:
@@ -774,6 +803,9 @@ async def generate_agents_from_plan(
         count = int(seg.get("count") or 0)
         if count <= 0:
             return []
+        arch = archetypes.get(seg.get("archetype_id") or "")
+        if arch:
+            return await _cast_segment(seg, arch, count)
         sizes = [_BATCH_SIZE] * (count // _BATCH_SIZE) + ([count % _BATCH_SIZE] if count % _BATCH_SIZE else [])
         seg_dicts: list[dict] = []
 
@@ -803,10 +835,41 @@ async def generate_agents_from_plan(
         apply_voice(seg_dicts, (constraints or {}).get('voice_used'))
         return seg_dicts
 
+    async def _cast_segment(seg: dict, arch: dict, count: int) -> list[dict]:
+        nonlocal done_total
+        slots = arch_mod.sample_attributes(seg, frame, count)
+        seg_dicts: list[dict] = []
+        batches = [slots[k:k + _BATCH_SIZE] for k in range(0, len(slots), _BATCH_SIZE)]
+
+        async def _note():
+            nonlocal done_total
+            async with progress_lock:
+                if on_progress:
+                    await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
+
+        first = await _cast_batch(seg, arch, batches[0], seg_dicts, "spawn:cast")
+        seg_dicts.extend(first)
+        done_total += len(first)
+        await _note()
+        if len(batches) > 1:
+            async def _rest(b: list[dict]):
+                nonlocal done_total
+                r = await _cast_batch(seg, arch, b, list(seg_dicts), "spawn:cast")
+                seg_dicts.extend(r)
+                done_total += len(r)
+                await _note()
+            await asyncio.gather(*[_rest(b) for b in batches[1:]])
+        finalise_segment_dicts(seg, seg_dicts)
+        return seg_dicts
+
     for part in await asyncio.gather(*[_segment(seg) for seg in segments]):
         all_dicts.extend(part)
 
-    all_dicts, dupes = split_duplicates(all_dicts)
+    # Cast personas share one job by design, so the role-at-same-age rule would call every
+    # sibling a clone; they are deduplicated by name only.
+    cast_dicts = uniquify_names([d for d in all_dicts if d.get("_cast")])
+    all_dicts, dupes = split_duplicates([d for d in all_dicts if not d.get("_cast")])
+    all_dicts = cast_dicts + all_dicts
     if dupes and not (should_stop and should_stop()):
         print(f"[agent_factory] {len(dupes)} duplicate persona(s) across plan batches — regenerating")
         if on_note:

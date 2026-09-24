@@ -24,6 +24,7 @@ from app.models.agent import SpawnedAgent
 from app.models.population import PopulationBuild
 from app.models.session import AnalysisSession, SessionStatus
 from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
+from app.services.agents import archetypes as archetypes_mod
 
 from . import facets as facets_mod
 from . import frame as frame_mod
@@ -867,6 +868,28 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
         _tasks.pop(build_id, None)
 
 
+async def load_archetypes(session_id: str) -> list[dict]:
+    """The archetypes the session's owner can cast from (ownerless rows too, for dev mode)."""
+    from app.models.archetype import Archetype
+    async with dbm.AsyncSessionLocal() as db:
+        sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
+        owner = getattr(sess, "user_id", None) if sess else None
+        q = select(Archetype).order_by(Archetype.created_at.desc())
+        if owner is not None:
+            q = q.where((Archetype.user_id == owner) | (Archetype.user_id.is_(None)))
+        rows = (await db.execute(q)).scalars().all()
+    return [{"id": a.id, "name": a.name, "role": a.role, "profile": a.profile or {}} for a in rows]
+
+
+async def _cast_log(build_id: str, segments: list[dict]) -> None:
+    cast = [sg for sg in segments if sg.get("archetype_id") and sg.get("decision") != "rejected"]
+    kept = [sg for sg in segments if sg.get("decision") != "rejected"]
+    if cast:
+        await log(build_id, "plan", "info", f"Cast from archetypes: {len(cast)} of {len(kept)} segments", " · ".join(f"{sg['name']} ← {sg.get('archetype_name')}" for sg in cast))
+    elif kept:
+        await log(build_id, "plan", "info", "No segment matches an archetype — the model writes every persona", "Author one in Build your own agent with 'use as an archetype' ticked, then re-plan or pick it on a segment card")
+
+
 async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = None):
     bld = await _save(build_id, status="planning")
     await log(build_id, "plan", "info", "Composing the population as segments" + (" around the segments you kept" if keep else ""))
@@ -890,6 +913,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
         kept_ids = {k.get("id") for k in keep}
         segments = [k for k in keep] + [sg for sg in segments if sg.get("id") not in kept_ids and sg.get("name") not in {k.get("name") for k in keep}]
     segments = normalise_segments(segments, bld.target_count, bld.constraints)
+    archetypes_mod.assign_archetypes(segments, await load_archetypes(bld.session_id))
     auto, v_set = voice_setting(bld.constraints)
     try:
         v_used = max(0, min(100, int(p.get("voice_value") if auto else v_set)))
@@ -908,6 +932,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
               "persona-level: " + (", ".join(f["label"] for f in facets if f.get("kind") == "persona") or "none — all read from what personas carry"))
     for sg in segments:
         await log(build_id, "plan", "info", f"Proposed · {sg['name']} — {sg['share_pct']}% ({sg['count']} agents), {sg['stance']}", sg.get("rationale"))
+    await _cast_log(build_id, segments)
     for a in plan["assumptions"][:5]:
         await log(build_id, "plan", "warn", f"Assumed: {a}")
     await log(build_id, "plan", "ok", f"Plan ready: {len(segments)} segments for {bld.target_count} agents. Review each one — accept, edit or reject with a reason.", plan.get("evidence_coverage"))
@@ -1046,6 +1071,13 @@ async def decide_segment(build_id: str, segment_id: str, decision: str, edits: O
             seg["sentiment"] = {**(seg.get("sentiment") or {}), **{k: v for k, v in e["sentiment"].items() if v is not None}}
         if isinstance(e.get("arguments"), list):
             seg["arguments"] = e["arguments"]
+        if "archetype_id" in e:
+            # "" = the analyst chose "model invents"; an id = cast this segment from that archetype.
+            wanted = str(e.get("archetype_id") or "")
+            arch = next((a for a in await load_archetypes(bld.session_id) if a["id"] == wanted), None) if wanted else None
+            seg["archetype_id"] = arch["id"] if arch else ""
+            seg["archetype_name"] = arch["name"] if arch else ""
+            seg["archetype_manual"] = True
         seg["decision"] = "edited"
         await log(build_id, "review", "decision", f"Edited · {seg['name']}", ", ".join(k for k in e.keys()))
     elif decision == "reject":
@@ -1084,6 +1116,7 @@ async def _replace_segment(build_id: str, segment_id: str, reason: str):
         new = segment_from_model(m)
         new["id"] = segment_id
         new["replaced"] = old.get("name")
+        archetypes_mod.assign_archetypes([new], await load_archetypes(bld.session_id))
         bld = await _load(build_id)
         segments = [new if sg.get("id") == segment_id else dict(sg) for sg in (bld.plan.get("segments") or [])]
         segments = normalise_segments(segments, bld.target_count, bld.constraints)
@@ -1195,6 +1228,16 @@ async def _spawn(build_id: str):
             persona_constraints["frame_prompt"] = frame_mod.frame_block_for_prompt(bld.frame)
         if (bld.plan or {}).get("facets"):
             persona_constraints["facets_prompt"] = facets_mod.facets_block_for_prompt(bld.plan["facets"])
+        wanted = {sg.get("archetype_id") for sg in segments if sg.get("archetype_id")}
+        if wanted:
+            persona_constraints["archetypes"] = {a["id"]: a for a in await load_archetypes(session_id) if a["id"] in wanted}
+            persona_constraints["frame"] = bld.frame
+            missing = [sg["name"] for sg in segments if sg.get("archetype_id") and sg["archetype_id"] not in persona_constraints["archetypes"]]
+            if missing:
+                await log(build_id, "spawn", "warn", "Archetype no longer exists — the model writes these segments instead", ", ".join(missing))
+            cast = [sg for sg in segments if sg.get("archetype_id") in persona_constraints["archetypes"]]
+            if cast:
+                await log(build_id, "spawn", "info", f"Casting {sum(int(sg.get('count') or 0) for sg in cast)} personas from archetypes", " · ".join(f"{sg['name']} ← {sg.get('archetype_name')}" for sg in cast))
         profiles = await generate_agents_from_plan(session_id, question, segments, persona_constraints, mode=bld.mode, evidence_text=evidence_text,
                                                    on_progress=progress, should_stop=lambda: _stopped(build_id), on_note=note)
         await log(build_id, "spawn", "info", f"Writing {len(profiles)} agents to the session")
@@ -1215,7 +1258,7 @@ async def _spawn(build_id: str):
                     id=p.id, session_id=session_id, name=p.name, age=p.age, role=p.role, background=p.background, stance=p.stance,
                     correlation=p.correlation, personality=p.personality, debate_style=p.debate_style, energy=p.energy,
                     avatar_color=p.avatar_color, dials=p.dials or {}, humanity=p.humanity or 0, segment=p.segment or None,
-                    demographics=p.demographics or None, weight=w,
+                    demographics=p.demographics or None, weight=w, character=getattr(p, "character", None) or None,
                 )
                 for p, w in zip(profiles, weights)
             ])

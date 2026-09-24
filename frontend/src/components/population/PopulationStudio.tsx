@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, apiFetch, Agent, AgentPreset, EvidenceItem, FrameCategory, PopulationBuild, PopulationConstraints, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState, Session, SimMode, WSEvent } from "@/lib/api";
+import { api, apiFetch, Agent, AgentPreset, Archetype, EvidenceItem, FrameCategory, PopulationBuild, PopulationConstraints, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState, Session, SimMode, WSEvent } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import DialsPanel, { DEFAULT_CONSTRAINTS } from "@/components/population/DialsPanel";
 import SourcesPanel from "@/components/population/SourcesPanel";
@@ -52,6 +52,9 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   // batch that streams in during a build.
   const [liveAgents, setLiveAgents] = useState<Partial<Agent>[]>([]);
   const [frameOpen, setFrameOpen] = useState(false);
+  // Archetypes the plan's segments can be cast from (Build your own agent → "use as an archetype").
+  const [archetypes, setArchetypes] = useState<Archetype[]>([]);
+  useEffect(() => { api.archetypes.list().then(setArchetypes).catch(() => {}); }, []);
   const loadAgents = useCallback(async () => {
     try { setLiveAgents((await api.agents.list(id)) as Agent[]); } catch {}
   }, [id]);
@@ -313,6 +316,11 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
                   <UserPlus className="w-4 h-4" /> Build your own agent
                 </button>
               </div>
+              <p className="text-[10px] text-muted-foreground/60">
+                {archetypes.length > 0
+                  ? `${archetypes.length} archetype${archetypes.length === 1 ? "" : "s"} on file (${archetypes.slice(0, 3).map((a) => a.name).join(", ")}${archetypes.length > 3 ? ", …" : ""}): segments that match one by job are cast from it — its rules and dials kept, the model writing only names, lives and places.`
+                  : "Tip: an agent you build with 'use as an archetype' becomes a mould — the plan casts every segment that matches its job from it, so its rules and dials are kept and the model writes only names, lives and places."}
+              </p>
             </div>
           )}
 
@@ -366,7 +374,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
 
           {build?.plan && (
             <ErrorBoundary label="The plan">
-              <PlanReview build={build} onDecide={decide} busyIds={new Set([...busySegs, ...regenerating])} readOnly={status === "spawning"} />
+              <PlanReview build={build} onDecide={decide} busyIds={new Set([...busySegs, ...regenerating])} readOnly={status === "spawning"} archetypes={archetypes} />
             </ErrorBoundary>
           )}
 

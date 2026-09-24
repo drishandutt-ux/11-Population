@@ -202,6 +202,11 @@ function AgentCard({ agent, animate = false }: { agent: Agent; animate?: boolean
             {agent.segment}
           </span>
         )}
+        {agent.character?.archetype?.name && (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-teal-500/30 text-teal-300 bg-teal-500/10 truncate max-w-full" title="Cast from a hand-authored archetype: its decision rules, temperament and dials are this agent's; only the name, life story and place were written by the model">
+            <UserPlus className="w-2.5 h-2.5" /> cast from {agent.character.archetype.name}
+          </span>
+        )}
       </div>
       {agent.demographics && (agent.demographics.gender || agent.demographics.region || agent.demographics.income_band) && (
         <p className="flex items-center gap-1 text-[10px] text-muted-foreground/75 mb-2 truncate" title="Demographics fixed by the population plan">

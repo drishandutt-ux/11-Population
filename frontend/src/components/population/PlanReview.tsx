@@ -1,15 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { PopulationBuild, PopulationSegment } from "@/lib/api";
+import { Archetype, PopulationBuild, PopulationSegment } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
-import { Check, X, Pencil, Loader2, Users, MapPin, Thermometer, Quote, Lightbulb, RotateCcw, Save } from "lucide-react";
+import { Check, X, Pencil, Loader2, Users, MapPin, Thermometer, Quote, Lightbulb, RotateCcw, Save, UserPlus } from "lucide-react";
 
 interface Props {
   build: PopulationBuild;
   onDecide: (segmentId: string, body: { decision: "accept" | "reject" | "edit"; edits?: Partial<PopulationSegment>; reason?: string }) => Promise<void>;
   busyIds: Set<string>;
   readOnly?: boolean;
+  /** The analyst's archetypes (Build your own agent → "use as an archetype"); a segment cast from one takes its rules, the model writes texture only. */
+  archetypes?: Archetype[];
+}
+
+/** Which mould a segment is cast from — auto-matched by job at plan time, changeable here. */
+function ArchetypePicker({ seg, archetypes, busy, readOnly, onPick }: { seg: PopulationSegment; archetypes: Archetype[]; busy: boolean; readOnly?: boolean; onPick: (id: string) => void }) {
+  const cast = !!seg.archetype_id;
+  const known = archetypes.some((a) => a.id === seg.archetype_id);
+  return (
+    <div className="mt-2 flex items-center gap-2 flex-wrap text-[10px]">
+      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${cast ? "border-primary/40 text-primary bg-primary/10" : "border-border/50 text-muted-foreground/70"}`}
+            title={cast ? "Every persona in this segment is cast from this archetype: its decision rules, temperament and dials are kept; the model writes only names, life stories and places" : "No archetype matches this segment — the model invents each persona's psychology"}>
+        <UserPlus className="w-3 h-3" /> {cast ? `cast from ${seg.archetype_name || "an archetype"}${known ? "" : " (deleted)"}` : "model invents"}
+      </span>
+      {!readOnly && archetypes.length > 0 && (
+        <select disabled={busy} value={known ? seg.archetype_id : ""} onChange={(e) => onPick(e.target.value)} className="bg-muted/50 border border-border rounded-md px-1.5 py-0.5 text-[10px] text-foreground focus:outline-none">
+          <option value="">model invents</option>
+          {archetypes.map((a) => <option key={a.id} value={a.id}>cast from {a.name} · {a.role}</option>)}
+        </select>
+      )}
+      {!readOnly && archetypes.length === 0 && <span className="text-muted-foreground/50">no archetypes yet — author one in Build your own agent</span>}
+    </div>
+  );
 }
 
 const MOOD: Record<string, string> = { for: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", against: "bg-red-500/15 text-red-300 border-red-500/30", mixed: "bg-amber-500/15 text-amber-300 border-amber-500/30", uncertain: "bg-slate-500/15 text-slate-300 border-slate-500/30" };
@@ -75,7 +98,7 @@ function EditForm({ seg, onSave, onCancel, busy }: { seg: PopulationSegment; onS
   );
 }
 
-function SegmentCard({ seg, onDecide, busy, readOnly }: { seg: PopulationSegment; onDecide: Props["onDecide"]; busy: boolean; readOnly?: boolean }) {
+function SegmentCard({ seg, onDecide, busy, readOnly, archetypes }: { seg: PopulationSegment; onDecide: Props["onDecide"]; busy: boolean; readOnly?: boolean; archetypes: Archetype[] }) {
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -115,6 +138,7 @@ function SegmentCard({ seg, onDecide, busy, readOnly }: { seg: PopulationSegment
         <span className="flex items-center gap-1"><Thermometer className="w-3 h-3 text-rose-400" /><span className="text-foreground/80">{se.temperature}/10</span>{se.top_emotions?.length ? <span className="text-rose-300/80"> · {se.top_emotions.slice(0, 3).map(toLabel).join(", ")}</span> : null}</span>
       </div>
       {d.occupations?.length ? <p className="text-[10px] text-muted-foreground/70 mt-1">typically: {d.occupations.slice(0, 5).join(" · ")}</p> : null}
+      {!rejected && <ArchetypePicker seg={seg} archetypes={archetypes} busy={busy} readOnly={readOnly} onPick={(id) => onDecide(seg.id, { decision: "edit", edits: { archetype_id: id } })} />}
 
       <div className="mt-2.5 rounded-lg bg-muted/25 border border-border/30 px-3 py-2">
         <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1 mb-0.5"><Lightbulb className="w-3 h-3 text-amber-300" /> why this segment, at this share</p>
@@ -165,11 +189,12 @@ function SegmentCard({ seg, onDecide, busy, readOnly }: { seg: PopulationSegment
   );
 }
 
-export default function PlanReview({ build, onDecide, busyIds, readOnly }: Props) {
+export default function PlanReview({ build, onDecide, busyIds, readOnly, archetypes = [] }: Props) {
   const plan = build.plan;
   if (!plan) return null;
   const segs = plan.segments || [];
   const kept = segs.filter((s) => s.decision !== "rejected");
+  const castCount = kept.filter((s) => s.archetype_id).length;
   const total = kept.reduce((n, s) => n + (s.count || 0), 0);
   const reviewed = segs.filter((s) => s.decision !== "proposed").length;
   const byStance = { direct: 0, indirect: 0, neutral: 0 } as Record<string, number>;
@@ -180,6 +205,7 @@ export default function PlanReview({ build, onDecide, busyIds, readOnly }: Props
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-foreground">Proposed population</span>
           <span className="text-[11px] text-muted-foreground">{kept.length} segment{kept.length === 1 ? "" : "s"} · {total} agents</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${castCount ? "border-primary/40 text-primary" : "border-border/50 text-muted-foreground/70"}`} title="Segments cast from a hand-authored archetype keep its rules and dials; the rest are invented by the model">{castCount} of {kept.length} cast from archetypes</span>
           <span className="text-[10px] text-muted-foreground/60 ml-auto">{reviewed}/{segs.length} reviewed</span>
         </div>
         <p className="text-[11px] text-foreground/85 leading-snug">{plan.rationale}</p>
@@ -196,7 +222,7 @@ export default function PlanReview({ build, onDecide, busyIds, readOnly }: Props
           </details>
         ) : null}
       </div>
-      {segs.map((seg) => <SegmentCard key={seg.id} seg={seg} onDecide={onDecide} busy={busyIds.has(seg.id)} readOnly={readOnly} />)}
+      {segs.map((seg) => <SegmentCard key={seg.id} seg={seg} onDecide={onDecide} busy={busyIds.has(seg.id)} readOnly={readOnly} archetypes={archetypes} />)}
     </div>
   );
 }

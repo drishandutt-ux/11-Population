@@ -33,7 +33,8 @@ const GROUPS: { key: keyof AgentDials; label: string; accent: string; text: stri
 ];
 const DIAL_TOTAL = Object.values(DIAL_KEYS).reduce((n, k) => n + k.length, 0);
 
-const CHARACTER_FIELDS: { key: keyof AgentCharacter; label: string; placeholder: string }[] = [
+type CharacterTextKey = Exclude<keyof AgentCharacter, "archetype">;
+const CHARACTER_FIELDS: { key: CharacterTextKey; label: string; placeholder: string }[] = [
   { key: "decision_rules", label: "How they decide", placeholder: "The rules of thumb, in order. e.g. Guideline first, then what the local formulary allows, then what the last patient complained about." },
   { key: "behaviour", label: "How they behave", placeholder: "Who they defer to, what they ignore, how fast they change their mind, what they do under pressure." },
   { key: "vocabulary", label: "How they talk", placeholder: "The words and register they use — and the words they never use." },
@@ -93,8 +94,10 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
   const [newName, setNewName] = useState("");
   const [presetId, setPresetId] = useState("");
   const [saving, setSaving] = useState<"" | "building" | "saving">("");
+  // Also keep the agent as an archetype: a mould the Studio casts a whole segment from (L3-02).
+  const [asArchetype, setAsArchetype] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<{ agent: string; lineup: string; count: number } | null>(null);
+  const [saved, setSaved] = useState<{ agent: string; lineup: string; count: number; archetype: boolean } | null>(null);
   // The profile was built from an earlier version of the text.
   const builtFromRef = useRef<string>("");
 
@@ -105,7 +108,7 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   const set = (patch: Partial<Text>) => setText((t) => ({ ...t, ...patch }));
-  const setChar = (k: keyof AgentCharacter, v: string) => setText((t) => ({ ...t, character: { ...t.character, [k]: v } }));
+  const setChar = (k: CharacterTextKey, v: string) => setText((t) => ({ ...t, character: { ...t.character, [k]: v } }));
 
   const fixedCount = Object.keys(fixed).length;
   const autoCount = DIAL_TOTAL - fixedCount;
@@ -192,9 +195,9 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
       }
       setSaving("saving");
       const body = draft(dials, h);
-      const preset = target === "new" ? await api.presets.createCustom(newName.trim(), [body]) : await api.presets.addAgents(presetId, [body]);
+      const preset = target === "new" ? await api.presets.createCustom(newName.trim(), [body], asArchetype) : await api.presets.addAgents(presetId, [body], asArchetype);
       setPresets((prev) => target === "new" ? [preset, ...prev] : prev.map((p) => (p.id === preset.id ? preset : p)));
-      setSaved({ agent: body.name, lineup: preset.name, count: preset.agent_count });
+      setSaved({ agent: body.name, lineup: preset.name, count: preset.agent_count, archetype: asArchetype });
       if (target === "new") { setTarget("existing"); setPresetId(preset.id); setNewName(""); }
     } catch (e: any) {
       setError(e.message || "Couldn't save the agent");
@@ -346,7 +349,7 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
           {saved && (
             <div className="flex items-center gap-3 text-xs text-emerald-200 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3 py-2">
               <Check className="w-4 h-4 shrink-0" />
-              <span className="flex-1"><span className="font-semibold">{saved.agent}</span> joined <span className="font-semibold">{saved.lineup}</span> ({saved.count} agent{saved.count === 1 ? "" : "s"}). Load the lineup from the Agents tab to bring them into this session.</span>
+              <span className="flex-1"><span className="font-semibold">{saved.agent}</span> joined <span className="font-semibold">{saved.lineup}</span> ({saved.count} agent{saved.count === 1 ? "" : "s"}){saved.archetype ? " and is now an archetype the Studio can cast from" : ""}. Load the lineup from the Agents tab to bring them into this session.</span>
               <button type="button" onClick={startAnother} className="text-emerald-100 hover:text-white underline underline-offset-2">Build another</button>
               <button type="button" onClick={back} className="text-emerald-100 hover:text-white underline underline-offset-2">Back to agents</button>
             </div>
@@ -368,7 +371,13 @@ export default function AgentBuilder({ sessionId }: { sessionId: string }) {
               {saving === "building" ? <><Loader2 className="w-4 h-4 animate-spin" /> Building profile…</> : saving === "saving" ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><UserPlus className="w-4 h-4" /> {target === "new" ? "Save to new lineup" : "Add to lineup"}</>}
             </button>
           </div>
-          {autoCount > 0 && !built && <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1"><MapPin className="w-3 h-3" /> {autoCount} dial{autoCount === 1 ? "" : "s"} still belong to the system — saving builds the profile first.</p>}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer" title="The Population Studio matches segments to archetypes by job and casts every persona in the segment from the mould: your character rules, temperament and dials stay, the model writes only names, life stories and places">
+              <input type="checkbox" checked={asArchetype} onChange={(e) => setAsArchetype(e.target.checked)} className="accent-primary" />
+              Use as an archetype the Studio can cast a segment from
+            </label>
+            {autoCount > 0 && !built && <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1"><MapPin className="w-3 h-3" /> {autoCount} dial{autoCount === 1 ? "" : "s"} still belong to the system — saving builds the profile first.</p>}
+          </div>
         </div>
       </div>
     </div>
