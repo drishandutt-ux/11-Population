@@ -18,7 +18,7 @@ import {
   Beaker, Download, Loader2, Play, Square, AlertTriangle, RefreshCw, ChevronLeft, ChevronDown,
   ChevronRight, History, Trash2, LucideIcon,
 } from "lucide-react";
-import { DotGrid, dotColor } from "./Charts";
+import { DotGrid, dotColor, pct } from "./Charts";
 import ExperimentPanel from "./ExperimentPanel";
 import { initialValues, toSpec } from "./InstrumentForm";
 import { formFor } from "./forms";
@@ -512,6 +512,43 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
             {selected.error && (
               <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{selected.error}</div>
             )}
+
+            {selected.status === "complete" && selected.aggregates && selected.aggregates.n === 0 && (
+              <div className="text-xs text-foreground/80 bg-muted/40 border border-border/60 rounded-lg px-3 py-2.5">
+                Nobody in this population could answer this — every twin said it was not theirs to answer. Ask
+                something inside their own lives and work, or build a population that would know.
+              </div>
+            )}
+
+            {/* Refusals and the unanimity check sit ABOVE the tool's own numbers (brief L3-06):
+                both change how the numbers below should be read, so neither is a footnote. */}
+            {selected.aggregates?.unanimity?.flagged && (
+              <div className="flex gap-2.5 text-xs text-yellow-200/90 bg-yellow-500/10 border border-yellow-500/25 rounded-lg px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-yellow-400" />
+                <span>
+                  <span className="font-semibold">This population agreed more than it should have. </span>
+                  {selected.aggregates.unanimity.reason}
+                </span>
+              </div>
+            )}
+            {(() => {
+              const dk = selected.aggregates?.dont_know;
+              if (!dk || dk.refused === 0) return null;
+              return (
+                <div className="text-xs rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 space-y-1.5">
+                  <div className="text-foreground/90">
+                    <span className="font-semibold">{pct(dk.share)} said this was not theirs to answer</span>
+                    <span className="text-muted-foreground"> ({dk.refused} of {dk.n}).
+                      They are not in any number below — every share is of the {selected.aggregates?.n} who had a view.</span>
+                  </div>
+                  {dk.reasons?.length > 0 && (
+                    <div className="text-[11px] text-muted-foreground/80">
+                      Why: {dk.reasons.slice(0, 3).map((r) => `${r.value} (${r.count})`).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* The tool's own results page. */}
             {selected.aggregates && selected.aggregates.n > 0 && (

@@ -336,6 +336,34 @@ def _character_block(agent: SpawnedAgent) -> str:
     return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"
 
 
+def _limits_block(agent: SpawnedAgent) -> str:
+    """What this twin can actually speak to, and the licence to say so when it cannot (brief L3-06).
+
+    Bounded on purpose: the licence is for things outside this life and this job, not a general
+    escape hatch. A panel of shruggers is worse than a panel of guessers, because it looks
+    rigorous while saying nothing — so the same block insists they DO have a view on their own
+    ground, and that a guess is allowed as long as it is labelled as one."""
+    demo = getattr(agent, "demographics", None) or {}
+    ch = getattr(agent, "character", None) or {}
+    have = [f"your own life and work as {agent.role}"]
+    if demo.get("region"):
+        have.append(f"what you see where you live, in {demo['region']}")
+    if str(ch.get("information_diet") or "").strip():
+        have.append(f"what reaches you: {str(ch['information_diet']).strip()}")
+    have.append("what you have read, heard and been told by people around you")
+    return (
+        "\n\nWHAT YOU ACTUALLY KNOW — and what to do when you do not:\n"
+        "- You know: " + "; ".join(have) + ".\n"
+        "- Anything outside that — another area's internal figures, a decision nobody has taken yet, "
+        "a speciality that is not yours, a number nobody publishes — you DO NOT KNOW. Say so plainly, "
+        "in your own words, and stop. Do not invent a figure, a policy or another place's practice to "
+        "fill the gap. You can say what you would do to find out, or give a guess as long as you call it "
+        "a guess.\n"
+        "- This is not permission to shrug. On your own ground you have a view and you give it: saying "
+        "\"I don't know\" about your own job, your own town or your own life would be a failure, not modesty."
+    )
+
+
 def _build_system_prompt(agent: SpawnedAgent, task: str = "post", dynamic: Optional[list[dict]] = None) -> str:
     """Persona + dials + humanity register.
 
@@ -356,6 +384,7 @@ Your stance type: {agent.stance} ({"a first-hand stake — you live this decisio
 
     prompt += _geo_block(agent)
     prompt += _character_block(agent)
+    prompt += _limits_block(agent)
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
     if dynamic:
         from app.services.agents import dynamic_dials as dyn_mod
@@ -429,6 +458,19 @@ _LENGTH_CHOICES: dict[str, list[tuple[str, float]]] = {
 _BAND_MAX_TOKENS = {"expert": 600, "tempered": 500, "balanced": 420, "defensive": 350, "reactive": 150}
 
 
+#: Read by every agent that can see the thread (brief L3-06). A room where everyone has read
+#: everyone else drifts toward whatever was said first and loudest; this is the counterweight.
+_DISSENT_RULE = (
+    "\n\nWHEN YOU HAVE READ THE ROOM:\n"
+    "- Agreeing adds nothing on its own. If you agree, say the ONE thing only you can add — from "
+    "your own job, your own place, your own experience — or do not repeat the point at all.\n"
+    "- If you think the prevailing view is wrong, say so plainly, even if you are the only one. "
+    "Being the lone voice is not a problem to solve; consensus you did not actually reach is.\n"
+    "- Never soften your position because others disagree, and never adopt a position because it "
+    "is popular. Only a specific fact or argument moves you — and if one does, say which."
+)
+
+
 async def generate_post(
     agent: SpawnedAgent,
     query: str,
@@ -484,6 +526,8 @@ Share your perspective on this topic as {agent.name}. Start a new thread or add 
 
     from app.services.agents import dynamic_dials as dyn_mod
     system_prompt = _build_system_prompt(agent, dynamic=await dyn_mod.for_session(getattr(agent, "session_id", "")))
+    if thread_context.strip():
+        system_prompt += _DISSENT_RULE
     if is_pro:
         system_prompt += _PRO_POST_DIRECTIVE
     length = random.choices([c for c, _ in _LENGTH_CHOICES[band]], weights=[w for _, w in _LENGTH_CHOICES[band]])[0]

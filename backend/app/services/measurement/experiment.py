@@ -32,7 +32,7 @@ from app.models.agent import SpawnedAgent
 from app.models.measurement import Experiment, Probe, ProbeAnswer
 from app.services.measurement import instruments, stats
 from app.services.measurement.probe import (
-    PROBE_CONCURRENCY, BASE_SPLIT_KEYS, _select_agents, run_probe, segments_for, split_keys, split_label,
+    PROBE_CONCURRENCY, BASE_SPLIT_KEYS, _select_agents, answered, run_probe, segments_for, split_keys, split_label,
 )
 
 DESIGNS = ("within", "between", "choice")
@@ -339,6 +339,9 @@ async def _set(experiment_id: str, **fields) -> None:
 
 
 async def _arm_rows(db, probe_id: str) -> dict[str, dict]:
+    """One arm's answers by agent. A twin that said the question was not theirs to answer
+    (brief L3-06) is left out: a lift must be measured on people who actually answered both
+    arms, not on a refusal treated as a value."""
     rows = (await db.execute(
         select(ProbeAnswer, SpawnedAgent)
         .join(SpawnedAgent, SpawnedAgent.id == ProbeAnswer.agent_id, isouter=True)
@@ -346,6 +349,8 @@ async def _arm_rows(db, probe_id: str) -> dict[str, dict]:
     )).all()
     out = {}
     for a, ag in rows:
+        if not answered({"answer": a.answer or {}}):
+            continue
         out[a.agent_id] = {
             "agent_id": a.agent_id,
             "agent": {"name": getattr(ag, "name", ""), "role": getattr(ag, "role", ""),

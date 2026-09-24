@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     sim_concurrency_pro: int = 12     # parallel Sonnet posts per phase (slower/pricier)
     kg_sim_concurrency: int = 6       # parallel KG-from-post enrichments during a run
     kg_sim_max_updates: int = 120     # target KG-enriching posts per phase; runs <= this capture EVERY post, only larger runs throttle
+    #: Share of twins who never read the thread (brief L3-06). They post from their own head every
+    #: phase, so the room always contains voices that cannot have drifted toward the majority.
+    independent_voice_share: float = 0.3
 
     def agent_model(self, mode: str) -> str:
         return self.model_pro_agents if mode == "pro" else self.model_agents

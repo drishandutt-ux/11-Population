@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import random
 import traceback
 from sqlalchemy import select
@@ -99,6 +100,17 @@ def _agent_event_payload(agent) -> dict:
         "debate_style": agent.debate_style,
         "energy": agent.energy,
     }
+
+
+def _independent_ids(agents: list, share: float) -> set[str]:
+    """The twins who speak without reading the room. Deterministic per agent id so the same
+    voices are independent in every phase (and in a re-run), never a different draw each time."""
+    if share <= 0:
+        return set()
+    if share >= 1:
+        return {a.id for a in agents}
+    cut = int(share * 1000)
+    return {a.id for a in agents if int(hashlib.sha256(a.id.encode()).hexdigest()[:8], 16) % 1000 < cut}
 
 
 async def _agent_action(
@@ -274,6 +286,10 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
             if brief_text:
                 kg_context = brief_text + "\n\n" + kg_context
             thread_context = build_thread_context(posts, agents_by_id)
+            # Independent voices (brief L3-06): a fixed share of twins never see the thread, in any
+            # phase, so consensus cannot be an artefact of everyone reading the same room. Chosen by
+            # a hash of the agent id, so the same twins stay independent across phases and re-runs.
+            independent = _independent_ids(db_agents, settings.independent_voice_share)
 
             sem = asyncio.Semaphore(concurrency)
 
@@ -288,7 +304,7 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
                         await _agent_action(
                             agent, action,
                             session_id=session_id, query=query,
-                            thread_context=thread_context, kg_context=ctx,
+                            thread_context="" if agent.id in independent else thread_context, kg_context=ctx,
                             posts=posts, round_num=round_num, mode=mode,
                             watcher=watcher, kg_sem=kg_sem, kg_sample=kg_sample,
                         )

@@ -629,6 +629,23 @@ export type ProbeAggregates = {
   sentiment?: MeanInterval;
   segments?: Record<string, (Interval & { segment: string; value: string; n: number; thin: boolean })[]>;
   verbatims?: Record<string, { agent_id: string; name: string; role: string; reasoning: string; max_price?: number }[]>;
+  /** Twins who said this was not theirs to answer (brief L3-06) — reported, never in the denominator. */
+  dont_know?: {
+    n: number;
+    refused: number;
+    share: number;
+    reasons: { value: string; count: number; share: number }[];
+    who: { agent_id: string; name: string; why: string }[];
+  };
+  /** The unanimity check (brief L3-06): agreement this population should not have produced. */
+  unanimity?: {
+    flagged: boolean;
+    top_share: number;
+    widest_split: string;
+    widest_spread: number;
+    n: number;
+    reason?: string;
+  };
 };
 
 export type Probe = {

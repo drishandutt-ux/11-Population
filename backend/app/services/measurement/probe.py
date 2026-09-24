@@ -32,9 +32,9 @@ from app.models.measurement import Probe, ProbeAnswer
 from app.models.post import SimulationPost
 from app.models.session import AnalysisSession
 from app.services.agents.agent_runner import _build_system_prompt
-from app.services.evidence.llm import LlmError, LlmTruncated, analyze, clip
+from app.services.evidence.llm import LlmError, LlmTruncated, analyze, clip, enum, s
 from app.services.knowledge_graph.lightrag_service import get_kg_context_string
-from app.services.measurement import instruments
+from app.services.measurement import instruments, stats
 
 # Answers are short and cheap, so a probe can run hotter than a debate phase.
 PROBE_CONCURRENCY = 32
@@ -215,6 +215,51 @@ def _build_user_message(
     return "\n\n".join(blocks)
 
 
+# ── "not mine to answer" (brief L3-06) ────────────────────────────────────────
+# Every instrument gains the same escape hatch, so a twin with no basis for an answer is not
+# forced to invent one — and a fabricated answer does not quietly enter the denominator of a
+# share we report to a client. A refusal is reported as its own number, never dropped.
+
+CAN_ANSWER = "can_answer"
+WHY_NOT = "cannot_answer_why"
+
+DONT_KNOW_RULE = (
+    "\n\nIF THIS IS NOT YOURS TO ANSWER: set " + CAN_ANSWER + " to \"no\" and say why in one line. "
+    "Use it when you genuinely have no basis — it is about somewhere you do not live, a job that is "
+    "not yours, a product you have never met, a number nobody has told you. Do NOT use it to avoid "
+    "committing: if this touches your own life, work or town, you have a view and you give it, even "
+    "an uncertain one. Answer the other fields as best you can either way."
+)
+
+
+def with_dont_know(schema: dict) -> dict:
+    """The instrument's own schema plus the shared refusal fields."""
+    props = dict(schema.get("properties") or {})
+    props[CAN_ANSWER] = enum(["yes", "no"], "Can you answer this from your own life, work and knowledge?")
+    props[WHY_NOT] = s("If no: one line on why this is not yours to answer. Empty when you can answer.")
+    required = list(schema.get("required") or list(schema.get("properties") or {}).keys())
+    return {**schema, "properties": props, "required": required + [CAN_ANSWER, WHY_NOT]}
+
+
+def answered(row: dict) -> bool:
+    """False when the twin said this was not theirs to answer."""
+    return str(((row.get("answer") or {}).get(CAN_ANSWER) or "yes")).lower() != "no"
+
+
+def dont_know_block(rows: list[dict]) -> dict:
+    """The refusal share, with the reasons — a number in its own right, reported beside the
+    headline rather than hidden inside it."""
+    refused = [r for r in rows if not answered(r)]
+    out = {
+        "n": len(rows),
+        "refused": len(refused),
+        "share": round(len(refused) / len(rows), 4) if rows else 0.0,
+        "reasons": stats.distribution([str((r.get("answer") or {}).get(WHY_NOT) or "").strip() for r in refused if str((r.get("answer") or {}).get(WHY_NOT) or "").strip()])[:6],
+        "who": [{"agent_id": r["agent_id"], "name": getattr(r.get("agent"), "name", ""), "why": str((r.get("answer") or {}).get(WHY_NOT) or "")[:200]} for r in refused[:20]],
+    }
+    return out
+
+
 # ── one agent, one answer ─────────────────────────────────────────────────────
 
 async def answer_one(
@@ -231,13 +276,13 @@ async def answer_one(
 
     from app.services.agents import dynamic_dials as dyn_mod
     # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
-    system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive
+    system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE
     user = _build_user_message(
         agent=agent, instrument=instrument, spec=spec, query=query,
         kg_context=kg_context, said=said, decided=decided,
     )
 
-    schema = instrument.schema_for(spec)
+    schema = with_dont_know(instrument.schema_for(spec))
     try:
         answer = await analyze(
             schema, system, user,
@@ -416,7 +461,17 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
                 pass
 
         rows.sort(key=lambda r: r["agent_id"])
-        aggregates = instrument.aggregate(rows, spec)
+        # "Not mine to answer" (brief L3-06): a refusal is a result, not a missing value. It is
+        # reported as its own share and kept OUT of the denominator of everything else, so a
+        # twin with no basis for an answer cannot inflate or dilute a number we quote.
+        refusals = dont_know_block(rows)
+        responded = len(rows)          # everyone who came back, refusals included
+        rows = [r for r in rows if answered(r)]
+        if not rows:
+            aggregates = {"n": 0, "sentence": "Nobody in this population could answer this — every twin said it was not theirs to answer."}
+        else:
+            aggregates = instrument.aggregate(rows, spec)
+        aggregates["dont_know"] = refusals
         # Weighted to the Studio's sampling frame (L2-02): the primary metric with each agent counting
         # for the people it stands for, beside the one-agent-one-vote figure, plus the effective n.
         try:
@@ -434,9 +489,17 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
                 }
         except Exception as e:  # noqa: BLE001
             print(f"[probe] weighted headline skipped: {type(e).__name__}: {e}")
-        status = "stopped" if (failed + len(rows)) < len(chosen) else "complete"
+        # The unanimity check (brief L3-06): flag agreement this population should not produce.
+        try:
+            from app.services.measurement import unanimity
+            verdict = unanimity.check(aggregates.get("headline"), aggregates.get("segments") or {}, n=len(rows))
+            if verdict:
+                aggregates["unanimity"] = verdict
+        except Exception as e:  # noqa: BLE001
+            print(f"[probe] unanimity check skipped: {type(e).__name__}: {e}")
+        status = "stopped" if (failed + responded) < len(chosen) else "complete"
         await _set_status(
-            probe_id, status=status, answer_count=len(rows), failed_count=failed,
+            probe_id, status=status, answer_count=responded, failed_count=failed,
             aggregates=aggregates, completed_at=datetime.utcnow(),
         )
         # Population-level coding (free-text reasons → shared themes). An experiment runs it
