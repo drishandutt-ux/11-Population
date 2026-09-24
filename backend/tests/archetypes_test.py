@@ -52,6 +52,24 @@ def test_segment_matches_the_archetype_with_the_same_job_and_synonyms_count():
     assert ar.match_archetype(seg, [ANN, BOLA])["id"] == "a2"
 
 
+def test_place_words_in_the_role_do_not_cast_patient_segments():
+    """Seen on prod: "GP partner in a coastal practice" was cast onto "Older coastal residents" and
+    "Community pharmacist" onto "Ethnic minority residents" and "Equity advocates", because
+    place and setting words in the role string matched the segment's name or description."""
+    ann = dict(ANN, role="GP partner in a coastal practice")
+    bola = dict(BOLA, role="Community pharmacist on the seafront")
+    older = {"name": "Older coastal residents with multiple chronic conditions", "description": "Retired, seen by their GP often", "demographics": {"occupations": ["retired", "carer"]}}
+    ethnic = {"name": "Ethnic minority residents with lower BMI thresholds", "description": "Community voices; pharmacies and GPs are their contact", "demographics": {"occupations": ["retail", "food service"]}}
+    advocates = {"name": "Equity advocates and health charities", "description": "Community organisers", "demographics": {"occupations": ["charity worker"]}}
+    gps = {"name": "GPs in deprived coastal practices", "description": "burned out", "demographics": {"occupations": ["GP", "salaried doctor"]}}
+    pharm = {"name": "High-street pharmacists", "description": "", "demographics": {"occupations": ["pharmacist"]}}
+    assert ar.match_archetype(older, [ann, bola]) is None
+    assert ar.match_archetype(ethnic, [ann, bola]) is None
+    assert ar.match_archetype(advocates, [ann, bola]) is None
+    assert ar.match_archetype(gps, [ann, bola])["id"] == "a1"
+    assert ar.match_archetype(pharm, [ann, bola])["id"] == "a2"
+
+
 def test_assign_keeps_a_manual_choice():
     segs = [dict(SEG_GP, archetype_id="", archetype_name="", archetype_manual=True), dict(SEG_PUBLIC)]
     ar.assign_archetypes(segs, [ANN])

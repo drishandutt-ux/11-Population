@@ -36,7 +36,10 @@ HUMANITY_DRIFT = 10
 SEGMENT_CELL_SHARE = 0.75
 
 _STOP = {"the", "and", "of", "in", "a", "an", "for", "with", "to", "on", "who", "at", "or", "by", "from", "their", "they", "are", "is",
-         "people", "person", "group", "segment", "local", "general", "public", "members", "workers", "adults", "residents", "practice", "partner", "senior", "junior"}
+         "people", "person", "group", "segment", "local", "general", "public", "members", "workers", "adults", "residents", "practice", "partner", "senior", "junior",
+         # place and setting words: a "GP partner in a coastal practice" is a GP, not a match for every coastal segment
+         "coastal", "community", "town", "towns", "area", "areas", "urban", "rural", "deprived", "affluent", "regional", "national", "england", "english", "uk", "nhs",
+         "high-street", "street", "seafront", "village", "city", "county", "north", "south", "east", "west"}
 _ROLE_SYNONYMS = {
     "gp": {"gp", "gps", "doctor", "doctors", "physician", "physicians", "practitioner", "practitioners"},
     "pharmacist": {"pharmacist", "pharmacists", "pharmacy"},
@@ -68,10 +71,17 @@ def _tokens(*texts: Any) -> set[str]:
     return out
 
 
+def _job_head(role: Any) -> str:
+    """The job itself: "GP partner in a coastal practice" → "GP partner"; "Nurse, Blackpool" → "Nurse"."""
+    return re.split(r"[,(/|·—–]| in | at | for | with | of | from | and ", str(role or ""), maxsplit=1)[0]
+
+
 def _archetype_tokens(arch: dict) -> set[str]:
+    """Job tokens only — the head of the role and the occupation, never the place or setting the
+    role string mentions (that is what cast a GP archetype onto "older coastal residents")."""
     prof = arch.get("profile") if isinstance(arch.get("profile"), dict) else arch
     demo = prof.get("demographics") if isinstance(prof.get("demographics"), dict) else {}
-    return _tokens(arch.get("role"), prof.get("role"), demo.get("occupation"), prof.get("segment"))
+    return _tokens(_job_head(arch.get("role")), _job_head(prof.get("role")), _job_head(demo.get("occupation")))
 
 
 def match_archetype(seg: dict, archetypes: list[dict]) -> Optional[dict]:
@@ -85,7 +95,10 @@ def match_archetype(seg: dict, archetypes: list[dict]) -> Optional[dict]:
         at = _archetype_tokens(arch)
         if not at:
             continue
-        score = 2.0 * len(at & seg_tokens) + 1.0 * len(at & desc_tokens)
+        job_hits = len(at & seg_tokens)
+        if not job_hits:
+            continue  # the description alone never casts a segment: it mentions GPs in every patient segment too
+        score = 2.0 * job_hits + 1.0 * len(at & desc_tokens)
         if score > best_score:
             best, best_score = arch, score
     return best if best_score >= 2.0 else None
