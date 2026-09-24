@@ -114,7 +114,8 @@ A separate full-page route lets you **chat 1:1 with any single agent** (`/sessio
 │  Services:                                                                     │
 │    • agents/      agent_factory (spawn population), agent_runner (write posts), │
 │                   profiles, dial_analytics (population dashboard),              │
-│                   dynamic_dials (the dials this question needs)                 │
+│                   dynamic_dials (the dials this question needs),                │
+│                   validation (does a twin behave like its own record?)          │
 │    • simulation/  orchestrator (round loop), thread_manager, report_generator,  │
 │                   citations (twin ↔ claim traceability)                         │
 │    • ingestion/   text_processor, document_parser, youtube_extractor,           │
@@ -407,6 +408,48 @@ Code: `backend/app/services/population/frame.py`, builder stages in `builder.py`
 **What the analyst sees.** Roster cards carry a **cast from …** chip; the segment chip, demographics line and dials read as usual; the character reaches every prompt through `_character_block` (§7.10). The build log names which segments were cast and warns when a referenced archetype has since been deleted (that segment falls back to the model).
 
 **Not yet.** Matching is by job only (no LLM judgement of fit); templates are whole agents, not a typed library per HCP role or patient cohort class (L3-01 proper); the retrieved context is graph entities, not scoped knowledge units (§9.6). Tests: `archetypes_test.py` (matching and synonyms, manual choice kept, sampling honours the segment and the frame, enforcement bounds the drift, prompt content, slot pairing, a stubbed build with one cast and one invented segment, and an HTTP round trip: author with `as_archetype` → plan auto-matches → pick / clear on a segment → delete).
+
+### 7.12 Behavioural validation — the confidence score beside every twin (brief L3-05)
+
+Code: `backend/app/services/agents/validation.py`; badge: `frontend/src/components/ConfidenceBadge.tsx`.
+
+A twin that sounds right is not the same as a twin that *is* right. After a population is built the
+**validation battery runs on its own** — nobody asks for it — and every scored twin carries a
+**confidence score (0-100)** wherever it speaks: on its roster card, beside its posts in the debate,
+beside its answers in the Lab, above its replies in one-on-one chat, and on the report's trace card.
+
+**The four parts** (each 0-1, blended by weight: stability .30, refusal .25, knowledge .25, register .20;
+a part that could not be scored drops out of the blend instead of scoring zero):
+
+| Part | What it asks | How it is scored |
+|---|---|---|
+| **Stability** | the same question in different words, answered in a **separate call that cannot see the first** | mechanical — the gap between the two 0-10 answers. No judge. |
+| **Refusal** | things this twin cannot know (another area's internal figures, an undecided price) | a judge marks *said so* / *hedged* / *asserted it anyway* |
+| **Knowledge** | what someone in this role would certainly know | a judge marks the answer against the item's expected answer |
+| **Register** | does it talk the way its own record says it talks | a judge scores 0-10 against the persona record |
+
+**Shape of a run.** Items are written **once per segment** (one call; the segment's archetype is shown to
+the writer when it has one), every twin then answers them in two separate contexts, and one judge call
+scores that twin — **three calls per twin** on the Fast model, at `VALIDATION_CONCURRENCY` (8) in
+parallel. A pass covers up to `MAX_SCORED_DEFAULT` (250) twins, picked **round-robin across segments** so
+a small segment is never drowned out by a large one; the rest stay unscored rather than guessed at.
+Scores are published per twin (`agent_validated`) as they land, so badges fill in live.
+
+**Stored on the twin** (`spawned_agents.validation`, Alembic `0013_validation`): the score and band, the
+four parts, the judge's evidence line for each item, **the items themselves and the twin's own answers**,
+plus model, seed and prompt hash — so a score can be inspected and reproduced, not just believed.
+`GET /agents/{id}/validation` returns the whole record; `GET /sessions/{id}/validation` gives the
+population's reading (mean, band mix, weakest part, and a **test-retest agreement** across all twins,
+which is `stats.agreement` used as designed — over many pairs, not one); `POST /sessions/{id}/validation`
+re-runs it. The Studio logs the population line when the background pass finishes.
+
+**What it is not.** It is fidelity to the twin's own record, not evidence that the population predicts
+reality — the badge's own tooltip says so, because a client will otherwise read "confidence" as
+confidence in the answer. Two parts lean on a judge that shares the writer's priors; stability is the
+only part with nothing in the loop, which is why it carries the most weight. The external check is the
+panel back-test (brief §06). **Known gap:** twins are not yet told they may say "I don't know" in the
+debate itself (L3-06), so the refusal part is currently the weakest score in most populations — which is
+the number that will prove L3-06 worked.
 
 ---
 
@@ -961,6 +1004,7 @@ The app runs Alembic at startup over the **asyncpg** driver, and asyncpg execute
 │   │       ├── agents/              # profiles, agent_factory, agent_runner,
 │   │       │                        #   seed_bank (Fast bank), dial_analytics,
 │   │       │                        #   dynamic_dials (the question's own dials),
+│   │       │                        #   validation (the behavioural battery),
 │   │       │                        #   agent_builder (hand-authored twins → lineups),
 │   │       │                        #   archetypes (match · sample attributes · cast prompt · enforce)
 │   │       ├── simulation/          # orchestrator, thread_manager, report_generator, citations, opinions

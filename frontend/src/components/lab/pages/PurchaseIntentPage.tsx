@@ -8,9 +8,10 @@
 
 import { CategoryBars, DemandCurve, MeanStat, SegmentTable, ShareBar, pct } from "../Charts";
 import { segmentLabel } from "../filters";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { InstrumentPageProps } from "./types";
 
-export default function PurchaseIntentPage({ probe, dynamicDials = []}: InstrumentPageProps) {
+export default function PurchaseIntentPage({ probe, dynamicDials = [], agentsById = {}}: InstrumentPageProps) {
   const a = probe.aggregates;
   if (!a || !a.n) return null;
   const currency = a.max_price?.currency || probe.spec?.currency || "GBP";
@@ -76,7 +77,9 @@ export default function PurchaseIntentPage({ probe, dynamicDials = []}: Instrume
                   {rows.map((v) => (
                     <p key={v.agent_id} className="text-xs text-foreground/75 leading-relaxed">
                       <span className="text-foreground/95">{v.name}</span>
-                      <span className="text-muted-foreground"> · {v.role}</span> — “{v.reasoning}”
+                      <span className="text-muted-foreground"> · {v.role}</span>
+                      {" "}<ConfidenceBadge validation={agentsById[v.agent_id]?.validation} size="xs" />
+                      {" "}— “{v.reasoning}”
                     </p>
                   ))}
                 </div>

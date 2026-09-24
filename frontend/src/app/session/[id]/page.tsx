@@ -209,6 +209,13 @@ export default function SessionPage() {
         });
         setSpawnProgress({ current: event.spawned, total: event.total });
 
+      } else if (event.type === "agent_validated") {
+        // The validation battery (brief L3-05) scores twins in the background; each score lands
+        // as it finishes, so a confidence badge appears beside that twin without a reload.
+        const v = { score: event.score, band: event.band as "strong" | "fair" | "weak", parts: event.parts, at: new Date().toISOString() };
+        setAgents((prev) => prev.map((a) => (a.id === event.agent_id ? { ...a, validation: v } : a)));
+        setAgentsMap((prev) => (prev[event.agent_id] ? { ...prev, [event.agent_id]: { ...prev[event.agent_id], validation: v } } : prev));
+
       } else if (event.type === "agents_ready") {
         setIsSpawning(false);
         setSpawnProgress(null);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Agent, AgentDials, AgentPreset, DynamicDial, SimMode, api } from "@/lib/api";
 import PopulationStudio from "@/components/population/PopulationStudio";
 import { stanceColor } from "@/lib/utils";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, X, ChevronDown, ChevronUp, BarChart2,
@@ -191,6 +192,7 @@ function AgentCard({ agent, animate = false, dynamicDials = [] }: { agent: Agent
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <span className="font-semibold text-foreground text-sm">{agent.name}</span>
             <span className="text-xs text-muted-foreground">{agent.age}y</span>
+            <ConfidenceBadge validation={agent.validation} size="xs" />
           </div>
           <p className="text-xs text-muted-foreground truncate">{agent.role}</p>
         </div>

@@ -145,6 +145,15 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ message }),
       }),
+    /** The whole validation battery for one twin (brief L3-05): items, its answers, the judge's evidence. */
+    validation: (agentId: string) => request(`/agents/${agentId}/validation`),
+  },
+  validation: {
+    /** How far this population behaved like itself. */
+    summary: (sessionId: string) => request<ValidationSummary>(`/sessions/${sessionId}/validation`),
+    /** Run (or re-run) the battery; scores land over the websocket as each twin finishes. */
+    run: (sessionId: string, agentIds?: string[], mode: SimMode = "fast") =>
+      request(`/sessions/${sessionId}/validation`, { method: "POST", body: JSON.stringify({ agent_ids: agentIds ?? null, mode }) }),
   },
   report: {
     query: (sessionId: string, question: string) =>
@@ -367,6 +376,28 @@ export type Agent = {
   weight?: number;
   /** Hand-authored character (Agent Builder), injected verbatim into the persona prompt. */
   character?: AgentCharacter | null;
+  /** Behavioural validation (brief L3-05) — null until the background battery has scored this twin. */
+  validation?: AgentValidation | null;
+};
+
+/** The battery's headline for one twin: 0-100 and the four parts behind it (each 0-1). */
+export type AgentValidation = {
+  score: number;
+  band?: "strong" | "fair" | "weak" | null;
+  parts?: { stability?: number | null; refusal?: number | null; knowledge?: number | null; register?: number | null };
+  at?: string | null;
+};
+
+/** How far a whole population behaved like itself (GET /sessions/{id}/validation). */
+export type ValidationSummary = {
+  session_id: string;
+  total: number;
+  scored: number;
+  mean: number | null;
+  bands: Record<string, number>;
+  parts: Record<string, number | null>;
+  weakest: string | null;
+  retest?: { agreement: number; n: number } | null;
 };
 
 /** The authored character fields (brief L3-01 / L3-04) — free text, each optional. */
@@ -462,6 +493,7 @@ export type WSEvent =
   | { type: "agent_spawned"; agent: Partial<Agent>; index?: number; total?: number }
   | { type: "agents_spawned_batch"; agents: Partial<Agent>[]; spawned: number; total: number }
   | { type: "agents_ready"; count: number }
+  | { type: "agent_validated"; agent_id: string; score: number; band: string; parts: Record<string, number | null> }
   | { type: "spawn_error"; error: string }
   | { type: "simulation_started"; agent_count: number }
   | { type: "post_created"; post: Post; agent: Partial<Agent> }

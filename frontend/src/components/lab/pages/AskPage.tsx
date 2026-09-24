@@ -5,9 +5,10 @@
 
 import { CategoryBars, MeanStat, SegmentTable, ShareBar, pct } from "../Charts";
 import { segmentLabel } from "../filters";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { InstrumentPageProps } from "./types";
 
-export default function AskPage({ probe, dynamicDials = []}: InstrumentPageProps) {
+export default function AskPage({ probe, dynamicDials = [], agentsById = {}}: InstrumentPageProps) {
   const a: any = probe.aggregates;
   if (!a || !a.n) return null;
   const question = probe.spec?.question;
@@ -64,6 +65,7 @@ export default function AskPage({ probe, dynamicDials = []}: InstrumentPageProps
                       {(v.theme || v.key_factor) && (
                         <span className="ml-1.5 text-[10px] rounded px-1.5 py-0.5 bg-primary/10 text-primary/90">{v.theme || v.key_factor}</span>
                       )}
+                      {" "}<ConfidenceBadge validation={agentsById[v.agent_id]?.validation} size="xs" />
                       {" "}— “{v.reasoning}”
                     </p>
                   ))}

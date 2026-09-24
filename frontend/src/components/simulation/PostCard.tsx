@@ -3,6 +3,7 @@
 import { Agent, Post } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import { ThumbsUp, Flame } from "lucide-react";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 interface Props {
   post: Post;
@@ -55,6 +56,7 @@ export default function PostCard({ post, agent, replies, agentsMap, depth = 0 }:
                 {agent.stance}
               </span>
             )}
+            <ConfidenceBadge validation={agent?.validation} />
             {isDebate && (
               <span className="flex items-center gap-0.5 text-[10px] text-red-400/80">
                 <Flame className="w-2.5 h-2.5" />

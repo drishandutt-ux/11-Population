@@ -953,6 +953,27 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     await refresh_frame_report(build_id)
 
 
+async def _validate_population(build_id: str, session_id: str) -> None:
+    """The validation battery as a background pass over the finished population."""
+    from app.services.agents import validation as val
+    try:
+        await log(build_id, "validate", "info", "Checking the twins behave like themselves — knowledge, register, refusal, stability")
+        res = await val.run_validation(session_id)
+        if not res.get("scored"):
+            await log(build_id, "validate", "warn", "No twin could be scored — the population runs unvalidated")
+            return
+        async with dbm.AsyncSessionLocal() as db:
+            agents = (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == session_id))).scalars().all()
+        summary = val.population_summary(list(agents))
+        bands = " · ".join(f"{n} {b}" for b, n in (summary.get("bands") or {}).items())
+        await log(build_id, "validate", "ok" if (summary.get("mean") or 0) >= 60 else "warn",
+                  f"Confidence: {summary['mean']}/100 across {summary['scored']} twins" + (f" — weakest on {summary['weakest']}" if summary.get("weakest") else ""),
+                  bands + (f" · {res['unscored']} not scored" if res.get("unscored") else ""))
+    except Exception as e:  # noqa: BLE001
+        print(f"[validation] background pass failed: {type(e).__name__}: {e}")
+        await log(build_id, "validate", "warn", "Validation could not finish", str(e)[:200])
+
+
 async def answer_questions(build_id: str, answers: dict[str, str], skip: bool = False) -> Optional[PopulationBuild]:
     bld = await _load(build_id)
     if not bld:
@@ -1306,6 +1327,10 @@ async def _spawn(build_id: str):
             await log(build_id, "frame", "ok" if rep.get("level") in ("good", "none") else "warn", "Representativeness: " + frame_mod.summary_line(rep),
                       ("Cells not safe to cut by: " + "; ".join(rep["thin_cells"])) if rep.get("thin_cells") else None)
         await _save(build_id, **fields)
+        # Behavioural validation (brief L3-05) runs on its own, after the build: every twin is
+        # put through the battery and carries a confidence score wherever it speaks. It must
+        # never hold up the build or break it, so it is a detached task with its own logging.
+        asyncio.create_task(_validate_population(build_id, session_id))
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         await log(build_id, "spawn", "error", f"Build failed: {type(e).__name__}: {str(e)[:200]}")

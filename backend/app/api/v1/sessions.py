@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -315,6 +316,10 @@ async def _apply_preset_task(session_id: str, agent_profiles: list[dict]):
                 await db.commit()
 
         await publish(session_channel(session_id), {"type": "agents_ready", "count": total})
+        # The validation battery (brief L3-05) scores the new twins in the background, so a
+        # confidence badge is there by the time anyone reads what they say.
+        from app.services.agents import validation as val
+        asyncio.create_task(val.run_validation(session_id))
 
     except Exception as e:
         import traceback

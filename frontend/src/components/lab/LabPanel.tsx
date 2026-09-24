@@ -24,6 +24,7 @@ import { initialValues, toSpec } from "./InstrumentForm";
 import { formFor } from "./forms";
 import { SEGMENT_FILTERS, dynamicFilters } from "./filters";
 import { pageFor } from "./pages";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { EXPERIMENT_ICON, iconFor } from "./icons";
 
 type LiveAnswer = { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> };
@@ -61,6 +62,7 @@ function ago(iso: string): string {
 }
 
 export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers, completedAt, experimentCompletedAt, onClearLive, dynamicDials = [] }: Props) {
+  const agentsById = useMemo(() => Object.fromEntries(agents.map((a) => [a.id, a])), [agents]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [instrumentKey, setInstrumentKey] = useState<string>("");
   // The A/B tool is the shell's second primitive: open it fresh, or on a past experiment.
@@ -498,8 +500,10 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
                   }))}
                 />
                 {live.slice(-3).reverse().map((x) => (
-                  <p key={x.agent_id} className="text-[11px] text-muted-foreground truncate">
-                    <span className="text-foreground/80">{x.agent_name}</span> — {x.answer?.reasoning}
+                  <p key={x.agent_id} className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+                    <span className="text-foreground/80">{x.agent_name}</span>
+                    <ConfidenceBadge validation={agentsById[x.agent_id]?.validation} size="xs" />
+                    <span className="truncate">— {x.answer?.reasoning}</span>
                   </p>
                 ))}
               </div>
@@ -512,7 +516,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
             {/* The tool's own results page. */}
             {selected.aggregates && selected.aggregates.n > 0 && (
               <>
-                <Page instrument={instrument} probe={selected} dynamicDials={dynamicDials} />
+                <Page instrument={instrument} probe={selected} dynamicDials={dynamicDials} agentsById={agentsById} />
                 <p className="text-[10px] text-muted-foreground/70">
                   {selected.answer_count} answered
                   {selected.failed_count ? `, ${selected.failed_count} failed and are excluded from every number above` : ""} ·

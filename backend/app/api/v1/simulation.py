@@ -85,6 +85,8 @@ def _agent_payload(p) -> dict:
         "segment": getattr(p, "segment", None) or None, "demographics": getattr(p, "demographics", None) or {},
         "weight": getattr(p, "weight", None) or 1.0,
         "character": getattr(p, "character", None) or None,
+        "validation": (lambda v: {"score": v["score"], "band": v.get("band"), "parts": v.get("parts") or {}, "at": v.get("at")}
+                       if isinstance(v, dict) and v.get("score") is not None else None)(getattr(p, "validation", None)),
     }
 
 
@@ -181,6 +183,10 @@ async def _spawn_agents_task(
             await asyncio.sleep(0.02)
 
         await publish(session_channel(session_id), {"type": "agents_ready", "count": total})
+        # The validation battery (brief L3-05) scores the new twins in the background, so a
+        # confidence badge is there by the time anyone reads what they say.
+        from app.services.agents import validation as val
+        asyncio.create_task(val.run_validation(session_id))
 
     except Exception as e:
         print(f"[spawn_agents_task] ERROR: {e}")

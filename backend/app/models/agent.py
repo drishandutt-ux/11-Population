@@ -45,4 +45,8 @@ class SpawnedAgent(Base):
     # Hand-authored character (Agent Builder): decision_rules, behaviour, vocabulary,
     # information_diet, failure_modes — free text, injected into the persona prompt. None otherwise.
     character: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    # Behavioural validation (brief L3-05): the background battery's result for this twin —
+    # {score 0-100, band, parts{stability,refusal,knowledge,register}, notes, items, answers,
+    # model, seed, prompt_hash, at}. None until the battery has run.
+    validation: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

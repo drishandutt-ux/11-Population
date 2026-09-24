@@ -6,6 +6,7 @@ import {
   FileText, Send, Loader2, Bot, User,
   ChevronDown, MessageCircle, Download, RefreshCw, X, Quote,
 } from "lucide-react";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 interface Message {
   role: "user" | "assistant";
@@ -327,7 +328,10 @@ function TwinTrace({
             {agent.name.charAt(0)}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-foreground leading-tight">{agent.name}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-foreground leading-tight">{agent.name}</span>
+              <ConfidenceBadge validation={agent.validation} size="xs" />
+            </div>
             <div className="text-[11px] text-muted-foreground/70 leading-tight mt-0.5">{origin(agent)}</div>
           </div>
           <button onClick={onClose} className="text-muted-foreground/50 hover:text-foreground shrink-0">
@@ -531,7 +535,17 @@ function ChatPanel({
                 <div className={`rounded-xl px-3 py-2 max-w-2xl border border-border/40 bg-muted/20 ${isUser ? "rounded-tr-sm" : "rounded-tl-sm"}`}>
                   {isUser
                     ? <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                    : <div onClick={onCiteClick}><MessageContent text={msg.content} agentsById={agentsById} /></div>}
+                    : (
+                      <>
+                        {mode === "agent" && selectedAgent?.validation && (
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[10px] text-muted-foreground/60">{selectedAgent.name}</span>
+                            <ConfidenceBadge validation={selectedAgent.validation} size="xs" />
+                          </div>
+                        )}
+                        <div onClick={onCiteClick}><MessageContent text={msg.content} agentsById={agentsById} /></div>
+                      </>
+                    )}
                 </div>
               </div>
             );

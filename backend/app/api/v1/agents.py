@@ -73,6 +73,7 @@ async def list_agents(session_id: str, user: AuthUser = Depends(get_current_user
             "demographics": getattr(a, "demographics", None) or {},
             "weight": getattr(a, "weight", None) or 1.0,
             "character": getattr(a, "character", None),
+            "validation": _validation_summary(a),
         }
         for a in agents
     ]
@@ -93,7 +94,17 @@ async def get_agent(agent_id: str, user: AuthUser = Depends(get_current_user), d
         "segment": getattr(agent, "segment", None),
         "demographics": getattr(agent, "demographics", None) or {},
         "character": getattr(agent, "character", None),
+        "validation": _validation_summary(agent),
     }
+
+
+def _validation_summary(agent) -> Optional[dict]:
+    """The battery's headline for the UI badge (brief L3-05). The full record — items, answers,
+    judge evidence — stays on the row; `GET /agents/{id}/validation` returns it."""
+    v = getattr(agent, "validation", None)
+    if not isinstance(v, dict) or v.get("score") is None:
+        return None
+    return {"score": v["score"], "band": v.get("band"), "parts": v.get("parts") or {}, "at": v.get("at")}
 
 
 class BuildProfileRequest(BaseModel):
@@ -113,6 +124,47 @@ async def build_agent_profile(session_id: str, body: BuildProfileRequest, user: 
         return await build_profile(session_id, session.query, body.agent or {})
     except LlmError as e:
         raise HTTPException(status_code=502, detail=f"The model could not build the profile: {e}")
+
+
+@router.get("/agents/{agent_id}/validation")
+async def get_agent_validation(agent_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The whole battery for one twin (brief L3-05): every item, its own answers, the judge's
+    evidence line for each, and the four part scores. What is behind the badge."""
+    agent = await _owned_agent(agent_id, user, db)
+    v = getattr(agent, "validation", None)
+    if not isinstance(v, dict):
+        return {"agent_id": agent_id, "name": agent.name, "validation": None}
+    return {"agent_id": agent_id, "name": agent.name, "validation": v}
+
+
+@router.get("/sessions/{session_id}/validation")
+async def get_session_validation(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """How far this population behaved like itself: mean score, the band mix, the weakest part."""
+    from app.services.agents import validation as val
+
+    await get_owned_session(session_id, user, db)
+    agents = (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == session_id))).scalars().all()
+    return {"session_id": session_id, "total": len(agents), **val.population_summary(list(agents))}
+
+
+class ValidationRequest(BaseModel):
+    agent_ids: Optional[list[str]] = None       # score just these twins (default: a spread of the population)
+    mode: str = "fast"
+
+
+@router.post("/sessions/{session_id}/validation")
+async def run_session_validation(
+    session_id: str, body: ValidationRequest,
+    user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Run (or re-run) the battery. Returns immediately; scores land over the websocket as each
+    twin finishes, the same way the background pass after a build does."""
+    import asyncio
+    from app.services.agents import validation as val
+
+    await get_owned_session(session_id, user, db)
+    asyncio.create_task(val.run_validation(session_id, agent_ids=body.agent_ids, mode=body.mode))
+    return {"status": "running"}
 
 
 @router.post("/agents/{agent_id}/chat")
