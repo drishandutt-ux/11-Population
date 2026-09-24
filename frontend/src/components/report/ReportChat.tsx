@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { api, Agent } from "@/lib/api";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { api, Agent, Post } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
-  ChevronDown, MessageCircle, Download, RefreshCw, X,
+  ChevronDown, MessageCircle, Download, RefreshCw, X, Quote,
 } from "lucide-react";
 
 interface Message {
@@ -16,6 +16,8 @@ interface Props {
   sessionId: string;
   query: string;
   agents: Agent[];
+  /** The transcript, so a citation can show the line it is quoting. */
+  posts?: Post[];
   reportContent?: string | null;
   isGeneratingReport?: boolean;
   onMakeReport?: () => void;
@@ -36,6 +38,7 @@ export default function ReportChat({
   sessionId,
   query,
   agents,
+  posts = [],
   reportContent = null,
   isGeneratingReport = false,
   onMakeReport,
@@ -44,6 +47,9 @@ export default function ReportChat({
   const [mode, setMode] = useState<Mode>("report");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // The twin a citation in the report (or a chat reply) was clicked on: who they are, and
+  // the line being quoted. Backtracking is the point — a claim you cannot trace is a claim.
+  const [cited, setCited] = useState<{ agent: Agent; post?: Post; x: number; y: number } | null>(null);
   const [reportMessages, setReportMessages] = useState<Message[]>([]);
   const [agentMessages, setAgentMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -69,6 +75,25 @@ export default function ReportChat({
 
   const messages = mode === "report" ? reportMessages : agentMessages;
   const setMessages = mode === "report" ? setReportMessages : setAgentMessages;
+
+  const agentsById = useMemo(() => Object.fromEntries(agents.map((a) => [a.id, a])), [agents]);
+  const postsById = useMemo(() => Object.fromEntries(posts.map((p) => [p.id, p])), [posts]);
+
+  /** Delegated click for every `[[twin:…]]` citation rendered inside this panel. */
+  function handleCiteClick(e: React.MouseEvent) {
+    const el = (e.target as HTMLElement).closest?.("[data-twin]") as HTMLElement | null;
+    if (!el) return;
+    e.preventDefault();
+    const agent = agentsById[el.dataset.twin || ""];
+    if (!agent) return;
+    const rect = el.getBoundingClientRect();
+    setCited({
+      agent,
+      post: el.dataset.post ? postsById[el.dataset.post] : undefined,
+      x: rect.left,
+      y: rect.bottom + 6,
+    });
+  }
 
   async function send(question: string) {
     if (!question.trim() || loading) return;
@@ -151,8 +176,8 @@ export default function ReportChat({
                 <span className="text-sm">Generating report from all agents and sources…</span>
               </div>
             ) : (
-              <div id="report-printable" className="max-w-2xl">
-                <ReportDocument content={reportContent!} />
+              <div id="report-printable" className="max-w-2xl" onClick={handleCiteClick}>
+                <ReportDocument content={reportContent!} agentsById={agentsById} />
               </div>
             )}
           </div>
@@ -179,9 +204,22 @@ export default function ReportChat({
             send={send}
             bottomRef={bottomRef}
             currentAgentColor={currentAgentColor}
+            agentsById={agentsById}
+            onCiteClick={handleCiteClick}
             compact
           />
         </div>
+
+        {cited && (
+          <TwinTrace
+            agent={cited.agent}
+            post={cited.post}
+            x={cited.x}
+            y={cited.y}
+            onClose={() => setCited(null)}
+            onTalk={() => { setMode("agent"); setSelectedAgent(cited.agent); setCited(null); }}
+          />
+        )}
       </div>
     );
   }
@@ -225,8 +263,110 @@ export default function ReportChat({
         send={send}
         bottomRef={bottomRef}
         currentAgentColor={currentAgentColor}
+        agentsById={agentsById}
+        onCiteClick={handleCiteClick}
       />
+
+      {cited && (
+        <TwinTrace
+          agent={cited.agent}
+          post={cited.post}
+          x={cited.x}
+          y={cited.y}
+          onClose={() => setCited(null)}
+          onTalk={() => { setMode("agent"); setSelectedAgent(cited.agent); setCited(null); }}
+        />
+      )}
     </div>
+  );
+}
+
+// ── The trace card: who said it, and who they were ────────────────────────────
+
+/** Where this twin came from — the mould, the segment, or the model. Answers "who was he?". */
+function origin(agent: Agent): string {
+  const arch = agent.character?.archetype;
+  if (arch?.name) return `Cast from the “${arch.name}” archetype`;
+  if (agent.character) return "Hand-authored in the Agent Builder";
+  if (agent.segment) return `Written for the segment “${agent.segment}”`;
+  return "Written for this session";
+}
+
+function TwinTrace({
+  agent, post, x, y, onClose, onTalk,
+}: {
+  agent: Agent; post?: Post; x: number; y: number;
+  onClose: () => void; onTalk: () => void;
+}) {
+  const demo = agent.demographics || {};
+  const facts: [string, string | undefined][] = [
+    ["Role", agent.role],
+    ["Age", String(agent.age)],
+    ["Place", demo.region],
+    ["Segment", agent.segment || undefined],
+    ["Stance", agent.stance],
+    ["Expert ↔ Reactive", agent.humanity != null ? String(agent.humanity) : undefined],
+    ["Weight", agent.weight != null && agent.weight !== 1 ? agent.weight.toFixed(2) : undefined],
+  ];
+  // Clamped so a citation near the right edge or the fold still opens a readable card.
+  const left = Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 360);
+  const top = Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 800) - 320);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 no-print" onClick={onClose} />
+      <div
+        className="fixed z-50 w-[340px] rounded-xl border border-border bg-background shadow-xl no-print"
+        style={{ left: Math.max(12, left), top: Math.max(12, top) }}
+      >
+        <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-3 border-b border-border/50">
+          <span
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+            style={{ backgroundColor: agent.avatar_color }}
+          >
+            {agent.name.charAt(0)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-foreground leading-tight">{agent.name}</div>
+            <div className="text-[11px] text-muted-foreground/70 leading-tight mt-0.5">{origin(agent)}</div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground/50 hover:text-foreground shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="px-4 py-3 grid grid-cols-2 gap-x-3 gap-y-2">
+          {facts.filter(([, v]) => v).map(([k, v]) => (
+            <div key={k}>
+              <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50">{k}</div>
+              <div className="text-[11px] text-foreground/85 leading-snug">{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {post?.content && (
+          <div className="px-4 pb-3">
+            <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1 flex items-center gap-1">
+              <Quote className="w-2.5 h-2.5" /> What they said {post.round_num ? `· round ${post.round_num}` : ""}
+            </div>
+            <p className="text-[11px] text-foreground/80 leading-relaxed border-l-2 border-primary/40 pl-2.5 max-h-40 overflow-y-auto">
+              {post.content}
+            </p>
+          </div>
+        )}
+
+        <div className="px-4 py-2.5 border-t border-border/50 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground/45 font-mono">{agent.id.slice(0, 8)}</span>
+          <button
+            onClick={onTalk}
+            className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+          >
+            <MessageCircle className="w-3 h-3" />
+            Talk to this twin
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -249,6 +389,9 @@ interface ChatPanelProps {
   bottomRef: React.RefObject<HTMLDivElement>;
   currentAgentColor: string;
   compact?: boolean;
+  /** Resolves `[[twin:…]]` citations in an assistant reply to the twin's real name. */
+  agentsById: Record<string, Agent>;
+  onCiteClick: (e: React.MouseEvent) => void;
 }
 
 function ChatPanel({
@@ -256,6 +399,7 @@ function ChatPanel({
   dropdownOpen, setDropdownOpen, dropdownRef,
   messages, loading, input, setInput, send,
   bottomRef, currentAgentColor, compact = false,
+  agentsById, onCiteClick,
 }: ChatPanelProps) {
   return (
     <div className={`flex flex-col min-h-0 ${compact ? "h-full" : "flex-1"}`}>
@@ -387,7 +531,7 @@ function ChatPanel({
                 <div className={`rounded-xl px-3 py-2 max-w-2xl border border-border/40 bg-muted/20 ${isUser ? "rounded-tr-sm" : "rounded-tl-sm"}`}>
                   {isUser
                     ? <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                    : <MessageContent text={msg.content} />}
+                    : <div onClick={onCiteClick}><MessageContent text={msg.content} agentsById={agentsById} /></div>}
                 </div>
               </div>
             );
@@ -438,17 +582,39 @@ function ChatPanel({
   );
 }
 
-// ── Chat message renderer (markdown-lite for assistant replies) ────────────────
+// ── Citations ─────────────────────────────────────────────────────────────────
+// The report model never types a name: it cites `[[twin:<id>]]`, optionally `|post:<id>`
+// for the exact line. The name below is read from the agent record, so it cannot drift.
 
-function renderInlineChat(text: string): string {
-  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return esc
-    .replace(/\*\*(.+?)\*\*/g, "<strong class='font-semibold text-foreground'>$1</strong>")
-    .replace(/`([^`]+?)`/g, "<code class='px-1 py-0.5 rounded bg-muted text-[11px] font-mono'>$1</code>")
-    .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>");
+const CITE_RE = /\[\[twin:([0-9a-fA-F-]{36})(?:\|post:([0-9a-fA-F-]{36}))?\]\]/g;
+
+function renderCitations(html: string, agentsById: Record<string, Agent>): string {
+  return html.replace(CITE_RE, (_m, twinId: string, postId?: string) => {
+    const agent = agentsById[twinId];
+    if (!agent) return "a twin in the population";
+    const post = postId ? ` data-post="${postId}"` : "";
+    return (
+      `<button type="button" data-twin="${twinId}"${post} title="${agent.name} — ${agent.role}" ` +
+      `class="twin-cite font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">` +
+      `${agent.name}</button>`
+    );
+  });
 }
 
-function MessageContent({ text }: { text: string }) {
+// ── Chat message renderer (markdown-lite for assistant replies) ────────────────
+
+function renderInlineChat(text: string, agentsById: Record<string, Agent> = {}): string {
+  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return renderCitations(
+    esc
+      .replace(/\*\*(.+?)\*\*/g, "<strong class='font-semibold text-foreground'>$1</strong>")
+      .replace(/`([^`]+?)`/g, "<code class='px-1 py-0.5 rounded bg-muted text-[11px] font-mono'>$1</code>")
+      .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>"),
+    agentsById,
+  );
+}
+
+function MessageContent({ text, agentsById = {} }: { text: string; agentsById?: Record<string, Agent> }) {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
   let bullets: string[] = [];
@@ -458,7 +624,7 @@ function MessageContent({ text }: { text: string }) {
       out.push(
         <ul key={`u${out.length}`} className="list-disc pl-4 space-y-0.5">
           {bullets.map((b, j) => (
-            <li key={j} dangerouslySetInnerHTML={{ __html: renderInlineChat(b) }} />
+            <li key={j} dangerouslySetInnerHTML={{ __html: renderInlineChat(b, agentsById) }} />
           ))}
         </ul>
       );
@@ -478,7 +644,7 @@ function MessageContent({ text }: { text: string }) {
     const bullet = line.match(/^[-*•]\s+(.*)$/) || line.match(/^\d+[.)]\s+(.*)$/);
     if (bullet) { bullets.push(bullet[1]); return; }
     flushBullets();
-    out.push(<p key={`p${out.length}`} dangerouslySetInnerHTML={{ __html: renderInlineChat(line) }} />);
+    out.push(<p key={`p${out.length}`} dangerouslySetInnerHTML={{ __html: renderInlineChat(line, agentsById) }} />);
   });
   flushBullets();
 
@@ -487,7 +653,7 @@ function MessageContent({ text }: { text: string }) {
 
 // ── Report document renderer ──────────────────────────────────────────────────
 
-function ReportDocument({ content }: { content: string }) {
+function ReportDocument({ content, agentsById }: { content: string; agentsById: Record<string, Agent> }) {
   const blocks = parseReport(content);
 
   return (
@@ -511,7 +677,7 @@ function ReportDocument({ content }: { content: string }) {
                 )}
               </div>
               <p className="text-[15px] font-semibold text-foreground leading-snug"
-                dangerouslySetInnerHTML={{ __html: renderInline(block.text) }} />
+                dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
             </div>
           );
         }
@@ -532,7 +698,7 @@ function ReportDocument({ content }: { content: string }) {
           return (
             <div key={i} className="flex gap-2.5 text-foreground/75 leading-relaxed">
               <span className="text-primary/50 shrink-0 mt-0.5 text-xs">·</span>
-              <span dangerouslySetInnerHTML={{ __html: renderInline(block.text) }} />
+              <span dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
             </div>
           );
         }
@@ -541,8 +707,10 @@ function ReportDocument({ content }: { content: string }) {
             <div key={i} className="grid grid-cols-2 gap-2 my-1">
               {block.items!.map((item, j) => (
                 <div key={j} className="border border-primary/20 rounded-lg px-3.5 py-3 bg-primary/4">
-                  <div className="text-[10px] text-muted-foreground/55 uppercase tracking-wide mb-1 leading-none">{item.label}</div>
-                  <div className="text-xl font-bold text-primary leading-tight">{item.value}</div>
+                  <div className="text-[10px] text-muted-foreground/55 uppercase tracking-wide mb-1 leading-none"
+                    dangerouslySetInnerHTML={{ __html: renderInline(item.label, agentsById) }} />
+                  <div className="text-xl font-bold text-primary leading-tight"
+                    dangerouslySetInnerHTML={{ __html: renderInline(item.value, agentsById) }} />
                 </div>
               ))}
             </div>
@@ -550,7 +718,7 @@ function ReportDocument({ content }: { content: string }) {
         }
         return (
           <p key={i} className="text-foreground/75 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: renderInline(block.text) }} />
+            dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
         );
       })}
     </div>
@@ -563,6 +731,23 @@ type Block =
   | { type: "direct_answer"; text: string; confidence?: string }
   | { type: "h2" | "h3" | "paragraph" | "bullet"; text: string }
   | { type: "kpi"; items: { label: string; value: string }[] };
+
+/** Same length, no colons: lets the KPI regexes run without tripping over `[[twin:…]]`. */
+function maskCitations(line: string): string {
+  return line.replace(CITE_RE, (t) => "·".repeat(t.length));
+}
+
+/** `(.+)$` anchors the value to the end of the line, so its length locates the split exactly. */
+function splitKpi(line: string, valueLen: number): { label: string; value: string } {
+  const value = line.slice(line.length - valueLen).trim();
+  const label = line
+    .slice(0, line.length - valueLen)
+    .replace(/^[*\-•]\s*/, "")
+    .replace(/[:\s]+$/, "")
+    .replace(/\*/g, "")
+    .trim();
+  return { label, value };
+}
 
 function parseReport(raw: string): Block[] {
   const lines = raw.split("\n");
@@ -608,16 +793,19 @@ function parseReport(raw: string): Block[] {
 
     if (inDirectAnswer) { directAnswerLines.push(line); continue; }
 
+    // A citation token carries a colon, so the label/value split is decided on a masked
+    // copy and the text is then sliced out of the real line (same length, same indices).
+    const masked = maskCitations(line);
     if (inKeyMetrics) {
-      const kpiMatch = line.match(/^[*\-•]?\s*(.+?):\s*(.+)$/);
+      const kpiMatch = masked.match(/^[*\-•]?\s*(.+?):\s*(.+)$/);
       if (kpiMatch && kpiMatch[2].trim().length < 80) {
-        kpiBuffer.push({ label: kpiMatch[1].replace(/\*/g, "").trim(), value: kpiMatch[2].replace(/\*/g, "").trim() });
+        kpiBuffer.push(splitKpi(line, kpiMatch[2].length));
         continue;
       }
     } else {
-      const kpiMatch = line.match(/^\*?\*?([A-Za-z][^:*\n]{2,40})\*?\*?:\s*(.+)$/);
+      const kpiMatch = masked.match(/^\*?\*?([A-Za-z][^:*\n]{2,40})\*?\*?:\s*(.+)$/);
       if (kpiMatch && !line.startsWith("-") && !line.startsWith("•") && kpiMatch[2].length < 60 && /[\d%$€£x+\-]/.test(kpiMatch[2])) {
-        kpiBuffer.push({ label: kpiMatch[1].replace(/\*/g, "").trim(), value: kpiMatch[2].trim() });
+        kpiBuffer.push(splitKpi(line, kpiMatch[2].length));
         continue;
       }
     }
@@ -632,8 +820,11 @@ function parseReport(raw: string): Block[] {
   return blocks;
 }
 
-function renderInline(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong class='text-foreground font-semibold'>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+function renderInline(text: string, agentsById: Record<string, Agent> = {}): string {
+  return renderCitations(
+    text
+      .replace(/\*\*(.+?)\*\*/g, "<strong class='text-foreground font-semibold'>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>"),
+    agentsById,
+  );
 }

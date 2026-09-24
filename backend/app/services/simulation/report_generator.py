@@ -1,7 +1,8 @@
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
-from app.services.simulation.thread_manager import get_posts, build_thread_context
+from app.services.simulation.thread_manager import get_posts
+from app.services.simulation import citations
 from app.models.agent import SpawnedAgent
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -29,13 +30,11 @@ async def answer_report_query(
     agents_list = agents_result.scalars().all()
     agents_map = {a.id: a for a in agents_list}
 
-    thread_text = build_thread_context(posts, agents_map)
-
-    # ── 3. Agent profile summary ────────────────────────────────────────────
-    agent_profiles = "\n".join(
-        f"- {a.name} ({a.role}, age {a.age}): stance={a.stance} | {a.background[:300]}"
-        for a in agents_list
-    )
+    # ── 3. Roster and transcript, both handled so every claim can be traced back
+    #        to the twin (and the line) it came from — brief L3-03.
+    handles = citations.build_handles(agents_list, posts)
+    thread_text = citations.transcript_block(posts, agents_map, handles)
+    agent_profiles = citations.roster_block(agents_list, handles)
 
     # ── 3b. The sampling frame the population was matched to (Studio) ──────
     frame_text = "No sampling frame: the population was not matched to published distributions."
@@ -60,9 +59,10 @@ async def answer_report_query(
     system = (
         "You are a senior analyst who has observed a full multi-agent simulation. "
         "You have access to the complete knowledge graph AND the full verbatim "
-        "simulation transcript. Your answers must cite specific agents by name, "
-        "quote or paraphrase their actual positions, and reference concrete data "
-        "from both the ingested documents and the debate."
+        "simulation transcript. Your answers must attribute every position to the "
+        "specific twin who held it, quote or paraphrase their actual words, and "
+        "reference concrete data from both the ingested documents and the debate.\n\n"
+        + citations.CITATION_RULES
     )
 
     prompt = f"""Original analysis query: {original_query}
@@ -73,16 +73,16 @@ async def answer_report_query(
 == POPULATION FRAME (how representative the panel is — state this under SOURCE MATERIALS, including any model-estimated distribution) ==
 {frame_text}
 
-== AGENT PROFILES ({len(agents_list)} agents) ==
+== POPULATION ROSTER ({len(agents_list)} twins — cite by the handle in brackets, never by name) ==
 {agent_profiles}
 
-== FULL SIMULATION TRANSCRIPT ({len(posts)} posts) ==
+== FULL SIMULATION TRANSCRIPT ({len(posts)} posts — each line starts [post handle · twin handle name | role]) ==
 {thread_text}
 
 == REPORT REQUEST ==
 {question}
 
-Use ALL of the above — the full transcript, every agent's actual statements, and the knowledge graph — to produce your answer. Reference specific agents by name. Do not say "some agents" — name them. Extract every relevant metric or data point that appeared in the discussion."""
+Use ALL of the above — the full transcript, every twin's actual statements, and the knowledge graph — to produce your answer. Attribute every position with a handle citation ([[A7]], or [[A7#P12]] for a specific statement) so a reader can click back to the twin and the line. Extract every relevant metric or data point that appeared in the discussion."""
 
     try:
         response = await tracked_messages_create(
@@ -95,13 +95,20 @@ Use ALL of the above — the full transcript, every agent's actual statements, a
             messages=[{"role": "user", "content": prompt}],
         )
         answer = response.content[0].text.strip()
+        # Handles → stable ids, then any name typed anyway becomes a citation: the name a
+        # reader sees is always read back from the agent row, never retyped by the model.
+        answer = citations.resolve(answer, handles)
+        answer = citations.repair_names(answer, agents_list)
     except Exception as e:
         from app.core.llm_errors import friendly_llm_error
         print(f"[report_generator] LLM call failed for session {session_id}: {type(e).__name__}: {e}")
         answer = friendly_llm_error(e)
 
+    cited = citations.cited_ids(answer)
     sources = (
         f"Knowledge graph + {len(posts)} simulation posts "
-        f"from {len(agents_list)} agents (session {session_id})"
+        f"from {len(agents_list)} agents"
+        + (f", {len(cited)} cited by name" if cited else "")
+        + f" (session {session_id})"
     )
     return answer, sources

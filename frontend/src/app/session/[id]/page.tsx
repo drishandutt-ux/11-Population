@@ -543,6 +543,7 @@ export default function SessionPage() {
             sessionId={id}
             query={session.query}
             agents={agents}
+            posts={posts}
             reportContent={reportContent}
             isGeneratingReport={isGeneratingReport}
             onMakeReport={handleMakeReport}
