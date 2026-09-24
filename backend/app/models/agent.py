@@ -42,4 +42,7 @@ class SpawnedAgent(Base):
     exposure: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     # Raking weight to the Studio's sampling frame (1.0 = counts as one person); the Lab's weighted headline reads it.
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.0)
+    # Hand-authored character (Agent Builder): decision_rules, behaviour, vocabulary,
+    # information_diet, failure_modes — free text, injected into the persona prompt. None otherwise.
+    character: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

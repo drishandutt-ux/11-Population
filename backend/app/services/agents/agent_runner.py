@@ -322,6 +322,20 @@ def _geo_block(agent: SpawnedAgent) -> str:
     )
 
 
+def _character_block(agent: SpawnedAgent) -> str:
+    """Hand-authored character (Agent Builder): how this person decides, behaves, talks, where
+    their information comes from and where they go wrong — the analyst's words, verbatim."""
+    from app.services.agents.agent_builder import CHARACTER_KEYS, CHARACTER_LABELS
+
+    ch = getattr(agent, "character", None) or {}
+    if not isinstance(ch, dict):
+        return ""
+    parts = [f"{CHARACTER_LABELS[k]}:\n{str(ch[k]).strip()}" for k in CHARACTER_KEYS if str(ch.get(k) or "").strip()]
+    if not parts:
+        return ""
+    return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"
+
+
 def _build_system_prompt(agent: SpawnedAgent, task: str = "post") -> str:
     """Persona + dials + humanity register.
 
@@ -341,6 +355,7 @@ Your debate style: {agent.debate_style}
 Your stance type: {agent.stance} ({"a first-hand stake — you live this decision or work inside it; that makes you experienced, not necessarily an expert" if agent.stance == "direct" else "an adjacent-field perspective" if agent.stance == "indirect" else "a neutral/skeptical observer"})"""
 
     prompt += _geo_block(agent)
+    prompt += _character_block(agent)
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
 
     band = _humanity_band(humanity)

@@ -11,7 +11,7 @@ import PlanReview from "@/components/population/PlanReview";
 import SamplingFrameGraph from "@/components/population/SamplingFrameGraph";
 import FrameCard from "@/components/population/FrameCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { ArrowLeft, Users, Sparkles, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Bookmark, Network } from "lucide-react";
+import { ArrowLeft, Users, Sparkles, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Bookmark, Network, UserPlus } from "lucide-react";
 
 interface Props {
   sessionId: string;
@@ -305,9 +305,12 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
                 The Studio reads your evidence, gathers base rates from statistics publishers, asks you what it can&apos;t infer, and proposes the population as
                 segments — each with its share, demographics, mood and the logic behind it. You accept, edit or reject every segment before a single agent is written.
               </p>
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
                 <button disabled={busy || !session} onClick={startBuild} className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 py-2.5 rounded-xl text-sm disabled:opacity-50">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} Detect &amp; plan for {count} agents
+                </button>
+                <button onClick={() => router.push(`/session/${id}/agents/build`)} className="inline-flex items-center gap-2 border border-border/60 text-muted-foreground hover:text-foreground hover:border-border font-medium px-4 py-2.5 rounded-xl text-sm" title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup you can load here">
+                  <UserPlus className="w-4 h-4" /> Build your own agent
                 </button>
               </div>
             </div>

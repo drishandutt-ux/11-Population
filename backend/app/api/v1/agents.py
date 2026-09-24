@@ -72,6 +72,7 @@ async def list_agents(session_id: str, user: AuthUser = Depends(get_current_user
             "segment": getattr(a, "segment", None),
             "demographics": getattr(a, "demographics", None) or {},
             "weight": getattr(a, "weight", None) or 1.0,
+            "character": getattr(a, "character", None),
         }
         for a in agents
     ]
@@ -91,7 +92,27 @@ async def get_agent(agent_id: str, user: AuthUser = Depends(get_current_user), d
         "verdict": getattr(agent, "verdict", None),
         "segment": getattr(agent, "segment", None),
         "demographics": getattr(agent, "demographics", None) or {},
+        "character": getattr(agent, "character", None),
     }
+
+
+class BuildProfileRequest(BaseModel):
+    """The Agent Builder draft: text fields plus `dials` holding only the values the analyst fixed."""
+    agent: dict
+
+
+@router.post("/sessions/{session_id}/agent-builder/profile")
+async def build_agent_profile(session_id: str, body: BuildProfileRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Build sentiment profile: read what the analyst wrote and tune every dial they left to the
+    system, relative to this session's query. Fixed dials come back unchanged."""
+    from app.services.agents.agent_builder import build_profile
+    from app.services.evidence.llm import LlmError
+
+    session = await get_owned_session(session_id, user, db)
+    try:
+        return await build_profile(session_id, session.query, body.agent or {})
+    except LlmError as e:
+        raise HTTPException(status_code=502, detail=f"The model could not build the profile: {e}")
 
 
 @router.post("/agents/{agent_id}/chat")

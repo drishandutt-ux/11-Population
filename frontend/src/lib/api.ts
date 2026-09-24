@@ -137,6 +137,9 @@ export const api = {
   agents: {
     list: (sessionId: string) => request(`/sessions/${sessionId}/agents`),
     get: (agentId: string) => request(`/agents/${agentId}`),
+    /** Agent Builder: read the draft and tune every dial the analyst left to the system, relative to the session's query. */
+    buildProfile: (sessionId: string, agent: AuthoredAgentDraft) =>
+      request<BuiltProfile>(`/sessions/${sessionId}/agent-builder/profile`, { method: "POST", body: JSON.stringify({ agent }) }),
     chat: (agentId: string, message: string) =>
       request(`/agents/${agentId}/chat`, {
         method: "POST",
@@ -244,6 +247,13 @@ export const api = {
   },
   presets: {
     list: () => request<AgentPreset[]>("/presets"),
+    get: (presetId: string) => request<AgentPreset & { agents: Record<string, any>[] }>(`/presets/${presetId}`),
+    /** A new lineup made only of hand-authored agents. */
+    createCustom: (name: string, agents: AuthoredAgentDraft[]) =>
+      request<AgentPreset>("/presets/custom", { method: "POST", body: JSON.stringify({ name, agents }) }),
+    /** Append hand-authored agents to an existing lineup (a name already in it is refused). */
+    addAgents: (presetId: string, agents: AuthoredAgentDraft[]) =>
+      request<AgentPreset>(`/presets/${presetId}/agents`, { method: "POST", body: JSON.stringify({ agents }) }),
     save: (sessionId: string, name: string) =>
       request("/presets", { method: "POST", body: JSON.stringify({ session_id: sessionId, name }) }),
     delete: (presetId: string) =>
@@ -337,7 +347,38 @@ export type Agent = {
   demographics?: AgentDemographics;
   /** Raking weight to the Studio's sampling frame; 1 when the population was not weighted. */
   weight?: number;
+  /** Hand-authored character (Agent Builder), injected verbatim into the persona prompt. */
+  character?: AgentCharacter | null;
 };
+
+/** The authored character fields (brief L3-01 / L3-04) — free text, each optional. */
+export type AgentCharacter = {
+  decision_rules?: string;
+  behaviour?: string;
+  vocabulary?: string;
+  information_diet?: string;
+  failure_modes?: string;
+};
+
+/** What the Agent Builder sends: the person in words plus `dials` holding only the values the analyst fixed. */
+export type AuthoredAgentDraft = {
+  name: string;
+  age?: number;
+  role: string;
+  background: string;
+  stance?: "direct" | "indirect" | "neutral";
+  correlation?: string;
+  personality?: string[] | string;
+  debate_style?: string;
+  humanity?: number;
+  /** True when the analyst set Expert↔Reactive by hand; otherwise the profile build places it. */
+  humanity_fixed?: boolean;
+  demographics?: AgentDemographics;
+  character?: AgentCharacter;
+  dials?: AgentDials;
+};
+
+export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string };
 
 export type AgentDemographics = {
   gender?: string;

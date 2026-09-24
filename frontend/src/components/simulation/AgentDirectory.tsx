@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Agent, AgentDials, AgentPreset, SimMode, api } from "@/lib/api";
 import PopulationStudio from "@/components/population/PopulationStudio";
 import { stanceColor } from "@/lib/utils";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, X, ChevronDown, ChevronUp, BarChart2,
-  Bookmark, Clock, Heart, Rocket, Brain, AlertTriangle, Wand2, MapPin,
+  Bookmark, Clock, Heart, Rocket, Brain, AlertTriangle, Wand2, MapPin, UserPlus,
 } from "lucide-react";
 
 // ── Activity ladder (mirrors backend orchestrator._build_phases) ──────────────
@@ -308,6 +309,7 @@ export default function AgentDirectory({
   onGoToReport,
   onApplyPreset,
 }: Props) {
+  const router = useRouter();
   const [intensity, setIntensity] = useState(2);
   const [mode, setMode] = useState<SimMode>("fast");
   const [search, setSearch] = useState("");
@@ -563,6 +565,13 @@ export default function AgentDirectory({
               {!isPendingSimulation && (
                 <>
                   <button
+                    onClick={() => router.push(`/session/${sessionId}/agents/build`)}
+                    className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground hover:text-foreground hover:border-border px-4 py-2 rounded-lg transition-all"
+                    title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Build your own agent
+                  </button>
+                  <button
                     onClick={() => setStudioOpen(true)}
                     className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
                     title="Rebuild this population in the Studio: evidence, statistics, dials and a plan you approve"
@@ -625,6 +634,13 @@ export default function AgentDirectory({
               <span className="font-semibold text-foreground">Simulation complete</span>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => router.push(`/session/${sessionId}/agents/build`)}
+                className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground hover:text-foreground hover:border-border px-4 py-2 rounded-lg transition-all"
+                title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup"
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Build your own agent
+              </button>
               <button
                 onClick={() => setStudioOpen(true)}
                 className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
