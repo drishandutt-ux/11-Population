@@ -1,8 +1,10 @@
+from typing import Optional
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
 from app.services.simulation.thread_manager import get_posts
 from app.services.simulation import citations
+from app.services.simulation import records as records_mod
 from app.models.agent import SpawnedAgent
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,8 +16,19 @@ async def answer_report_query(
     original_query: str,
     question: str,
     db: AsyncSession,
+    records: Optional[list[dict]] = None,
 ) -> tuple[str, str]:
+    """`records` (brief L6-01): the session's outcome records — every computed figure about the
+    population, numbered for the model as R1 … Rn; the answer cites them and never types a
+    figure of its own. None = load them (without running the verdict probe)."""
     settings = get_settings()
+    if records is None:
+        try:
+            records = await records_mod.records_for_session(session_id)
+        except Exception as e:  # noqa: BLE001
+            print(f"[report] records unavailable: {type(e).__name__}: {e}")
+            records = []
+    records_text, record_handles = records_mod.records_block(records)
 
     # ── 1. Knowledge graph context ──────────────────────────────────────────
     rag = await get_lightrag(session_id)
@@ -63,6 +76,7 @@ async def answer_report_query(
         "specific twin who held it, quote or paraphrase their actual words, and "
         "reference concrete data from both the ingested documents and the debate.\n\n"
         + citations.CITATION_RULES
+        + "\n\n" + records_mod.FIGURE_RULES
     )
 
     prompt = f"""Original analysis query: {original_query}
@@ -72,6 +86,9 @@ async def answer_report_query(
 
 == POPULATION FRAME (how representative the panel is — state this under SOURCE MATERIALS, including any model-estimated distribution) ==
 {frame_text}
+
+== OUTCOME RECORDS ({len(records)} computed from the twins' answers — the ONLY figures about this population you may state; cite as [[R1]]) ==
+{records_text}
 
 == POPULATION ROSTER ({len(agents_list)} twins — cite by the handle in brackets, never by name) ==
 {agent_profiles}
@@ -95,8 +112,10 @@ Use ALL of the above — the full transcript, every twin's actual statements, an
             messages=[{"role": "user", "content": prompt}],
         )
         answer = response.content[0].text.strip()
-        # Handles → stable ids, then any name typed anyway becomes a citation: the name a
-        # reader sees is always read back from the agent row, never retyped by the model.
+        # Record handles first (a dangling [[R9]] is dropped), then twin handles → stable ids,
+        # then any name typed anyway becomes a citation: the name a reader sees is always read
+        # back from the agent row, never retyped by the model.
+        answer = records_mod.resolve_handles(answer, record_handles)
         answer = citations.resolve(answer, handles)
         answer = citations.repair_names(answer, agents_list)
     except Exception as e:
@@ -105,10 +124,12 @@ Use ALL of the above — the full transcript, every twin's actual statements, an
         answer = friendly_llm_error(e)
 
     cited = citations.cited_ids(answer)
+    cited_records = records_mod.cited_record_ids(answer)
     sources = (
         f"Knowledge graph + {len(posts)} simulation posts "
         f"from {len(agents_list)} agents"
         + (f", {len(cited)} cited by name" if cited else "")
+        + (f", {len(cited_records)} outcome record(s) cited" if cited_records else "")
         + f" (session {session_id})"
     )
     return answer, sources

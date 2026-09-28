@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem } from "@/lib/api";
+import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
@@ -19,7 +19,7 @@ type OpinionsStatus = "idle" | "loading" | "done" | "error";
 
 const REPORT_PROMPT = `You are a senior analyst. Produce a structured executive briefing for this simulation session.
 
-CRITICAL: Your VERY FIRST line must be "## DIRECT ANSWER" — no preamble, no intro. Use exactly these six sections in this order:
+CRITICAL: Your VERY FIRST line must be "## DIRECT ANSWER" — no preamble, no intro. Use exactly these five sections in this order:
 
 ## DIRECT ANSWER
 One precise sentence directly answering the user's question. End the section with exactly one of these on its own line: Confidence: HIGH  /  Confidence: MEDIUM  /  Confidence: LOW
@@ -33,13 +33,10 @@ What was ingested — document types, names, and their direct relevance to the q
 ## DISCUSSION
 Which perspectives were represented (bullish/bearish, for/against, technical/regulatory, etc.), what the majority view concluded, notable dissenting opinions, and any contradictions or risks flagged during the debate.
 
-## KEY METRICS
-The most relevant quantitative data points for this query type. Write ONLY as "Label: Value" lines — one per line, no bullets, no prose. For finance: revenue, margins, multiples, growth rates, price targets. For markets: TAM, market share, adoption rates, unit economics. For policy: risk scores, timelines, compliance rates. Extract actual numbers from the discussion wherever possible.
-
 ## OUTCOME
 Final recommendation and answer. State the 2–3 key caveats that could change the conclusion.
 
-Use **bold** for critical figures and key conclusions. Write densely — every sentence must carry insight, zero filler.`;
+Every figure about the population comes from an OUTCOME RECORD and is cited right after it ([[R1]]); the headline record is the population's answer to the question — lead with it. Figures from the source material are quoted with their source. Use **bold** for key conclusions. Write densely — every sentence must carry insight, zero filler.`;
 
 
 export default function SessionPage() {
@@ -84,6 +81,8 @@ export default function SessionPage() {
 
   // Report split-screen state
   const [reportContent, setReportContent] = useState<string | null>(null);
+  // The outcome records the report was rendered from (brief L6-01); the report panel also loads them on its own.
+  const [reportRecords, setReportRecords] = useState<OutcomeRecord[]>([]);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Agent opinion KPIs — generated once we have enough posts, refreshed on completion.
@@ -410,7 +409,8 @@ export default function SessionPage() {
     setIsGeneratingReport(true);
     setActiveTab("report"); // switch immediately so user sees the generating state
     try {
-      const result = await api.report.query(id, REPORT_PROMPT) as { answer: string };
+      const result = await api.report.generate(id, REPORT_PROMPT);
+      setReportRecords(result.records || []);
       setReportContent(result.answer);
     } catch (e: any) {
       // Never fail silently — surface the reason in the report panel so the button
@@ -554,6 +554,7 @@ export default function SessionPage() {
             agents={agents}
             posts={posts}
             reportContent={reportContent}
+            records={reportRecords}
             isGeneratingReport={isGeneratingReport}
             onMakeReport={handleMakeReport}
             onClearReport={() => setReportContent(null)}

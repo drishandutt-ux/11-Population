@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { api, Agent, Post } from "@/lib/api";
+import { api, Agent, OutcomeRecord, Post } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
-  ChevronDown, MessageCircle, Download, RefreshCw, X, Quote,
+  ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle,
 } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 
@@ -20,6 +20,8 @@ interface Props {
   /** The transcript, so a citation can show the line it is quoting. */
   posts?: Post[];
   reportContent?: string | null;
+  /** The outcome records the report is rendered from (brief L6-01); loaded here when not given. */
+  records?: OutcomeRecord[];
   isGeneratingReport?: boolean;
   onMakeReport?: () => void;
   onClearReport?: () => void;
@@ -41,6 +43,7 @@ export default function ReportChat({
   agents,
   posts = [],
   reportContent = null,
+  records: recordsProp,
   isGeneratingReport = false,
   onMakeReport,
   onClearReport,
@@ -51,6 +54,15 @@ export default function ReportChat({
   // The twin a citation in the report (or a chat reply) was clicked on: who they are, and
   // the line being quoted. Backtracking is the point — a claim you cannot trace is a claim.
   const [cited, setCited] = useState<{ agent: Agent; post?: Post; x: number; y: number } | null>(null);
+  // A record citation ([[record:…]]) or record card that was clicked: the computed figure behind the claim.
+  const [openRecord, setOpenRecord] = useState<{ record: OutcomeRecord; x: number; y: number } | null>(null);
+  const [loadedRecords, setLoadedRecords] = useState<OutcomeRecord[]>([]);
+  useEffect(() => {
+    if (recordsProp && recordsProp.length) return;
+    api.records.list(sessionId).then((r) => setLoadedRecords(r.records || [])).catch(() => {});
+  }, [sessionId, reportContent, recordsProp]);
+  const records = recordsProp && recordsProp.length ? recordsProp : loadedRecords;
+  RECORDS_BY_ID = Object.fromEntries(records.map((r) => [r.id, r]));
   const [reportMessages, setReportMessages] = useState<Message[]>([]);
   const [agentMessages, setAgentMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -82,6 +94,16 @@ export default function ReportChat({
 
   /** Delegated click for every `[[twin:…]]` citation rendered inside this panel. */
   function handleCiteClick(e: React.MouseEvent) {
+    const rel = (e.target as HTMLElement).closest?.("[data-record]") as HTMLElement | null;
+    if (rel) {
+      const record = RECORDS_BY_ID[rel.dataset.record || ""];
+      if (record) {
+        e.preventDefault();
+        const rect = rel.getBoundingClientRect();
+        setOpenRecord({ record, x: rect.left, y: rect.bottom + 6 });
+      }
+      return;
+    }
     const el = (e.target as HTMLElement).closest?.("[data-twin]") as HTMLElement | null;
     if (!el) return;
     e.preventDefault();
@@ -178,7 +200,7 @@ export default function ReportChat({
               </div>
             ) : (
               <div id="report-printable" className="max-w-2xl" onClick={handleCiteClick}>
-                <ReportDocument content={reportContent!} agentsById={agentsById} />
+                <ReportDocument content={reportContent!} agentsById={agentsById} records={records} />
               </div>
             )}
           </div>
@@ -211,6 +233,7 @@ export default function ReportChat({
           />
         </div>
 
+        {openRecord && <RecordCard record={openRecord.record} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
         {cited && (
           <TwinTrace
             agent={cited.agent}
@@ -268,6 +291,7 @@ export default function ReportChat({
         onCiteClick={handleCiteClick}
       />
 
+      {openRecord && <RecordCard record={openRecord.record} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
       {cited && (
         <TwinTrace
           agent={cited.agent}
@@ -601,8 +625,40 @@ function ChatPanel({
 // for the exact line. The name below is read from the agent record, so it cannot drift.
 
 const CITE_RE = /\[\[twin:([0-9a-fA-F-]{36})(?:\|post:([0-9a-fA-F-]{36}))?\]\]/g;
+// A figure about the population is never typed by the model: it cites `[[record:<id>]]` and the
+// number a reader sees is read from the outcome record (brief L6-01).
+const RECORD_RE = /\[\[record:([0-9a-fA-F-]{36})\]\]/g;
+let RECORDS_BY_ID: Record<string, OutcomeRecord> = {};
+
+function fmtEstimate(r: OutcomeRecord): string {
+  const e = r.estimate;
+  if (e.value == null) return "—";
+  if (e.format === "share") return `${Math.round(e.value * 100)}%`;
+  if (e.format === "lift") return `${e.value > 0 ? "+" : ""}${Math.round(e.value * 100)} pts`;
+  return String(e.value);
+}
+function fmtInterval(r: OutcomeRecord): string {
+  const e = r.estimate;
+  if (e.low == null || e.high == null) return "";
+  if (e.format === "share") return `95% CI ${Math.round(e.low * 100)}–${Math.round(e.high * 100)}%`;
+  if (e.format === "lift") return `95% CI ${Math.round(e.low * 100)} to ${Math.round(e.high * 100)} pts`;
+  return `${e.low}–${e.high}`;
+}
+
+function renderRecordCitations(html: string): string {
+  return html.replace(RECORD_RE, (_m, id: string) => {
+    const r = RECORDS_BY_ID[id];
+    if (!r) return "";
+    return (
+      `<button type="button" data-record="${id}" title="${r.label} — ${fmtInterval(r)} · n=${r.estimate.n} · confidence ${r.confidence.score}/100" ` +
+      `class="record-cite inline-flex items-center gap-1 align-baseline text-[11px] font-semibold px-1.5 py-px rounded border border-teal-500/40 text-teal-300 bg-teal-500/10 hover:bg-teal-500/20">` +
+      `${fmtEstimate(r)}<span class="font-normal text-teal-300/70">· ${r.label.length > 34 ? r.label.slice(0, 32) + "…" : r.label}</span></button>`
+    );
+  });
+}
 
 function renderCitations(html: string, agentsById: Record<string, Agent>): string {
+  html = renderRecordCitations(html);
   return html.replace(CITE_RE, (_m, twinId: string, postId?: string) => {
     const agent = agentsById[twinId];
     if (!agent) return "a twin in the population";
@@ -667,15 +723,17 @@ function MessageContent({ text, agentsById = {} }: { text: string; agentsById?: 
 
 // ── Report document renderer ──────────────────────────────────────────────────
 
-function ReportDocument({ content, agentsById }: { content: string; agentsById: Record<string, Agent> }) {
+function ReportDocument({ content, agentsById, records = [] }: { content: string; agentsById: Record<string, Agent>; records?: OutcomeRecord[] }) {
   const blocks = parseReport(content);
+  const firstAnswer = blocks.findIndex((b) => b.type === "direct_answer");
 
   return (
     <div className="space-y-4 text-sm">
       {blocks.map((block, i) => {
         if (block.type === "direct_answer") {
           return (
-            <div key={i} className="border-l-4 border-primary bg-primary/5 rounded-r-lg px-5 py-4 mb-2">
+            <div key={i}>
+            <div className="border-l-4 border-primary bg-primary/5 rounded-r-lg px-5 py-4 mb-2">
               <div className="flex items-center gap-2 mb-2.5">
                 <span className="text-[10px] uppercase tracking-widest font-bold text-primary">Direct Answer</span>
                 {block.confidence && (
@@ -692,6 +750,8 @@ function ReportDocument({ content, agentsById }: { content: string; agentsById: 
               </div>
               <p className="text-[15px] font-semibold text-foreground leading-snug"
                 dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
+            </div>
+            {i === firstAnswer && records.length > 0 && <RecordGrid records={records} />}
             </div>
           );
         }
@@ -736,6 +796,119 @@ function ReportDocument({ content, agentsById }: { content: string; agentsById: 
         );
       })}
     </div>
+  );
+}
+
+// ── Outcome records (brief L6-01) ─────────────────────────────────────────────
+// The report's backbone: every card is a computed figure with its interval, its n and its
+// confidence — read from the record, never from the prose. Click one for the splits, the
+// refusals, the unanimity verdict, the provenance and the caveats.
+
+const KIND_LABEL: Record<string, string> = { headline: "Population verdict", probe: "Lab result", experiment: "A/B lift" };
+
+function RecordGrid({ records }: { records: OutcomeRecord[] }) {
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-widest text-teal-300 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> Outcome records</span>
+        <span className="text-[10px] text-muted-foreground/60">{records.length} computed from the twins&apos; answers · every figure in this report cites one</span>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+        {records.map((r) => {
+          const flagged = r.unanimity?.flagged;
+          const refused = r.refusals?.refused || 0;
+          return (
+            <button key={r.id} type="button" data-record={r.id} className="text-left border border-teal-500/25 rounded-lg px-3.5 py-3 bg-teal-500/5 hover:bg-teal-500/10 transition-colors">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">{KIND_LABEL[r.kind] || r.kind}</span>
+                {flagged && <AlertTriangle className="w-3 h-3 text-yellow-400" />}
+              </div>
+              <div className="text-[11px] text-foreground/85 leading-snug line-clamp-2">{r.label}</div>
+              <div className="flex items-baseline gap-2 mt-1.5">
+                <span className="text-xl font-bold text-teal-300 leading-none">{fmtEstimate(r)}</span>
+                <span className="text-[10px] text-muted-foreground/70">{fmtInterval(r)}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground/70">
+                <span>n={r.estimate.n}</span>
+                <span>· confidence {r.confidence.score}/100</span>
+                {refused > 0 && <span>· {refused} refused</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: number; y: number; onClose: () => void }) {
+  const left = Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 400);
+  const top = Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 800) - 460);
+  const splitKeys = Object.keys(r.splits || {}).filter((k) => (r.splits[k] || []).length >= 2).slice(0, 3);
+  const mix = Object.entries(r.provenance?.evidence_mix || {}).filter(([, n]) => n > 0);
+  return (
+    <>
+      <div className="fixed inset-0 z-40 no-print" onClick={onClose} />
+      <div className="fixed z-50 w-[380px] max-h-[70vh] overflow-y-auto rounded-xl border border-teal-500/30 bg-background shadow-xl no-print" style={{ left: Math.max(12, left), top: Math.max(12, top) }}>
+        <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-3 border-b border-border/50">
+          <div className="min-w-0 flex-1">
+            <div className="text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">{KIND_LABEL[r.kind] || r.kind} · {r.basis.replace("_", " ")}</div>
+            <div className="text-sm font-semibold text-foreground leading-tight mt-0.5">{r.label}</div>
+            {r.question && <div className="text-[11px] text-muted-foreground/70 leading-snug mt-1">{r.question}</div>}
+          </div>
+          <button onClick={onClose} className="text-muted-foreground/50 hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-teal-300 leading-none">{fmtEstimate(r)}</span>
+            <span className="text-[11px] text-muted-foreground">{r.estimate.label} · {fmtInterval(r)} · n={r.estimate.n}</span>
+          </div>
+          {r.sentence && <p className="text-[11px] text-foreground/80 leading-snug">{r.sentence}</p>}
+          {r.weighted && r.weighted.weighted != null && (
+            <p className="text-[10px] text-muted-foreground/80">Weighted to the frame: {r.weighted.format === "share" ? `${Math.round((r.weighted.weighted || 0) * 100)}%` : r.weighted.weighted} (effective n {r.weighted.ess.toFixed(1)})</p>
+          )}
+          {r.unanimity?.flagged && (
+            <div className="flex gap-2 text-[10px] text-yellow-200/90 bg-yellow-500/10 border border-yellow-500/25 rounded-lg px-2.5 py-2"><AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px text-yellow-400" /><span>{r.unanimity.reason}</span></div>
+          )}
+          {r.refusals && r.refusals.refused > 0 && (
+            <p className="text-[10px] text-muted-foreground/80">{r.refusals.refused} of {r.refusals.n} said it was not theirs to answer — outside every denominator.</p>
+          )}
+          {splitKeys.length > 0 && (
+            <div className="space-y-2">
+              {splitKeys.map((k) => (
+                <div key={k}>
+                  <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1">{k.replace(/^dyn:/, "").replace(/_/g, " ")}</div>
+                  <div className="space-y-0.5">
+                    {(r.splits[k] || []).slice(0, 5).map((b) => (
+                      <div key={b.value} className="flex items-center gap-2 text-[10px]">
+                        <span className="w-24 truncate text-foreground/80">{b.value}</span>
+                        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden"><div className="h-full bg-teal-400/70 rounded-full" style={{ width: `${Math.round((b.share || 0) * 100)}%` }} /></div>
+                        <span className="w-14 text-right tabular-nums text-muted-foreground">{Math.round((b.share || 0) * 100)}% <span className="text-muted-foreground/50">n={b.n}</span></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div>
+            <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1">Confidence {r.confidence.score}/100</div>
+            <ul className="text-[10px] text-foreground/75 space-y-0.5">{r.confidence.drivers.map((d, i) => <li key={i}>· {d}</li>)}</ul>
+          </div>
+          {r.caveats?.length > 0 && (
+            <div>
+              <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1">Caveats</div>
+              <ul className="text-[10px] text-muted-foreground/85 space-y-0.5">{r.caveats.map((c, i) => <li key={i}>· {c}</li>)}</ul>
+            </div>
+          )}
+          <div className="text-[10px] text-muted-foreground/60 border-t border-border/40 pt-2">
+            {r.provenance.model && <span>model {r.provenance.model} · </span>}seed {r.provenance.seed} · frame {r.provenance.frame_level}
+            {mix.length > 0 && <span> · evidence {mix.map(([k, n]) => `${k} ${n}`).join(", ")}</span>}
+            <span className="block font-mono text-muted-foreground/45 mt-0.5">{r.id.slice(0, 8)}</span>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -161,7 +161,17 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ question }),
       }),
+    /** The report proper (brief L6-01): computes the headline outcome record first, then writes the narrative around every record. Slow — it may run a verdict probe. */
+    generate: (sessionId: string, question: string) =>
+      request<{ id: string; question: string; answer: string; sources: string | null; records: OutcomeRecord[] }>(`/sessions/${sessionId}/report/generate`, {
+        method: "POST",
+        body: JSON.stringify({ question }),
+      }),
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
+  },
+  records: {
+    /** Every outcome record on file for the session — the headline verdict first, then Lab results. */
+    list: (sessionId: string) => request<{ records: OutcomeRecord[] }>(`/sessions/${sessionId}/records`),
   },
   kg: {
     ontology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology`),
@@ -427,6 +437,27 @@ export type AuthoredAgentDraft = {
   demographics?: AgentDemographics;
   character?: AgentCharacter;
   dials?: AgentDials;
+};
+
+/** An outcome record (brief L6-01): one computed figure about the population, the backbone every report is rendered from. */
+export type OutcomeRecord = {
+  id: string;
+  kind: "headline" | "probe" | "experiment";
+  instrument: string;
+  label: string;
+  question: string;
+  basis: "simulated" | "evidence_anchored" | "client_reported";
+  estimate: { metric: string; label: string; format: "share" | "lift" | "mean" | "text"; value: number | null; low: number | null; high: number | null; n: number; successes?: number; significant?: boolean; control?: number | null; variant?: number | null };
+  sentence: string;
+  distribution: { value: string; count: number; share: number }[];
+  splits: Record<string, { value: string; share: number; low?: number; high?: number; n: number }[]>;
+  refusals: { n: number; refused: number; share: number; reasons: { value: string; count: number; share: number }[]; who: { agent_id: string; name: string; why: string }[] } | null;
+  unanimity: { flagged: boolean; top_share: number; widest_split: string; widest_spread: number; n: number; reason?: string } | null;
+  weighted: { metric: string; label: string; format: string; weighted: number | null; unweighted: number | null; ess: number; n: number } | null;
+  provenance: { model: string; seed: number; schema_id?: string; prompt_hash?: string; agents?: number; answered?: number; design?: string; arms?: any[]; evidence_mix: Record<string, number>; frame_level: string; created_at: string | null };
+  confidence: { score: number; drivers: string[] };
+  caveats: string[];
+  tags: { condition?: string; journey_stage?: string };
 };
 
 export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string; dynamic_dials?: DynamicDial[] };
