@@ -569,6 +569,11 @@ async def _run(run_id: str, context: str = ""):
         note = ctx.over_budget() or ("stopped by user" if ctx.stopped() else "coverage satisfied or query plan exhausted")
         await ctx.save(recommendations=recs, status=status, note=note, finished_at=_now())
         await _emit(ctx.session_id, {"type": "research_complete", "run_id": run_id, "status": status, "note": note, "budget": ctx.budget, "covered": ctx.covered, "recommendations": recs})
+        try:
+            from app.services.scoping import auto as scoping_auto
+            scoping_auto.schedule(ctx.session_id, ctx.question, reason="research")
+        except Exception as e:  # noqa: BLE001
+            print(f"[research] could not schedule scoping: {type(e).__name__}: {e}")
     except asyncio.CancelledError:
         # A second Stop press cancelled the task outright. Land the row honestly; what was
         # gathered is already persisted.

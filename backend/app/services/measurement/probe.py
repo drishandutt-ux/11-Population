@@ -416,7 +416,14 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
         # the same evidence, which is what makes the comparison between them meaningful.
         kg_context = await _probe_kg_context(session_id, query, spec)
         from app.services.scoping import service as scoping
+        if kg_context:
+            try:
+                from app.services.scoping import auto as scoping_auto
+                await scoping_auto.ensure_tagged(session_id, query, reason="probe", warm=False)
+            except Exception as e:  # noqa: BLE001
+                print(f"[probe] scoping before the probe failed: {type(e).__name__}: {e}")
         scoped = bool(kg_context) and await scoping.is_scoped(session_id)
+        scoping_snapshot = await scoping.snapshot_of(session_id) if scoped else None
 
         await _set_status(probe_id, status="running", agent_count=len(chosen))
         await publish(session_channel(session_id), {
@@ -481,6 +488,9 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
         else:
             aggregates = instrument.aggregate(rows, spec)
         aggregates["dont_know"] = refusals
+        # Run record (L1-06 / L6-01 provenance): whether every twin answered from its own scoped
+        # knowledge, and which snapshot of it.
+        aggregates["scoping"] = {"scoped": bool(scoped), "snapshot_id": scoping_snapshot}
         # Weighted to the Studio's sampling frame (L2-02): the primary metric with each agent counting
         # for the people it stands for, beside the one-agent-one-vote figure, plus the effective n.
         try:

@@ -193,6 +193,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
             "prompt_hash": str(getattr(p, "prompt_hash", "") or ""), "agents": int(getattr(p, "agent_count", 0) or 0),
             "answered": int(getattr(p, "answer_count", 0) or 0), "evidence_mix": evidence_mix or {},
             "frame_level": frame_level or "none", "created_at": created.isoformat() if isinstance(created, datetime) else None,
+            "scoped": bool((agg.get("scoping") or {}).get("scoped")) if isinstance(agg.get("scoping"), dict) else None,
+            "scoping_snapshot": (agg.get("scoping") or {}).get("snapshot_id") if isinstance(agg.get("scoping"), dict) else None,
         },
         "confidence": confidence_for(n=n, low=est.get("low"), high=est.get("high"), fmt=est.get("format", "share"),
                                      unanimity=unanimity, refusals=refusals, frame_level=frame_level, weighted=bool(weighted), model=model),

@@ -70,6 +70,13 @@ async def _ingest_chunks(session_id: str, raw_text: str, source: str = "document
             "type": "ingest_complete",
             "source": source,
         })
+        # Scoping is a pipeline step (L1-04): new knowledge is tagged as soon as it lands, so a
+        # population written or a debate run after this is scoped without anyone pressing Tag.
+        try:
+            from app.services.scoping import auto as scoping_auto
+            scoping_auto.schedule(session_id, await scoping_auto.session_query(session_id), reason="ingest")
+        except Exception as e:  # noqa: BLE001
+            print(f"[ingest] could not schedule scoping: {type(e).__name__}: {e}")
 
 
 @router.post("/{session_id}/ingest/text")

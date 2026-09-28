@@ -99,6 +99,7 @@ async def _ensure_columns():
         "ALTER TABLE analysis_sessions ADD COLUMN dynamic_dials JSON",
         "ALTER TABLE spawned_agents ADD COLUMN validation JSON",
         "ALTER TABLE report_queries ADD COLUMN structure JSON",
+        "ALTER TABLE spawned_agents ADD COLUMN knowledge JSON",
     ]
     for ddl in migrations:
         try:

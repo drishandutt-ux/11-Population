@@ -7,6 +7,8 @@ import { api, type Agent, type KnowledgeUnit, type ScopeRule, type ScopingPrevie
 interface Props {
   sessionId: string;
   agents: Agent[];
+  /** Preselect this twin (the Agents tab's "sees N/M" chip lands here). */
+  initialAgentId?: string;
 }
 
 const PROV_COLORS: Record<string, string> = {
@@ -57,7 +59,7 @@ function UnitCard({ unit, highlight, extra }: { unit: KnowledgeUnit; highlight?:
   );
 }
 
-export default function ScopingView({ sessionId, agents }: Props) {
+export default function ScopingView({ sessionId, agents, initialAgentId }: Props) {
   const [state, setState] = useState<ScopingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [tagging, setTagging] = useState(false);
@@ -86,6 +88,7 @@ export default function ScopingView({ sessionId, agents }: Props) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!agentId && agents.length > 0) setAgentId(agents[0].id); }, [agents, agentId]);
+  useEffect(() => { if (initialAgentId) setAgentId(initialAgentId); }, [initialAgentId]);
 
   const loadPreview = useCallback(async () => {
     if (!agentId || !state?.tagged) { setPreview(null); return; }

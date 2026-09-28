@@ -1284,6 +1284,17 @@ async def _spawn(build_id: str):
             cast = [sg for sg in segments if sg.get("archetype_id") in persona_constraints["archetypes"]]
             if cast:
                 await log(build_id, "spawn", "info", f"Casting {sum(int(sg.get('count') or 0) for sg in cast)} personas from archetypes", " · ".join(f"{sg['name']} ← {sg.get('archetype_name')}" for sg in cast))
+        # Scoping before writing (L1-04): the knowledge is tagged now if it never was or has grown,
+        # so every persona is written from what a twin of its segment could actually reach.
+        try:
+            from app.services.scoping import auto as scoping_auto
+            sc = await scoping_auto.ensure_tagged(session_id, question, reason="build")
+            if sc.get("tagged"):
+                await log(build_id, "spawn", "info", f"Knowledge scoped: {sc.get('unit_count', 0)} units tagged by place, role, channel and register — each persona is written from what its segment can reach")
+            else:
+                await log(build_id, "spawn", "info", "No knowledge to scope yet — personas are written from the shared summary")
+        except Exception as e:  # noqa: BLE001
+            await log(build_id, "spawn", "warn", "Scoping could not run before writing; personas use the shared summary", str(e)[:120])
         profiles = await generate_agents_from_plan(session_id, question, segments, persona_constraints, mode=bld.mode, evidence_text=evidence_text,
                                                    on_progress=progress, should_stop=lambda: _stopped(build_id), on_note=note)
         await log(build_id, "spawn", "info", f"Writing {len(profiles)} agents to the session")
@@ -1339,6 +1350,9 @@ async def _spawn(build_id: str):
         # put through the battery and carries a confidence score wherever it speaks. It must
         # never hold up the build or break it, so it is a detached task with its own logging.
         asyncio.create_task(_validate_population(build_id, session_id))
+        # Every twin records what it was written from and can see (scoping, L1-04 wired end to end).
+        from app.services.scoping import auto as scoping_auto
+        asyncio.create_task(scoping_auto.annotate_agents(session_id, question, reason="build"))
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         await log(build_id, "spawn", "error", f"Build failed: {type(e).__name__}: {str(e)[:200]}")

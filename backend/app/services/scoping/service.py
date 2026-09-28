@@ -81,8 +81,9 @@ async def _log(session_id: str, agent_id: str, purpose: str, snapshot_id: str, v
         print(f"[scoping] retrieval log failed: {type(e).__name__}: {e}")
 
 
-async def context_for_agent(session_id: str, agent: Any, query: str, *, purpose: str = "post", limit: int = 14, log: bool = True) -> Optional[str]:
-    """The twin's knowledge block, or None when the session is not scoped (caller falls back)."""
+async def retrieval_for_agent(session_id: str, agent: Any, query: str, *, purpose: str = "post", limit: int = 14, log: bool = True) -> Optional[tuple[dict, dict, str, int]]:
+    """(profile, retrieval, snapshot id, policy version) for one twin, cached per (profile, query);
+    None when the session is not scoped."""
     bundle = await _load_bundle(session_id)
     if bundle is None:
         return None
@@ -94,6 +95,21 @@ async def context_for_agent(session_id: str, agent: Any, query: str, *, purpose:
         bundle["cache"][key] = res
     if log:
         asyncio.create_task(_log(session_id, getattr(agent, "id", ""), purpose, bundle["snapshot_id"], bundle["policy_version"], res["visible"]))
+    return profile, res, bundle["snapshot_id"], bundle["policy_version"]
+
+
+async def snapshot_of(session_id: str) -> Optional[str]:
+    """The snapshot id a scoped session is currently serving from; None when not scoped."""
+    bundle = await _load_bundle(session_id)
+    return bundle["snapshot_id"] if bundle else None
+
+
+async def context_for_agent(session_id: str, agent: Any, query: str, *, purpose: str = "post", limit: int = 14, log: bool = True) -> Optional[str]:
+    """The twin's knowledge block, or None when the session is not scoped (caller falls back)."""
+    got = await retrieval_for_agent(session_id, agent, query, purpose=purpose, limit=limit, log=log)
+    if got is None:
+        return None
+    _, res, _, _ = got
     if not res["visible"]:
         return f"Topic under discussion: {query}\n(You have not come across specifics on this yourself.)"
     return knowledge_block(res["visible"])

@@ -184,6 +184,10 @@ export const api = {
   scoping: {
     state: (sessionId: string) => request<ScopingState>(`/sessions/${sessionId}/scoping`),
     tag: (sessionId: string) => request<ScopingState>(`/sessions/${sessionId}/scoping/tag`, { method: "POST" }),
+    /** Tag now if untagged or stale, then annotate every twin (what each can see). */
+    ensure: (sessionId: string) => request<ScopingState>(`/sessions/${sessionId}/scoping/ensure`, { method: "POST" }),
+    /** Per-twin scoping records for the Agents tab. */
+    coverage: (sessionId: string) => request<ScopingCoverage>(`/sessions/${sessionId}/scoping/coverage`),
     preview: (sessionId: string, agentId: string) => request<ScopingPreview>(`/sessions/${sessionId}/scoping/preview?agent_id=${encodeURIComponent(agentId)}`),
     setPolicy: (sessionId: string, rules: ScopeRule[], note = "") =>
       request<{ version: number; rules: ScopeRule[] }>(`/sessions/${sessionId}/scoping/policy`, { method: "PUT", body: JSON.stringify({ rules, note }) }),
@@ -392,7 +396,13 @@ export type Agent = {
   character?: AgentCharacter | null;
   /** Behavioural validation (brief L3-05) — null until the background battery has scored this twin. */
   validation?: AgentValidation | null;
+  /** Scoping (L1-04, wired end to end): what this twin was written from and can see — null until annotated. */
+  knowledge?: AgentKnowledge | null;
 };
+
+export type AgentKnowledge = { snapshot_id: string | null; visible: number; total: number; routes: string[]; provenance: Record<string, number>; written_from: string | null; profile: Record<string, unknown>; at: string | null };
+export type ScopingCoverage = { tagged: boolean; stale: boolean; unit_count: number; chunk_count: number; snapshot_id: string | null; annotated: number; total: number;
+  agents: Record<string, { visible: number; total: number; snapshot_id: string | null; written_from: string | null; routes: string[]; provenance: Record<string, number> }> };
 
 /** The battery's headline for one twin: 0-100 and the four parts behind it (each 0-1). */
 export type AgentValidation = {
@@ -558,6 +568,10 @@ export type WSEvent =
   | { type: "agent_spawned"; agent: Partial<Agent>; index?: number; total?: number }
   | { type: "agents_spawned_batch"; agents: Partial<Agent>[]; spawned: number; total: number }
   | { type: "agents_ready"; count: number }
+  | { type: "scoping_started"; reason: string; chunks: number; stale: boolean }
+  | { type: "scoping_complete"; reason: string; unit_count: number; snapshot_id: string | null; counts: Record<string, Record<string, number>> }
+  | { type: "scoping_error"; reason: string; error: string }
+  | { type: "scoping_annotated"; reason: string; count: number }
   | { type: "agent_validated"; agent_id: string; score: number; band: string; parts: Record<string, number | null> }
   | { type: "spawn_error"; error: string }
   | { type: "simulation_started"; agent_count: number }

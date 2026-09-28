@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.models.agent import SpawnedAgent
 from app.services.evidence.llm import LlmError
 from app.services.scoping import service, tagger
+from app.services.scoping import auto as scoping_auto
 
 router = APIRouter(prefix="/sessions", tags=["scoping"])
 
@@ -42,6 +43,23 @@ async def tag_scoping(session_id: str, user: AuthUser = Depends(get_current_user
         raise HTTPException(status_code=400, detail=str(e))
     except LlmError as e:
         raise HTTPException(status_code=502, detail=f"The model could not tag the knowledge: {e}")
+
+
+@router.get("/{session_id}/scoping/coverage")
+async def scoping_coverage(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """What every twin can see, for the Agents tab: tagged / stale, unit count, and per twin the
+    stored scoping record (visible of total, routes, snapshot, what it was written from)."""
+    await get_owned_session(session_id, user, db)
+    return await scoping_auto.coverage(session_id)
+
+
+@router.post("/{session_id}/scoping/ensure")
+async def scoping_ensure(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Tag now if the knowledge is untagged or stale, then annotate every twin. Returns the state."""
+    session = await get_owned_session(session_id, user, db)
+    st = await scoping_auto.ensure_tagged(session_id, session.query, reason="manual")
+    await scoping_auto.annotate_agents(session_id, session.query, reason="manual")
+    return st
 
 
 @router.get("/{session_id}/scoping/preview")

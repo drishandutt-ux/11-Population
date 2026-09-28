@@ -87,6 +87,10 @@ def _agent_payload(p) -> dict:
         "character": getattr(p, "character", None) or None,
         "validation": (lambda v: {"score": v["score"], "band": v.get("band"), "parts": v.get("parts") or {}, "at": v.get("at")}
                        if isinstance(v, dict) and v.get("score") is not None else None)(getattr(p, "validation", None)),
+        # Scoping (L1-04): what this twin was written from and can see — visible / total units, routes, snapshot.
+        "knowledge": (lambda k: {"snapshot_id": k.get("snapshot_id"), "visible": k.get("visible", 0), "total": k.get("total", 0), "routes": k.get("routes") or [],
+                                 "provenance": k.get("provenance") or {}, "written_from": k.get("written_from"), "profile": k.get("profile") or {}, "at": k.get("at")}
+                      if isinstance(k, dict) else None)(getattr(p, "knowledge", None)),
     }
 
 
@@ -187,6 +191,8 @@ async def _spawn_agents_task(
         # confidence badge is there by the time anyone reads what they say.
         from app.services.agents import validation as val
         asyncio.create_task(val.run_validation(session_id))
+        from app.services.scoping import auto as scoping_auto
+        asyncio.create_task(scoping_auto.annotate_agents(session_id, reason="spawn"))
 
     except Exception as e:
         print(f"[spawn_agents_task] ERROR: {e}")

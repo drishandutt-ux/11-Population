@@ -9,8 +9,7 @@ import ConfidenceBadge from "@/components/ConfidenceBadge";
 import {
   Zap, Users, Sparkles, Play, Loader2, AlertCircle,
   MessageCircle, X, ChevronDown, ChevronUp, BarChart2,
-  Bookmark, Clock, Heart, Rocket, Brain, AlertTriangle, Wand2, MapPin, UserPlus,
-} from "lucide-react";
+  Bookmark, Clock, Heart, Rocket, Brain, AlertTriangle, Wand2, MapPin, UserPlus, Filter } from "lucide-react";
 
 // ── Activity ladder (mirrors backend orchestrator._build_phases) ──────────────
 const LADDER = ["comment", "like", "debate", "reply"] as const;
@@ -45,6 +44,10 @@ interface Props {
   expectedAgentCount?: number | null;
   /** The question's own dials (brief L3-04) — labels for the Dynamic group on every agent card. */
   dynamicDials?: DynamicDial[];
+  /** Where automatic scoping stands (L1-04): runs when knowledge lands and before a build, a debate or a probe. */
+  scoping?: { status: "idle" | "running" | "done" | "error"; reason?: string; unitCount?: number; error?: string };
+  /** Open the Scoping view on this twin: what it can see, what is hidden from it, and why. */
+  onShowKnowledge?: (agentId: string) => void;
   onStartSimulation: (intensity: number, mode: SimMode) => void;
   onGoToThread: () => void;
   onGoToReport: () => void;
@@ -164,7 +167,7 @@ function DialViewer({ dials, dynamicDials = [] }: { dials: AgentDials; dynamicDi
 }
 
 // ── Agent card ────────────────────────────────────────────────────────────────
-function AgentCard({ agent, animate = false, dynamicDials = [] }: { agent: Agent; animate?: boolean; dynamicDials?: DynamicDial[] }) {
+function AgentCard({ agent, animate = false, dynamicDials = [], onShowKnowledge }: { agent: Agent; animate?: boolean; dynamicDials?: DynamicDial[]; onShowKnowledge?: (agentId: string) => void }) {
   const [showDials, setShowDials] = useState(false);
   const hasDials = agent.dials && Object.keys(agent.dials).length > 0;
   const humanity = agent.humanity ?? 0;
@@ -193,6 +196,16 @@ function AgentCard({ agent, animate = false, dynamicDials = [] }: { agent: Agent
             <span className="font-semibold text-foreground text-sm">{agent.name}</span>
             <span className="text-xs text-muted-foreground">{agent.age}y</span>
             <ConfidenceBadge validation={agent.validation} size="xs" />
+            {agent.knowledge && (
+              <button
+                type="button"
+                onClick={() => onShowKnowledge?.(agent.id)}
+                title={`Scoped knowledge: this twin sees ${agent.knowledge.visible} of ${agent.knowledge.total} units its profile can reach${agent.knowledge.routes.length ? ` — ${agent.knowledge.routes.slice(0, 3).join(", ")}` : ""}${agent.knowledge.written_from === "scoped" ? " · written from that knowledge" : ""}. Click to see what, and what is hidden.`}
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-sky-500/30 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20"
+              >
+                <Filter className="w-2.5 h-2.5" /> sees {agent.knowledge.visible}/{agent.knowledge.total}
+              </button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{agent.role}</p>
         </div>
@@ -324,6 +337,8 @@ export default function AgentDirectory({
   isPendingSimulation = false,
   expectedAgentCount = null,
   dynamicDials = [],
+  scoping,
+  onShowKnowledge,
   onStartSimulation,
   onGoToThread,
   onGoToReport,
@@ -506,7 +521,7 @@ export default function AgentDirectory({
         )}
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {agents.slice(-60).map((agent, i, arr) => (
-            <AgentCard key={agent.id} agent={agent} animate={i === arr.length - 1} dynamicDials={dynamicDials} />
+            <AgentCard onShowKnowledge={onShowKnowledge} key={agent.id} agent={agent} animate={i === arr.length - 1} dynamicDials={dynamicDials} />
           ))}
         </div>
       </div>
@@ -599,6 +614,21 @@ export default function AgentDirectory({
                     <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio
                   </button>
                 </>
+              )}
+              {scoping && (
+                <span
+                  className={`text-[10px] px-2 py-1 rounded border ${
+                    scoping.status === "running" ? "border-sky-500/40 text-sky-300 bg-sky-500/10 animate-pulse"
+                    : scoping.status === "done" ? "border-sky-500/30 text-sky-300/90 bg-sky-500/5"
+                    : scoping.status === "error" ? "border-red-500/30 text-red-300 bg-red-500/10"
+                    : "border-border text-muted-foreground/70"}`}
+                  title="Scoping: the knowledge is tagged by place, role, channel and register and every twin is given only what its profile can reach. It runs on its own when knowledge lands and again, if the graph has grown, before a build, a debate or a probe."
+                >
+                  {scoping.status === "running" ? "Scoping the knowledge…"
+                    : scoping.status === "done" ? `Scoped · ${scoping.unitCount ?? 0} units · each twin sees only what it can reach`
+                    : scoping.status === "error" ? "Scoping failed — running on shared knowledge"
+                    : "Scoping runs automatically before the debate"}
+                </span>
               )}
               <button
                 onClick={() => onStartSimulation(intensity, mode)}
@@ -746,7 +776,7 @@ export default function AgentDirectory({
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {shown.map((agent) => (
-                  <AgentCard key={agent.id} agent={agent} dynamicDials={dynamicDials} />
+                  <AgentCard onShowKnowledge={onShowKnowledge} key={agent.id} agent={agent} dynamicDials={dynamicDials} />
                 ))}
               </div>
               {group.length > CAP && (

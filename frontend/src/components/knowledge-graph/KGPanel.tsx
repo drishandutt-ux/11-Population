@@ -22,6 +22,8 @@ interface EntityDetail {
 }
 
 interface Props {
+  /** Open on a given view, optionally focused on one twin (from the Agents tab's "sees N/M" chip). */
+  focus?: { view: "entities" | "ontology" | "scoping"; agentId?: string } | null;
   sessionId: string;
   agents?: Agent[];
   entities: string[];
@@ -420,7 +422,8 @@ const VIEWS: { key: GraphView; label: string; hint: string }[] = [
 
 /** The Graph tab: a view picker, then the free-text entity graph or the typed ontology over it. */
 export default function KGPanel(props: Props) {
-  const [view, setView] = useState<GraphView>("entities");
+  const [view, setView] = useState<GraphView>(props.focus?.view || "entities");
+  useEffect(() => { if (props.focus) setView(props.focus.view); }, [props.focus]);
   const current = VIEWS.find((v) => v.key === view)!;
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -439,7 +442,7 @@ export default function KGPanel(props: Props) {
       <div className="flex-1 min-h-0">
         {view === "entities" && <EntityGraph {...props} />}
         {view === "ontology" && <OntologyView sessionId={props.sessionId} liveEntityCount={props.entities.length} />}
-        {view === "scoping" && <ScopingView sessionId={props.sessionId} agents={props.agents || []} />}
+        {view === "scoping" && <ScopingView sessionId={props.sessionId} agents={props.agents || []} initialAgentId={props.focus?.agentId} />}
       </div>
     </div>
   );

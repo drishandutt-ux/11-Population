@@ -773,15 +773,26 @@ async def generate_agents_from_plan(
     used_colors: list[str] = []
     profiles: list[AgentProfile] = []
 
+    async def _segment_knowledge(seg: dict, *, role: str = "", region: str = "") -> Optional[str]:
+        """What a twin of this segment (and place / job) could plausibly know — the scoped
+        retrieval (L1-04) — or None when the session is not scoped."""
+        try:
+            from app.services.scoping import auto as scoping_auto
+            return await scoping_auto.context_for_segment(session_id, seg, query, role=role, region=region)
+        except Exception as e:  # noqa: BLE001
+            print(f"[agent_factory] scoped context unavailable ({seg.get('name')}): {type(e).__name__}: {e}")
+            return None
+
     async def _batch(seg: dict, n: int, taken: list[dict], label: str) -> list[dict]:
         if should_stop and should_stop():
             return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
+        seg_knowledge = (await _segment_knowledge(seg)) or kg_summary
         async with sem:
             try:
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
                     system=_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, kg_summary, evidence_text, taken, dyn_mod, dynamic)}],
+                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic)}],
                 )
                 return dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
@@ -793,7 +804,12 @@ async def generate_agents_from_plan(
         and the mould's rules are enforced on what comes back."""
         if should_stop and should_stop():
             return []
-        contexts = {r: arch_mod.local_context(session_id, r, arch.get("role", "")) for r in {s_.get("region") or "" for s_ in slots} if r}
+        contexts: dict[str, str] = {}
+        for r in {s_.get("region") or "" for s_ in slots}:
+            if not r:
+                continue
+            # Scoped first (what a twin of this segment in this place can reach), the place-keyword slice otherwise.
+            contexts[r] = (await _segment_knowledge(seg, role=arch.get("role", ""), region=r)) or arch_mod.local_context(session_id, r, arch.get("role", ""))
         prompt = arch_mod.cast_prompt(query, seg, arch, slots, contexts, _constraints_block(constraints), _taken_block_text(taken),
                                       (constraints or {}).get("facets_prompt") or "",
                                       dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))

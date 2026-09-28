@@ -65,6 +65,11 @@ export default function SessionPage() {
   // The outcome records the report was rendered from (brief L6-01); the report panel also loads them on its own.
   const [reportRecords, setReportRecords] = useState<OutcomeRecord[]>([]);
   const [reportStructure, setReportStructure] = useState<ReportStructure | null>(null);
+  // Scoping runs on its own now (L1-04 wired end to end): when knowledge lands, before a build,
+  // a debate or a probe. The Agents tab shows where it stands and each twin what it can see.
+  const [scoping, setScoping] = useState<{ status: "idle" | "running" | "done" | "error"; reason?: string; unitCount?: number; error?: string }>({ status: "idle" });
+  // A twin whose knowledge the analyst asked to inspect: opens the Graph tab on the Scoping view.
+  const [graphFocus, setGraphFocus] = useState<{ view: "scoping"; agentId: string } | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Agent opinion KPIs — generated once we have enough posts, refreshed on completion.
@@ -254,6 +259,20 @@ export default function SessionPage() {
       } else if (event.type === "experiment_complete") {
         setExperimentCompletedAt(Date.now());
 
+      } else if (event.type === "scoping_started") {
+        setScoping({ status: "running", reason: event.reason });
+      } else if (event.type === "scoping_complete") {
+        setScoping({ status: "done", reason: event.reason, unitCount: event.unit_count });
+      } else if (event.type === "scoping_error") {
+        setScoping({ status: "error", reason: event.reason, error: event.error });
+      } else if (event.type === "scoping_annotated") {
+        // Every twin's record of what it can see was rewritten: reload the roster so the chips update.
+        api.agents.list(id).then((a) => {
+          const list = a as Agent[];
+          if (!list.length) return;
+          setAgents(list);
+          setAgentsMap(Object.fromEntries(list.map((ag) => [ag.id, ag])));
+        }).catch(() => {});
       } else if (event.type === "ingest_complete") {
         refreshSession();
 
@@ -495,6 +514,8 @@ export default function SessionPage() {
             isPendingSimulation={pendingSim !== null}
             expectedAgentCount={session ? (session.agent_count ?? 0) : null}
             dynamicDials={session?.dynamic_dials || []}
+            scoping={scoping}
+            onShowKnowledge={(agentId) => { setGraphFocus({ view: "scoping", agentId }); setActiveTab("kg"); }}
             onStartSimulation={(it, md) => handleStartSimulation(it, md)}
             onGoToThread={() => setActiveTab("simulation")}
             onGoToReport={() => setActiveTab("report")}
@@ -528,7 +549,7 @@ export default function SessionPage() {
           />
         )}
         {activeTab === "kg" && (
-          <KGPanel sessionId={id} agents={agents} entities={kgEntities} relations={kgRelations} activity={kgActivity} />
+          <KGPanel sessionId={id} agents={agents} entities={kgEntities} relations={kgRelations} activity={kgActivity} focus={graphFocus} />
         )}
         {activeTab === "report" && session && (
           <ReportChat

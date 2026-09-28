@@ -267,6 +267,11 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
         # Scoped retrieval (L1-04): once a session's knowledge has been facet-tagged, each twin
         # gets what its own profile can reach, with a route per item, instead of one shared block.
         from app.services.scoping import service as scoping
+        from app.services.scoping import auto as scoping_auto
+        try:
+            await scoping_auto.ensure_tagged(session_id, query, reason="debate")
+        except Exception as e:  # noqa: BLE001
+            print(f"[orchestrator] scoping before the debate failed: {type(e).__name__}: {e}")
         scoped = await scoping.is_scoped(session_id)
         if scoped:
             print(f"[orchestrator] session {session_id} is scoped — per-twin knowledge blocks")
