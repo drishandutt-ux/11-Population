@@ -10,11 +10,12 @@ ENV PYTHONUNBUFFERED=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # requirements.lock.txt is the fully pinned resolution of requirements.txt (uv pip compile, Linux
 # x86_64, Python 3.12). Installing the lock keeps a new transitive release from breaking the
-# build — a pip ResolutionImpossible on python-dateutil took the backend deploy down on 2026-09-28.
+# build. The 2026-09-28 failures were PyPI read timeouts on the builder (pip then reports "no versions"),
+# hence the long timeout and retries.
 # Regenerate after editing requirements.txt:
 #   uv pip compile requirements.txt --python-version 3.12 --python-platform x86_64-manylinux_2_28 --no-header -o requirements.lock.txt
 COPY requirements.txt requirements.lock.txt ./
-RUN pip install --no-cache-dir -r requirements.lock.txt
+RUN pip install --no-cache-dir --timeout 60 --retries 10 -r requirements.lock.txt
 
 COPY . .
 
