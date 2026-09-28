@@ -33,6 +33,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.agent import SpawnedAgent
 from app.models.evidence import Evidence
 from app.models.measurement import Experiment, Probe, ProbeAnswer
+from app.services.population import equity as equity_mod
 
 HANDLE_RE = re.compile(r"\[\[\s*(R\d+)\s*\]\]", re.IGNORECASE)
 TOKEN_RE = re.compile(r"\[\[record:([0-9a-fA-F-]{36})\]\]")
@@ -46,7 +47,9 @@ FIGURE_RULES = (
     "it, say it in words (\"most\", \"a minority\", \"the older twins\") and cite the twins instead.\n"
     "- Figures from the source material (a statistic, a price in a document) are cited too — "
     "see SOURCE FIGURES: [[F3]] for a typed statistic, [[E5]] for the document it was read in.\n"
-    "- The headline record (R1) is the population's answer to the question: lead with it."
+    "- The headline record (R1) is the population's answer to the question: lead with it.\n"
+    "- Every record carries an equity line (most vs least deprived cell). State the gap only as the record gives it, "
+    "say when it is not distinguishable at this size, and never read a gap into a record whose equity line is unavailable."
 )
 
 
@@ -97,8 +100,12 @@ def confidence_for(*, n: int, low: Optional[float], high: Optional[float], fmt: 
 
 
 def caveats_for(*, n: int, unanimity: Optional[dict], refusals: Optional[dict], frame_level: Optional[str],
-                estimated_dims: Optional[list[str]] = None, thin_cells: Optional[list[str]] = None) -> list[str]:
+                estimated_dims: Optional[list[str]] = None, thin_cells: Optional[list[str]] = None, equity: Optional[dict] = None) -> list[str]:
     out: list[str] = []
+    if equity is not None and not equity.get("available"):
+        out.append(str(equity.get("reason") or "No deprivation levels on this population."))
+    elif equity and equity.get("thin"):
+        out.append("Deprivation cells too thin to read on their own: " + ", ".join(equity["thin"][:4]) + ".")
     if n < 10:
         out.append(f"Small population ({n}): treat the interval, not the point, as the finding.")
     if unanimity and unanimity.get("flagged"):
@@ -164,6 +171,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
     n = int(est.get("n") or agg.get("n") or 0)
     model = str(getattr(p, "model", "") or "")
     created = getattr(p, "created_at", None)
+    splits = agg.get("segments") if isinstance(agg.get("segments"), dict) else {}
+    equity = equity_mod.equity_block(splits.get(equity_mod.KEY), fmt=est.get("format", "share"))
     return {
         "id": p.id,
         "kind": "headline" if instrument == "verdict" else "probe",
@@ -174,7 +183,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "estimate": est,
         "sentence": str(agg.get("sentence") or ""),
         "distribution": agg.get("position") or agg.get("would_buy") or agg.get("verdict") or [],
-        "splits": agg.get("segments") if isinstance(agg.get("segments"), dict) else {},
+        "splits": splits,
+        "equity": equity,
         "refusals": refusals,
         "unanimity": unanimity,
         "weighted": weighted,
@@ -188,7 +198,7 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
                                      unanimity=unanimity, refusals=refusals, frame_level=frame_level, weighted=bool(weighted), model=model),
         "caveats": caveats_for(n=n, unanimity=unanimity, refusals=refusals, frame_level=frame_level,
                                estimated_dims=(rep or {}).get("estimated") if isinstance(rep, dict) else None,
-                               thin_cells=(rep or {}).get("thin_cells") if isinstance(rep, dict) else None),
+                               thin_cells=(rep or {}).get("thin_cells") if isinstance(rep, dict) else None, equity=equity),
         "tags": {},
     }
 
@@ -219,6 +229,7 @@ def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame
         "sentence": str(res.get("verdict") or best.get("sentence") or ""),
         "distribution": [],
         "splits": best.get("segments") if isinstance(best.get("segments"), dict) else {},
+        "equity": equity_mod.equity_block(((best.get("segments") or {}) if isinstance(best.get("segments"), dict) else {}).get(equity_mod.KEY), fmt="lift"),
         "refusals": None,
         "unanimity": None,
         "weighted": None,
@@ -262,6 +273,7 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
                 hi = max(buckets, key=lambda b: _num(b.get("share")))
                 lo = min(buckets, key=lambda b: _num(b.get("share")))
                 notable.append(f"{key}: {hi.get('value')} {round(_num(hi.get('share')) * 100)}% vs {lo.get('value')} {round(_num(lo.get('share')) * 100)}%")
+        eq_line = equity_mod.prompt_line(r.get("equity") or {})
         flags = []
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")
@@ -271,6 +283,7 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             f"[[{h}]] {r.get('label')} — {est.get('label') or 'value'}: {_fmt_value(est)}"
             + (f"; question: {r['question']}" if r.get("question") else "")
             + (f"; splits: {'; '.join(notable)}" if notable else "")
+            + f"; {eq_line}"
             + (f"; {'; '.join(flags)}" if flags else "")
             + f"; confidence {r.get('confidence', {}).get('score', '?')}/100"
         )

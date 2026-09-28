@@ -13,6 +13,8 @@ its limit does not accept £14 an instrument later.
 """
 from __future__ import annotations
 
+import re
+
 import asyncio
 import hashlib
 import json
@@ -60,7 +62,7 @@ def _dial_bucket(v: Optional[float]) -> str:
 
 
 #: The splits every population has, in report order.
-BASE_SPLIT_KEYS = ("stance", "age_band", "humanity_band", "purchase_intent_prior")
+BASE_SPLIT_KEYS = ("stance", "age_band", "humanity_band", "purchase_intent_prior", "deprivation")
 #: Splits made from this session's dynamic dials (brief L3-04) are namespaced, so a dial
 #: called "region" or "segment" can never collide with a demographic split.
 DYNAMIC_PREFIX = "dyn:"
@@ -95,6 +97,13 @@ def segments_for(agent: SpawnedAgent) -> dict:
         for key in ("gender", "region", "income_band", "education"):
             if demo.get(key):
                 out[key] = str(demo[key])
+        # Equity by default (brief L6-04): the deprivation cell the writer placed the twin in, in
+        # one canonical spelling, so every result splits by it.
+        from app.services.population import equity
+        raw = ((demo.get("frame") or {}).get(equity.KEY) if isinstance(demo.get("frame"), dict) else None) or demo.get(equity.KEY)
+        cell = equity.canonical(raw, equity.explicit_level(raw))
+        if cell:
+            out[equity.KEY] = cell
     return out
 
 

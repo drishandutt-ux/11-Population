@@ -720,6 +720,9 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
             frame_dims: list[dict] = []
             try:
                 frame_dims = await frame_mod.pick_dimensions(bld.session_id, question, detected, constraints_summary(bld.constraints or {}))
+                # Equity by default (brief L6-04): deprivation is always a matched dimension.
+                from app.services.population import equity as equity_mod
+                frame_dims = equity_mod.ensure_dimension(frame_dims, bld.target_count)
                 await log(build_id, "frame", "info", "Sampling frame — the dimensions this population must match: " + ", ".join(f"{k + 1}. {d['label']}" for k, d in enumerate(frame_dims)),
                           " · ".join(f"{d['label']}: {d.get('why', '')}" for d in frame_dims)[:400])
                 bld = await _save(build_id, frame={"dimensions": frame_dims, "targets": {}, "report": None, "geography": detected.get("geography") or "", "sizing": None})
@@ -825,7 +828,12 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                         await log(build_id, "frame", "decision", f"Proxy · {d['label']} matched via {tg.get('proxy_attribute')}: {tg.get('source') or ''}", tg.get("note"))
                     else:
                         await log(build_id, "frame", "warn", f"No published distribution for {d['label']} — your call: estimate, upload, use a proxy, or skip", tg.get("note"))
-                bld = await _save(build_id, frame={"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or "", "sizing": sizing})
+                frame_now = {"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or "", "sizing": sizing}
+                from app.services.population import equity as equity_mod
+                frame_now, eq_note = equity_mod.ensure_target(frame_now, equity_mod.level_for(bld.target_count))
+                if eq_note:
+                    await log(build_id, "frame", "decision", "Equity by default · " + eq_note, None)
+                bld = await _save(build_id, frame=frame_now)
             except Exception as e:  # noqa: BLE001
                 await log(build_id, "frame", "warn", "Could not build the sampling frame; the plan will not be matched to published distributions", str(e)[:120])
             if _stopped(build_id):

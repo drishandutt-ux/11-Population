@@ -455,6 +455,8 @@ export type OutcomeRecord = {
   sentence: string;
   distribution: { value: string; count: number; share: number }[];
   splits: Record<string, { value: string; share: number; low?: number; high?: number; n: number }[]>;
+  /** Equity by default (brief L6-04): the record by deprivation level — most vs least deprived cell, the gap, whether it is real. */
+  equity: EquityBlock;
   refusals: { n: number; refused: number; share: number; reasons: { value: string; count: number; share: number }[]; who: { agent_id: string; name: string; why: string }[] } | null;
   unanimity: { flagged: boolean; top_share: number; widest_split: string; widest_spread: number; n: number; reason?: string } | null;
   weighted: { metric: string; label: string; format: string; weighted: number | null; unweighted: number | null; ess: number; n: number } | null;
@@ -479,6 +481,11 @@ export type ReportStructure = {
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
+
+export type EquityCell = { rank: number; label: string; value: string; n: number; thin: boolean; share?: number | null; low?: number | null; high?: number | null; mean?: number | null };
+export type EquityBlock =
+  | { available: true; key: string; level: "quintile" | "decile"; label: string; cells: EquityCell[]; most: EquityCell; least: EquityCell; gap: number | null; gap_unit: string; significant: boolean | null; thin: string[]; spans: boolean }
+  | { available: false; key: string; reason: string };
 
 export type ProvenanceClass = "official_statistic" | "peer_reviewed" | "grey_literature" | "commissioned_research" | "client_data" | "social_signal" | "model_inference";
 /** A typed statistic read from the material (brief L6-03): what `[[fact:<evidence id>#<k>]]` resolves to. */
@@ -1038,7 +1045,7 @@ export type PopulationDetected = {
 
 // ── The sampling frame (Studio; brief L2-01…L2-05) ───────────────────────────
 export type FrameCategory = { label: string; share_pct: number; age_min?: number; age_max?: number };
-export type FrameDimension = { key: string; label: string; attribute: string; kind: "demographic" | "behavioural" | "attitudinal"; why: string; matchable: boolean; proxy_attribute: string };
+export type FrameDimension = { key: string; label: string; attribute: string; kind: "demographic" | "behavioural" | "attitudinal"; why: string; matchable: boolean; proxy_attribute: string; equity?: boolean; level?: "quintile" | "decile" };
 export type FrameTarget = { status: "found" | "proxy" | "uploaded" | "estimated" | "skipped" | "missing"; categories: FrameCategory[]; source: string; year: string; geography: string; proxy_attribute: string; note: string; provenance?: string; confidence?: number };
 export type FrameReportCell = { label: string; target_pct: number; planned_pct: number; achieved_pct: number | null; achieved_n: number | null; expected_n: number; thin: boolean };
 export type FrameReportDim = { key: string; label: string; attribute: string; status: string; source: string; year: string; geography: string; provenance: string; priority: number; mode: "exact" | "weighted" | "unmatched"; cells?: FrameReportCell[]; max_deviation_planned?: number; max_deviation_achieved?: number | null; unplaced?: number | null };

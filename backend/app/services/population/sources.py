@@ -48,7 +48,7 @@ QUANT_MAX_ROUNDS = int(os.environ.get("QUANT_MAX_ROUNDS", 2))
 #: The population dimensions a fact target can describe. The planner names one per target and
 #: the catalogue says which publishers cover it, so a target that comes back empty can be
 #: widened to every ticked publisher that covers its dimension.
-DIMENSIONS = ["size", "age", "gender", "region", "household", "income", "occupation", "education",
+DIMENSIONS = ["size", "age", "gender", "region", "household", "income", "occupation", "education", "deprivation",
               "attitude", "trust", "tech", "habit", "health", "transport", "housing", "price", "consumer", "other"]
 
 #: The catalogue the Studio offers. `regions` are hints for the default selection; the user can
@@ -60,29 +60,29 @@ DIMENSIONS = ["size", "age", "gender", "region", "household", "income", "occupat
 QUANT_SOURCES: list[dict] = [
     # ── United Kingdom: official statistics ─────────────────────────────────
     {"key": "ons", "label": "ONS", "domain": "ons.gov.uk", "regions": ["uk", "england", "wales"], "kind": "official statistics", "fit": 4,
-     "covers": ["size", "age", "gender", "region", "household", "income", "occupation", "tech", "health", "habit"],
+     "covers": ["size", "age", "gender", "region", "household", "income", "occupation", "tech", "health", "habit", "deprivation"],
      "phrasing": ["Population and household estimates, England and Wales", "Earnings and hours worked, occupation by four-digit SOC",
                   "Personal well-being in the UK", "Internet access – households and individuals", "Families and households in the UK"],
      "description": "Office for National Statistics: census, population estimates, earnings (ASHE), households, wellbeing, internet access.",
      "note": "Bulletin and article pages carry the headline figures in prose; dataset pages are JavaScript-rendered — prefer /bulletins and /articles. Census figures are England and Wales, not UK."},
     {"key": "nomis", "label": "Nomis", "domain": "nomisweb.co.uk", "regions": ["uk", "england", "scotland", "wales", "ni"], "kind": "official statistics", "fit": 4,
-     "covers": ["size", "age", "region", "occupation", "education", "income"],
+     "covers": ["size", "age", "region", "occupation", "education", "income", "deprivation"],
      "phrasing": ["Labour Market Profile", "Local Area Report", "National Statistics Socio-economic Classification (NS-SEC)", "Employment by occupation"],
      "description": "ONS labour-market and census statistics by local area: occupation, NS-SEC (the social-grade proxy), employment, claimant counts.",
      "note": "Local Area Report and Labour Market Profile pages are static HTML tables with the numbers in them — the best automated entry point for a named town or council area."},
     {"key": "govuk", "label": "gov.uk statistics", "domain": "gov.uk", "site": "gov.uk/government/statistics", "regions": ["uk", "england"], "kind": "official statistics", "fit": 4,
-     "covers": ["income", "household", "transport", "housing", "attitude", "trust", "habit", "education", "health"],
+     "covers": ["income", "household", "transport", "housing", "attitude", "trust", "habit", "education", "health", "deprivation"],
      "phrasing": ["Households below average income: for financial years ending", "National Travel Survey", "English Housing Survey",
                   "Community Life Survey", "Family Resources Survey", "Participation Survey"],
      "description": "Departmental statistics: DWP household incomes (HBAI), DfT National Travel Survey, English Housing Survey, DCMS Community Life and Participation surveys.",
      "note": "Search is restricted to /government/statistics so policy papers and ministerial press releases are not read. Statistical releases carry the headline shares in the HTML summary; tables sit in ODS/CSV."},
     {"key": "scot_census", "label": "Scotland's Census", "domain": "scotlandscensus.gov.uk", "regions": ["scotland"], "kind": "official statistics", "fit": 3,
-     "covers": ["size", "age", "gender", "region", "household", "education", "occupation"],
+     "covers": ["size", "age", "gender", "region", "household", "education", "occupation", "deprivation"],
      "phrasing": ["Scotland's Census 2022 - rounded population estimates", "Ethnic group, national identity, language and religion", "Housing"],
      "description": "National Records of Scotland: the 2022 census — population, households, identity, housing, work.",
      "note": "The 2022 census is a year later than England and Wales; say so when merging into a UK figure."},
     {"key": "nisra", "label": "NISRA", "domain": "nisra.gov.uk", "regions": ["ni"], "kind": "official statistics", "fit": 4,
-     "covers": ["size", "age", "gender", "region", "household", "education", "occupation"],
+     "covers": ["size", "age", "gender", "region", "household", "education", "occupation", "deprivation"],
      "phrasing": ["Census 2021 Main Statistics", "Mid-Year Population Estimates", "Labour Force Survey"],
      "description": "Northern Ireland Statistics and Research Agency: census 2021, population estimates, labour market.",
      "note": "Main Statistics pages carry the headline figures; the detailed tables are CSV packages."},
@@ -155,7 +155,7 @@ QUANT_SOURCES: list[dict] = [
      "description": "Retail sales growth, shop-price inflation and footfall — headline percentages in monthly press releases.",
      "note": "Only the headline growth rates are public."},
     {"key": "london", "label": "London Datastore", "domain": "data.london.gov.uk", "regions": ["england"], "kind": "open data portal", "fit": 3,
-     "covers": ["housing", "income", "region", "size", "transport"],
+     "covers": ["housing", "income", "region", "size", "transport", "deprivation"],
      "phrasing": ["Children in low-income families", "house price per square metre", "London Datastore dataset"],
      "description": "Greater London Authority open data: housing costs, poverty, population and infrastructure by borough and ward.",
      "note": "Dataset pages describe the data and give some headline numbers; the detail is in CSV."},

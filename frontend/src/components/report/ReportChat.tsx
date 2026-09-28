@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass } from "@/lib/api";
+import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass, EquityBlock, EquityCell } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
   ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle,
@@ -855,6 +855,7 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
                 dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
             </div>
             {i === firstAnswer && records.length > 0 && <RecordGrid records={records} />}
+            {i === firstAnswer && records.length > 0 && <EquityStrip records={records} />}
             </div>
           );
         }
@@ -1131,6 +1132,7 @@ function RecordGrid({ records }: { records: OutcomeRecord[] }) {
                 <span>· confidence {r.confidence.score}/100</span>
                 {refused > 0 && <span>· {refused} refused</span>}
               </div>
+              <EquityLine eq={r.equity} compact />
             </button>
           );
         })}
@@ -1139,10 +1141,95 @@ function RecordGrid({ records }: { records: OutcomeRecord[] }) {
   );
 }
 
+// ── Equity by default (brief L6-04) ───────────────────────────────────────────
+// Every record is read by deprivation level as well as the headline: the most and least
+// deprived cells side by side, the gap, and whether it is real (intervals do not overlap).
+
+function fmtCell(c: EquityCell): string {
+  if (typeof c.share === "number") return `${Math.round(c.share * 100)}%`;
+  if (typeof c.mean === "number") return `${c.mean}`;
+  return "—";
+}
+
+function EquityLine({ eq, compact = false }: { eq: EquityBlock; compact?: boolean }) {
+  if (!eq) return null;
+  if (!eq.available) return <div className={`text-[10px] text-muted-foreground/55 ${compact ? "mt-1.5" : ""}`}>equity · no deprivation levels</div>;
+  const tone = eq.significant ? "text-fuchsia-300" : "text-muted-foreground/70";
+  return (
+    <div className={`flex flex-wrap items-center gap-x-2 text-[10px] ${compact ? "mt-1.5" : ""}`}>
+      <span className="text-fuchsia-300/80 font-semibold uppercase tracking-wide text-[9px]">equity</span>
+      <span className="text-foreground/80">{eq.most.label.split(" ")[0]} {fmtCell(eq.most)}</span>
+      <span className="text-muted-foreground/50">vs</span>
+      <span className="text-foreground/80">{eq.least.label.split(" ")[0]} {fmtCell(eq.least)}</span>
+      {eq.gap != null && <span className={tone}>{eq.gap > 0 ? "+" : ""}{eq.gap} {eq.gap_unit === "points" ? "pts" : ""}{eq.significant ? " · real gap" : eq.significant === false ? " · not distinguishable" : ""}</span>}
+    </div>
+  );
+}
+
+function EquitySplit({ eq }: { eq: EquityBlock }) {
+  if (!eq) return null;
+  if (!eq.available) {
+    return (
+      <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/5 px-2.5 py-2 text-[10px] text-muted-foreground/85">
+        <span className="text-fuchsia-300/80 font-semibold uppercase tracking-wide text-[9px]">Equity</span> · {eq.reason}
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/5 px-2.5 py-2 space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="text-fuchsia-300/80 font-semibold uppercase tracking-wide text-[9px]">Equity · {eq.label}</span>
+        {eq.gap != null && (
+          <span className={`text-[10px] ${eq.significant ? "text-fuchsia-300" : "text-muted-foreground/70"}`}>
+            gap {eq.gap > 0 ? "+" : ""}{eq.gap} {eq.gap_unit === "points" ? "pts" : ""} · {eq.significant ? "real: the intervals do not overlap" : eq.significant === false ? "not distinguishable at this size" : "untested"}
+          </span>
+        )}
+      </div>
+      <div className="space-y-0.5">
+        {eq.cells.map((c) => (
+          <div key={c.rank} className={`flex items-center gap-2 text-[10px] ${c.thin ? "opacity-60" : ""}`}>
+            <span className="w-28 truncate text-foreground/80" title={c.value}>{c.label}</span>
+            <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-fuchsia-400/70 rounded-full" style={{ width: `${typeof c.share === "number" ? Math.round(c.share * 100) : 0}%` }} />
+            </div>
+            <span className="w-16 text-right tabular-nums text-muted-foreground">{fmtCell(c)} <span className="text-muted-foreground/50">n={c.n}{c.thin ? " thin" : ""}</span></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EquityStrip({ records }: { records: OutcomeRecord[] }) {
+  const withEq = records.filter((r) => r.equity);
+  if (!withEq.length) return null;
+  const none = withEq.every((r) => !r.equity.available);
+  return (
+    <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/5 px-3.5 py-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[10px] uppercase tracking-widest text-fuchsia-300 font-bold">Equity</span>
+        <span className="text-[10px] text-muted-foreground/60">every record by deprivation level, most vs least deprived</span>
+      </div>
+      {none ? (
+        <p className="text-[11px] text-muted-foreground/85 leading-snug">{(withEq[0].equity as { reason: string }).reason}</p>
+      ) : (
+        <div className="space-y-1">
+          {withEq.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 text-[11px]">
+              <button type="button" data-record={r.id} className="truncate max-w-[45%] text-left text-foreground/85 hover:text-foreground underline decoration-dotted underline-offset-2">{r.label}</button>
+              <EquityLine eq={r.equity} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: number; y: number; onClose: () => void }) {
   const left = Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 400);
   const top = Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 800) - 460);
-  const splitKeys = Object.keys(r.splits || {}).filter((k) => (r.splits[k] || []).length >= 2).slice(0, 3);
+  const splitKeys = Object.keys(r.splits || {}).filter((k) => k !== "deprivation" && (r.splits[k] || []).length >= 2).slice(0, 3);
   const mix = Object.entries(r.provenance?.evidence_mix || {}).filter(([, n]) => n > 0);
   return (
     <>
@@ -1171,6 +1258,7 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
           {r.refusals && r.refusals.refused > 0 && (
             <p className="text-[10px] text-muted-foreground/80">{r.refusals.refused} of {r.refusals.n} said it was not theirs to answer — outside every denominator.</p>
           )}
+          <EquitySplit eq={r.equity} />
           {splitKeys.length > 0 && (
             <div className="space-y-2">
               {splitKeys.map((k) => (

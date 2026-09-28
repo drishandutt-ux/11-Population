@@ -148,6 +148,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-foreground">{d.label}</span>
+                    {d.equity && <span className="text-[9px] px-1.5 py-0.5 rounded border border-fuchsia-500/30 text-fuchsia-300 bg-fuchsia-500/10" title="Equity by default: every result is reported by deprivation level as well as the headline">equity · always on</span>}
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
                     {rep && rep.mode !== "unmatched" && <span className="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground">{MODE_META[rep.mode]}</span>}
                     {t.status === "proxy" && <span className="text-[10px] text-sky-300/80">via {t.proxy_attribute}</span>}

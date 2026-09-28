@@ -30,8 +30,9 @@ from typing import Any, Optional
 
 from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
 from app.services.measurement.stats import rake_weights
+from app.services.population import equity
 
-ATTRIBUTES = ["region", "age", "gender", "income", "education", "occupation", "household", "ethnicity", "employment", "tenure", "condition", "attitude", "other"]
+ATTRIBUTES = ["region", "age", "gender", "income", "education", "occupation", "household", "ethnicity", "employment", "tenure", "condition", "deprivation", "attitude", "other"]
 KINDS = ["demographic", "behavioural", "attitudinal"]
 STATUSES = ["found", "proxy", "uploaded", "estimated", "skipped", "missing"]
 MATCH_EXACTLY = 3          # the top-priority dimensions are quota'd; the rest are weighted only
@@ -193,6 +194,8 @@ def category_of(dim: dict, target: dict, *, value: Any = None, age: Any = None) 
         return _keyword_category(v, cats, _INCOME_SYNONYMS)
     if attr == "education":
         return _keyword_category(v, cats, _EDU_SYNONYMS)
+    if attr == equity.ATTRIBUTE:   # deprivation: by rank, whatever the spelling (brief L6-04)
+        return equity.category_for(v, cats, equity.level_for(None) if len(cats) <= 5 else "decile")
     for c in cats:   # region, occupation, household, employment, tenure, ethnicity, condition: containment either way
         lab = _norm(c["label"])
         if lab and (lab in v or (len(v) >= 4 and v in lab)):
@@ -232,7 +235,8 @@ def frame_block_for_prompt(frame: Optional[dict]) -> str:
         cats = tg.get("categories") or []
         if cats:
             lines.append(f"- {d['key']} ({d['label']}): categories " + " | ".join(f"{c['label']} ({c.get('share_pct', 0)}%)" for c in cats)
-                         + f" — from {tg.get('source') or tg.get('status')}; place every persona in exactly one of these categories, and match these shares across the population")
+                         + f" — from {tg.get('source') or tg.get('status')}; place every persona in exactly one of these categories, and match these shares across the population"
+                         + (("\n" + equity.persona_note(d.get("level") or equity.level_for(None))) if d.get("key") == equity.KEY else ""))
         else:
             lines.append(f"- {d['key']} ({d['label']}): no published distribution — assign each persona a short, consistent category label of your own (2-4 words; reuse the same labels across personas)")
     return "SAMPLING FRAME (the dimensions this population must be representative on, most important first):\n" + "\n".join(lines) + "\n"
@@ -247,6 +251,8 @@ def _agent_value(dim: dict, target: dict, agent: Any) -> tuple[Any, Any]:
     else:
         age = getattr(agent, "age", None)
     key = {"region": "region", "gender": "gender", "income": "income_band", "education": "education", "occupation": "occupation"}.get(attr, attr)
+    if attr == equity.ATTRIBUTE:   # the writer stores the cell under demographics.frame; a plain key is accepted too
+        return ((demo.get("frame") or {}).get(equity.KEY) if isinstance(demo.get("frame"), dict) else None) or demo.get(equity.KEY), age
     return demo.get(key), age
 
 
@@ -457,7 +463,7 @@ def summary_line(report: Optional[dict]) -> str:
 # the condition or in scope, and the slice the system actually reaches. Tavily (when keyed)
 # runs these as advanced, domain-scoped searches through the existing engine chain.
 
-_ATTR_TO_GATHER_DIM = {"region": "region", "age": "age", "gender": "gender", "income": "income", "education": "education", "occupation": "occupation",
+_ATTR_TO_GATHER_DIM = {"deprivation": "deprivation", "region": "region", "age": "age", "gender": "gender", "income": "income", "education": "education", "occupation": "occupation",
                        "household": "household", "ethnicity": "other", "employment": "occupation", "tenure": "housing", "condition": "health",
                        "attitude": "attitude", "other": "other"}
 
@@ -542,6 +548,7 @@ _FALLBACK_PHRASING = {
     "income": "household income by area {geo}", "education": "highest level of qualification Census 2021 {geo}", "occupation": "occupation Census 2021 {geo}",
     "household": "household composition Census 2021 {geo}", "ethnicity": "ethnic group Census 2021 {geo}", "employment": "economic activity {geo}",
     "tenure": "housing tenure Census 2021 {geo}", "condition": "{label} prevalence {geo}", "other": "{label} statistics {geo}",
+    "deprivation": "English indices of deprivation 2019 {geo} IMD deciles share of neighbourhoods",
 }
 
 
