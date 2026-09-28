@@ -57,7 +57,7 @@ Which perspectives were represented, what the majority position concluded and wh
 ## OUTCOME
 Final recommendation and answer. State the 2–3 analytic caveats that could change the conclusion (the computed caveats from the records are shown separately — do not repeat them).
 
-Every figure about the population comes from an OUTCOME RECORD and is cited right after it ([[R1]]). Figures from the source material are quoted with their source. Use **bold** for key conclusions. Write densely — every sentence must carry insight, zero filler."""
+Every figure about the population comes from an OUTCOME RECORD and is cited right after it ([[R1]]). Every figure from the source material cites the typed statistic ([[F2]]) or the document it was read in ([[E3]]); a number you cannot cite is said in words. Use **bold** for key conclusions. Write densely — every sentence must carry insight, zero filler."""
 
 STRUCTURE_RULES = (
     "STRUCTURE — what is computed and what you write:\n"
@@ -258,7 +258,8 @@ def caveats_from_records(records: list[dict], cited_ids: list[str]) -> list[dict
 # ── assembly ─────────────────────────────────────────────────────────────────
 
 def build_structure(*, session_query: str, records: list[dict], headline: Optional[dict], positions: list[dict],
-                    evidence: list[dict], frame: dict, cited_record_ids: list[str], claimed_band: Optional[str]) -> dict:
+                    evidence: list[dict], frame: dict, cited_record_ids: list[str], claimed_band: Optional[str],
+                    figures: Optional[dict] = None) -> dict:
     """Everything the rendered report reads from data rather than prose."""
     maj, dissent = dissent_for(positions)
     counts = {k: sum(1 for p in positions if p["position"] == k) for k in ("for", "against", "mixed")}
@@ -288,6 +289,8 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
         },
         "records": {"all": [r.get("id") for r in records], "cited": list(cited_record_ids)},
         "outcome": {"caveats": caveats_from_records(records, cited_record_ids)},
+        # L6-03: which source figures the prose cites, and every number it typed with no source.
+        "figures": figures or {"facts_cited": [], "items_cited": [], "unsourced": []},
     }
 
 

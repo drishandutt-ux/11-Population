@@ -173,6 +173,10 @@ export const api = {
     /** Every outcome record on file for the session — the headline verdict first, then Lab results. */
     list: (sessionId: string) => request<{ records: OutcomeRecord[] }>(`/sessions/${sessionId}/records`),
   },
+  figures: {
+    /** The source-figure ledger (brief L6-03): typed statistics and evidence items with their provenance class. */
+    list: (sessionId: string) => request<FigureLedger>(`/sessions/${sessionId}/figures`),
+  },
   kg: {
     ontology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology`),
     buildOntology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology/build`, { method: "POST" }),
@@ -472,7 +476,16 @@ export type ReportStructure = {
   discussion: { record_id: string | null; positions: { value: string; count: number; share: number }[]; n: number; majority: string | null; dissent: { agent_id: string; position: string; confidence: number; verdict: string }[] };
   records: { all: string[]; cited: string[] };
   outcome: { caveats: { text: string; record_ids: string[] }[] };
+  /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
+  figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
+
+export type ProvenanceClass = "official_statistic" | "peer_reviewed" | "grey_literature" | "commissioned_research" | "client_data" | "social_signal" | "model_inference";
+/** A typed statistic read from the material (brief L6-03): what `[[fact:<evidence id>#<k>]]` resolves to. */
+export type SourceFact = { id: string; evidence_id: string; k: number; value: string; statistic: string; group: string; geography: string; year: string; quote: string; source: string; source_ref: string; title: string; provenance_class: ProvenanceClass; trust_tier: string };
+/** An evidence item with its provenance class: what `[[evidence:<id>]]` resolves to. */
+export type SourceItem = { id: string; provenance_class: ProvenanceClass; trust_tier: string; title: string; author: string; source_ref: string; published_at: string; on_topic: boolean; excerpt: string };
+export type FigureLedger = { facts: SourceFact[]; items: SourceItem[] };
 
 export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string; dynamic_dials?: DynamicDial[] };
 

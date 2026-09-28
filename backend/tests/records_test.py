@@ -157,7 +157,7 @@ def client(tmp_path, monkeypatch):
     async def fake_create(client_, *, session_id=None, label="", **kw):
         seen["system"] = kw["system"]; seen["prompt"] = kw["messages"][0]["content"]
         class R:
-            content = [type("T", (), {"text": "## DIRECT ANSWER\nMost are in favour [[R1]] — [[A1]] said so.\nConfidence: HIGH\n\n## OUTCOME\nGo ahead [[R9]]."})()]
+            content = [type("T", (), {"text": "## DIRECT ANSWER\nMost are in favour [[R1]] — [[A1]] said so.\nConfidence: HIGH\n\n## OUTCOME\nGo ahead [[R9]]. About 12% said so in the debate."})()]
         return R()
 
     monkeypatch.setattr(report_generator, "tracked_messages_create", fake_create)
@@ -220,6 +220,12 @@ def test_generate_runs_the_verdict_once_and_renders_from_records(client):
     assert "== EVIDENCE BY CLASS" in seen["prompt"] and "Never state a confidence level" in seen["system"]
     assert st["outcome"]["caveats"][-1]["text"].startswith("Synthetic population") and st["outcome"]["caveats"][-1]["record_ids"] == [rid]
     assert st["records"] == {"all": [rid], "cited": [rid]}
+    # L6-03: the source ledger reached the prompt, and a number the model typed with no source is flagged
+    assert "== SOURCE FIGURES (0 typed statistics" in seen["prompt"] and "== SOURCE DOCUMENTS (0 evidence" in seen["prompt"]
+    assert "SOURCE FIGURES — numbers from the material" in seen["system"]
+    assert "About [[unsourced:12%]] said so" in body["answer"] and st["figures"] == {"facts_cited": [], "items_cited": [], "unsourced": ["12%"]}
+    assert "1 unsourced figure(s) flagged" in body["sources"]
+    assert c.get(f"/api/v1/sessions/{sid}/figures").json() == {"facts": [], "items": []}
     hist = c.get(f"/api/v1/sessions/{sid}/report/history").json()
     assert hist and hist[0]["structure"]["direct_answer"]["record_id"] == rid
 

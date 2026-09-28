@@ -44,8 +44,8 @@ FIGURE_RULES = (
     "after the figure: \"75% would buy [[R1]]\".\n"
     "- Do NOT type a figure about the population that is not in a record. If no record covers "
     "it, say it in words (\"most\", \"a minority\", \"the older twins\") and cite the twins instead.\n"
-    "- Figures from the source material (a statistic, a price in a document) are fine to quote; "
-    "say where they came from.\n"
+    "- Figures from the source material (a statistic, a price in a document) are cited too — "
+    "see SOURCE FIGURES: [[F3]] for a typed statistic, [[E5]] for the document it was read in.\n"
     "- The headline record (R1) is the population's answer to the question: lead with it."
 )
 

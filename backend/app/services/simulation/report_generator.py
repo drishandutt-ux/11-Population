@@ -7,6 +7,7 @@ from app.services.simulation.thread_manager import get_posts
 from app.services.simulation import citations
 from app.services.simulation import records as records_mod
 from app.services.simulation import structure as structure_mod
+from app.services.simulation import figures as figures_mod
 from app.models.agent import SpawnedAgent
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -27,6 +28,12 @@ class ReportContext:
     records: list = field(default_factory=list)
     records_text: str = ""
     record_handles: dict = field(default_factory=dict)
+    # L6-03: the source-figure ledger — typed statistics and evidence items, numbered F1… / E1…
+    ledger: dict = field(default_factory=dict)
+    facts_text: str = ""
+    items_text: str = ""
+    figure_handles: dict = field(default_factory=dict)
+    unsourced: list = field(default_factory=list)
 
 
 async def _context(session_id: str, question: str, db: AsyncSession, records: Optional[list[dict]]) -> ReportContext:
@@ -37,6 +44,13 @@ async def _context(session_id: str, question: str, db: AsyncSession, records: Op
             print(f"[report] records unavailable: {type(e).__name__}: {e}")
             records = []
     records_text, record_handles = records_mod.records_block(records)
+
+    ledger: dict = {}
+    try:
+        ledger = await figures_mod.load_ledger(session_id)
+    except Exception as e:  # noqa: BLE001
+        print(f"[report] source-figure ledger unavailable: {type(e).__name__}: {e}")
+    facts_text, items_text, figure_handles = figures_mod.ledger_block(ledger)
 
     # ── 1. Knowledge graph context ──────────────────────────────────────────
     rag = await get_lightrag(session_id)
@@ -75,7 +89,8 @@ async def _context(session_id: str, question: str, db: AsyncSession, records: Op
 
     return ReportContext(kg_context=kg_context, posts=posts, agents=agents_list, handles=handles, thread_text=thread_text,
                          roster_text=roster_text, frame_text=frame_text, frame=frame, records=records,
-                         records_text=records_text, record_handles=record_handles)
+                         records_text=records_text, record_handles=record_handles, ledger=ledger,
+                         facts_text=facts_text, items_text=items_text, figure_handles=figure_handles)
 
 
 async def _call(session_id: str, label: str, system: str, prompt: str, ctx: ReportContext) -> str:
@@ -91,8 +106,11 @@ async def _call(session_id: str, label: str, system: str, prompt: str, ctx: Repo
         # then any name typed anyway becomes a citation: the name a reader sees is always read
         # back from the agent row, never retyped by the model.
         answer = records_mod.resolve_handles(answer, ctx.record_handles)
+        answer = figures_mod.resolve_handles(answer, ctx.figure_handles)
         answer = citations.resolve(answer, ctx.handles)
         answer = citations.repair_names(answer, ctx.agents)
+        # Last: any number left with no citation in its sentence is the model's own — flagged.
+        answer, ctx.unsourced = figures_mod.mark_unsourced(answer)
         return answer
     except Exception as e:
         from app.core.llm_errors import friendly_llm_error
@@ -103,10 +121,13 @@ async def _call(session_id: str, label: str, system: str, prompt: str, ctx: Repo
 def _sources(ctx: ReportContext, answer: str, session_id: str) -> str:
     cited = citations.cited_ids(answer)
     cited_records = records_mod.cited_record_ids(answer)
+    facts, items = figures_mod.cited_ids(answer)
     return (
         f"Knowledge graph + {len(ctx.posts)} simulation posts from {len(ctx.agents)} agents"
         + (f", {len(cited)} cited by name" if cited else "")
         + (f", {len(cited_records)} outcome record(s) cited" if cited_records else "")
+        + (f", {len(facts) + len(items)} source figure(s) cited" if facts or items else "")
+        + (f", {len(ctx.unsourced)} unsourced figure(s) flagged" if ctx.unsourced else "")
         + f" (session {session_id})"
     )
 
@@ -119,6 +140,7 @@ _BASE_SYSTEM = (
     "reference concrete data from both the ingested documents and the debate.\n\n"
     + citations.CITATION_RULES
     + "\n\n" + records_mod.FIGURE_RULES
+    + "\n\n" + figures_mod.SOURCE_FIGURE_RULES
 )
 
 
@@ -133,6 +155,12 @@ def _prompt(original_query: str, ctx: ReportContext, extra_blocks: str, request:
 
 == OUTCOME RECORDS ({len(ctx.records)} computed from the twins' answers — the ONLY figures about this population you may state; cite as [[R1]]) ==
 {ctx.records_text}
+
+== SOURCE FIGURES ({len(ctx.ledger.get('facts') or [])} typed statistics read from the material — cite as [[F1]]) ==
+{ctx.facts_text}
+
+== SOURCE DOCUMENTS ({len(ctx.ledger.get('items') or [])} evidence items with their provenance class — cite as [[E1]] for a figure or claim read in one) ==
+{ctx.items_text}
 {extra_blocks}
 == POPULATION ROSTER ({len(ctx.agents)} twins — cite by the handle in brackets, never by name) ==
 {ctx.roster_text}
@@ -200,8 +228,10 @@ async def generate_report(
 
     from app.services.population import frame as frame_mod
     frame_summary = structure_mod.frame_summary(ctx.frame, frame_mod.summary_line((ctx.frame or {}).get("report")))
+    facts_cited, items_cited = figures_mod.cited_ids(answer)
     structure = structure_mod.build_structure(
         session_query=original_query, records=records, headline=headline, positions=positions, evidence=evidence,
         frame=frame_summary, cited_record_ids=records_mod.cited_record_ids(answer), claimed_band=claimed,
+        figures={"facts_cited": facts_cited, "items_cited": items_cited, "unsourced": list(ctx.unsourced)},
     )
     return answer, _sources(ctx, answer, session_id), structure

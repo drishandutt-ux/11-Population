@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { api, Agent, OutcomeRecord, Post, ReportStructure } from "@/lib/api";
+import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
   ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle,
@@ -66,6 +66,15 @@ export default function ReportChat({
   }, [sessionId, reportContent, recordsProp]);
   const records = recordsProp && recordsProp.length ? recordsProp : loadedRecords;
   RECORDS_BY_ID = Object.fromEntries(records.map((r) => [r.id, r]));
+  // L6-03: the source-figure ledger a `[[fact:…]]` / `[[evidence:…]]` citation resolves to.
+  const [ledger, setLedger] = useState<{ facts: SourceFact[]; items: SourceItem[] }>({ facts: [], items: [] });
+  useEffect(() => {
+    api.figures.list(sessionId).then((l) => setLedger({ facts: l.facts || [], items: l.items || [] })).catch(() => {});
+  }, [sessionId, reportContent]);
+  FACTS_BY_ID = Object.fromEntries(ledger.facts.map((f) => [f.id, f]));
+  ITEMS_BY_ID = Object.fromEntries(ledger.items.map((i) => [i.id, i]));
+  // A source chip that was clicked: the statistic or document behind a quoted figure.
+  const [openSource, setOpenSource] = useState<{ fact?: SourceFact; item?: SourceItem; x: number; y: number } | null>(null);
   const [reportMessages, setReportMessages] = useState<Message[]>([]);
   const [agentMessages, setAgentMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -97,6 +106,17 @@ export default function ReportChat({
 
   /** Delegated click for every `[[twin:…]]` citation rendered inside this panel. */
   function handleCiteClick(e: React.MouseEvent) {
+    const src = (e.target as HTMLElement).closest?.("[data-fact],[data-evidence]") as HTMLElement | null;
+    if (src) {
+      const fact = src.dataset.fact ? FACTS_BY_ID[src.dataset.fact] : undefined;
+      const item = src.dataset.evidence ? ITEMS_BY_ID[src.dataset.evidence] : undefined;
+      if (fact || item) {
+        e.preventDefault();
+        const rect = src.getBoundingClientRect();
+        setOpenSource({ fact, item, x: rect.left, y: rect.bottom + 6 });
+      }
+      return;
+    }
     const rel = (e.target as HTMLElement).closest?.("[data-record]") as HTMLElement | null;
     if (rel) {
       const record = RECORDS_BY_ID[rel.dataset.record || ""];
@@ -237,6 +257,7 @@ export default function ReportChat({
         </div>
 
         {openRecord && <RecordCard record={openRecord.record} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
+        {openSource && <SourceCard fact={openSource.fact} item={openSource.item} x={openSource.x} y={openSource.y} onClose={() => setOpenSource(null)} />}
         {cited && (
           <TwinTrace
             agent={cited.agent}
@@ -295,6 +316,7 @@ export default function ReportChat({
       />
 
       {openRecord && <RecordCard record={openRecord.record} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
+        {openSource && <SourceCard fact={openSource.fact} item={openSource.item} x={openSource.x} y={openSource.y} onClose={() => setOpenSource(null)} />}
       {cited && (
         <TwinTrace
           agent={cited.agent}
@@ -632,6 +654,63 @@ const CITE_RE = /\[\[twin:([0-9a-fA-F-]{36})(?:\|post:([0-9a-fA-F-]{36}))?\]\]/g
 // number a reader sees is read from the outcome record (brief L6-01).
 const RECORD_RE = /\[\[record:([0-9a-fA-F-]{36})\]\]/g;
 let RECORDS_BY_ID: Record<string, OutcomeRecord> = {};
+// L6-03: a figure read from the material cites the typed statistic or the document it came from;
+// a number with nothing behind it arrives wrapped as unsourced and is shown as the model's own.
+const FACT_RE = /\[\[fact:([A-Za-z0-9-]{1,64}#\d+)\]\]/g;
+const EVID_RE = /\[\[evidence:([A-Za-z0-9-]{1,64})\]\]/g;
+const UNSOURCED_RE = /\[\[unsourced:([^\]]+)\]\]/g;
+let FACTS_BY_ID: Record<string, SourceFact> = {};
+let ITEMS_BY_ID: Record<string, SourceItem> = {};
+
+export const CLASS_LABEL: Record<ProvenanceClass, string> = {
+  official_statistic: "Official statistic", peer_reviewed: "Peer-reviewed", grey_literature: "Grey literature",
+  commissioned_research: "Commissioned research", client_data: "Client data", social_signal: "Social signal", model_inference: "Model-inferred",
+};
+/** One colour per provenance class, so a reader tells an official statistic from a paper from a social claim from a counted twin figure at a glance. */
+export const CLASS_STYLE: Record<ProvenanceClass | "unsourced", string> = {
+  official_statistic: "border-sky-500/40 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20",
+  peer_reviewed: "border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20",
+  grey_literature: "border-slate-400/40 text-slate-300 bg-slate-500/10 hover:bg-slate-500/20",
+  commissioned_research: "border-indigo-500/40 text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20",
+  client_data: "border-pink-500/40 text-pink-300 bg-pink-500/10 hover:bg-pink-500/20",
+  social_signal: "border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20",
+  model_inference: "border-teal-500/40 text-teal-300 bg-teal-500/10 hover:bg-teal-500/20",
+  unsourced: "border-dashed border-zinc-500/60 text-zinc-400 bg-zinc-500/10 line-through decoration-zinc-500/60",
+};
+const CLASS_DOT: Record<ProvenanceClass | "unsourced", string> = {
+  official_statistic: "bg-sky-400", peer_reviewed: "bg-violet-400", grey_literature: "bg-slate-400", commissioned_research: "bg-indigo-400",
+  client_data: "bg-pink-400", social_signal: "bg-orange-400", model_inference: "bg-teal-400", unsourced: "bg-zinc-500",
+};
+const CHIP = "inline-flex items-center gap-1 align-baseline text-[11px] font-semibold px-1.5 py-px rounded border";
+
+function esc(t: string): string {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function renderSourceCitations(html: string): string {
+  html = html.replace(FACT_RE, (_m, id: string) => {
+    const f = FACTS_BY_ID[id];
+    if (!f) return "";
+    const where = [f.source || f.title, f.year].filter(Boolean).join(" ");
+    return (
+      `<button type="button" data-fact="${id}" title="${esc(`${f.statistic}${f.group ? ` — ${f.group}` : ""}${f.geography ? `, ${f.geography}` : ""} · ${CLASS_LABEL[f.provenance_class]} · trust ${f.trust_tier}`)}" ` +
+      `class="source-cite ${CHIP} ${CLASS_STYLE[f.provenance_class] || CLASS_STYLE.grey_literature}">` +
+      `${esc(f.value)}<span class="font-normal opacity-70">· ${esc(CLASS_LABEL[f.provenance_class])}${where ? ` · ${esc(where.length > 26 ? where.slice(0, 24) + "…" : where)}` : ""}</span></button>`
+    );
+  });
+  html = html.replace(EVID_RE, (_m, id: string) => {
+    const it = ITEMS_BY_ID[id];
+    if (!it) return "";
+    return (
+      `<button type="button" data-evidence="${id}" title="${esc(`${it.title} — ${it.author || ""} · trust ${it.trust_tier}`)}" ` +
+      `class="source-cite ${CHIP} ${CLASS_STYLE[it.provenance_class] || CLASS_STYLE.grey_literature}">` +
+      `${esc(CLASS_LABEL[it.provenance_class])}<span class="font-normal opacity-70">· ${esc(it.title.length > 30 ? it.title.slice(0, 28) + "…" : it.title)}</span></button>`
+    );
+  });
+  html = html.replace(UNSOURCED_RE, (_m, tok: string) =>
+    `<span title="Typed by the model — no record, statistic or document behind it" class="${CHIP} ${CLASS_STYLE.unsourced}">${esc(tok)}<span class="font-normal no-underline opacity-70">· unsourced</span></span>`);
+  return html;
+}
 
 function fmtEstimate(r: OutcomeRecord): string {
   const e = r.estimate;
@@ -653,15 +732,27 @@ function renderRecordCitations(html: string): string {
     const r = RECORDS_BY_ID[id];
     if (!r) return "";
     return (
-      `<button type="button" data-record="${id}" title="${r.label} — ${fmtInterval(r)} · n=${r.estimate.n} · confidence ${r.confidence.score}/100" ` +
+      `<button type="button" data-record="${id}" title="${r.label} — ${fmtInterval(r)} · n=${r.estimate.n} · confidence ${r.confidence.score}/100 · Model-inferred: counted from the synthetic twins" ` +
       `class="record-cite inline-flex items-center gap-1 align-baseline text-[11px] font-semibold px-1.5 py-px rounded border border-teal-500/40 text-teal-300 bg-teal-500/10 hover:bg-teal-500/20">` +
       `${fmtEstimate(r)}<span class="font-normal text-teal-300/70">· ${r.label.length > 34 ? r.label.slice(0, 32) + "…" : r.label}</span></button>`
     );
   });
 }
 
+/** "34% [[fact:…]]" and "75% [[record:…]]": the chip carries the figure, so the same figure typed
+ *  just before it is dropped rather than shown twice. Only an exact match goes; anything else stays. */
+function dedupeFigures(html: string): string {
+  const norm = (t: string) => t.replace(/[\s,]/g, "").replace(/\.0+(?=%|$)/, "").toLowerCase();
+  return html.replace(/([^\s>]+)\s+(\[\[(record|fact):([^\]]+)\]\])/g, (m, before: string, tok: string, kind: string, id: string) => {
+    const v = kind === "record" ? (RECORDS_BY_ID[id] ? fmtEstimate(RECORDS_BY_ID[id]) : "") : (FACTS_BY_ID[id]?.value || "");
+    return v && norm(before) === norm(v) ? tok : m;
+  });
+}
+
 function renderCitations(html: string, agentsById: Record<string, Agent>): string {
+  html = dedupeFigures(html);
   html = renderRecordCitations(html);
+  html = renderSourceCitations(html);
   return html.replace(CITE_RE, (_m, twinId: string, postId?: string) => {
     const agent = agentsById[twinId];
     if (!agent) return "a twin in the population";
@@ -736,6 +827,7 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
 
   return (
     <div className="space-y-4 text-sm">
+      <FigureKey structure={structure} />
       {blocks.map((block, i) => {
         if (block.type === "direct_answer") {
           const band = computed?.band || block.confidence;
@@ -914,6 +1006,73 @@ function Positions({ d, agentsById }: { d: ReportStructure["discussion"]; agents
   );
 }
 
+// ── Provenance (brief L6-03) ──────────────────────────────────────────────────
+// Every figure in the document carries its class in its colour: a counted twin figure is teal
+// (model-inferred), an official statistic sky, a paper violet, grey literature slate, a social
+// claim orange, client data pink — and a number the model typed with no source is struck through.
+
+function FigureKey({ structure }: { structure?: ReportStructure | null }) {
+  const n = structure?.figures?.unsourced?.length || 0;
+  const entries: (ProvenanceClass | "unsourced")[] = ["model_inference", "official_statistic", "peer_reviewed", "grey_literature", "social_signal", "client_data", "unsourced"];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground/70 border-b border-border/30 pb-2">
+      <span className="uppercase tracking-wide text-[9px] font-semibold text-muted-foreground/60">Figure key</span>
+      {entries.map((k) => (
+        <span key={k} className="inline-flex items-center gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${CLASS_DOT[k]}`} />
+          {k === "model_inference" ? "counted from the twins (model-inferred)" : k === "unsourced" ? `unsourced — typed by the model${n ? ` (${n})` : ""}` : CLASS_LABEL[k].toLowerCase()}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SourceCard({ fact, item, x, y, onClose }: { fact?: SourceFact; item?: SourceItem; x: number; y: number; onClose: () => void }) {
+  const left = Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 400);
+  const top = Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 800) - 360);
+  const cls = (fact?.provenance_class || item?.provenance_class || "grey_literature") as ProvenanceClass;
+  const trust = fact?.trust_tier || item?.trust_tier || "medium";
+  const href = fact?.source_ref || item?.source_ref || "";
+  return (
+    <>
+      <div className="fixed inset-0 z-40 no-print" onClick={onClose} />
+      <div className="fixed z-50 w-[380px] max-h-[70vh] overflow-y-auto rounded-xl border border-border/60 bg-background shadow-xl no-print" style={{ left: Math.max(12, left), top: Math.max(12, top) }}>
+        <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-3 border-b border-border/50">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className={`${CHIP} ${CLASS_STYLE[cls]} text-[10px]`}>{CLASS_LABEL[cls]}</span>
+              <span className="text-[10px] text-muted-foreground/70">trust {trust}</span>
+            </div>
+            <div className="text-sm font-semibold text-foreground leading-tight mt-1.5">{fact ? fact.statistic || fact.title : item?.title}</div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground/50 hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
+        </div>
+        <div className="px-4 py-3 space-y-2.5">
+          {fact && (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-foreground leading-none">{fact.value}</span>
+                <span className="text-[11px] text-muted-foreground">{[fact.group, fact.geography, fact.year].filter(Boolean).join(" · ")}</span>
+              </div>
+              {fact.quote && <p className="text-[11px] text-foreground/80 leading-snug italic border-l-2 border-border/60 pl-2">&ldquo;{fact.quote}&rdquo;</p>}
+              <div className="text-[10px] text-muted-foreground/80">{fact.source}{fact.title && fact.title !== fact.source ? ` — ${fact.title}` : ""}</div>
+            </>
+          )}
+          {item && !fact && (
+            <>
+              <div className="text-[10px] text-muted-foreground/80">{[item.author, item.published_at].filter(Boolean).join(" · ")}</div>
+              {item.excerpt && <p className="text-[11px] text-foreground/80 leading-snug">{item.excerpt}</p>}
+            </>
+          )}
+          {href && (
+            <a href={href} target="_blank" rel="noreferrer" className="block text-[10px] text-primary underline decoration-dotted underline-offset-2 truncate">{href}</a>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ComputedCaveats({ caveats }: { caveats: ReportStructure["outcome"]["caveats"] }) {
   if (!caveats?.length) return null;
   return (
@@ -991,7 +1150,7 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
       <div className="fixed z-50 w-[380px] max-h-[70vh] overflow-y-auto rounded-xl border border-teal-500/30 bg-background shadow-xl no-print" style={{ left: Math.max(12, left), top: Math.max(12, top) }}>
         <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-3 border-b border-border/50">
           <div className="min-w-0 flex-1">
-            <div className="text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">{KIND_LABEL[r.kind] || r.kind} · {r.basis.replace("_", " ")}</div>
+            <div className="text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">{KIND_LABEL[r.kind] || r.kind} · {r.basis === "simulated" ? "model-inferred · counted from the synthetic twins" : r.basis.replace("_", " ")}</div>
             <div className="text-sm font-semibold text-foreground leading-tight mt-0.5">{r.label}</div>
             {r.question && <div className="text-[11px] text-muted-foreground/70 leading-snug mt-1">{r.question}</div>}
           </div>

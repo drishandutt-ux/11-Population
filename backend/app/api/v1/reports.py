@@ -101,6 +101,15 @@ async def list_records(session_id: str, user: AuthUser = Depends(get_current_use
     return {"records": await records_mod.records_for_session(session_id)}
 
 
+@router.get("/{session_id}/figures")
+async def list_figures(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The source-figure ledger (brief L6-03): every typed statistic and evidence item on file with
+    its provenance class — what a `[[fact:…]]` / `[[evidence:…]]` citation in a report resolves to."""
+    from app.services.simulation import figures as figures_mod
+    await get_owned_session(session_id, user, db)
+    return await figures_mod.load_ledger(session_id)
+
+
 @router.get("/{session_id}/report/history", response_model=list[ReportQueryResponse])
 async def get_report_history(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await get_owned_session(session_id, user, db)
