@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { api, Agent, OutcomeRecord, Post } from "@/lib/api";
+import { api, Agent, OutcomeRecord, Post, ReportStructure } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
   ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle,
@@ -22,6 +22,8 @@ interface Props {
   reportContent?: string | null;
   /** The outcome records the report is rendered from (brief L6-01); loaded here when not given. */
   records?: OutcomeRecord[];
+  /** The report's wired parts (brief L6-02): computed confidence, evidence by class, positions + dissent, caveats. */
+  structure?: ReportStructure | null;
   isGeneratingReport?: boolean;
   onMakeReport?: () => void;
   onClearReport?: () => void;
@@ -44,6 +46,7 @@ export default function ReportChat({
   posts = [],
   reportContent = null,
   records: recordsProp,
+  structure = null,
   isGeneratingReport = false,
   onMakeReport,
   onClearReport,
@@ -200,7 +203,7 @@ export default function ReportChat({
               </div>
             ) : (
               <div id="report-printable" className="max-w-2xl" onClick={handleCiteClick}>
-                <ReportDocument content={reportContent!} agentsById={agentsById} records={records} />
+                <ReportDocument content={reportContent!} agentsById={agentsById} records={records} structure={structure} />
               </div>
             )}
           </div>
@@ -723,30 +726,38 @@ function MessageContent({ text, agentsById = {} }: { text: string; agentsById?: 
 
 // ── Report document renderer ──────────────────────────────────────────────────
 
-function ReportDocument({ content, agentsById, records = [] }: { content: string; agentsById: Record<string, Agent>; records?: OutcomeRecord[] }) {
+function ReportDocument({ content, agentsById, records = [], structure = null }: { content: string; agentsById: Record<string, Agent>; records?: OutcomeRecord[]; structure?: ReportStructure | null }) {
   const blocks = parseReport(content);
   const firstAnswer = blocks.findIndex((b) => b.type === "direct_answer");
+  // The confidence beside the direct answer is the headline record's computed band (L6-02);
+  // the model's own label is only a fallback for reports written before the structure existed.
+  const computed = structure?.direct_answer?.confidence;
+  const hasOutcome = blocks.some((b) => b.type === "h2" && /^outcome/i.test(b.text));
 
   return (
     <div className="space-y-4 text-sm">
       {blocks.map((block, i) => {
         if (block.type === "direct_answer") {
+          const band = computed?.band || block.confidence;
           return (
             <div key={i}>
             <div className="border-l-4 border-primary bg-primary/5 rounded-r-lg px-5 py-4 mb-2">
               <div className="flex items-center gap-2 mb-2.5">
                 <span className="text-[10px] uppercase tracking-widest font-bold text-primary">Direct Answer</span>
-                {block.confidence && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold leading-none border ${
-                    block.confidence === "HIGH"
+                {band && (
+                  <button type="button" data-record={computed?.band ? structure?.direct_answer?.record_id || undefined : undefined}
+                    title={computed?.band ? `Computed from the headline record: ${computed.drivers.join(" · ")}` : "Stated by the model"}
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-semibold leading-none border ${
+                    band === "HIGH"
                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-                      : block.confidence === "MEDIUM"
+                      : band === "MEDIUM"
                       ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/25"
                       : "bg-red-500/10 text-red-400 border-red-500/25"
                   }`}>
-                    {block.confidence} confidence
-                  </span>
+                    {band} confidence{computed?.band && computed.score != null ? ` · ${computed.score}/100` : ""}
+                  </button>
                 )}
+                {computed?.band && <span className="text-[9px] text-muted-foreground/55">computed</span>}
               </div>
               <p className="text-[15px] font-semibold text-foreground leading-snug"
                 dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
@@ -756,12 +767,18 @@ function ReportDocument({ content, agentsById, records = [] }: { content: string
           );
         }
         if (block.type === "h2") {
+          // The section's computed part sits under its heading, before the model's prose (L6-02).
+          const wired = !structure ? null
+            : /^source materials?/i.test(block.text) ? <SourceMaterials sm={structure.source_materials} />
+            : /^discussion/i.test(block.text) ? <Positions d={structure.discussion} agentsById={agentsById} />
+            : null;
           return (
             <div key={i} className="pt-4">
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-[10px] uppercase tracking-widest text-primary font-bold shrink-0">{block.text}</span>
                 <div className="flex-1 h-px bg-border/40" />
               </div>
+              {wired}
             </div>
           );
         }
@@ -795,6 +812,128 @@ function ReportDocument({ content, agentsById, records = [] }: { content: string
             dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
         );
       })}
+      {structure && hasOutcome && <ComputedCaveats caveats={structure.outcome.caveats} />}
+    </div>
+  );
+}
+
+// ── The wired sections (brief L6-02) ──────────────────────────────────────────
+// Source materials by role, the positions with named dissent, and the conclusion-changing
+// caveats are read from the report structure — computed on the backend from the evidence
+// store, the verdict probe and the records — so the model's prose describes them, never
+// decides them.
+
+function SourceMaterials({ sm }: { sm: ReportStructure["source_materials"] }) {
+  const ev = sm?.evidence || [];
+  const fr = sm?.frame;
+  const sourced = (fr?.dimensions || []).filter((d) => d.source);
+  if (!ev.length && (!fr || fr.level === "none")) return null;
+  return (
+    <div className="mb-3 rounded-lg border border-border/40 bg-muted/10 px-3.5 py-3 space-y-2">
+      <div className="text-[9px] uppercase tracking-wide text-muted-foreground/60 font-semibold">By role · from the evidence store</div>
+      {ev.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {ev.map((e) => (
+            <span key={e.class} className="text-[10px] px-2 py-0.5 rounded-full border border-border/50 bg-background/60"
+              title={Object.entries(e.trust || {}).map(([k, n]) => `${k} trust ${n}`).join(" · ") || undefined}>
+              <span className="font-semibold text-foreground/85">{e.label}</span>
+              <span className="text-muted-foreground"> {e.count}{e.on_topic && e.on_topic !== e.count ? ` · ${e.on_topic} on topic` : ""}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {ev.some((e) => e.top?.length) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5">
+          {ev.flatMap((e) => (e.top || []).slice(0, 3).map((t) => (
+            <div key={`${e.class}-${t.id || t.source_ref}`} className="text-[10px] text-foreground/70 truncate">
+              <span className="text-muted-foreground/60">{e.label.split(" ")[0]}</span> · {t.title}{t.author ? <span className="text-muted-foreground/60"> — {t.author}</span> : null}
+            </div>
+          )))}
+        </div>
+      )}
+      {fr && (
+        <div className="text-[10px] text-muted-foreground/85 leading-snug">
+          <span className="font-semibold text-foreground/75">Frame:</span> {fr.summary}
+          {sourced.length > 0 && (
+            <span className="block mt-0.5">{sourced.map((d) => `${d.label} — ${d.source}${d.geography || d.year ? ` (${[d.geography, d.year].filter(Boolean).join(" ")})` : ""}`).join(" · ")}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const POSITION_COLOR: Record<string, string> = { for: "bg-emerald-400/80", mixed: "bg-yellow-400/70", against: "bg-red-400/80" };
+const POSITION_DOT: Record<string, string> = { for: "bg-emerald-400", mixed: "bg-yellow-400", against: "bg-red-400" };
+
+function Positions({ d, agentsById }: { d: ReportStructure["discussion"]; agentsById: Record<string, Agent> }) {
+  if (!d || !d.n) return null;
+  return (
+    <div className="mb-3 rounded-lg border border-border/40 bg-muted/10 px-3.5 py-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[9px] uppercase tracking-wide text-muted-foreground/60 font-semibold">Positions · {d.n} twins answered</span>
+        {d.record_id && <button type="button" data-record={d.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">headline record</button>}
+      </div>
+      <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+        {d.positions.filter((p) => p.count > 0).map((p) => (
+          <div key={p.value} className={POSITION_COLOR[p.value] || "bg-muted-foreground/50"} style={{ width: `${Math.round(p.share * 100)}%` }} title={`${p.value}: ${p.count} (${Math.round(p.share * 100)}%)`} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-3 text-[10px] text-foreground/80">
+        {d.positions.map((p) => (
+          <span key={p.value} className="inline-flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${POSITION_DOT[p.value] || "bg-muted-foreground"}`} />
+            {p.value} {Math.round(p.share * 100)}% <span className="text-muted-foreground/60">({p.count})</span>
+            {p.value === d.majority && <span className="text-muted-foreground/60">· majority</span>}
+          </span>
+        ))}
+      </div>
+      {d.dissent.length > 0 ? (
+        <div>
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground/60 font-semibold mb-1">Named dissent · did not hold the majority position</div>
+          <ul className="space-y-1">
+            {d.dissent.map((x) => {
+              const a = agentsById[x.agent_id];
+              return (
+                <li key={x.agent_id} className="text-[11px] leading-snug">
+                  <button type="button" data-twin={x.agent_id} title={a ? `${a.name} — ${a.role}` : undefined}
+                    className="twin-cite font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                    {a?.name || "a twin in the population"}
+                  </button>
+                  <span className="text-muted-foreground/70"> · {x.position} · {x.confidence}/100</span>
+                  {x.verdict && <span className="text-foreground/80"> — &ldquo;{x.verdict}&rdquo;</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <div className="text-[10px] text-muted-foreground/70">No dissent: every twin who answered held the majority position.</div>
+      )}
+    </div>
+  );
+}
+
+function ComputedCaveats({ caveats }: { caveats: ReportStructure["outcome"]["caveats"] }) {
+  if (!caveats?.length) return null;
+  return (
+    <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3.5 py-3">
+      <div className="text-[9px] uppercase tracking-wide text-yellow-300/80 font-semibold mb-1.5">What would change this · computed from the records</div>
+      <ul className="space-y-1">
+        {caveats.map((c, i) => (
+          <li key={i} className="flex gap-2 text-[11px] text-foreground/80 leading-snug">
+            <span className="text-yellow-400/60 shrink-0">·</span>
+            <span>
+              {c.text}
+              {c.record_ids?.length > 0 && (
+                <button type="button" data-record={c.record_ids[0]} className="ml-1.5 text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">
+                  {c.record_ids.length > 1 ? `${c.record_ids.length} records` : "record"}
+                </button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

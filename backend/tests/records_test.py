@@ -207,6 +207,22 @@ def test_generate_runs_the_verdict_once_and_renders_from_records(client):
     assert "== OUTCOME RECORDS (1 computed" in seen["prompt"] and "Do NOT type a figure" in seen["system"]
     assert "outcome record(s) cited" in body["sources"]
 
+    # L6-02: the wired parts — computed band (the model's "Confidence: HIGH" is stripped, kept only as
+    # the claim), the verdict probe's positions with the named dissent, evidence by class, caveats.
+    st = body["structure"]
+    assert "Confidence" not in body["answer"] and st["direct_answer"]["claimed_band"] == "HIGH"
+    assert st["direct_answer"]["record_id"] == rid and st["direct_answer"]["confidence"]["band"] in ("HIGH", "MEDIUM", "LOW")
+    assert st["direct_answer"]["confidence"]["score"] == recs[0]["confidence"]["score"]
+    assert st["discussion"]["majority"] == "for" and st["discussion"]["n"] == 6
+    assert sorted(d["position"] for d in st["discussion"]["dissent"]) == ["against", "against"]
+    assert all(d["verdict"].endswith("says so") for d in st["discussion"]["dissent"])
+    assert "== POSITIONS" in seen["prompt"] and "DISSENT (the twins who did not hold" in seen["prompt"]
+    assert "== EVIDENCE BY CLASS" in seen["prompt"] and "Never state a confidence level" in seen["system"]
+    assert st["outcome"]["caveats"][-1]["text"].startswith("Synthetic population") and st["outcome"]["caveats"][-1]["record_ids"] == [rid]
+    assert st["records"] == {"all": [rid], "cited": [rid]}
+    hist = c.get(f"/api/v1/sessions/{sid}/report/history").json()
+    assert hist and hist[0]["structure"]["direct_answer"]["record_id"] == rid
+
     # the one-liners reached the roster, and a second report reuses the record
     agents = c.get(f"/api/v1/sessions/{sid}/agents").json()
     assert all(a["verdict"] and a["verdict"].endswith("says so") for a in agents)

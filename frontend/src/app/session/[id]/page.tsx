@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord } from "@/lib/api";
+import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord, ReportStructure } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker } from "lucide-react";
 import InputPanel from "@/components/ingestion/InputPanel";
@@ -17,26 +17,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 type Tab = "ingest" | "agents" | "simulation" | "lab" | "kg" | "report";
 type OpinionsStatus = "idle" | "loading" | "done" | "error";
 
-const REPORT_PROMPT = `You are a senior analyst. Produce a structured executive briefing for this simulation session.
-
-CRITICAL: Your VERY FIRST line must be "## DIRECT ANSWER" — no preamble, no intro. Use exactly these five sections in this order:
-
-## DIRECT ANSWER
-One precise sentence directly answering the user's question. End the section with exactly one of these on its own line: Confidence: HIGH  /  Confidence: MEDIUM  /  Confidence: LOW
-
-## QUESTION
-Restate the question being investigated and why it matters.
-
-## SOURCE MATERIALS
-What was ingested — document types, names, and their direct relevance to the query. Be specific.
-
-## DISCUSSION
-Which perspectives were represented (bullish/bearish, for/against, technical/regulatory, etc.), what the majority view concluded, notable dissenting opinions, and any contradictions or risks flagged during the debate.
-
-## OUTCOME
-Final recommendation and answer. State the 2–3 key caveats that could change the conclusion.
-
-Every figure about the population comes from an OUTCOME RECORD and is cited right after it ([[R1]]); the headline record is the population's answer to the question — lead with it. Figures from the source material are quoted with their source. Use **bold** for key conclusions. Write densely — every sentence must carry insight, zero filler.`;
+// The report's section spec lives server-side since L6-02 (`services/simulation/structure.REPORT_PROMPT`).
 
 
 export default function SessionPage() {
@@ -83,6 +64,7 @@ export default function SessionPage() {
   const [reportContent, setReportContent] = useState<string | null>(null);
   // The outcome records the report was rendered from (brief L6-01); the report panel also loads them on its own.
   const [reportRecords, setReportRecords] = useState<OutcomeRecord[]>([]);
+  const [reportStructure, setReportStructure] = useState<ReportStructure | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Agent opinion KPIs — generated once we have enough posts, refreshed on completion.
@@ -409,8 +391,9 @@ export default function SessionPage() {
     setIsGeneratingReport(true);
     setActiveTab("report"); // switch immediately so user sees the generating state
     try {
-      const result = await api.report.generate(id, REPORT_PROMPT);
+      const result = await api.report.generate(id);
       setReportRecords(result.records || []);
+      setReportStructure(result.structure || null);
       setReportContent(result.answer);
     } catch (e: any) {
       // Never fail silently — surface the reason in the report panel so the button
@@ -555,6 +538,7 @@ export default function SessionPage() {
             posts={posts}
             reportContent={reportContent}
             records={reportRecords}
+            structure={reportStructure}
             isGeneratingReport={isGeneratingReport}
             onMakeReport={handleMakeReport}
             onClearReport={() => setReportContent(null)}

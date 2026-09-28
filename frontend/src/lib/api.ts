@@ -162,10 +162,10 @@ export const api = {
         body: JSON.stringify({ question }),
       }),
     /** The report proper (brief L6-01): computes the headline outcome record first, then writes the narrative around every record. Slow — it may run a verdict probe. */
-    generate: (sessionId: string, question: string) =>
-      request<{ id: string; question: string; answer: string; sources: string | null; records: OutcomeRecord[] }>(`/sessions/${sessionId}/report/generate`, {
+    generate: (sessionId: string) =>
+      request<{ id: string; question: string; answer: string; sources: string | null; records: OutcomeRecord[]; structure: ReportStructure | null }>(`/sessions/${sessionId}/report/generate`, {
         method: "POST",
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({}),
       }),
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
   },
@@ -458,6 +458,20 @@ export type OutcomeRecord = {
   confidence: { score: number; drivers: string[] };
   caveats: string[];
   tags: { condition?: string; journey_stage?: string };
+};
+
+/** The report's wired parts (brief L6-02): what the rendered report reads from data, not prose. */
+export type ReportStructure = {
+  version: number;
+  direct_answer: { record_id: string | null; confidence: { band: "HIGH" | "MEDIUM" | "LOW" | null; score: number | null; drivers: string[] }; claimed_band: string | null };
+  question: { session_query: string; instrument: string | null; asked: number; answered: number };
+  source_materials: {
+    evidence: { class: string; label: string; count: number; on_topic: number; trust: Record<string, number>; top: { id: string | null; title: string; author: string; source_ref: string; trust: string }[] }[];
+    frame: { level: string; summary: string; dimensions: { key: string; label: string; status: string; source?: string | null; geography?: string | null; year?: string | number | null }[]; estimated: string[]; thin_cells: string[] };
+  };
+  discussion: { record_id: string | null; positions: { value: string; count: number; share: number }[]; n: number; majority: string | null; dissent: { agent_id: string; position: string; confidence: number; verdict: string }[] };
+  records: { all: string[]; cited: string[] };
+  outcome: { caveats: { text: string; record_ids: string[] }[] };
 };
 
 export type BuiltProfile = { dials: AgentDials; humanity: number; reading: string; dynamic_dials?: DynamicDial[] };
