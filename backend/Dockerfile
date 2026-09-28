@@ -8,8 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg gcc g++ 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements.lock.txt is the fully pinned resolution of requirements.txt (uv pip compile, Linux
+# x86_64, Python 3.12). Installing the lock keeps a new transitive release from breaking the
+# build — a pip ResolutionImpossible on python-dateutil took the backend deploy down on 2026-09-28.
+# Regenerate after editing requirements.txt:
+#   uv pip compile requirements.txt --python-version 3.12 --python-platform x86_64-manylinux_2_28 --no-header -o requirements.lock.txt
+COPY requirements.txt requirements.lock.txt ./
+RUN pip install --no-cache-dir -r requirements.lock.txt
 
 COPY . .
 
