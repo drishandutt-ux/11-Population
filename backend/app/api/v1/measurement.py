@@ -165,6 +165,18 @@ class TargetingRunRequest(BaseModel):
     mode: str = "fast"
 
 
+class MessageIn(BaseModel):
+    label: Optional[str] = None
+    text: str
+
+
+class MessagingRunRequest(BaseModel):
+    journey_probe_id: str
+    candidate_id: str
+    messages: list[MessageIn]
+    mode: str = "fast"
+
+
 class ReviewRequest(BaseModel):
     reviewed_by: str
     approve: bool = True
@@ -339,6 +351,30 @@ async def list_targeting_runs(session_id: str, user: AuthUser = Depends(get_curr
     await get_owned_session(session_id, user, db)
     rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
     return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("targeting")]}
+
+
+@router.post("/sessions/{session_id}/messaging/run")
+async def run_messaging(session_id: str, body: MessagingRunRequest, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Test messages against the panel at a candidate's step (brief L7-06): the twins at risk
+    there answer the journey again once per message having read it; the shift in conversion is
+    counted per message and by cohort, backfire flagged, the result labelled a modelled reaction."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import messaging
+    res = await messaging.start(session_id, journey_probe_id=body.journey_probe_id, candidate_id=body.candidate_id,
+                                messages=[m.model_dump() for m in body.messages], mode=body.mode)
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    background_tasks.add_task(messaging.run, res["experiment_id"])
+    e = await db.get(Experiment, res["experiment_id"])
+    return {**_experiment_payload(e), "messages": res["messages"], "at_risk": res["at_risk"]}
+
+
+@router.get("/sessions/{session_id}/messaging")
+async def list_messaging_runs(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Every message run in the session, newest first, with `results.messaging` when counted."""
+    await get_owned_session(session_id, user, db)
+    rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
+    return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("messaging")]}
 
 
 @router.get("/lab/instruments")

@@ -72,7 +72,11 @@ FIGURE_RULES = (
     "- WHICH BEHAVIOUR TO CHANGE comes only from a 'behaviours ranked' record: name the behaviours in that order, each with "
     "the direction to push it and its movement per point with the interval, and cite the record. State every BACKFIRE the "
     "record lists as prominently as the top behaviour. Say that the ranking is the modelled population's sensitivity to each "
-    "behaviour, not the effect of an intervention. Never rank or recommend a behaviour the record does not list."
+    "behaviour, not the effect of an intervention. Never rank or recommend a behaviour the record does not list.\n"
+    "- WHICH MESSAGE WORKS comes only from a 'messages tested' record: name the messages in that order, each with its "
+    "shift in conversion and the interval, and cite the record. State every BACKFIRE the record lists (a message that lowers "
+    "conversion overall, or for a deprivation band) as prominently as the winner. Say that the result is a modelled reaction "
+    "to a framing, not a forecast of uptake. Never rank, recommend or reword a message the record does not list."
 )
 
 
@@ -371,15 +375,62 @@ def record_from_targeting(e: Any, *, evidence_mix: Optional[dict] = None, frame:
     }
 
 
+def record_from_messaging(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
+    """A message run (brief L7-06) → one record: the messages ranked by the shift in conversion at
+    the candidate's step, backfire listed beside the winner, labelled a modelled reaction to a
+    framing and never a forecast. None until counted."""
+    res = getattr(e, "results", None) or {}
+    t = res.get("messaging") if isinstance(res, dict) else None
+    if not t or not t.get("available"):
+        return None
+    rep = (frame or {}).get("report") if isinstance(frame, dict) else None
+    frame_level = (rep or {}).get("level") if isinstance(rep, dict) else None
+    ranked = [r for r in (t.get("messages") or []) if r.get("available")]
+    top = ranked[0] if ranked else {}
+    n = int(t.get("n") or 0)
+    created = getattr(e, "created_at", None)
+    model = str(getattr(e, "model", "") or "")
+    return {
+        "id": e.id,
+        "kind": "messaging",
+        "instrument": "journey",
+        "label": f"Messages tested at {(t.get('from') or {}).get('label')} → {(t.get('to') or {}).get('label')}",
+        "question": str(getattr(e, "name", "") or "")[:300],
+        "basis": "simulated",
+        "estimate": {"metric": "message_shift", "label": f"Top message: '{top.get('label', '')}' — shift in conversion at the step (modelled reaction, not a forecast)", "format": "lift",
+                     "value": _num(top.get("lift")), "low": _num(top.get("low")), "high": _num(top.get("high")), "n": n,
+                     "significant": bool(top.get("significant"))},
+        "sentence": str(t.get("sentence") or ""),
+        "distribution": [],
+        "splits": {},
+        "equity": None,
+        "messaging": {"candidate_id": t.get("candidate_id"), "journey_probe_id": t.get("journey_probe_id"), "n": n, "weighted": bool(t.get("weighted")),
+                      "messages": [{k: r.get(k) for k in ("rank", "key", "label", "text", "direction", "lift", "low", "high", "significant", "then", "now", "movement",
+                                                          "people", "backfire", "hurts", "bands", "weighted")} for r in ranked],
+                      "backfires": t.get("backfires") or [], "any_significant": bool(t.get("any_significant"))},
+        "refusals": None, "unanimity": None, "weighted": None,
+        "provenance": {"model": model, "seed": int(getattr(e, "seed", 0) or 0), "design": "within", "arms": ["baseline"] + [f"message:{r['key']}" for r in ranked],
+                       "evidence_mix": evidence_mix or {}, "frame_level": frame_level or "none", "created_at": created.isoformat() if isinstance(created, datetime) else None},
+        "confidence": confidence_for(n=n, low=None, high=None, fmt="lift", unanimity=None, refusals=None, frame_level=frame_level, weighted=bool(t.get("weighted")), model=model),
+        "caveats": ["A modelled reaction to a framing, not a forecast of uptake: the twins read each message and answered the journey again; nothing says the message would reach these people, or move them by this much, in the world (that is what a reviewed calibration rule and a lever run are for)."]
+                   + ([] if t.get("any_significant") else ["No message's shift is distinguishable from zero at this sample size."])
+                   + ([f"Backfire: {len(t.get('backfires') or [])} message(s) lower conversion overall or in a deprivation band — read them beside the winner."] if t.get("backfires") else [])
+                   + caveats_for(n=n, unanimity=None, refusals=None, frame_level=frame_level),
+        "tags": {},
+    }
+
+
 def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
     """One complete experiment → one record: the best variant's lift on the primary metric.
     A lever run (brief L7-04) is shaped by `record_from_lever`, a behaviour-targeting run
-    (brief L7-05) by `record_from_targeting`."""
+    (brief L7-05) by `record_from_targeting`, a message run (brief L7-06) by `record_from_messaging`."""
     res = getattr(e, "results", None) or {}
     if isinstance(res, dict) and res.get("lever"):
         return record_from_lever(e, evidence_mix=evidence_mix, frame=frame)
     if isinstance(res, dict) and res.get("targeting"):
         return record_from_targeting(e, evidence_mix=evidence_mix, frame=frame)
+    if isinstance(res, dict) and res.get("messaging"):
+        return record_from_messaging(e, evidence_mix=evidence_mix, frame=frame)
     comps = res.get("comparisons") if isinstance(res, dict) else None
     if not comps:
         return None
@@ -501,6 +552,26 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             else:
                 bar_line += "; no backfire found"
             bar_line += "; this is the modelled population's sensitivity, not an intervention's effect"
+        mg = r.get("messaging") or {}
+        if mg:
+            def _pm(x):
+                return f"{round(_num(x) * 100, 1):+.1f}"
+            bar_line += ("; messages tested (shift in conversion at the step, " + str(mg.get("n")) + " twins at risk"
+                         + (", weighted to the frame" if mg.get("weighted") else "") + "): "
+                         + "; ".join(f"{m.get('rank')}. '{m.get('label')}' {_pm(m.get('lift'))} (CI {_pm(m.get('low'))} to {_pm(m.get('high'))}"
+                                     f"{', real' if m.get('significant') else ', not distinguishable from zero'}"
+                                     + (f"; weighted {_pm(m['weighted']['lift'])}" if m.get("weighted") else "")
+                                     + (f"; ≈{int(m['people']['moved']):,} people" if m.get("people") else "") + ")"
+                                     for m in (mg.get("messages") or [])[:6]))
+            bfs = mg.get("backfires") or []
+            if bfs:
+                bar_line += "; BACKFIRE: " + "; ".join((f"'{b['label']}' lowers conversion overall ({_pm(b.get('lift'))})" if b.get("hurts") else "")
+                                                       + ("; " if b.get("hurts") and b.get("bands") else "")
+                                                       + "; ".join(f"'{b['label']}' lowers it for {x['value']} ({_pm(x['lift'])})" for x in (b.get("bands") or []))
+                                                       for b in bfs)
+            else:
+                bar_line += "; no backfire found"
+            bar_line += "; this is a modelled reaction to a framing, NOT a forecast of uptake"
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")
         if (r.get("refusals") or {}).get("refused"):

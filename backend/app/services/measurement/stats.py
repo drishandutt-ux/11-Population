@@ -105,6 +105,33 @@ def paired_lift(pairs: Sequence[tuple[float, float]], *, iterations: int = 2000,
     return out
 
 
+def weighted_paired_lift(pairs: Sequence[tuple[float, float]], weights: Sequence[float], *, iterations: int = 2000, seed: int = 0) -> dict:
+    """`paired_lift` with each twin counted at its sampling-frame weight (L2-02): the weighted
+    mean of (b - a), a bootstrap interval over twins (each resample re-weighted), and the
+    effective n (Kish). Used where a shift must speak for the frame, not the panel."""
+    diffs = [float(b) - float(a) for a, b in pairs]
+    ws = [max(0.0, float(w)) for w in weights][:len(diffs)]
+    n = len(diffs)
+    if n == 0 or sum(ws) <= 0:
+        return {"mean": 0.0, "low": 0.0, "high": 0.0, "n": 0, "ess": 0.0, "significant": False}
+
+    def wmean(idx: Iterable[int]) -> float:
+        idx = list(idx)
+        tot = sum(ws[i] for i in idx) or 1.0
+        return sum(ws[i] * diffs[i] for i in idx) / tot
+
+    mean = wmean(range(n))
+    if n == 1:
+        low = high = mean
+    else:
+        rng = random.Random(seed)
+        means = sorted(wmean(rng.randrange(n) for _ in range(n)) for _ in range(iterations))
+        low, high = _percentile(means, 0.025), _percentile(means, 0.975)
+    ess = (sum(ws) ** 2) / (sum(w * w for w in ws) or 1.0)
+    return {"mean": round(mean, 3), "low": round(low, 3), "high": round(high, 3), "n": n, "ess": round(ess, 1),
+            "significant": bool(low > 0 or high < 0)}
+
+
 def unpaired_lift(a: Sequence[float], b: Sequence[float], *, iterations: int = 2000, seed: int = 0) -> dict:
     """mean(b) - mean(a) for two independent groups (between-subjects A/B), with a bootstrap
     interval that resamples each group on its own. Wider than the paired version at the same

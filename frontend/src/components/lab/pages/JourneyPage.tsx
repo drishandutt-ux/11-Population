@@ -7,12 +7,12 @@
  *  the stored answers, so no call is needed. */
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ListOrdered, Play, Sparkles } from "lucide-react";
+import { BookOpen, ListOrdered, MessageSquare, Play, Sparkles } from "lucide-react";
 import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import RuleBook from "../RuleBook";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
-import { api, CalibrationRule, Experiment, LeverRefusal, LeverShift, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
+import { api, CalibrationRule, Experiment, LeverRefusal, LeverShift, MessagingResult, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
 import { InstrumentPageProps } from "./types";
 
 /** The 409 body of a refused lever run, from the API client's error text. */
@@ -146,11 +146,31 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       await loadTg();
     } catch (e: any) { setTgError((er) => ({ ...er, [cid]: e?.message || "Could not start the run" })); } finally { setTgStarting(null); }
   };
+  // Message testing (brief L7-06): framings read by the twins at risk here; the shift per message and by cohort, backfire beside the winner.
+  const [mgRuns, setMgRuns] = useState<Experiment[]>([]);
+  const [mgOpen, setMgOpen] = useState<Record<string, boolean>>({});
+  const [mgMsgs, setMgMsgs] = useState<Record<string, { label: string; text: string }[]>>({});
+  const [mgStarting, setMgStarting] = useState<string | null>(null);
+  const [mgError, setMgError] = useState<Record<string, string>>({});
+  const MAX_MESSAGES = 6;
+  const loadMg = () => api.lab.messagingRuns(sessionId).then((r) => setMgRuns(r.runs.filter((x) => x.spec?.messaging?.journey_probe_id === probe.id))).catch(() => {});
+  const msgsFor = (cid: string) => mgMsgs[cid] ?? [{ label: "", text: "" }, { label: "", text: "" }];
+  const setMsg = (cid: string, i: number, patch: Partial<{ label: string; text: string }>) =>
+    setMgMsgs((m) => ({ ...m, [cid]: msgsFor(cid).map((x, k) => (k === i ? { ...x, ...patch } : x)) }));
+  const testMessages = async (cid: string) => {
+    const messages = msgsFor(cid).filter((m) => m.text.trim()).map((m) => ({ label: m.label.trim() || undefined, text: m.text.trim() }));
+    if (!messages.length) { setMgError((e) => ({ ...e, [cid]: "Write at least one message." })); return; }
+    setMgStarting(cid); setMgError((e) => ({ ...e, [cid]: "" }));
+    try {
+      await api.lab.runMessaging(sessionId, { journey_probe_id: probe.id, candidate_id: cid, messages });
+      await loadMg();
+    } catch (e: any) { setMgError((er) => ({ ...er, [cid]: e?.message || "Could not start the run" })); } finally { setMgStarting(null); }
+  };
   useEffect(() => {
     api.lab.rules(sessionId).then((r) => setRules(r.rules)).catch(() => {});
     api.lab.targetingBehaviours(sessionId).then(setMenu).catch(() => {});
-    loadRuns(); loadTg();
-    const t = setInterval(() => { loadRuns(); loadTg(); }, 5000);
+    loadRuns(); loadTg(); loadMg();
+    const t = setInterval(() => { loadRuns(); loadTg(); loadMg(); }, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, probe.id]);
@@ -485,6 +505,45 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                       {tgError[c.id] && <p className="text-[11px] text-red-400">{tgError[c.id]}</p>}
                       {tgRuns.filter((r) => r.spec?.targeting?.candidate_id === c.id).map((r) => <TargetingRun key={r.id} run={r} />)}
                     </div>
+
+                    {/* Message testing (brief L7-06): the twins at risk here read each framing and answer the journey again; the shift per message and by cohort; backfire beside the winner; a reaction, not a forecast. */}
+                    <div className="rounded-lg border border-border/50 bg-card/20 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Test messages · which framing gets the stuck through, counted: the twins at risk here read each one and answer again</div>
+                        <button type="button" onClick={() => setMgOpen((o) => ({ ...o, [c.id]: !o[c.id] }))} className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted shrink-0">{mgOpen[c.id] ? "hide the messages" : "write messages"}</button>
+                      </div>
+                      {mgOpen[c.id] && (
+                        <div className="space-y-1.5">
+                          {msgsFor(c.id).map((m, i) => (
+                            <div key={i} className="grid grid-cols-[8rem_1fr_auto] gap-1.5 items-start">
+                              <input value={m.label} placeholder={`name ${i + 1}`} maxLength={60} onChange={(e) => setMsg(c.id, i, { label: e.target.value })}
+                                className="bg-input border border-border rounded px-1.5 py-1 text-[11px] text-foreground" />
+                              <textarea value={m.text} rows={2} maxLength={1500} placeholder="The message exactly as people would read it — a line of copy, a leaflet paragraph, what a nurse would say"
+                                onChange={(e) => setMsg(c.id, i, { text: e.target.value })}
+                                className="bg-input border border-border rounded px-1.5 py-1 text-[11px] text-foreground resize-y" />
+                              <button type="button" title="remove" onClick={() => setMgMsgs((mm) => ({ ...mm, [c.id]: msgsFor(c.id).filter((_, k) => k !== i) }))}
+                                className="text-[11px] text-muted-foreground hover:text-foreground px-1 py-1">×</button>
+                            </div>
+                          ))}
+                          <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground">
+                            <button type="button" disabled={msgsFor(c.id).length >= MAX_MESSAGES} onClick={() => setMgMsgs((mm) => ({ ...mm, [c.id]: [...msgsFor(c.id), { label: "", text: "" }] }))}
+                              className="underline decoration-dotted hover:text-foreground disabled:opacity-50">add a message</button>
+                            <span>up to {MAX_MESSAGES} · one run of the {c.n} at-risk twins per message, plus a baseline · nothing about the twins is changed; they read it and answer</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button type="button" disabled={mgStarting === c.id || msgsFor(c.id).every((m) => !m.text.trim())} onClick={() => testMessages(c.id)}
+                          title="The twins at risk at this step read each message in its own run and answer the journey again; the shift in conversion is counted per message and by deprivation band."
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs disabled:opacity-50">
+                          <MessageSquare className="w-3 h-3" /> {mgStarting === c.id ? "Starting…" : "Test messages"}
+                        </button>
+                        {!mgOpen[c.id] && <span className="text-[10px] text-muted-foreground">{msgsFor(c.id).filter((m) => m.text.trim()).length} message{msgsFor(c.id).filter((m) => m.text.trim()).length === 1 ? "" : "s"} written</span>}
+                        <span className="text-[10px] text-muted-foreground/70">a modelled reaction to a framing, not a forecast of uptake</span>
+                      </div>
+                      {mgError[c.id] && <p className="text-[11px] text-red-400">{mgError[c.id]}</p>}
+                      {mgRuns.filter((r) => r.spec?.messaging?.candidate_id === c.id).map((r) => <MessagingRun key={r.id} run={r} />)}
+                    </div>
                   </div>
                 )}
               </li>
@@ -540,6 +599,65 @@ function LeverRun({ run }: { run: Experiment }) {
       <div className="text-[10px] text-muted-foreground/70">
         rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · {assumed ? "no evidence (assumption)" : `${lv.rule.evidence_count ?? ""} evidence line${lv.rule.evidence_count === 1 ? "" : "s"}`} · reviewed by {lv.rule.reviewed_by}
       </div>
+    </div>
+  );
+}
+
+
+/** One message run (brief L7-06): the framings ranked by the shift in conversion at the step,
+ *  the interval, who moved, the people moved, by deprivation band — every backfire above the
+ *  winner, and the whole thing labelled a modelled reaction, never a forecast. */
+function MessagingRun({ run }: { run: Experiment }) {
+  const t: MessagingResult | undefined = run.results?.messaging;
+  const info = run.spec?.messaging as { messages?: { key: string; label: string; text: string }[]; at_risk?: number } | undefined;
+  if (!t?.available) {
+    return (
+      <div className="rounded-md border border-border/40 px-2.5 py-2 text-[11px] text-muted-foreground">
+        <span className="text-foreground/85">{run.name}</span> · {run.status === "complete" ? "counting the shift…" : run.status === "failed" ? `failed: ${run.error || ""}` : `${run.status}…`}
+        {info && <span className="opacity-70"> · {info.messages?.length || 0} message{(info.messages?.length || 0) === 1 ? "" : "s"} × {info.at_risk} twins</span>}
+      </div>
+    );
+  }
+  const pp = (x: number) => `${x > 0 ? "+" : ""}${(x * 100).toFixed(1)}`;
+  const rows = t.messages.filter((r) => r.available);
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 space-y-1.5 text-[11px]">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-medium text-foreground/95">Messages ranked by the shift in conversion</span>
+        <span className="text-muted-foreground tabular-nums">{t.n} twins at risk · {rows.length} message{rows.length === 1 ? "" : "s"}{t.weighted ? " · weighted to the frame" : ""}</span>
+        {!t.any_significant && <span className="text-yellow-300/80">no shift distinguishable from zero at this size</span>}
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-yellow-400/40 text-yellow-200/90">reaction, not a forecast</span>
+      </div>
+      {t.backfires.length > 0 && (
+        <div className="rounded border border-red-400/40 bg-red-500/10 px-2 py-1.5 text-red-200/90">
+          <span className="font-semibold uppercase tracking-wide text-[10px]">Backfire</span>{" "}
+          {t.backfires.map((b) => [b.hurts ? `‘${b.label}’ lowers conversion overall (${pp(b.lift)})` : "", ...b.bands.map((x) => `‘${b.label}’ lowers it for ${x.value} (${pp(x.lift)})`)].filter(Boolean).join("; ")).join("; ")}
+        </div>
+      )}
+      <ol className="space-y-1">
+        {rows.map((r) => (
+          <li key={r.key} className={`grid grid-cols-[1.25rem_1fr] gap-x-2 rounded px-1.5 py-1 ${r.hurts || r.backfire.length ? "bg-red-500/5" : r.rank === 1 && r.significant ? "bg-emerald-500/5" : ""}`}>
+            <span className="text-muted-foreground tabular-nums">{r.rank}.</span>
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.direction === "helps" ? "border-emerald-400/40 text-emerald-300/90" : r.direction === "hurts" ? "border-red-400/40 text-red-300/90" : "border-border/60 text-muted-foreground"}`}>{r.direction === "helps" ? "helps" : r.direction === "hurts" ? "hurts" : "no change"}</span>
+                <span className="font-medium text-foreground/95">{r.label}</span>
+                <span className={`tabular-nums ${r.significant ? "text-foreground/90" : "text-muted-foreground"}`}>{pp(r.lift)} pts <span className="text-muted-foreground">({pp(r.low)} to {pp(r.high)}) · {r.significant ? "real" : "not distinguishable from zero"}</span></span>
+                {r.weighted && <span className="text-muted-foreground tabular-nums" title={`each twin at its sampling-frame weight; effective n ${r.weighted.ess}`}>weighted {pp(r.weighted.lift)}</span>}
+                {r.people && <span className="text-foreground/85 tabular-nums" title={r.people.basis}>≈{Math.abs(r.people.moved).toLocaleString()} people {r.people.moved < 0 ? "lost" : "moved"}</span>}
+                {(r.hurts || r.backfire.length > 0) && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-red-400/50 text-red-300/90">{r.hurts ? "hurts overall" : "backfires in a band"}</span>}
+              </div>
+              <div className="text-muted-foreground/80 italic whitespace-pre-wrap">“{r.text}”</div>
+              <div className="text-muted-foreground">
+                {Math.round(r.then * 100)}% → {Math.round(r.now * 100)}% get through · {r.movement.up} moved through · {r.movement.down} fell back · {r.movement.unchanged} unchanged
+                {r.end && <> · end of journey {Math.round((r.end.then || 0) * 100)}% → {Math.round((r.end.now || 0) * 100)}%</>}
+                {r.bands.length > 1 && <> · by deprivation: {r.bands.map((b) => `${b.value} ${pp(b.lift)}${b.thin ? " (thin)" : ""}`).join(" · ")}</>}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[10px] text-muted-foreground/70">A modelled reaction to a framing, counted from the twins&apos; own placements after reading it. It says which message the twins respond to, not that the message would reach these people or move them by this much in the world — that is what a reviewed rule and a lever run are for. The report may only quote this list, in this order, with every backfire.</p>
     </div>
   );
 }

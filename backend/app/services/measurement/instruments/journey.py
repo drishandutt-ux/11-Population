@@ -268,9 +268,9 @@ def _candidate_barriers(agg: dict) -> list[dict]:
 
 
 async def _targeting_kinds(probe_ids: list[str]) -> dict[str, str]:
-    """Which probes belong to a behaviour-targeting run (brief L7-05): its nudge arms need no
-    coding, tracing or movability (the ranking reads only the funnel), and its baseline needs
-    only headcounts. Anything else is a full journey run."""
+    """Which probes belong to a behaviour-targeting run (brief L7-05) or a message run (brief
+    L7-06): their nudge / message arms need no coding, tracing or movability (the ranking reads
+    only the funnel), and their baseline needs only headcounts. Anything else is a full journey run."""
     from sqlalchemy import select
     from app.core import database as dbm
     from app.models.measurement import Probe
@@ -278,7 +278,7 @@ async def _targeting_kinds(probe_ids: list[str]) -> dict[str, str]:
     async with dbm.AsyncSessionLocal() as db:
         for p in (await db.execute(select(Probe).where(Probe.id.in_(probe_ids)))).scalars().all():
             spec = p.spec or {}
-            out[p.id] = "nudge" if spec.get("nudge") else "baseline" if spec.get("targeting_baseline") else "full"
+            out[p.id] = "nudge" if (spec.get("nudge") or spec.get("message")) else "baseline" if spec.get("targeting_baseline") else "full"
     return out
 
 

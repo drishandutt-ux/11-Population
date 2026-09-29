@@ -224,6 +224,12 @@ def _build_user_message(
     if lever:
         from app.services.measurement import levers as lever_mod
         blocks.append(lever_mod.counterfactual_block(lever))
+    # A message run (brief L7-06): the twin has just read a framing. A stimulus, not a change in
+    # the world and not a dial shift — the twin decides what it does to them.
+    message = spec.get("message") if isinstance(spec.get("message"), dict) else None
+    if message and message.get("text"):
+        from app.services.measurement import messaging as msg_mod
+        blocks.append(msg_mod.message_block(message))
 
     blocks.append("THE QUESTION: " + instrument.question_for(spec) + "\n\nRecord your answer with the tool.")
     return "\n\n".join(blocks)

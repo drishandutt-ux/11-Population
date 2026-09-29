@@ -229,6 +229,10 @@ export const api = {
     runTargeting: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; behaviours?: string[]; points?: number; mode?: string }) =>
       request<Experiment & { behaviours: string[]; points: number; at_risk: number }>(`/sessions/${sessionId}/targeting/run`, { method: "POST", body: JSON.stringify(body) }),
     targetingRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/targeting`),
+    // Message testing (brief L7-06): framings read by the twins at risk at a candidate's step; the shift counted per message and by cohort, backfire flagged.
+    runMessaging: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; messages: { label?: string; text: string }[]; mode?: string }) =>
+      request<Experiment & { messages: MessageSpec[]; at_risk: number }>(`/sessions/${sessionId}/messaging/run`, { method: "POST", body: JSON.stringify(body) }),
+    messagingRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/messaging`),
     journeySuggest: (sessionId: string, question?: string) =>
       request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -602,6 +606,17 @@ export type TargetingRow = { rank?: number; key: string; label: string; group: s
 export type TargetingResult = { available: boolean; candidate_id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string }; points: number; n: number;
   behaviours: TargetingRow[]; any_significant: boolean; backfires: { key: string; label: string; direction: string; bands: { value: string; per_point: number }[]; hurts: boolean }[];
   end_label?: string; sentence: string; journey_probe_id?: string };
+/** A message run (brief L7-06): the framings ranked by the shift in conversion at the step, backfire beside the winner, labelled a reaction not a forecast. */
+export type MessageSpec = { key: string; label: string; text: string };
+export type MessagingRow = { rank?: number; key: string; label: string; text: string; available: boolean; reason?: string;
+  lift: number; low: number; high: number; n: number; significant: boolean; direction: "helps" | "hurts" | "none"; then: number; now: number;
+  movement: { up: number; down: number; unchanged: number; n: number }; end?: { label: string; then: number; now: number; lift: number };
+  segments: Record<string, TargetingBand[]>; bands: TargetingBand[]; backfire: { value: string; n: number; lift: number; low: number; high: number }[]; hurts: boolean;
+  weighted: { lift: number; low: number; high: number; ess: number; significant: boolean } | null;
+  people?: { moved: number; low: number; high: number; basis: string } };
+export type MessagingResult = { available: boolean; candidate_id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string }; n: number;
+  messages: MessagingRow[]; any_significant: boolean; weighted: boolean; backfires: { key: string; label: string; hurts: boolean; lift: number; bands: { value: string; lift: number }[] }[];
+  end_label?: string; label: string; sentence: string; journey_probe_id?: string };
 export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean; denominator: JourneyDenominator | null };
 
 export type ClientReport = {
@@ -997,6 +1012,8 @@ export type ExperimentResults = {
   /** A lever run (brief L7-04): the counted shift, once both arms are in. */
   lever?: LeverShift;
   targeting?: TargetingResult;
+  /** A message run (brief L7-06): the framings ranked, once counted. */
+  messaging?: MessagingResult;
   design: ExperimentDesign;
   instrument: string;
   control: string;
