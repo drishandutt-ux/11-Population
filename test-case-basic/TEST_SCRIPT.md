@@ -54,10 +54,12 @@ If every step below produces what it says it should, the tool works end to end.
 ## Step 1 — Create the session (2 minutes)
 
 1. On the landing page type the title and the question above.
-2. Leave **Research automatically** ticked. Create.
-3. **Check:** the session opens on the Ingest tab and a research panel starts streaming searches
-   about food-waste collections, caddies and Manchester. Off-topic finds are greyed, not hidden.
-4. Let it finish, or press **Stop** once and check it still produces an evidence brief.
+2. **Untick Research automatically.** Create. (Research off keeps the three test files as the only
+   material, so every number and barrier in the run can be traced back to them.)
+3. **Check:** the session opens on the Ingest tab with status *created* and no research panel running.
+4. Optional second pass, later: repeat the whole script in a new session with research on, and check
+   only that the research panel streams and greys off-topic finds, and that the Journey's barriers
+   still match the twins' words rather than drifting to web material.
 
 ## Step 2 — Add the three files (5 minutes)
 
@@ -181,7 +183,7 @@ If every step below produces what it says it should, the tool works end to end.
 
 ## Things that look like bugs but are not
 
-- Auto-research finds real Manchester and national food-waste material; that is fine, the test
+- With research on, real Manchester and national food-waste material mixes in; that is fine, the test
   files are the anchor.
 - Candidates that rest on fewer than five twins say so and have very wide intervals.
 - Editing a reviewed rule puts it back to draft on purpose.
