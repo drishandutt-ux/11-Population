@@ -119,3 +119,24 @@ def test_cited_ids_lists_who_the_answer_rests_on():
 def test_a_possessive_keeps_its_apostrophe():
     out = c.repair_names("Sarah Whitfield's list is the largest.", [SARAH])
     assert out == f"[[twin:{A_ID}]]'s list is the largest."
+
+
+# ── name + handle, side by side ──────────────────────────────────────────────
+
+def test_a_name_typed_beside_its_handle_collapses_to_one_citation():
+    # The report wrote "Gary Pendleton [[A7]]:" — repair made two adjacent tokens of one twin.
+    t = f"[[twin:{A_ID}]] [[twin:{A_ID}]]: \"Most will try it\" (confidence 92/100)."
+    assert c.collapse_repeats(t) == f"[[twin:{A_ID}]]: \"Most will try it\" (confidence 92/100)."
+    # Bold around the name survives; a bracketed handle after the name folds in.
+    assert c.collapse_repeats(f"**[[twin:{A_ID}]]** [[twin:{A_ID}]] said") == f"**[[twin:{A_ID}]]** said"
+    assert c.collapse_repeats(f"[[twin:{A_ID}]] ([[twin:{A_ID}]]) said") == f"[[twin:{A_ID}]] said"
+    # The statement citation is the one kept, whichever side it is on.
+    assert c.collapse_repeats(f"[[twin:{A_ID}]] [[twin:{A_ID}|post:{P1}]] said") == f"[[twin:{A_ID}|post:{P1}]] said"
+    assert c.collapse_repeats(f"[[twin:{A_ID}|post:{P1}]], [[twin:{A_ID}]] said") == f"[[twin:{A_ID}|post:{P1}]] said"
+    # Three in a row fold to one; two different twins are left alone.
+    assert c.collapse_repeats(f"[[twin:{A_ID}]] [[twin:{A_ID}]] [[twin:{A_ID}]]") == f"[[twin:{A_ID}]]"
+    two = f"[[twin:{A_ID}]], [[twin:{B_ID}]] disagreed"
+    assert c.collapse_repeats(two) == two
+    # A repeat later in the sentence is not adjacent: left for the renderer's marker.
+    later = f"[[twin:{A_ID}]] said it; his [[twin:{A_ID}|post:{P1}]] claim stands"
+    assert c.collapse_repeats(later) == later

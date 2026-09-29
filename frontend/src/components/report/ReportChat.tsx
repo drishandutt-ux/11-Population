@@ -804,14 +804,38 @@ function dedupeFigures(html: string): string {
   });
 }
 
+/** A twin's initials, for the compact marker a repeat citation renders as. */
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "·";
+}
+
+/**
+ * Twin citations in one block of text. The first citation of a twin renders as the full name;
+ * every later one in the same block is a small marker — "¶" when it points at a statement,
+ * the twin's initials otherwise — so "his [[A7#P12]] claim" reads as prose with a clickable
+ * pointer rather than the name a third time. Both open the same card.
+ */
 function renderCitations(html: string, agentsById: Record<string, Agent>): string {
   html = dedupeFigures(html);
   html = renderRecordCitations(html);
   html = renderSourceCitations(html);
+  // Reports stored before collapse_repeats existed can carry "name + handle" as two adjacent
+  // tokens of one twin; fold them here too so an old report reads the same as a new one.
+  html = html.replace(/(\[\[twin:([0-9a-fA-F-]{36})(?:\|post:[0-9a-fA-F-]{36})?\]\])[ \t]*\[\[twin:\2(\|post:[0-9a-fA-F-]{36})?\]\]/g,
+    (_m, first: string, id: string, post2?: string) => (first.includes("|post:") || !post2 ? first : `[[twin:${id}${post2}]]`));
+  const seen = new Set<string>();
   return html.replace(CITE_RE, (_m, twinId: string, postId?: string) => {
     const agent = agentsById[twinId];
     if (!agent) return "a twin in the population";
     const post = postId ? ` data-post="${postId}"` : "";
+    if (seen.has(twinId)) {
+      return (
+        `<button type="button" data-twin="${twinId}"${post} title="${agent.name} — ${postId ? "this statement" : agent.role}" ` +
+        `class="twin-cite twin-cite-again inline-flex items-center align-baseline h-[15px] px-1 rounded text-[9.5px] font-semibold leading-none tracking-wide text-primary/90 bg-primary/10 hover:bg-primary/20">` +
+        `${postId ? "¶" : initials(agent.name)}</button>`
+      );
+    }
+    seen.add(twinId);
     return (
       `<button type="button" data-twin="${twinId}"${post} title="${agent.name} — ${agent.role}" ` +
       `class="twin-cite font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">` +

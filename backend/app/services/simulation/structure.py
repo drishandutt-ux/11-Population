@@ -52,7 +52,7 @@ Restate the question being investigated and why it matters.
 What grounds this population, by role: go through == EVIDENCE BY CLASS == in the order given, name the items that mattered and their direct relevance to the query, then state the population frame (including any model-estimated distribution). Be specific; do not list material that is not there.
 
 ## DISCUSSION
-Which perspectives were represented, what the majority position concluded and why, then the NAMED DISSENT: the twins listed as dissenting under == POSITIONS == — cite each by handle, quote their verdict line, and say what would have to be true for them to be right. Then any contradictions or risks flagged during the debate.
+Which perspectives were represented, what the majority position concluded and why, then the NAMED DISSENT: the twins listed as dissenting under == POSITIONS == — one entry each, opened with the handle once ([[A7]]: "…"), quoting their verdict line, then what would have to be true for them to be right, referring back to them by pronoun and citing the statement it rests on after the claim ([[A7#P12]]). Then any contradictions or risks flagged during the debate.
 
 ## OUTCOME
 Final recommendation and answer. State the 2–3 analytic caveats that could change the conclusion (the computed caveats from the records are shown separately — do not repeat them).
@@ -153,7 +153,8 @@ def dissent_for(positions: list[dict], limit: int = 8) -> tuple[Optional[str], l
 
 def positions_block(positions: list[dict], handle_of_agent: dict[str, str], names: dict[str, str]) -> str:
     """The positions as the model sees them: the split, then the dissent by handle with the
-    line each dissenter would be quoted on."""
+    line each dissenter would be quoted on. The name is deliberately not shown beside the
+    handle: given both, the model typed both, and the reader saw the name twice."""
     if not positions:
         return "(no verdict answers on file — describe the discussion from the transcript and name no dissent as computed)"
     maj, dissent = dissent_for(positions)
@@ -164,7 +165,7 @@ def positions_block(positions: list[dict], handle_of_agent: dict[str, str], name
         lines.append("DISSENT (the twins who did not hold the majority position — name these, by handle):")
         for p in dissent:
             h = handle_of_agent.get(p["agent_id"] or "", "?")
-            lines.append(f"- [[{h}]] {names.get(p['agent_id'] or '', '')} — {p['position']} (confidence {p['confidence']}/100): \"{p['verdict']}\"")
+            lines.append(f"- [[{h}]] — {p['position']} (confidence {p['confidence']}/100): \"{p['verdict']}\"")
     else:
         lines.append("DISSENT: none — every twin who answered held the majority position (say so; do not invent a minority).")
     return "\n".join(lines)

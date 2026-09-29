@@ -109,6 +109,7 @@ async def _call(session_id: str, label: str, system: str, prompt: str, ctx: Repo
         answer = figures_mod.resolve_handles(answer, ctx.figure_handles)
         answer = citations.resolve(answer, ctx.handles)
         answer = citations.repair_names(answer, ctx.agents)
+        answer = citations.collapse_repeats(answer)
         # Last: any number left with no citation in its sentence is the model's own — flagged.
         answer, ctx.unsourced = figures_mod.mark_unsourced(answer)
         return answer

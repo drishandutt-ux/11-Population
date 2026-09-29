@@ -225,7 +225,21 @@ def resolve_citations(text: str, *, agents: dict[str, str], records: dict[str, d
     def item(m):
         it = items.get(m.group(1))
         return f" [{it.get('title')}, {str(it.get('provenance_class') or '').replace('_', ' ')}]" if it else ""
-    out = TWIN_RE.sub(lambda m: agents.get(m.group(1), "a twin"), text)
+    # A twin is named once per paragraph. A later citation of the same twin that points at a
+    # statement ("his [[A7#P12]] claim") is a pointer with nothing to point to on paper, so it
+    # goes; a later plain citation keeps the name (it may be a list). Adjacent duplicates of
+    # one twin — name + handle in reports stored before collapse_repeats — fold first.
+    from app.services.simulation.citations import collapse_repeats
+    def twins(line: str) -> str:
+        seen: set[str] = set()
+        def sub(m):
+            tid, again = m.group(1), m.group(1) in seen
+            seen.add(tid)
+            if again and "|post:" in m.group(0):
+                return ""
+            return agents.get(tid, "a twin")
+        return TWIN_RE.sub(sub, line)
+    out = "\n".join(twins(line) for line in collapse_repeats(text).split("\n"))
     out = RECORD_RE.sub(rec, out)
     out = FACT_RE.sub(fact, out)
     out = EVID_RE.sub(item, out)

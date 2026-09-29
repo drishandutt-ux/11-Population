@@ -97,3 +97,12 @@ def test_the_delta_reads_what_changed_and_whether_the_headline_change_is_real():
     c = _side(0.40, 0.28, 0.54, {"for": 0.4, "mixed": 0.36, "against": 0.24}, ["d1", "d2"], [("cost", 14), ("capacity", 9)], {"web": 23, "quant": 3}, "MEDIUM", 2)
     d2 = dl.compare(a, c)
     assert d2["headline"]["real"] is False and "not distinguishable" in d2["summary"] and d2["barriers"]["same"][0]["theme"] == "cost"
+
+
+def test_the_client_document_names_a_twin_once_per_paragraph():
+    from app.services.simulation import export as ex
+    a = "11111111-1111-1111-1111-111111111111"; post = "aaaaaaaa-1111-1111-1111-111111111111"
+    text = (f"[[twin:{a}]] [[twin:{a}]]: \"Most will try it\". For him to be right, his [[twin:{a}|post:{post}]] claim must hold.\n"
+            f"Later, [[twin:{a}]] agreed.")
+    out = ex.resolve_citations(text, agents={a: "Gary Pendleton"}, records={}, facts={}, items={})
+    assert out == "Gary Pendleton: \"Most will try it\". For him to be right, his claim must hold.\nLater, Gary Pendleton agreed."

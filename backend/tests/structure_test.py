@@ -51,8 +51,10 @@ def test_positions_block_names_the_dissent_by_handle_with_their_line():
     pos = st.positions_from_answers(_rows())
     block = st.positions_block(pos, {"a3": "A3", "a4": "A4"}, {"a3": "Priya", "a4": "Tom"})
     assert "Majority position: for (3 of 5)" in block
-    assert "[[A3]] Priya — against (confidence 90/100): \"line 3\"" in block
-    assert "[[A4]] Tom — mixed" in block
+    # The handle only: shown the name as well, the model typed both and the reader saw it twice.
+    assert "[[A3]] — against (confidence 90/100): \"line 3\"" in block
+    assert "[[A4]] — mixed" in block
+    assert "Priya" not in block and "Tom" not in block
     unanimous = st.positions_block([{"agent_id": "a1", "position": "for", "confidence": 50, "verdict": "v"}], {}, {})
     assert "DISSENT: none" in unanimous
 

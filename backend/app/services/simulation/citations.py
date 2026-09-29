@@ -11,7 +11,10 @@ rewritten to stable ids:
 That is what kills the name drift seen in the Blackpool report: the name the reader sees is
 read from the agent row at render time, so the model cannot misremember a surname. Any name
 it types anyway is repaired into a citation by `repair_names` — a full-name-shaped mention
-whose first name belongs to exactly one twin becomes that twin's token, wrong surname and all.
+whose first name belongs to exactly one twin becomes that twin's token, wrong surname and all —
+and `collapse_repeats` then folds "name + handle" into one token, so a twin is never rendered
+twice in a row. The renderer shows the first citation of a twin in a paragraph as the full
+name and any later one as a small marker.
 
 Pure functions; no I/O.
 """
@@ -119,6 +122,36 @@ def resolve(text: str, handles: Handles) -> str:
     return re.sub(r"[ \t]{2,}", " ", out)
 
 
+#: Two citations of the same twin with nothing but space, punctuation or bold markers between
+#: them — what "Gary Pendleton [[A7]]" becomes once the typed name is repaired into a token.
+_ADJACENT_RE = re.compile(
+    r"\[\[twin:(?P<id>[0-9a-fA-F-]{36})(?P<post1>\|post:[0-9a-fA-F-]{36})?\]\]"
+    r"(?P<sep>[ \t*_,;:—–-]*|[ \t]*\([ \t]*)"
+    r"\[\[twin:(?P=id)(?P<post2>\|post:[0-9a-fA-F-]{36})?\]\](?P<close>[ \t]*\))?"
+)
+
+
+def collapse_repeats(text: str) -> str:
+    """One citation where the model left two of the same twin side by side.
+
+    "Gary Pendleton [[A7]]:" is repaired into two adjacent tokens, which would render as the
+    name twice. Keep one — the one that points at a statement, if either does — and keep any
+    bold markers the separator carried so the emphasis still closes."""
+    def sub(m: re.Match) -> str:
+        sep, close = m.group("sep") or "", m.group("close")
+        if sep.lstrip().startswith("(") and close is None:
+            return m.group(0)                       # "( [[A7]]" with no ")" — not a pair
+        post = m.group("post1") or m.group("post2") or ""
+        token = f"[[twin:{m.group('id')}{post}]]"
+        markup = "".join(ch for ch in sep if ch in "*_")
+        return token + markup
+
+    prev = None
+    while prev != text:
+        prev, text = text, _ADJACENT_RE.sub(sub, text)
+    return text
+
+
 def repair_names(text: str, agents: list[Any]) -> str:
     """Turn any name the model typed into a citation.
 
@@ -178,6 +211,10 @@ CITATION_RULES = (
     "[[A7#P12]]. Use the post handle shown at the start of each transcript line.\n"
     "- Write around the citation as if it were the name: \"[[A7]] argued that …\", "
     "\"two pharmacists ([[A3]], [[A9]]) disagreed\".\n"
+    "- Cite a twin ONCE per sentence — the handle renders as the full name, so a second handle "
+    "for the same twin reads as the name twice. Never write the name and the handle together. "
+    "Refer back with a pronoun, and put a statement citation after the claim it supports "
+    "(\"his claim of bluebottles in four days [[A7#P12]]\"), never between a pronoun and its noun.\n"
     "- Never write \"some agents\" or \"several participants\" — cite them.\n"
     "- Never invent a handle. Only handles listed in the roster exist."
 )
