@@ -292,6 +292,26 @@ def candidates_from_records(records: list[dict]) -> Optional[dict]:
     return None
 
 
+def commitments_from_records(records: list[dict]) -> Optional[list[dict]]:
+    """Every commitment record (brief L7-08), for the report's *Committed outcomes* block: the
+    frozen forecast, what it rested on, the target and the observed result against it."""
+    out = []
+    for r in records:
+        cm = r.get("commitment")
+        if not cm:
+            continue
+        est = r.get("estimate") or {}
+        out.append({"record_id": r.get("id"), "label": r.get("label"), "from": cm.get("from"), "to": cm.get("to"), "status": cm.get("status"),
+                    "committed_by": cm.get("committed_by"), "committed_at": cm.get("committed_at"), "frozen_at": cm.get("frozen_at"),
+                    "conversion": est.get("value"), "low": est.get("low"), "high": est.get("high"), "n": est.get("n"), "stuck": cm.get("stuck"),
+                    "stuck_people": cm.get("stuck_people"), "stuck_low": cm.get("stuck_low"), "stuck_high": cm.get("stuck_high"), "basis": cm.get("basis"),
+                    "build_id": cm.get("build_id"), "population_n": cm.get("population_n"), "frame_level": cm.get("frame_level"),
+                    "evidence_items": cm.get("evidence_items"), "rules": cm.get("rules"), "related": cm.get("related") or [],
+                    "target": cm.get("target") or {}, "comparison": cm.get("comparison"), "observations": len(cm.get("observed") or []),
+                    "closed_by": cm.get("closed_by"), "close_note": cm.get("close_note")})
+    return out or None
+
+
 # ── assembly ─────────────────────────────────────────────────────────────────
 
 def build_structure(*, session_query: str, records: list[dict], headline: Optional[dict], positions: list[dict],
@@ -326,7 +346,9 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
         },
         "records": {"all": [r.get("id") for r in records], "cited": list(cited_record_ids)},
         "outcome": {"caveats": caveats_from_records(records, cited_record_ids), "barriers": barriers_from_records(records),
-                    "candidates": candidates_from_records(records)},
+                    "candidates": candidates_from_records(records),
+                    # L7-08: the frozen forecasts a client has committed to, and the observed results against them.
+                    "commitments": commitments_from_records(records)},
         # L6-03: which source figures the prose cites, and every number it typed with no source.
         "figures": figures or {"facts_cited": [], "items_cited": [], "unsourced": []},
     }

@@ -288,6 +288,33 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
                          + mv_text
                          + (f"; barriers: {bars}" if bars else ""))
         lines.append("")
+    cms = (structure.get("outcome") or {}).get("commitments") if structure else None
+    if cms:
+        lines += ["## Committed outcomes — the frozen forecasts", "",
+                  "Each commitment is a copy of the modelled baseline as it stood when the outcome was chosen; later work in the session does not change it. "
+                  "An observed result is a figure entered by hand with its source; whether it sits inside the modelled interval is counted, not judged.", ""]
+        for k, c in enumerate(cms, 1):
+            t = c.get("target") or {}
+            cp = c.get("comparison")
+            line = (f"{k}. **{c.get('from')} → {c.get('to')}** — committed by {c.get('committed_by') or 'nobody'} on {str(c.get('committed_at') or '')[:10]}; "
+                    f"forecast {round(float(c.get('conversion') or 0) * 100)}% get through (95% CI {round(float(c.get('low') or 0) * 100)}–{round(float(c.get('high') or 0) * 100)}%, "
+                    f"{c.get('stuck')} of {c.get('n')} stuck)"
+                    + (f"; ≈{int(c['stuck_people']):,} people stuck ({_people_range(c)})" if c.get("stuck_people") is not None else "")
+                    + f"; population build {c.get('build_id') or 'unknown'} ({c.get('population_n')} twins, frame {c.get('frame_level') or 'none'}); "
+                    + f"{c.get('evidence_items')} evidence items and {c.get('rules')} calibration rules on file"
+                    + (f"; target {round(float(t['value']) * 100)}%" + (f" by {t['horizon']}" if t.get("horizon") else "") if t.get("value") is not None else "; no target set"))
+            if cp:
+                line += (f"; **observed {round(float(cp.get('observed') or 0) * 100)}%** on {cp.get('observed_date')} ({cp.get('observed_source')}): {round(float(cp.get('delta') or 0) * 100):+d} points against the forecast, "
+                         + ("inside" if cp.get("inside_interval") else "outside") + " the modelled interval"
+                         + (("; target " + ("met" if cp.get("target_met") else "not met")) if "target_met" in cp else ""))
+            else:
+                line += "; no observed result yet"
+            if c.get("status") == "superseded":
+                line += "; superseded by a later commitment"
+            elif c.get("status") == "closed":
+                line += f"; closed by {c.get('closed_by') or 'nobody'}" + (f" ({c.get('close_note')})" if c.get("close_note") else "")
+            lines.append(line)
+        lines.append("")
     if report and report.get("answer"):
         lines += ["## The report", "", resolve_citations(report["answer"], agents=agents, records=by_id, facts=facts, items=items), ""]
     cav = (structure.get("outcome") or {}).get("caveats") if structure else None
@@ -327,6 +354,13 @@ async def bundle(session_id: str) -> bytes:
         "sources.json": json.dumps({**stamp, **ledger}, indent=2, default=str),
         "roster.csv": "# " + st.replace("\n", " ") + "\n" + _csv(roster_rows(agents), ROSTER_COLUMNS),
     }
+    # Commitments (brief L7-08): every frozen baseline as its own file, so the client keeps it outside the tool.
+    try:
+        from app.services.measurement import commitments as commitments_mod
+        for c in await commitments_mod.list_for_session(session_id):
+            files[f"commitments/{c['id']}.json"] = json.dumps({**stamp, "commitment": c}, indent=2, default=str)
+    except Exception as e:  # noqa: BLE001
+        print(f"[export] commitments unavailable for {session_id}: {type(e).__name__}: {e}")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for name, content in files.items():

@@ -233,6 +233,14 @@ export const api = {
     runMessaging: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; messages: { label?: string; text: string }[]; mode?: string }) =>
       request<Experiment & { messages: MessageSpec[]; at_risk: number }>(`/sessions/${sessionId}/messaging/run`, { method: "POST", body: JSON.stringify(body) }),
     messagingRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/messaging`),
+    // Commitments (brief L7-08): freeze the modelled baseline for a chosen candidate outcome; enter observed results against it later.
+    commitments: (sessionId: string) => request<{ commitments: Commitment[] }>(`/sessions/${sessionId}/commitments`),
+    commit: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; committed_by: string; label?: string; target?: { value?: number | string; horizon?: string; note?: string } }) =>
+      request<Commitment>(`/sessions/${sessionId}/commitments`, { method: "POST", body: JSON.stringify(body) }),
+    observeCommitment: (sessionId: string, commitmentId: string, body: { value: number; low?: number; high?: number; source: string; date: string; entered_by?: string; note?: string }) =>
+      request<Commitment>(`/sessions/${sessionId}/commitments/${commitmentId}/observe`, { method: "POST", body: JSON.stringify(body) }),
+    closeCommitment: (sessionId: string, commitmentId: string, body: { closed_by: string; note?: string }) =>
+      request<Commitment>(`/sessions/${sessionId}/commitments/${commitmentId}/close`, { method: "POST", body: JSON.stringify(body) }),
     journeySuggest: (sessionId: string, question?: string) =>
       request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -543,7 +551,12 @@ export type ReportStructure = {
       items: { id: string; rank: number; from: string; to: string; label: string; n: number; stuck: number; conversion: number; low: number; high: number; gap: number | null; equity_gap: number | null;
         stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; at_risk_people?: number | null; basis?: HeadcountBasis;
         movability?: Partial<Movability>;
-        barriers: { theme: string; count: number; weight_mean: number | null; removals: string[]; agent_ids: string[]; reach?: Reach; lever?: string; actor?: string }[] }[] } | null };
+        barriers: { theme: string; count: number; weight_mean: number | null; removals: string[]; agent_ids: string[]; reach?: Reach; lever?: string; actor?: string }[] }[] } | null;
+    /** Committed outcomes (brief L7-08): the frozen forecasts and the observed results against them. */
+    commitments?: { record_id: string; label: string; from: string; to: string; status: "open" | "closed" | "superseded"; committed_by: string; committed_at: string | null; frozen_at: string;
+      conversion: number; low: number; high: number; n: number; stuck: number; stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; basis?: string;
+      build_id: string | null; population_n: number; frame_level: string; evidence_items: number; rules: number; related: { id: string; kind: string; label: string }[];
+      target: { value?: number; horizon?: string; note?: string }; comparison: CommitmentComparison | null; observations: number; closed_by?: string; close_note?: string }[] | null };
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
@@ -617,6 +630,21 @@ export type MessagingRow = { rank?: number; key: string; label: string; text: st
 export type MessagingResult = { available: boolean; candidate_id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string }; n: number;
   messages: MessagingRow[]; any_significant: boolean; weighted: boolean; backfires: { key: string; label: string; hurts: boolean; lift: number; bands: { value: string; lift: number }[] }[];
   end_label?: string; label: string; sentence: string; journey_probe_id?: string };
+/** A commitment (brief L7-08): the frozen modelled baseline for a candidate outcome a client chose to pursue, signed by name, never edited; observed results entered later against it. */
+export type CommitmentObserved = { value: number; low?: number; high?: number; source: string; date: string; entered_by: string; entered_at: string; note: string };
+export type CommitmentComparison = { observed: number; observed_date: string; observed_source: string; observations: number; forecast: number | null; forecast_low: number | null; forecast_high: number | null;
+  delta?: number; direction?: "above" | "below" | "at"; inside_interval?: boolean; target?: number; target_met?: boolean };
+export type Commitment = { id: string; session_id: string; journey_probe_id: string; candidate_id: string; label: string; committed_by: string; committed_at: string | null;
+  target: { value?: number; horizon?: string; note?: string }; status: "open" | "closed" | "superseded"; superseded_by: string | null;
+  closed_by: string; closed_at: string | null; close_note: string;
+  baseline: { frozen_at: string; question: string; title: string; candidate: JourneyCandidate & Record<string, any>;
+    journey: { probe_id: string; stages: JourneyStage[]; funnel: any[]; headcount: { available: boolean; sentence: string; reason: string; denominator: any; weighted: boolean }; n: number; seed: number; model: string; prompt_hash: string; created_at: string | null };
+    related: { id: string; kind: string; label: string; estimate?: any; sentence?: string }[];
+    population: { n: number; build_id: string | null; mode: string | null; weights: { n: number; weighted: boolean; ess: number } };
+    frame: { level: string; matched_exactly: string[]; weighted_only: string[]; estimated: string[]; ess: number | null; thin_cells: any[]; geography: any; sizing: any };
+    evidence: { counts: Record<string, number>; items: { id: string; title: string; source_ref: string; provenance_class: string; trust_tier: string; published_at: string; on_topic: boolean }[]; facts: any[] };
+    scoping_snapshot: string | null; calibration_rules: { id: string; lever: string; status: string; reviewed_by: string; basis_class?: string }[]; statement: string };
+  observed: CommitmentObserved[]; comparison: CommitmentComparison | null; sentence: string; created_at: string | null };
 export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean; denominator: JourneyDenominator | null };
 
 export type ClientReport = {

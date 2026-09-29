@@ -177,6 +177,29 @@ class MessagingRunRequest(BaseModel):
     mode: str = "fast"
 
 
+class CommitRequest(BaseModel):
+    journey_probe_id: str
+    candidate_id: str
+    committed_by: str
+    label: Optional[str] = None
+    target: Optional[dict] = None       # {value (share or %), horizon, note}
+
+
+class ObserveRequest(BaseModel):
+    value: float
+    low: Optional[float] = None
+    high: Optional[float] = None
+    source: str
+    date: str
+    entered_by: Optional[str] = None
+    note: Optional[str] = None
+
+
+class CloseRequest(BaseModel):
+    closed_by: str
+    note: Optional[str] = None
+
+
 class ReviewRequest(BaseModel):
     reviewed_by: str
     approve: bool = True
@@ -375,6 +398,63 @@ async def list_messaging_runs(session_id: str, user: AuthUser = Depends(get_curr
     await get_owned_session(session_id, user, db)
     rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
     return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("messaging")]}
+
+
+@router.get("/sessions/{session_id}/commitments")
+async def list_commitments(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Every commitment in the session (brief L7-08), newest first, each with its frozen baseline,
+    observed results and the counted comparison."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import commitments
+    return {"commitments": await commitments.list_for_session(session_id)}
+
+
+@router.post("/sessions/{session_id}/commitments")
+async def create_commitment(session_id: str, body: CommitRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Commit to a candidate outcome (brief L7-08): freeze the modelled baseline as a copy — the
+    candidate, the journey run, every run on it, the population build and frame, the evidence on
+    file, the rules and the statement — signed by name. An open commitment on the same candidate
+    is superseded. No model call."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import commitments
+    res = await commitments.freeze(session_id, journey_probe_id=body.journey_probe_id, candidate_id=body.candidate_id, committed_by=body.committed_by,
+                                   target=body.target, label=body.label or "")
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    return res
+
+
+@router.get("/sessions/{session_id}/commitments/{commitment_id}")
+async def get_commitment(session_id: str, commitment_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import commitments
+    c = await commitments.get(session_id, commitment_id)
+    if not c:
+        raise HTTPException(404, "Commitment not found")
+    return c
+
+
+@router.post("/sessions/{session_id}/commitments/{commitment_id}/observe")
+async def observe_commitment(session_id: str, commitment_id: str, body: ObserveRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Enter an observed result against the frozen forecast: a share (or percentage) with its
+    source and date. The comparison — delta, inside the interval, target met — is counted."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import commitments
+    res = await commitments.observe(session_id, commitment_id, body.model_dump(), entered_by=body.entered_by or "")
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    return res
+
+
+@router.post("/sessions/{session_id}/commitments/{commitment_id}/close")
+async def close_commitment(session_id: str, commitment_id: str, body: CloseRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Close a commitment by name, with a note. It is never edited or deleted."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import commitments
+    res = await commitments.close(session_id, commitment_id, closed_by=body.closed_by, note=body.note or "")
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    return res
 
 
 @router.get("/lab/instruments")

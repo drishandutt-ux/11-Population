@@ -101,3 +101,31 @@ class CalibrationMapping(Base):
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Commitment(Base):
+    """A commitment record (brief L7-08): when a client picks a candidate outcome to pursue, the
+    modelled baseline is frozen here — the candidate as it stood, the population build, the frame
+    and weights, the evidence on file, every calibration rule, the runs on it, the model and seed
+    and the synthetic statement — as a copy, never a pointer, so later work in the session cannot
+    change what was promised. Observed results are entered by hand later, with a source, and
+    compared against the frozen forecast. A commitment is never edited: it is closed or superseded."""
+    __tablename__ = "commitments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), index=True)
+    journey_probe_id: Mapped[str] = mapped_column(String(36), index=True)
+    candidate_id: Mapped[str] = mapped_column(String(160))
+    label: Mapped[str] = mapped_column(String(300), default="")
+    committed_by: Mapped[str] = mapped_column(String(120), default="")
+    committed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    target: Mapped[dict] = mapped_column(JSON, default=dict)             # {value (share 0–1), horizon, note}
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)   # open | closed | superseded
+    superseded_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, default=None)
+    closed_by: Mapped[str] = mapped_column(String(120), default="")
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    close_note: Mapped[str] = mapped_column(Text, default="")
+    baseline: Mapped[dict] = mapped_column(JSON, default=dict)           # the frozen modelled baseline (see commitments.build_baseline)
+    observed: Mapped[list] = mapped_column(JSON, default=list)           # [{value, low, high, source, date, entered_by, entered_at, note}]
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -76,7 +76,11 @@ FIGURE_RULES = (
     "- WHICH MESSAGE WORKS comes only from a 'messages tested' record: name the messages in that order, each with its "
     "shift in conversion and the interval, and cite the record. State every BACKFIRE the record lists (a message that lowers "
     "conversion overall, or for a deprivation band) as prominently as the winner. Say that the result is a modelled reaction "
-    "to a framing, not a forecast of uptake. Never rank, recommend or reword a message the record does not list."
+    "to a framing, not a forecast of uptake. Never rank, recommend or reword a message the record does not list.\n"
+    "- A COMMITTED OUTCOME comes only from a 'committed' record: state the forecast it froze (the conversion with its interval, "
+    "the population build and the date it was frozen) from that record, never from the live journey figure, and cite it. State "
+    "an observed result, and whether it fell inside the modelled interval or met the target, only where the record gives one; "
+    "where it says 'no observed result yet', say so. Never call a forecast met, missed or on track on your own judgement."
 )
 
 
@@ -420,6 +424,57 @@ def record_from_messaging(e: Any, *, evidence_mix: Optional[dict] = None, frame:
     }
 
 
+def record_from_commitment(c: dict) -> Optional[dict]:
+    """A commitment (brief L7-08) → one record: the frozen forecast for the chosen candidate
+    outcome, the target, and the observed result against it where one has been entered. Read
+    only from the frozen baseline — the live journey figure is never consulted."""
+    b = c.get("baseline") or {}
+    cand = b.get("candidate") or {}
+    if not cand:
+        return None
+    pop = b.get("population") or {}
+    frame = b.get("frame") or {}
+    n = int(cand.get("n") or 0)
+    cmp_ = c.get("comparison")
+    t = c.get("target") or {}
+    ev = b.get("evidence") or {}
+    return {
+        "id": c["id"],
+        "kind": "commitment",
+        "instrument": "journey",
+        "label": f"Committed: {c.get('label') or ((cand.get('from') or {}).get('label', '') + ' → ' + (cand.get('to') or {}).get('label', ''))}",
+        "question": str(b.get("question") or "")[:300],
+        "basis": "simulated",
+        "estimate": {"metric": "conversion", "label": "Frozen forecast: share of those at the step who reach the next", "format": "share",
+                     "value": _num(cand.get("conversion")), "low": _num(cand.get("low")), "high": _num(cand.get("high")), "n": n,
+                     "significant": None},
+        "sentence": str(c.get("sentence") or ""),
+        "distribution": [],
+        "splits": {},
+        "equity": cand.get("equity") or None,
+        "commitment": {"candidate_id": c.get("candidate_id"), "journey_probe_id": c.get("journey_probe_id"), "committed_by": c.get("committed_by"),
+                       "committed_at": c.get("committed_at"), "frozen_at": b.get("frozen_at"), "status": c.get("status"), "superseded_by": c.get("superseded_by"),
+                       "closed_by": c.get("closed_by"), "closed_at": c.get("closed_at"), "close_note": c.get("close_note"),
+                       "from": (cand.get("from") or {}).get("label"), "to": (cand.get("to") or {}).get("label"), "step": cand.get("step"),
+                       "stuck": cand.get("stuck"), "stuck_people": cand.get("stuck_people"), "stuck_low": cand.get("stuck_low"), "stuck_high": cand.get("stuck_high"),
+                       "basis": cand.get("basis") or "", "movability": cand.get("movability") or {},
+                       "build_id": pop.get("build_id"), "population_n": pop.get("n"), "frame_level": frame.get("level"), "ess": (pop.get("weights") or {}).get("ess"),
+                       "evidence_items": len(ev.get("items") or []), "facts": len(ev.get("facts") or []), "rules": len(b.get("calibration_rules") or []),
+                       "related": [{"id": r.get("id"), "kind": r.get("kind"), "label": r.get("label")} for r in (b.get("related") or [])],
+                       "target": t, "observed": list(c.get("observed") or []), "comparison": cmp_},
+        "refusals": None, "unanimity": None, "weighted": None,
+        "provenance": {"model": str((b.get("journey") or {}).get("model") or ""), "seed": int((b.get("journey") or {}).get("seed") or 0), "design": "frozen",
+                       "arms": [], "evidence_mix": {}, "frame_level": frame.get("level") or "none", "created_at": c.get("committed_at")},
+        "confidence": dict(cand.get("confidence") or confidence_for(n=n, low=cand.get("low"), high=cand.get("high"), fmt="share", unanimity=None, refusals=None, frame_level=frame.get("level"), weighted=False)),
+        "caveats": [f"A frozen copy of the modelled baseline as it stood on {str(b.get('frozen_at') or '')[:10]}: later runs, documents, rules or population builds in this session do not change it."]
+                   + (["No observed result has been entered against this forecast yet."] if not cmp_ else
+                      ["The observed result is a figure entered by hand with its source; whether it sits inside the modelled interval is counted, not judged."])
+                   + (["Superseded by a later commitment on the same candidate."] if c.get("status") == "superseded" else [])
+                   + caveats_for(n=n, unanimity=None, refusals=None, frame_level=frame.get("level")),
+        "tags": {},
+    }
+
+
 def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
     """One complete experiment → one record: the best variant's lift on the primary metric.
     A lever run (brief L7-04) is shaped by `record_from_lever`, a behaviour-targeting run
@@ -572,6 +627,21 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             else:
                 bar_line += "; no backfire found"
             bar_line += "; this is a modelled reaction to a framing, NOT a forecast of uptake"
+        cm = r.get("commitment") or {}
+        if cm:
+            t = cm.get("target") or {}
+            cp = cm.get("comparison")
+            bar_line += (f"; COMMITTED outcome (frozen {str(cm.get('frozen_at') or '')[:10]} by {cm.get('committed_by') or 'nobody'}; population build {cm.get('build_id') or 'unknown'}, "
+                         f"{cm.get('population_n')} twins, frame {cm.get('frame_level') or 'none'}; {cm.get('evidence_items')} evidence items, {cm.get('rules')} calibration rules on file; status {cm.get('status')})"
+                         + (f"; ≈{int(cm['stuck_people']):,} people stuck at the time" if cm.get("stuck_people") is not None else "")
+                         + (f"; target {round(_num(t.get('value')) * 100)}%" + (f" by {t['horizon']}" if t.get("horizon") else "") if t.get("value") is not None else "; no target set"))
+            if cp:
+                bar_line += (f"; OBSERVED {round(_num(cp.get('observed')) * 100)}% on {cp.get('observed_date')} ({cp.get('observed_source')}): {round(_num(cp.get('delta')) * 100):+d} points against the frozen forecast, "
+                             + ("inside" if cp.get("inside_interval") else "outside") + " the modelled interval"
+                             + (("; target " + ("met" if cp.get("target_met") else "not met")) if "target_met" in cp else ""))
+            else:
+                bar_line += "; no observed result yet"
+            bar_line += "; the frozen forecast is the only figure that may be quoted for this commitment"
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")
         if (r.get("refusals") or {}).get("refused"):
@@ -651,6 +721,15 @@ async def records_for_session(session_id: str) -> list[dict]:
         r = record_from_experiment(e, evidence_mix=mix, frame=frame)
         if r:
             out.append(r)
+    # Commitments (brief L7-08): the frozen forecasts, read from their own copies.
+    try:
+        from app.services.measurement import commitments as commitments_mod
+        for c in await commitments_mod.list_for_session(session_id):
+            r = record_from_commitment(c)
+            if r:
+                out.append(r)
+    except Exception as e:  # noqa: BLE001 — a missing table on an old database must not hide the other records
+        print(f"[records] commitments unavailable for {session_id}: {type(e).__name__}: {e}")
     out.sort(key=lambda r: (0 if r["kind"] == "headline" else 1, r.get("provenance", {}).get("created_at") or ""), reverse=False)
     heads = [r for r in out if r["kind"] == "headline"]
     rest = sorted([r for r in out if r["kind"] != "headline"], key=lambda r: r.get("provenance", {}).get("created_at") or "", reverse=True)
@@ -668,9 +747,17 @@ async def records_by_ids(session_id: str, ids: list[str]) -> list[dict]:
     async with AsyncSessionLocal() as db:
         probes = {p.id: p for p in (await db.execute(select(Probe).where(Probe.session_id == session_id, Probe.id.in_(ids)))).scalars().all()}
         exps = {e.id: e for e in (await db.execute(select(Experiment).where(Experiment.session_id == session_id, Experiment.id.in_(ids)))).scalars().all()}
+    commits: dict[str, dict] = {}
+    try:
+        from app.services.measurement import commitments as commitments_mod
+        commits = {c["id"]: c for c in await commitments_mod.list_for_session(session_id) if c["id"] in ids}
+    except Exception:  # noqa: BLE001
+        commits = {}
     out = []
     for rid in ids:
-        r = record_from_probe(probes[rid], evidence_mix=mix, frame=frame) if rid in probes else (record_from_experiment(exps[rid], evidence_mix=mix, frame=frame) if rid in exps else None)
+        r = (record_from_probe(probes[rid], evidence_mix=mix, frame=frame) if rid in probes
+             else record_from_experiment(exps[rid], evidence_mix=mix, frame=frame) if rid in exps
+             else record_from_commitment(commits[rid]) if rid in commits else None)
         if r:
             out.append(r)
     return out

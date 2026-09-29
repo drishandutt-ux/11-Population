@@ -962,6 +962,7 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
       })}
       {structure?.outcome?.barriers && hasOutcome && <WhatsInTheWay b={structure.outcome.barriers} agentsById={agentsById} />}
       {structure?.outcome?.candidates && hasOutcome && <WhereTheyDropOff c={structure.outcome.candidates} agentsById={agentsById} />}
+      {structure?.outcome?.commitments && hasOutcome && <CommittedOutcomes items={structure.outcome.commitments} />}
       {structure && hasOutcome && <ComputedCaveats caveats={structure.outcome.caveats} />}
     </div>
   );
@@ -1234,6 +1235,48 @@ function WhatsInTheWay({ b, agentsById }: { b: NonNullable<ReportStructure["outc
 /** Journey (brief L7-01): the funnel in one line and a plain numbered list of the candidate
  *  outcomes — the step, how many get through, how many are stuck, the top barriers and who raised
  *  them. The model may only quote candidates from this list, in this order. */
+/** Committed outcomes (brief L7-08): the frozen forecasts a client chose to pursue, what each
+ *  rested on, and the observed result against it where one has been entered. Read from the
+ *  commitment records only — never from the live journey figure. */
+function CommittedOutcomes({ items }: { items: NonNullable<ReportStructure["outcome"]["commitments"]> }) {
+  if (!items?.length) return null;
+  const P = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  return (
+    <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-500/5 px-3.5 py-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold" title="A copy of the modelled baseline as it stood when the outcome was chosen; later work in the session does not change it.">Committed outcomes · the frozen forecasts</span>
+        <span className="text-[10px] text-muted-foreground/60">{items.length}</span>
+      </div>
+      <ol className="space-y-1.5">
+        {items.map((c, k) => (
+          <li key={c.record_id} className="text-[11px] text-foreground/85 leading-snug flex gap-2">
+            <span className="text-muted-foreground/60 tabular-nums w-4 shrink-0">{k + 1}.</span>
+            <span>
+              <span className="font-medium">{c.from} → {c.to}</span>
+              {c.status !== "open" && <span className="text-muted-foreground/70"> · {c.status}</span>}
+              <span className="text-muted-foreground"> · committed by {c.committed_by || "nobody"} on {(c.committed_at || "").slice(0, 10)}</span>
+              <button type="button" data-record={c.record_id} className="ml-1 text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">record</button>
+              <br />
+              <span className="text-muted-foreground">forecast </span><span className="tabular-nums">{P(c.conversion)} get through ({P(c.low)}–{P(c.high)}) · {c.stuck} of {c.n} stuck</span>
+              {c.stuck_people != null && <span className="tabular-nums"> · ≈{c.stuck_people.toLocaleString()} people stuck</span>}
+              <span className="text-muted-foreground"> · population build {(c.build_id || "unknown").slice(0, 8)} ({c.population_n} twins, frame {c.frame_level || "none"}) · {c.evidence_items} evidence items, {c.rules} rules on file</span>
+              {c.target?.value != null && <span className="text-foreground/85 tabular-nums"> · target {P(c.target.value)}{c.target.horizon ? ` by ${c.target.horizon}` : ""}</span>}
+              <br />
+              {c.comparison ? (
+                <span className={c.comparison.inside_interval ? "text-emerald-300/85" : "text-red-300/85"}>
+                  observed {P(c.comparison.observed)} on {c.comparison.observed_date} ({c.comparison.observed_source}) · {c.comparison.delta != null ? `${c.comparison.delta > 0 ? "+" : ""}${Math.round(c.comparison.delta * 100)} points against the forecast` : ""} · {c.comparison.inside_interval ? "inside" : "outside"} the modelled interval{"target_met" in c.comparison ? ` · target ${c.comparison.target_met ? "met" : "not met"}` : ""}
+                </span>
+              ) : <span className="text-muted-foreground/70">no observed result yet</span>}
+              {c.status === "closed" && c.close_note && <span className="text-muted-foreground"> · closed: {c.close_note}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-1.5 text-[10px] text-muted-foreground/60">An observed result is a figure entered by hand with its source; whether it sits inside the modelled interval is counted, not judged.</p>
+    </div>
+  );
+}
+
 function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["outcome"]["candidates"]>; agentsById: Record<string, Agent> }) {
   if (!c.items?.length && !c.funnel?.length) return null;
   return (

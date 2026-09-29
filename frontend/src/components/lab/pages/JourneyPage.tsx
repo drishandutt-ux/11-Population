@@ -7,12 +7,12 @@
  *  the stored answers, so no call is needed. */
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ListOrdered, MessageSquare, Play, Sparkles } from "lucide-react";
+import { BookOpen, ListOrdered, Lock, MessageSquare, Play, Sparkles } from "lucide-react";
 import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import RuleBook from "../RuleBook";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
-import { api, CalibrationRule, Experiment, LeverRefusal, LeverShift, MessagingResult, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
+import { api, CalibrationRule, Commitment, Experiment, LeverRefusal, LeverShift, MessagingResult, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
 import { InstrumentPageProps } from "./types";
 
 /** The 409 body of a refused lever run, from the API client's error text. */
@@ -166,10 +166,29 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       await loadMg();
     } catch (e: any) { setMgError((er) => ({ ...er, [cid]: e?.message || "Could not start the run" })); } finally { setMgStarting(null); }
   };
+  // Commitments (brief L7-08): freeze the modelled baseline for a chosen candidate; observed results entered later against it.
+  const [commits, setCommits] = useState<Commitment[]>([]);
+  const [cmOpen, setCmOpen] = useState<Record<string, boolean>>({});
+  const [cmForm, setCmForm] = useState<Record<string, { who: string; target: string; horizon: string; note: string }>>({});
+  const [cmBusy, setCmBusy] = useState<string | null>(null);
+  const [cmError, setCmError] = useState<Record<string, string>>({});
+  const loadCm = () => api.lab.commitments(sessionId).then((r) => setCommits(r.commitments.filter((c) => c.journey_probe_id === probe.id))).catch(() => {});
+  const formFor = (cid: string) => cmForm[cid] ?? { who: "", target: "", horizon: "", note: "" };
+  const commitTo = async (cid: string) => {
+    const f = formFor(cid);
+    if (!f.who.trim()) { setCmError((e) => ({ ...e, [cid]: "A commitment is signed by name: say who is committing." })); return; }
+    setCmBusy(cid); setCmError((e) => ({ ...e, [cid]: "" }));
+    try {
+      await api.lab.commit(sessionId, { journey_probe_id: probe.id, candidate_id: cid, committed_by: f.who.trim(),
+        target: f.target.trim() || f.horizon.trim() || f.note.trim() ? { value: f.target.trim() || undefined, horizon: f.horizon.trim() || undefined, note: f.note.trim() || undefined } : undefined });
+      await loadCm();
+      setCmOpen((o) => ({ ...o, [cid]: false }));
+    } catch (e: any) { setCmError((er) => ({ ...er, [cid]: e?.message || "Could not commit" })); } finally { setCmBusy(null); }
+  };
   useEffect(() => {
     api.lab.rules(sessionId).then((r) => setRules(r.rules)).catch(() => {});
     api.lab.targetingBehaviours(sessionId).then(setMenu).catch(() => {});
-    loadRuns(); loadTg(); loadMg();
+    loadRuns(); loadTg(); loadMg(); loadCm();
     const t = setInterval(() => { loadRuns(); loadTg(); loadMg(); }, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,7 +325,11 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                 <button type="button" onClick={() => setOpen(isOpen ? null : c.id)} className="w-full text-left px-3 py-2">
                   <div className="flex items-center gap-3 text-xs">
                     <span className="w-5 text-muted-foreground tabular-nums">{k + 1}.</span>
-                    <span className="flex-1 text-foreground/95 font-medium">{c.from.label} <span className="text-muted-foreground font-normal">→</span> {c.to.label}</span>
+                    <span className="flex-1 text-foreground/95 font-medium">{c.from.label} <span className="text-muted-foreground font-normal">→</span> {c.to.label}
+                      {commits.some((x) => x.candidate_id === c.id && x.status === "open") && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-normal px-1.5 py-0.5 rounded-full border border-amber-400/50 text-amber-200/90" title="A frozen baseline exists for this outcome (brief L7-08)"><Lock className="w-2.5 h-2.5" /> committed</span>
+                      )}
+                    </span>
                     <span className="text-muted-foreground tabular-nums">{pct(c.conversion)} get through <span className="opacity-60">({pct(c.low)}–{pct(c.high)})</span></span>
                     <span className="text-muted-foreground/80 tabular-nums w-24 text-right">{c.stuck} of {c.n} stuck</span>
                     {showPeople && (() => { const sc = storedFor(c.id); return sc?.stuck_people != null
@@ -544,6 +567,38 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                       {mgError[c.id] && <p className="text-[11px] text-red-400">{mgError[c.id]}</p>}
                       {mgRuns.filter((r) => r.spec?.messaging?.candidate_id === c.id).map((r) => <MessagingRun key={r.id} run={r} />)}
                     </div>
+
+                    {/* Commitment (brief L7-08): freeze this candidate's modelled baseline as a copy, signed by name; enter observed results against it later. */}
+                    <div className="rounded-lg border border-amber-400/30 bg-amber-500/5 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Commit to this outcome · freeze the modelled baseline as it stands, signed by name, so a real result can later be compared against it</div>
+                        <button type="button" onClick={() => setCmOpen((o) => ({ ...o, [c.id]: !o[c.id] }))} className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted shrink-0">{cmOpen[c.id] ? "cancel" : commits.some((x) => x.candidate_id === c.id && x.status === "open") ? "commit again (supersedes)" : "commit"}</button>
+                      </div>
+                      {cmOpen[c.id] && (
+                        <div className="space-y-1.5">
+                          <div className="grid grid-cols-[1fr_6rem_10rem] gap-1.5 text-[11px]">
+                            <input value={formFor(c.id).who} placeholder="committed by (your name)" maxLength={120} onChange={(e) => setCmForm((f) => ({ ...f, [c.id]: { ...formFor(c.id), who: e.target.value } }))}
+                              className="bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+                            <input value={formFor(c.id).target} placeholder="target %" inputMode="decimal" onChange={(e) => setCmForm((f) => ({ ...f, [c.id]: { ...formFor(c.id), target: e.target.value } }))}
+                              className="bg-input border border-border rounded px-1.5 py-1 text-foreground tabular-nums" />
+                            <input value={formFor(c.id).horizon} placeholder="by when (e.g. March 2027)" maxLength={300} onChange={(e) => setCmForm((f) => ({ ...f, [c.id]: { ...formFor(c.id), horizon: e.target.value } }))}
+                              className="bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+                          </div>
+                          <input value={formFor(c.id).note} placeholder="note (optional): why this outcome, what the partnership will do" maxLength={300} onChange={(e) => setCmForm((f) => ({ ...f, [c.id]: { ...formFor(c.id), note: e.target.value } }))}
+                            className="w-full bg-input border border-border rounded px-1.5 py-1 text-[11px] text-foreground" />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button type="button" disabled={cmBusy === c.id || !formFor(c.id).who.trim()} onClick={() => commitTo(c.id)}
+                              title="Takes a copy of this candidate, the journey run, every run on it, the population build and frame, the evidence on file, the rules and the statement. Nothing is edited afterwards."
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/80 text-black text-xs disabled:opacity-50">
+                              <Lock className="w-3 h-3" /> {cmBusy === c.id ? "Freezing…" : "Freeze and commit"}
+                            </button>
+                            <span className="text-[10px] text-muted-foreground">what is frozen: this candidate ({pct(c.conversion)}, {c.stuck} of {c.n} stuck), the funnel and headcounts, every lever run, ranking and message test on it, the population build, frame and weights, the evidence list, every rule, the model and seed, the statement · no model call</span>
+                          </div>
+                        </div>
+                      )}
+                      {cmError[c.id] && <p className="text-[11px] text-red-400">{cmError[c.id]}</p>}
+                      {commits.filter((x) => x.candidate_id === c.id).map((x) => <CommitmentCard key={x.id} c={x} sessionId={sessionId} onChanged={loadCm} />)}
+                    </div>
                   </div>
                 )}
               </li>
@@ -599,6 +654,114 @@ function LeverRun({ run }: { run: Experiment }) {
       <div className="text-[10px] text-muted-foreground/70">
         rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · {assumed ? "no evidence (assumption)" : `${lv.rule.evidence_count ?? ""} evidence line${lv.rule.evidence_count === 1 ? "" : "s"}`} · reviewed by {lv.rule.reviewed_by}
       </div>
+    </div>
+  );
+}
+
+
+/** One commitment (brief L7-08): the frozen forecast and what it rested on, the target, the observed
+ *  results entered against it with the counted comparison, and the close / supersede state. */
+function CommitmentCard({ c, sessionId, onChanged }: { c: Commitment; sessionId: string; onChanged: () => void }) {
+  const [showBaseline, setShowBaseline] = useState(false);
+  const [obsOpen, setObsOpen] = useState(false);
+  const [obs, setObs] = useState({ value: "", source: "", date: "", who: "", note: "" });
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeForm, setCloseForm] = useState({ who: "", note: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const b = c.baseline;
+  const cand = b?.candidate;
+  const cmp = c.comparison;
+  const P = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const addObserved = async () => {
+    setBusy(true); setErr("");
+    try {
+      await api.lab.observeCommitment(sessionId, c.id, { value: Number(obs.value), source: obs.source.trim(), date: obs.date.trim(), entered_by: obs.who.trim() || undefined, note: obs.note.trim() || undefined });
+      setObs({ value: "", source: "", date: "", who: "", note: "" }); setObsOpen(false); onChanged();
+    } catch (e: any) { setErr(e?.message || "Could not record the observation"); } finally { setBusy(false); }
+  };
+  const closeIt = async () => {
+    setBusy(true); setErr("");
+    try { await api.lab.closeCommitment(sessionId, c.id, { closed_by: closeForm.who.trim(), note: closeForm.note.trim() || undefined }); setCloseOpen(false); onChanged(); }
+    catch (e: any) { setErr(e?.message || "Could not close"); } finally { setBusy(false); }
+  };
+  const statusCls = c.status === "open" ? "border-amber-400/50 text-amber-200/90" : c.status === "closed" ? "border-border/60 text-muted-foreground" : "border-border/40 text-muted-foreground/60";
+  return (
+    <div className={`rounded-md border px-2.5 py-2 space-y-1.5 text-[11px] ${c.status === "open" ? "border-amber-400/40 bg-amber-500/5" : "border-border/40 bg-card/20 opacity-90"}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Lock className="w-3 h-3 text-amber-300/80" />
+        <span className="font-medium text-foreground/95">{c.label}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusCls}`}>{c.status}</span>
+        <span className="text-muted-foreground">committed by <span className="text-foreground/85">{c.committed_by}</span> on {(c.committed_at || "").slice(0, 10)}</span>
+        {c.target?.value != null && <span className="text-foreground/85 tabular-nums">target {P(c.target.value)}{c.target.horizon ? ` by ${c.target.horizon}` : ""}</span>}
+      </div>
+      {cand && (
+        <div className="text-muted-foreground">
+          <span className="text-foreground/90 tabular-nums">Frozen forecast: {P(cand.conversion)} get through ({P(cand.low)}–{P(cand.high)}) · {cand.stuck} of {cand.n} stuck</span>
+          {cand.stuck_people != null && <span className="tabular-nums"> · ≈{Number(cand.stuck_people).toLocaleString()} people stuck</span>}
+          <span> · population build <span className="font-mono text-[10px]">{(b.population?.build_id || "unknown").slice(0, 8)}</span> ({b.population?.n} twins, frame {b.frame?.level || "none"}{b.population?.weights?.weighted ? `, effective n ${b.population.weights.ess}` : ""})</span>
+          <span> · {b.evidence?.items?.length || 0} evidence items, {b.evidence?.facts?.length || 0} typed facts, {b.calibration_rules?.length || 0} rules on file · {b.related?.length || 0} run{(b.related?.length || 0) === 1 ? "" : "s"} on this candidate</span>
+          {c.target?.note && <span> · {c.target.note}</span>}
+        </div>
+      )}
+      {cmp ? (
+        <div className={`rounded border px-2 py-1.5 ${cmp.inside_interval ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100/90" : "border-red-400/40 bg-red-500/10 text-red-100/90"}`}>
+          <span className="font-semibold uppercase tracking-wide text-[10px]">Observed</span>{" "}
+          <span className="tabular-nums">{P(cmp.observed)}</span> on {cmp.observed_date} ({cmp.observed_source}) · {cmp.delta != null ? `${cmp.delta > 0 ? "+" : ""}${Math.round(cmp.delta * 100)} points against the forecast` : ""} · {cmp.inside_interval ? "inside" : "outside"} the modelled interval
+          {"target_met" in cmp && <> · target {cmp.target_met ? "met" : "not met"}</>}
+          {cmp.observations > 1 && <span className="opacity-70"> · {cmp.observations} observations, latest shown</span>}
+        </div>
+      ) : (
+        <div className="text-muted-foreground/70">No observed result yet.</div>
+      )}
+      {c.observed.length > 0 && (
+        <ul className="text-muted-foreground/80 space-y-0.5">
+          {c.observed.map((o, i) => <li key={i} className="tabular-nums">{P(o.value)}{o.low != null && o.high != null ? ` (${P(o.low)}–${P(o.high)})` : ""} · {o.date} · {o.source}{o.entered_by ? ` · entered by ${o.entered_by}` : ""}{o.note ? ` · ${o.note}` : ""}</li>)}
+        </ul>
+      )}
+      {c.status === "closed" && <div className="text-muted-foreground">Closed by {c.closed_by} on {(c.closed_at || "").slice(0, 10)}{c.close_note ? `: ${c.close_note}` : ""}</div>}
+      <div className="flex items-center gap-2 flex-wrap text-[10px]">
+        <button type="button" onClick={() => setShowBaseline((s) => !s)} className="text-muted-foreground hover:text-foreground underline decoration-dotted">{showBaseline ? "hide the frozen baseline" : "show the frozen baseline"}</button>
+        {c.status !== "superseded" && <button type="button" onClick={() => { setObsOpen((s) => !s); setCloseOpen(false); }} className="text-muted-foreground hover:text-foreground underline decoration-dotted">{obsOpen ? "cancel" : "enter an observed result"}</button>}
+        {c.status === "open" && <button type="button" onClick={() => { setCloseOpen((s) => !s); setObsOpen(false); }} className="text-muted-foreground hover:text-foreground underline decoration-dotted">{closeOpen ? "cancel" : "close this commitment"}</button>}
+      </div>
+      {obsOpen && (
+        <div className="space-y-1">
+          <div className="grid grid-cols-[5rem_1fr_8rem_9rem] gap-1.5">
+            <input value={obs.value} placeholder="value %" inputMode="decimal" onChange={(e) => setObs((o) => ({ ...o, value: e.target.value }))} className="bg-input border border-border rounded px-1.5 py-1 text-foreground tabular-nums" />
+            <input value={obs.source} placeholder="source (required): the dataset, audit or report it comes from" maxLength={300} onChange={(e) => setObs((o) => ({ ...o, source: e.target.value }))} className="bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+            <input value={obs.date} placeholder="date (required)" maxLength={40} onChange={(e) => setObs((o) => ({ ...o, date: e.target.value }))} className="bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+            <input value={obs.who} placeholder="entered by" maxLength={120} onChange={(e) => setObs((o) => ({ ...o, who: e.target.value }))} className="bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input value={obs.note} placeholder="note (optional)" maxLength={600} onChange={(e) => setObs((o) => ({ ...o, note: e.target.value }))} className="flex-1 bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+            <button type="button" disabled={busy || !obs.value.trim() || !obs.source.trim() || !obs.date.trim()} onClick={addObserved} className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs disabled:opacity-50">{busy ? "Saving…" : "Record it"}</button>
+          </div>
+        </div>
+      )}
+      {closeOpen && (
+        <div className="flex items-center gap-1.5">
+          <input value={closeForm.who} placeholder="closed by (your name)" maxLength={120} onChange={(e) => setCloseForm((f) => ({ ...f, who: e.target.value }))} className="bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+          <input value={closeForm.note} placeholder="why (optional)" maxLength={600} onChange={(e) => setCloseForm((f) => ({ ...f, note: e.target.value }))} className="flex-1 bg-input border border-border rounded px-1.5 py-1 text-foreground" />
+          <button type="button" disabled={busy || !closeForm.who.trim()} onClick={closeIt} className="px-2.5 py-1 rounded-lg border border-border text-xs disabled:opacity-50">{busy ? "Closing…" : "Close"}</button>
+        </div>
+      )}
+      {err && <p className="text-red-400">{err}</p>}
+      {showBaseline && b && (
+        <div className="rounded border border-border/40 bg-background/40 p-2 space-y-1 text-[10px] text-muted-foreground">
+          <div>Frozen {b.frozen_at} · question: <span className="text-foreground/80">{b.question}</span></div>
+          <div>Journey run {b.journey?.probe_id?.slice(0, 8)} · {b.journey?.n} answered · model {b.journey?.model} · seed {b.journey?.seed} · prompt {b.journey?.prompt_hash?.slice(0, 10)} · steps: {(b.journey?.stages || []).map((s) => s.label).join(" → ")}</div>
+          <div>Headcounts: {b.journey?.headcount?.available ? b.journey.headcount.sentence : `not available — ${b.journey?.headcount?.reason || "no sizing figure"}`}</div>
+          <div>Frame: level {b.frame?.level || "none"}{b.frame?.matched_exactly?.length ? ` · matched ${b.frame.matched_exactly.join(", ")}` : ""}{b.frame?.weighted_only?.length ? ` · weighted ${b.frame.weighted_only.join(", ")}` : ""}{b.frame?.estimated?.length ? ` · estimated ${b.frame.estimated.join(", ")}` : ""}{b.scoping_snapshot ? ` · scoping snapshot ${String(b.scoping_snapshot).slice(0, 8)}` : ""}</div>
+          {cand?.barriers?.length > 0 && <div>Barriers then: {cand.barriers.map((x: any) => `${x.theme} (${x.count}${x.reach ? `, ${x.reach}` : ""})`).join(" · ")}</div>}
+          {cand?.movability?.scored && <div>Movability then: movable {Math.round((cand.movability.movable_share || 0) * 100)}% · system {Math.round((cand.movability.system_share || 0) * 100)}% · structural {Math.round((cand.movability.structural_share || 0) * 100)}%</div>}
+          {(b.related || []).length > 0 && <div>Runs on this candidate: {b.related.map((r) => `${r.kind}: ${r.label}`).join(" · ")}</div>}
+          {(b.calibration_rules || []).length > 0 && <div>Rules on file: {b.calibration_rules.map((r) => `${r.lever} (${r.status}${r.reviewed_by ? `, ${r.reviewed_by}` : ""})`).join(" · ")}</div>}
+          <div>Evidence on file: {Object.entries(b.evidence?.counts || {}).map(([k, v]) => `${v} ${k}`).join(", ") || "none"} · {(b.evidence?.items || []).slice(0, 8).map((it) => it.title).join(" · ")}{(b.evidence?.items || []).length > 8 ? " · …" : ""}</div>
+          <details><summary className="cursor-pointer">Synthetic statement as frozen</summary><p className="whitespace-pre-wrap mt-1">{b.statement}</p></details>
+        </div>
+      )}
+      <p className="text-[10px] text-muted-foreground/60">A copy, not a pointer: later runs, documents, rules or population builds do not change it. The report may quote only the frozen forecast for this commitment, and an observed result only where one is recorded here.</p>
     </div>
   );
 }
