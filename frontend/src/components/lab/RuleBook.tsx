@@ -1,13 +1,16 @@
 "use client";
 
-/** The rule book (brief L4-02, the minimum of it): the session's calibration rules — what evidence
- *  shows a lever does to behaviour. A rule names the lever, who it applies to, which dials it moves
- *  and by how many points (bounded), the evidence it rests on, the basis, the author, and is signed
- *  off by name before the lever simulation (brief L7-04) will run against it. Nothing here is a
- *  hidden constant: every rule is listed, editable and exported in the run record. */
+/** The rule book (brief L4-02, the minimum of it): the session's calibration rules — what a lever
+ *  does to behaviour. A rule names the lever, who it applies to, which dials it moves and by how
+ *  many points (bounded), the evidence it rests on (optional: with none it is an ASSUMPTION and is
+ *  labelled so everywhere its shift travels), the basis, the author, and is signed off by name
+ *  before the lever simulation (brief L7-04) will run against it. The system can DRAFT a rule from
+ *  the candidate's barriers, the facts on file and the documents the twins cited; the human reads,
+ *  corrects and signs. Nothing here is a hidden constant: every rule is listed, editable and
+ *  exported in the run record. */
 
 import { useEffect, useState } from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { api, CalibrationRule, RuleRequest } from "@/lib/api";
 
 const CONTROL = "w-full bg-input border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground";
@@ -19,15 +22,30 @@ const APPLIES_KEYS: { key: string; label: string; options: string[] }[] = [
 
 const EMPTY: RuleRequest = { lever: "", description: "", applies_to: {}, deltas: {}, bound: 4, evidence: [{ ref: "", note: "" }], basis: "", author: "" };
 
-export default function RuleBook({ sessionId, initialLever, onClose, onChanged }: { sessionId: string; initialLever?: string; onClose: () => void; onChanged?: (rules: CalibrationRule[]) => void }) {
+const formOf = (r: CalibrationRule): RuleRequest => ({ lever: r.lever, description: r.description, applies_to: r.applies_to, deltas: r.deltas, bound: r.bound, evidence: r.evidence.length ? r.evidence : [{ ref: "", note: "" }], basis: r.basis, author: r.author });
+
+/** `context` names the journey run and candidate a draft should read (its barriers and their evidence); `draft` opens the book on a rule the system has just drafted. */
+export default function RuleBook({ sessionId, initialLever, context, draft, onClose, onChanged }: { sessionId: string; initialLever?: string; context?: { journey_probe_id?: string; candidate_id?: string }; draft?: CalibrationRule; onClose: () => void; onChanged?: (rules: CalibrationRule[]) => void }) {
   const [rules, setRules] = useState<CalibrationRule[]>([]);
   const [dials, setDials] = useState<Record<string, string[]>>({});
   const [boundMax, setBoundMax] = useState(6);
-  const [editing, setEditing] = useState<{ id?: string; form: RuleRequest } | null>(initialLever ? { form: { ...EMPTY, lever: initialLever } } : null);
+  const [editing, setEditing] = useState<{ id?: string; form: RuleRequest; drafted?: CalibrationRule } | null>(
+    draft ? { id: draft.id, form: formOf(draft), drafted: draft } : initialLever ? { form: { ...EMPTY, lever: initialLever } } : null);
   const [reviewer, setReviewer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [group, setGroup] = useState("friction");
+  const draftIt = async () => {
+    const lever = (editing?.form.lever || "").trim();
+    if (!lever) return;
+    setDrafting(true); setError(null);
+    try {
+      const r = await api.lab.draftRule(sessionId, { lever, journey_probe_id: context?.journey_probe_id, candidate_id: context?.candidate_id });
+      setEditing({ id: r.id, form: formOf(r), drafted: r });
+      await load();
+    } catch (e: any) { setError(e?.message || "The draft could not be written"); } finally { setDrafting(false); }
+  };
 
   const load = async () => {
     const r = await api.lab.rules(sessionId);
@@ -66,7 +84,7 @@ export default function RuleBook({ sessionId, initialLever, onClose, onChanged }
           <div>
             <div className="text-sm font-medium">Rule book · calibration rules</div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              What the evidence shows a lever does to behaviour: who it applies to, which dials it moves and by how much, the evidence it rests on. A lever is simulated only against a rule someone has reviewed by name. Every rule is exported with the run.
+              What a lever does to behaviour: who it applies to, which dials it moves and by how much, and the evidence it rests on. Evidence is optional — a rule without any is an <span className="text-foreground/80">assumption</span>, and every result from it says so. The system can draft a rule for you; a lever is simulated only against a rule someone has read and signed by name. Every rule is exported with the run.
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
@@ -83,8 +101,12 @@ export default function RuleBook({ sessionId, initialLever, onClose, onChanged }
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.status === "reviewed" ? "border-emerald-400/40 text-emerald-300/90" : "border-yellow-400/40 text-yellow-300/90"}`}>
                     {r.status === "reviewed" ? `reviewed · ${r.reviewed_by}` : "draft · not yet reviewed"}
                   </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.basis_class === "assumption" ? "border-orange-400/50 text-orange-300/90" : "border-sky-400/40 text-sky-300/90"}`}
+                    title={r.basis_class === "assumption" ? "No evidence behind this rule: the reviewer signs its dial changes as a scenario, and every result says 'assumed effect'." : `${r.evidence.length} evidence line${r.evidence.length === 1 ? "" : "s"}`}>
+                    {r.basis_class === "assumption" ? "assumption · no evidence" : "evidence-anchored"}
+                  </span>
                   <span className="ml-auto flex items-center gap-2">
-                    <button type="button" title="Edit (sends it back to draft)" onClick={() => setEditing({ id: r.id, form: { lever: r.lever, description: r.description, applies_to: r.applies_to, deltas: r.deltas, bound: r.bound, evidence: r.evidence.length ? r.evidence : [{ ref: "", note: "" }], basis: r.basis, author: r.author } })} className="text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button type="button" title="Edit (sends it back to draft)" onClick={() => setEditing({ id: r.id, form: formOf(r) })} className="text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
                     <button type="button" title="Delete" onClick={() => remove(r)} className="text-muted-foreground hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                   </span>
                 </div>
@@ -93,7 +115,7 @@ export default function RuleBook({ sessionId, initialLever, onClose, onChanged }
                   applies to: {Object.keys(r.applies_to || {}).length ? Object.entries(r.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join(" / ")}`).join("; ") : "everyone"}
                   {" · "}dials: {Object.entries(r.deltas).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} (bound ±{r.bound})
                 </p>
-                <p className="text-[11px] text-muted-foreground">evidence: {r.evidence.map((e) => e.ref + (e.note ? ` — ${e.note}` : "")).join("; ")}{r.basis ? ` · basis: ${r.basis}` : ""}{r.author ? ` · by ${r.author}` : ""}</p>
+                <p className="text-[11px] text-muted-foreground">evidence: {r.evidence.length ? r.evidence.map((e) => e.ref + (e.note ? ` — ${e.note}` : "")).join("; ") : <span className="text-orange-300/80">none — an assumption</span>}{r.basis ? ` · basis: ${r.basis}` : ""}{r.author ? ` · by ${r.author}` : ""}</p>
                 <div className="flex items-center gap-2 pt-1">
                   {r.status !== "reviewed" ? (
                     <>
@@ -112,10 +134,25 @@ export default function RuleBook({ sessionId, initialLever, onClose, onChanged }
 
         {editing && f && (
           <div className="space-y-2">
+            {editing.drafted && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-foreground/85">
+                <span className="font-medium">Drafted by the system</span> from the candidate&apos;s barriers, what the twins said would remove them{editing.drafted.material ? `, and ${editing.drafted.material} piece${editing.drafted.material === 1 ? "" : "s"} of material on file` : ""}.
+                {editing.drafted.basis_class === "assumption" ? <> Nothing in the session speaks to this lever, so it carries <span className="text-orange-300/90">no evidence — an assumption</span>.</> : <> It cites only material from this session.</>}
+                {" "}Read it, change any number you disagree with, save, then sign it off. It is already in the list as a draft.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-muted-foreground">The lever</label>
-                <input value={f.lever} onChange={(e) => setF({ lever: e.target.value })} placeholder="nurse phone line" className={CONTROL} />
+                <div className="flex gap-1.5">
+                  <input value={f.lever} onChange={(e) => setF({ lever: e.target.value })} placeholder="nurse phone line" className={CONTROL} />
+                  {!editing.id && (
+                    <button type="button" disabled={drafting || busy || !f.lever.trim()} onClick={draftIt} title="The system proposes the description, who it applies to, the dial changes, the evidence from this session and the basis. You read and sign."
+                      className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/50 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-40">
+                      <Sparkles className="w-3 h-3" /> {drafting ? "Drafting…" : "Draft it for me"}
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="text-[10px] text-muted-foreground">Author</label>
@@ -166,7 +203,7 @@ export default function RuleBook({ sessionId, initialLever, onClose, onChanged }
               {Object.entries(f.deltas).filter(([, v]) => v).length > 0 && <p className="text-[10px] text-muted-foreground mt-1">set: {Object.entries(f.deltas).filter(([, v]) => v).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")}</p>}
             </div>
             <div>
-              <label className="text-[10px] text-muted-foreground">Evidence it rests on</label>
+              <label className="text-[10px] text-muted-foreground">Evidence it rests on · optional — with none, the rule is an <span className="text-orange-300/80">assumption</span> and every result says so</label>
               {f.evidence.map((e, i) => (
                 <div key={i} className="flex gap-1 mb-1">
                   <input value={e.ref} onChange={(ev) => setF({ evidence: f.evidence.map((x, k) => (k === i ? { ...x, ref: ev.target.value } : x)) })} placeholder="source, title or URL" className={CONTROL} />
@@ -176,7 +213,7 @@ export default function RuleBook({ sessionId, initialLever, onClose, onChanged }
               <button type="button" onClick={() => setF({ evidence: [...f.evidence, { ref: "", note: "" }] })} className="text-[10px] text-muted-foreground hover:text-foreground">+ another source</button>
             </div>
             <div>
-              <label className="text-[10px] text-muted-foreground">Basis · how the evidence sets these values</label>
+              <label className="text-[10px] text-muted-foreground">Basis · how the evidence sets these values, or what you are assuming</label>
               <input value={f.basis} onChange={(e) => setF({ basis: e.target.value })} placeholder="Discontinuation halves in the audit where a nurse line exists, so emotional resistance −3" className={CONTROL} />
             </div>
             <div className="flex items-center gap-2 pt-1">

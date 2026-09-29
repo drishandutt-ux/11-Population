@@ -150,6 +150,13 @@ class RuleRequest(BaseModel):
     author: str = ""
 
 
+class DraftRuleRequest(BaseModel):
+    lever: str
+    journey_probe_id: Optional[str] = None
+    candidate_id: Optional[str] = None
+    mode: str = "pro"
+
+
 class ReviewRequest(BaseModel):
     reviewed_by: str
     approve: bool = True
@@ -198,6 +205,20 @@ async def create_rule(session_id: str, body: RuleRequest, user: AuthUser = Depen
     await db.commit()
     await db.refresh(m)
     return levers.rule_payload(m)
+
+
+@router.post("/sessions/{session_id}/rules/draft")
+async def draft_rule(session_id: str, body: DraftRuleRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The system drafts a rule for a lever from the candidate's barriers, what the twins said would
+    remove them, the facts on file and the documents the twins cited; saved as a draft for a human
+    to read, correct and sign. Evidence is chosen only from that material — empty when nothing
+    speaks to the lever, and the rule is then labelled an assumption."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import levers
+    res = await levers.draft_rule(session_id, body.lever, journey_probe_id=body.journey_probe_id, candidate_id=body.candidate_id, mode=body.mode)
+    if res.get("error"):
+        raise HTTPException(422, res["error"])
+    return res
 
 
 @router.put("/sessions/{session_id}/rules/{rule_id}")

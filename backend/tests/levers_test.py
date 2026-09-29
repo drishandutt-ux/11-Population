@@ -23,9 +23,15 @@ RULE = {"id": "r1", "lever": "nurse phone line", "description": "A nurse phone l
         "evidence": [{"ref": "Audit 2025", "note": ""}], "basis": "Discontinuation halves where a nurse line exists."}
 
 
-def test_a_rule_must_name_real_dials_within_its_bound_with_evidence_and_a_basis():
+def test_a_rule_must_name_real_dials_within_its_bound_and_a_basis_and_evidence_is_optional():
     ok = {"lever": "nurse phone line", "deltas": {"friction.emotional_resistance": -3}, "bound": 4, "evidence": [{"ref": "Audit"}], "basis": "because"}
     assert lv.validate_rule(ok) == []
+    # Evidence is optional — a rule without it is an assumption, and says so.
+    assert lv.validate_rule({**ok, "evidence": []}) == []
+    assert lv.basis_class({**ok, "evidence": []}) == lv.BASIS_ASSUMPTION
+    assert lv.basis_class({**ok, "evidence": [{"ref": "  "}]}) == lv.BASIS_ASSUMPTION
+    assert lv.basis_class(ok) == lv.BASIS_EVIDENCE
+    assert lv.lever_spec({**ok, "id": "r", "evidence": []}, {"id": "c"})["basis_class"] == lv.BASIS_ASSUMPTION
     assert any("needs the lever" in p for p in lv.validate_rule({**ok, "lever": ""}))
     assert any("not a dial" in p for p in lv.validate_rule({**ok, "deltas": {"friction.made_up": -1}}))
     assert any("not a dial" in p for p in lv.validate_rule({**ok, "deltas": {"nodot": -1}}))
@@ -33,7 +39,6 @@ def test_a_rule_must_name_real_dials_within_its_bound_with_evidence_and_a_basis(
     assert any("is zero" in p for p in lv.validate_rule({**ok, "deltas": {"friction.time_cost": 0}}))
     assert any("whole number" in p for p in lv.validate_rule({**ok, "deltas": {"friction.time_cost": "lots"}}))
     assert any("at least one dial" in p for p in lv.validate_rule({**ok, "deltas": {}}))
-    assert any("evidence" in p for p in lv.validate_rule({**ok, "evidence": []}))
     assert any("basis" in p for p in lv.validate_rule({**ok, "basis": ""}))
     assert any("bound must be" in p for p in lv.validate_rule({**ok, "bound": 9}))
 
@@ -129,7 +134,8 @@ def test_a_lever_run_becomes_a_record_with_its_rule_and_the_prompt_line():
     assert r["estimate"]["format"] == "lift" and r["estimate"]["value"] == 0.5 and r["lever"]["rule"]["reviewed_by"] == "M. Hunt" and r["provenance"]["rule_id"] == "r1"
     assert any("calibration rule 'nurse phone line' (reviewed by M. Hunt)" in c for c in r["caveats"])
     text, _ = rec.records_block([r])
-    assert "lever run under rule 'nurse phone line' (reviewed by M. Hunt; dials friction.emotional_resistance -3, trust.reliability +2; applies to everyone)" in text
+    assert "lever run under rule 'nurse phone line' (reviewed by M. Hunt; 0 evidence line(s); dials friction.emotional_resistance -3, trust.reliability +2; applies to everyone)" in text
+    assert "ASSUMPTION" not in text
     assert "people moved" in text and "end of journey" in text
     assert "MODELLED SHIFT" in rec.FIGURE_RULES
     # not yet counted: no record
@@ -151,3 +157,46 @@ def test_the_run_refuses_without_a_reviewed_rule_and_never_asks_the_twins_to_ima
     assert rule3 and rule3["id"] == "r1"
     rule4, _ = asyncio.run(lv.find_rule("s", "anything", rule_id="r1"))
     assert rule4 and rule4["id"] == "r1"
+
+
+def test_an_assumption_run_reads_as_a_what_if_and_the_record_says_so():
+    base_rows, lever_rows = _rows({"a5": "yes", "a6": "yes"})
+    c_agg, l_agg = jn.aggregate(base_rows, SPEC), jn.aggregate(lever_rows, SPEC)
+    c_map = {r["agent_id"]: {"answer": r["answer"], "segments": r["segments"]} for r in base_rows}
+    l_map = {r["agent_id"]: {"answer": r["answer"], "segments": r["segments"]} for r in lever_rows}
+    s = lv.shift(control_agg=c_agg, lever_agg=l_agg, control_rows=c_map, lever_rows=l_map, candidate_id="step3->step4", seed=1, assumed=True)
+    assert s["assumed"] and s["sentence"].startswith("Assumed effect, not a forecast")
+    plain = lv.shift(control_agg=c_agg, lever_agg=l_agg, control_rows=c_map, lever_rows=l_map, candidate_id="step3->step4", seed=1)
+    assert not plain["assumed"] and plain["sentence"].startswith("With the lever in place")
+    s["rule"] = {"rule_id": "r1", "lever": "nurse phone line", "deltas": RULE["deltas"], "applies_to": {}, "reviewed_by": "M. Hunt", "reviewed_at": "2026-09-29",
+                 "basis_class": "assumption", "evidence_count": 0}
+    e = SimpleNamespace(id="e1", name="Lever", seed=1, model="m", created_at=None, results={"lever": s})
+    r = rec.record_from_lever(e)
+    assert r["label"].startswith("Assumed effect:") and r["lever"]["assumed"] and any("what-if, not a forecast" in c for c in r["caveats"])
+    text, _ = rec.records_block([r])
+    assert "ASSUMPTION" in text and "NO evidence" in text
+    assert "ASSUMPTION" in rec.FIGURE_RULES
+
+
+def test_the_system_draft_cites_only_the_material_it_was_shown_and_keeps_real_dials():
+    pool = lv.evidence_pool(
+        {"from": {"label": "Tried it once"}, "to": {"label": "Uses it weekly"}, "conversion": 0.48, "stuck": 12, "at_risk": 23,
+         "barriers": [{"theme": "Liner cost", "count": 3, "removals": ["free liners"], "reach": "partner", "lever": "free liners",
+                       "evidence": [{"unit_id": "u1", "title": "Pilot liner sub-study", "source": "pilot report", "provenance_class": "grey", "twins": 2}]}]},
+        {"facts": [{"source": "Pilot report", "year": "2025", "statistic": "six-month use with free liners", "value": "57%", "provenance_class": "grey"}],
+         "items": [{"title": "Off topic", "on_topic": False}, {"title": "Council brief", "source_ref": "brief.md", "on_topic": True, "excerpt": "liners free"}]},
+    )
+    assert [p["handle"] for p in pool] == ["E1", "E2", "E3"] and pool[0]["kind"] == "cited" and pool[1]["kind"] == "fact"
+    raw = {"description": "Liners arrive free with the caddy", "applies_to": {"deprivation": ["Q1 most deprived", "nonsense"], "stance": [], "age_band": []},
+           "deltas": [{"dial": "friction.money_pain", "points": -2, "why": "nothing to buy"}, {"dial": "friction.made_up", "points": -3, "why": "x"},
+                      {"dial": "habit.action_simplicity", "points": 9, "why": "easier"}, {"dial": "trust.reliability", "points": 0, "why": "none"}],
+           "evidence": [{"handle": "e2", "note": "57% vs 44%"}, {"handle": "E9", "note": "invented"}], "basis": "Free liners remove the cost."}
+    f = lv.clean_draft(raw, lever="Free caddy liners", pool=pool)
+    assert f["deltas"] == {"friction.money_pain": -2, "habit.action_simplicity": 4}          # unknown dial dropped, clamped to the bound, zero dropped
+    assert f["applies_to"] == {"deprivation": ["Q1 most deprived"]}                          # only allowed values
+    assert len(f["evidence"]) == 1 and f["evidence"][0]["ref"].startswith("Pilot report 2025")   # the invented handle is gone
+    assert f["author"] == lv.SYSTEM_AUTHOR and "Dials:" in f["basis"] and lv.validate_rule(f) == []
+    assert lv.basis_class(f) == lv.BASIS_EVIDENCE
+    # nothing to cite → an honest assumption, still a valid draft
+    g = lv.clean_draft({**raw, "evidence": [], "basis": ""}, lever="Free caddy liners", pool=[])
+    assert g["evidence"] == [] and lv.basis_class(g) == lv.BASIS_ASSUMPTION and lv.validate_rule(g) == []

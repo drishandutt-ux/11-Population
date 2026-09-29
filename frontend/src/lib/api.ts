@@ -213,6 +213,9 @@ export const api = {
     // Calibration rules (brief L4-02) and lever runs (brief L7-04).
     rules: (sessionId: string) => request<{ rules: CalibrationRule[]; dials: Record<string, string[]>; bound_max: number; bound_default: number }>(`/sessions/${sessionId}/rules`),
     createRule: (sessionId: string, body: RuleRequest) => request<CalibrationRule>(`/sessions/${sessionId}/rules`, { method: "POST", body: JSON.stringify(body) }),
+    /** The system drafts a rule for a lever from the candidate's barriers, the facts on file and the documents the twins cited; saved as a draft for a human to read, correct and sign. */
+    draftRule: (sessionId: string, body: { lever: string; journey_probe_id?: string; candidate_id?: string; mode?: string }) =>
+      request<CalibrationRule>(`/sessions/${sessionId}/rules/draft`, { method: "POST", body: JSON.stringify(body) }),
     updateRule: (sessionId: string, ruleId: string, body: RuleRequest) => request<CalibrationRule>(`/sessions/${sessionId}/rules/${ruleId}`, { method: "PUT", body: JSON.stringify(body) }),
     reviewRule: (sessionId: string, ruleId: string, reviewed_by: string, approve = true) =>
       request<CalibrationRule>(`/sessions/${sessionId}/rules/${ruleId}/review`, { method: "POST", body: JSON.stringify({ reviewed_by, approve }) }),
@@ -566,9 +569,11 @@ export type JourneyDenominator = { people: number; basis: HeadcountBasis; label:
 export type JourneyHeadcount = { available: boolean; reason?: string; sentence?: string; denominator?: JourneyDenominator | null;
   anchors?: { step: string; people: number; source: string }[]; weighted?: boolean; ess?: number | null; unit?: string };
 /** A calibration rule (brief L4-02): what evidence shows a lever does to behaviour. */
+/** `basis_class`: evidence_anchored when at least one evidence line names a source; otherwise an assumption — a scenario the reviewer signs, labelled as such wherever its shift travels. */
 export type CalibrationRule = { id: string; session_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number;
-  evidence: { ref: string; note: string }[]; basis: string; author: string; status: "draft" | "reviewed"; reviewed_by: string; reviewed_at: string | null; created_at: string | null; updated_at: string | null };
-export type RuleRequest = Omit<CalibrationRule, "id" | "session_id" | "status" | "reviewed_by" | "reviewed_at" | "created_at" | "updated_at">;
+  evidence: { ref: string; note: string }[]; basis: string; author: string; status: "draft" | "reviewed"; reviewed_by: string; reviewed_at: string | null; created_at: string | null; updated_at: string | null;
+  basis_class: "evidence_anchored" | "assumption"; drafted?: boolean; material?: number };
+export type RuleRequest = Omit<CalibrationRule, "id" | "session_id" | "status" | "reviewed_by" | "reviewed_at" | "created_at" | "updated_at" | "basis_class" | "drafted" | "material">;
 /** The modelled shift of a lever run (brief L7-04), counted from the two arms on the same twins. */
 export type LeverShift = { available: boolean; reason?: string; candidate_id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string };
   conversion: { then: number; now: number; lift: number; low: number; high: number; n: number; significant: boolean };
@@ -576,8 +581,9 @@ export type LeverShift = { available: boolean; reason?: string; candidate_id: st
   end: { label: string; then: number; now: number; lift: number; low: number; high: number; n: number; significant: boolean };
   segments: Record<string, { value: string; n: number; thin: boolean; then: number; now: number; lift: number; low: number; high: number }[]>;
   people?: { moved: number; low: number; high: number; stuck_then: number | null; stuck_now: number; basis: string };
-  rule: { rule_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number; reviewed_by: string; reviewed_at: string | null };
-  covered: number; journey_probe_id: string; sentence: string };
+  rule: { rule_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number; reviewed_by: string; reviewed_at: string | null;
+    basis_class?: "evidence_anchored" | "assumption"; evidence_count?: number };
+  assumed?: boolean; covered: number; journey_probe_id: string; sentence: string };
 export type LeverRefusal = { refused: true; lever: string; reason: string; drafts: string[]; missing: boolean };
 export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean; denominator: JourneyDenominator | null };
 

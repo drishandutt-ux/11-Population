@@ -7,7 +7,7 @@
  *  the stored answers, so no call is needed. */
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Play } from "lucide-react";
+import { BookOpen, Play, Sparkles } from "lucide-react";
 import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import RuleBook from "../RuleBook";
@@ -112,8 +112,22 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   const [runs, setRuns] = useState<Experiment[]>([]);
   const [leverText, setLeverText] = useState<Record<string, string>>({});
   const [refusal, setRefusal] = useState<Record<string, LeverRefusal | string>>({});
-  const [ruleBook, setRuleBook] = useState<{ lever?: string } | null>(null);
+  const [ruleBook, setRuleBook] = useState<{ lever?: string; candidate_id?: string; draft?: CalibrationRule } | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState<string | null>(null);
+  // The system drafts the rule for this lever (brief L4-02): the human reads and signs it in the rule book.
+  const draftRule = async (candidateId: string) => {
+    const lever = (leverText[candidateId] || "").trim();
+    if (!lever) return;
+    setDrafting(candidateId);
+    setRefusal((r) => ({ ...r, [candidateId]: "" }));
+    try {
+      const d = await api.lab.draftRule(sessionId, { lever, journey_probe_id: probe.id, candidate_id: candidateId });
+      setRuleBook({ lever, candidate_id: candidateId, draft: d });
+    } catch (e: any) {
+      setRefusal((r) => ({ ...r, [candidateId]: e?.message || "The draft could not be written" }));
+    } finally { setDrafting(null); }
+  };
   const loadRuns = () => api.lab.leverRuns(sessionId).then((r) => setRuns(r.runs.filter((x) => x.spec?.lever_run?.journey_probe_id === probe.id))).catch(() => {});
   useEffect(() => {
     api.lab.rules(sessionId).then((r) => setRules(r.rules)).catch(() => {});
@@ -193,7 +207,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
           <BookOpen className="w-3 h-3" /> Rule book <span className="opacity-60">{rules.filter((r) => r.status === "reviewed").length}/{rules.length}</span>
         </button>
       </div>
-      {ruleBook && <RuleBook sessionId={sessionId} initialLever={ruleBook.lever} onClose={() => setRuleBook(null)} onChanged={setRules} />}
+      {ruleBook && <RuleBook sessionId={sessionId} initialLever={ruleBook.lever} draft={ruleBook.draft} context={{ journey_probe_id: probe.id, candidate_id: ruleBook.candidate_id }} onClose={() => setRuleBook(null)} onChanged={setRules} />}
 
       {/* The funnel: share of everyone who reached each step. */}
       <div className="rounded-xl border border-border/60 bg-card/40 p-4">
@@ -357,7 +371,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
 
                     {/* Lever simulation (brief L7-04): only against a reviewed rule; otherwise a refusal, never a guess. */}
                     <div className="rounded-lg border border-border/50 bg-card/20 p-2.5 space-y-2">
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Simulate a lever · the same twins answer again with a reviewed rule applied</div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Simulate a lever · name it, let the system draft the rule, sign it, then the same twins answer again with it applied</div>
                       <div className="flex flex-wrap gap-1">
                         {(c.movability?.levers || []).filter((l) => l.lever).map((l) => (
                           <button key={l.lever} type="button" onClick={() => setLeverText((t) => ({ ...t, [c.id]: l.lever }))}
@@ -369,6 +383,13 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                       <div className="flex items-center gap-1.5">
                         <input value={leverText[c.id] || ""} onChange={(e) => setLeverText((t) => ({ ...t, [c.id]: e.target.value }))} placeholder="the lever, e.g. nurse phone line"
                           className="flex-1 bg-input border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground" />
+                        {!reviewedFor(leverText[c.id] || "") && (
+                          <button type="button" disabled={drafting === c.id || !(leverText[c.id] || "").trim()} onClick={() => draftRule(c.id)}
+                            title="The system drafts the rule from this candidate's barriers, the facts on file and the documents the twins cited; you read and sign it."
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary/50 text-primary text-xs hover:bg-primary/10 disabled:opacity-50">
+                            <Sparkles className="w-3 h-3" /> {drafting === c.id ? "Drafting…" : "Draft the rule"}
+                          </button>
+                        )}
                         <button type="button" disabled={starting === c.id || !(leverText[c.id] || "").trim()} onClick={() => simulate(c.id)}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs disabled:opacity-50">
                           <Play className="w-3 h-3" /> {starting === c.id ? "Starting…" : "Simulate"}
@@ -376,9 +397,10 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                       </div>
                       {(leverText[c.id] || "").trim() && (
                         reviewedFor(leverText[c.id]) ? (
-                          <p className="text-[10px] text-emerald-300/80">Rule on file: <span className="text-foreground/80">{reviewedFor(leverText[c.id])!.lever}</span> · reviewed by {reviewedFor(leverText[c.id])!.reviewed_by} · dials {Object.entries(reviewedFor(leverText[c.id])!.deltas).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")}</p>
+                          <p className="text-[10px] text-emerald-300/80">Rule on file: <span className="text-foreground/80">{reviewedFor(leverText[c.id])!.lever}</span> · reviewed by {reviewedFor(leverText[c.id])!.reviewed_by} · dials {Object.entries(reviewedFor(leverText[c.id])!.deltas).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")}
+                            {reviewedFor(leverText[c.id])!.basis_class === "assumption" && <> · <span className="text-orange-300/90">assumption, no evidence — the result will say "assumed effect"</span></>}</p>
                         ) : (
-                          <p className="text-[10px] text-yellow-300/70">No reviewed rule for this lever — the run will refuse. <button type="button" onClick={() => setRuleBook({ lever: leverText[c.id] })} className="underline decoration-dotted">Write a rule</button></p>
+                          <p className="text-[10px] text-yellow-300/70">No reviewed rule for this lever yet — press <span className="text-foreground/80">Draft the rule</span> and sign it, or <button type="button" onClick={() => setRuleBook({ lever: leverText[c.id], candidate_id: c.id })} className="underline decoration-dotted">write one yourself</button>. Simulate refuses until a signed rule exists.</p>
                         )
                       )}
                       {refusal[c.id] && (
@@ -386,7 +408,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                           {typeof refusal[c.id] === "string" ? (refusal[c.id] as string) : (
                             <>
                               <span className="font-medium">Refused — no number without a reviewed rule.</span> {(refusal[c.id] as LeverRefusal).reason}{" "}
-                              <button type="button" onClick={() => setRuleBook({ lever: (refusal[c.id] as LeverRefusal).lever })} className="underline decoration-dotted">{(refusal[c.id] as LeverRefusal).missing ? "Write the rule" : "Open the rule book"}</button>
+                              <button type="button" onClick={() => setRuleBook({ lever: (refusal[c.id] as LeverRefusal).lever, candidate_id: c.id })} className="underline decoration-dotted">{(refusal[c.id] as LeverRefusal).missing ? "Open the rule book" : "Open the rule book to sign it"}</button>
                             </>
                           )}
                         </div>
@@ -424,8 +446,14 @@ function LeverRun({ run }: { run: Experiment }) {
   }
   const cv = lv.conversion;
   const sign = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}`;
+  const assumed = lv.assumed || lv.rule?.basis_class === "assumption";
   return (
-    <div className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 space-y-1 text-[11px]">
+    <div className={`rounded-md border px-2.5 py-2 space-y-1 text-[11px] ${assumed ? "border-orange-400/40 bg-orange-500/5" : "border-primary/30 bg-primary/5"}`}>
+      {assumed && (
+        <div className="text-[10px] uppercase tracking-wide text-orange-300/90 font-semibold" title="The rule this ran under rests on no evidence: the reviewer signed its dial changes as a scenario. Read the shift as 'if the change moved people as assumed', not as a forecast.">
+          Assumed effect · not a forecast · the rule rests on no evidence
+        </div>
+      )}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-medium text-foreground/95">{lv.rule.lever}</span>
         <span className={`tabular-nums ${cv.significant ? "text-emerald-300/90" : "text-muted-foreground"}`}>{sign(cv.lift)} points ({sign(cv.low)} to {sign(cv.high)}) · {cv.significant ? "real" : "not distinguishable from zero"}</span>
@@ -440,7 +468,7 @@ function LeverRun({ run }: { run: Experiment }) {
         <div className="text-muted-foreground/80">by deprivation: {lv.segments.deprivation.map((r) => `${r.value} ${sign(r.lift)}${r.thin ? " (thin)" : ""}`).join(" · ")}</div>
       )}
       <div className="text-[10px] text-muted-foreground/70">
-        rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · reviewed by {lv.rule.reviewed_by}
+        rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · {assumed ? "no evidence (assumption)" : `${lv.rule.evidence_count ?? ""} evidence line${lv.rule.evidence_count === 1 ? "" : "s"}`} · reviewed by {lv.rule.reviewed_by}
       </div>
     </div>
   );

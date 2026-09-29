@@ -64,7 +64,11 @@ FIGURE_RULES = (
     "where a candidate says 'movability not scored', say it is unscored.\n"
     "- A MODELLED SHIFT from a lever (what would move if an intervention were in place) may be stated only from a "
     "'lever run' record, with its interval, the rule it ran under and who reviewed it. Never estimate what a lever would do "
-    "on your own; where no lever record exists, say the lever has not been simulated."
+    "on your own; where no lever record exists, say the lever has not been simulated.\n"
+    "- A lever record marked ASSUMPTION ran under a rule with no evidence behind it: word it as a what-if ('if free liners "
+    "eased the cost objection as the rule assumes, conversion would move from X to Y'), never as a forecast or a finding, and "
+    "say in the same sentence that the rule rests on no evidence. Give an assumption's shift the same prominence as any "
+    "evidence-anchored one, and never present one as the other."
 )
 
 
@@ -288,11 +292,12 @@ def record_from_lever(e: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
     created = getattr(e, "created_at", None)
     rule = lv.get("rule") or {}
     model = str(getattr(e, "model", "") or "")
+    assumed = (rule.get("basis_class") or "evidence_anchored") == "assumption"
     return {
         "id": e.id,
         "kind": "lever",
         "instrument": "journey",
-        "label": f"Lever: {rule.get('lever')} — shift at {(lv.get('from') or {}).get('label')} → {(lv.get('to') or {}).get('label')}",
+        "label": ("Assumed effect: " if assumed else "Lever: ") + f"{rule.get('lever')} — shift at {(lv.get('from') or {}).get('label')} → {(lv.get('to') or {}).get('label')}",
         "question": str(getattr(e, "name", "") or "")[:300],
         "basis": "simulated",
         "estimate": {"metric": "conversion_shift", "label": "Shift in those getting through", "format": "lift",
@@ -303,14 +308,16 @@ def record_from_lever(e: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "splits": {k: [{"segment": k, "value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in v] for k, v in (lv.get("segments") or {}).items()},
         "equity": equity_mod.equity_block([{"value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in (lv.get("segments") or {}).get(equity_mod.KEY, [])], fmt="lift"),
         "lever": {"rule": rule, "candidate_id": lv.get("candidate_id"), "journey_probe_id": lv.get("journey_probe_id"), "covered": lv.get("covered"),
-                  "movement": lv.get("movement"), "end": lv.get("end"), "people": lv.get("people"), "stuck": lv.get("stuck")},
+                  "movement": lv.get("movement"), "end": lv.get("end"), "people": lv.get("people"), "stuck": lv.get("stuck"),
+                  "basis_class": "assumption" if assumed else "evidence_anchored", "assumed": assumed},
         "refusals": None, "unanimity": None, "weighted": None,
         "provenance": {"model": model, "seed": int(getattr(e, "seed", 0) or 0), "design": "within", "arms": ["baseline", "lever"], "evidence_mix": evidence_mix or {},
                        "frame_level": frame_level or "none", "created_at": created.isoformat() if isinstance(created, datetime) else None,
                        "rule_id": rule.get("rule_id"), "reviewed_by": rule.get("reviewed_by"), "reviewed_at": rule.get("reviewed_at")},
         "confidence": confidence_for(n=n, low=None, high=None, fmt="lift", unanimity=None, refusals=None, frame_level=frame_level, weighted=False, model=model),
         "caveats": ([] if conv.get("significant") else ["The shift is not distinguishable from zero: the interval crosses it."])
-                   + [f"Modelled under calibration rule '{rule.get('lever')}' (reviewed by {rule.get('reviewed_by') or 'nobody'}): the shift is only as good as that rule's evidence."]
+                   + ([f"ASSUMPTION: the rule '{rule.get('lever')}' rests on no evidence — the reviewer ({rule.get('reviewed_by') or 'nobody'}) signed its dial changes as a scenario. This is a what-if, not a forecast."]
+                      if assumed else [f"Modelled under calibration rule '{rule.get('lever')}' (reviewed by {rule.get('reviewed_by') or 'nobody'}): the shift is only as good as that rule's evidence."])
                    + caveats_for(n=n, unanimity=None, refusals=None, frame_level=frame_level),
         "tags": {},
     }
@@ -420,7 +427,9 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             ppl = lv.get("people") or {}
             dial_text = ", ".join(f"{k} {int(v):+d}" for k, v in (rule.get("deltas") or {}).items())
             applies_text = ("applies to " + ", ".join(f"{k}={'/'.join(map(str, v))}" for k, v in (rule.get("applies_to") or {}).items())) if rule.get("applies_to") else "applies to everyone"
-            bar_line += (f"; lever run under rule '{rule.get('lever')}' (reviewed by {rule.get('reviewed_by') or 'nobody'}; dials {dial_text}; {applies_text})"
+            bar_line += ((f"; ASSUMPTION — lever run under rule '{rule.get('lever')}' which rests on NO evidence (a what-if signed as a scenario by {rule.get('reviewed_by') or 'nobody'}; dials {dial_text}; {applies_text})"
+                          if lv.get("assumed") or (rule.get("basis_class") == "assumption") else
+                          f"; lever run under rule '{rule.get('lever')}' (reviewed by {rule.get('reviewed_by') or 'nobody'}; {len(rule.get('evidence') or [])} evidence line(s); dials {dial_text}; {applies_text})")
                          + (f"; ≈{int(ppl['moved']):,} people moved ({int(ppl['low']):,}–{int(ppl['high']):,})" if ppl.get("moved") is not None else "")
                          + (f"; end of journey {round(_num((lv.get('end') or {}).get('then')) * 100)}% → {round(_num((lv.get('end') or {}).get('now')) * 100)}%" if lv.get("end") else ""))
         if (r.get("unanimity") or {}).get("flagged"):
