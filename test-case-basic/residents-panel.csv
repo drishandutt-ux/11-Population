@@ -1,0 +1,13 @@
+respondent_id,name,age,gender,ward,home_type,deprivation_quintile,knew_scheme_was_coming,has_caddy,used_it_once,uses_weekly,still_using_6m,biggest_barrier,verbatim
+R01,Sandra,58,female,Harpurhey,terrace,Q1 most deprived,yes,yes,yes,no,no,smell,"It stank by week two, gave up"
+R02,Kwame,34,male,Hulme,flat,Q1 most deprived,no,yes,yes,no,no,shared bin full,"Nowhere to put it once the shared bin is full"
+R03,Priya,29,female,Chorlton,semi,Q4,yes,yes,yes,yes,yes,liners ran out,"Easy once I got going"
+R04,Dave,47,male,Wythenshawe,semi,Q2,no,yes,no,no,no,did not know it started,"First I heard was a bin on the pavement"
+R05,Mary,72,female,Levenshulme,terrace,Q3,yes,yes,yes,yes,yes,none,"I do it religiously"
+R06,Tom,22,male,Fallowfield,shared house,Q3,yes,yes,yes,no,no,caddy too small,"Full by Tuesday with five of us"
+R07,Fatima,41,female,Cheetham Hill,flat,Q1 most deprived,yes,yes,no,no,no,no space,"There is no worktop for a bin"
+R08,Gary,53,male,Moston,terrace,Q2,yes,yes,yes,no,no,flies,"Flies. End of story"
+R09,Ellie,36,female,Didsbury,detached,Q5 least deprived,yes,yes,yes,yes,yes,none,"We buy our own liners now"
+R10,Ahmed,39,male,Longsight,terrace,Q1 most deprived,yes,yes,no,no,no,liners cost money,"I'd do it if the liners came free"
+R11,Jean,66,female,Burnage,semi,Q4,yes,yes,yes,yes,no,unsure what goes in,"Never know if teabags go in"
+R12,Lewis,31,male,Ancoats,flat,Q3,yes,yes,yes,yes,yes,none,"Caretaker sorted the bin store, everyone uses it"
