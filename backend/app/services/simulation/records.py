@@ -33,6 +33,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.agent import SpawnedAgent
 from app.models.evidence import Evidence
 from app.models.measurement import Experiment, Probe, ProbeAnswer
+from app.services.measurement import movability as _mv
 from app.services.population import equity as equity_mod
 
 HANDLE_RE = re.compile(r"\[\[\s*(R\d+)\s*\]\]", re.IGNORECASE)
@@ -57,7 +58,10 @@ FIGURE_RULES = (
     "record, and never propose an outcome that is not on it.\n"
     "- A number of PEOPLE (a headcount) may be stated only where the record gives one ('≈ N people stuck'), with its range, "
     "and the sentence must say what the denominator was (the record's 'headcounts:' line). Where the record says headcounts are "
-    "not available, give no number of people at all."
+    "not available, give no number of people at all.\n"
+    "- MOVABILITY (how much of a gap a partner could reach) comes only from the record's own 'movable' figure and its levers; "
+    "candidates are already ranked by the movable gap. Never call a gap movable, fixable or structural on your own judgement, and "
+    "where a candidate says 'movability not scored', say it is unscored."
 )
 
 
@@ -194,8 +198,11 @@ def candidate_summary(c: dict, probe_id: str) -> dict:
         "at_risk_people": c.get("at_risk_people"), "through_people": c.get("through_people"), "stuck_people": c.get("stuck_people"),
         "stuck_low": c.get("stuck_low"), "stuck_high": c.get("stuck_high"), "basis": c.get("basis") or "",
         "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "share": b.get("share"), "weight_mean": b.get("weight_mean"),
-                      "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [], "evidence": b.get("evidence") or []}
+                      "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [], "evidence": b.get("evidence") or [],
+                      # Movability (brief L7-03): who could reach this barrier, and the lever.
+                      "reach": b.get("reach") or "", "lever": b.get("lever") or "", "actor": b.get("actor") or "", "reach_reason": b.get("reach_reason") or ""}
                      for b in (c.get("barriers") or [])[:7]],
+        "movability": dict(c.get("movability") or {}),
         "equity": c.get("equity") or {},
         "confidence": confidence_for(n=int(c.get("n") or 0), low=c.get("low"), high=c.get("high"), fmt="share", unanimity=None, refusals=None,
                                      frame_level=None, weighted=False),
@@ -350,7 +357,8 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
                 f"{c.get('rank')}. {c.get('from', {}).get('label')} → {c.get('to', {}).get('label')} ({round(_num(c.get('conversion')) * 100)}% get through, "
                 f"{c.get('stuck')} of {c.get('n')} stuck"
                 + (people_phrase(c) if c.get("stuck_people") is not None else "")
-                + (f", top barrier {c['barriers'][0]['theme']}" if c.get("barriers") else "") + ")"
+                + (f", top barrier {c['barriers'][0]['theme']}" if c.get("barriers") else "")
+                + ((", " + _mv.sentence(c)) if (c.get("movability") or {}).get("scored") else ", movability not scored") + ")"
                 for c in cands[:7])
             fun = r.get("funnel") or []
             if fun:

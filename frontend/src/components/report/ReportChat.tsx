@@ -1239,7 +1239,7 @@ function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["o
   return (
     <div className="mt-4 rounded-lg border border-border/50 bg-muted/10 px-3.5 py-3">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">Where the population drops off · candidate outcomes</span>
+        <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold" title="Ranked by the movable gap first: the share of the stuck whose barrier a single partner could reach, from what the twins said would remove it.">Where the population drops off · candidate outcomes · ranked by what a partner could move</span>
         {c.record_id && <button type="button" data-record={c.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">record</button>}
         <span className="text-[10px] text-muted-foreground/60">n={c.n}</span>
       </div>
@@ -1264,6 +1264,9 @@ function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["o
               <span className="font-medium">{it.from} → {it.to}</span>
               <span className="text-muted-foreground"> · {Math.round(it.conversion * 100)}% get through ({Math.round(it.low * 100)}–{Math.round(it.high * 100)}%) · {it.stuck} of {it.n} stuck</span>
               {it.stuck_people != null && <span className="text-foreground/85 tabular-nums"> · ≈{it.stuck_people.toLocaleString()} people{it.stuck_low != null && it.stuck_high != null && it.stuck_low !== it.stuck_high ? ` (${it.stuck_low.toLocaleString()}–${it.stuck_high.toLocaleString()})` : ""}</span>}
+              {it.movability?.scored
+                ? <span className="text-muted-foreground"> · <span className="text-emerald-300/85">movable {Math.round((it.movability.movable_share || 0) * 100)}%</span>{it.movability.movable_people != null ? <span className="tabular-nums"> (≈{it.movability.movable_people.toLocaleString()} people)</span> : null}{(it.movability.system_share || 0) > 0 ? ` · needs the system ${Math.round((it.movability.system_share || 0) * 100)}%` : ""}{(it.movability.structural_share || 0) > 0 ? ` · structural ${Math.round((it.movability.structural_share || 0) * 100)}%` : ""}{it.movability.levers?.length ? ` · lever: ${it.movability.levers.slice(0, 2).map((l) => l.lever + (l.actor ? ` (${l.actor})` : "")).join("; ")}` : ""}</span>
+                : <span className="text-muted-foreground/60"> · movability not scored</span>}
               {it.equity_gap != null && <span className="text-muted-foreground"> · equity gap {it.equity_gap > 0 ? "+" : ""}{it.equity_gap} pts</span>}
               {it.barriers?.length > 0 && (
                 <span className="text-muted-foreground"> · barriers: {it.barriers.map((b, k) => {

@@ -127,7 +127,7 @@ def _csv(rows: list[dict], columns: list[str]) -> str:
 
 RECORD_COLUMNS = ["record_id", "kind", "instrument", "label", "question", "metric", "format", "value", "low", "high", "n", "weighted_value", "effective_n",
                   "refused", "unanimity_flagged", "confidence", "frame_level", "scoped", "model", "seed", "created_at", "equity_most", "equity_most_value", "equity_least",
-                  "equity_least_value", "equity_gap", "equity_significant", "top_barrier", "top_candidate", "top_candidate_people", "headcount_basis", "sources_cited", "caveats"]
+                  "equity_least_value", "equity_gap", "equity_significant", "top_barrier", "top_candidate", "top_candidate_people", "top_candidate_movable_share", "top_candidate_movable_people", "headcount_basis", "sources_cited", "caveats"]
 
 
 def records_rows(records: list[dict]) -> list[dict]:
@@ -150,6 +150,8 @@ def records_rows(records: list[dict]) -> list[dict]:
             "top_barrier": (r.get("barriers") or [{}])[0].get("theme") if r.get("barriers") else "",
             "top_candidate": (r.get("candidates") or [{}])[0].get("label") if r.get("candidates") else "",
             "top_candidate_people": (r.get("candidates") or [{}])[0].get("stuck_people") if r.get("candidates") else "",
+            "top_candidate_movable_share": ((r.get("candidates") or [{}])[0].get("movability") or {}).get("movable_share", "") if r.get("candidates") else "",
+            "top_candidate_movable_people": ((r.get("candidates") or [{}])[0].get("movability") or {}).get("movable_people", "") if r.get("candidates") else "",
             "headcount_basis": ((r.get("headcount") or {}).get("denominator") or {}).get("basis", "") if (r.get("headcount") or {}).get("available") else "",
             "sources_cited": len(r.get("sources") or []), "caveats": " | ".join(r.get("caveats") or []),
         })
@@ -263,11 +265,17 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
             lines += ["Headcounts: not available — " + (hc.get("reason") or "no sizing figure on file."), ""]
         if cands.get("funnel"):
             lines += ["Funnel: " + " → ".join(f"{f.get('label')} {round(float(f.get('share') or 0) * 100)}%" + (f" (≈{int(f['people']):,} people)" if f.get("people") is not None else "") for f in cands["funnel"]), ""]
+        lines += ["Candidates are ranked by the movable gap first: the share of the stuck whose barrier a single partner could reach, from what the twins said would remove it.", ""]
         for it in cands["items"]:
-            bars = "; ".join(f"{b.get('theme')} ({b.get('count')} twins)" for b in (it.get("barriers") or []))
+            bars = "; ".join(f"{b.get('theme')} ({b.get('count')} twins" + (f"; {b.get('reach')}" + (f": {b.get('lever')}" if b.get("lever") else "") if b.get("reach") else "") + ")" for b in (it.get("barriers") or []))
+            mv = it.get("movability") or {}
+            mv_text = (f"; movable {round(float(mv.get('movable_share') or 0) * 100)}%" + (f" (≈{int(mv['movable_people']):,} people)" if mv.get("movable_people") is not None else "")
+                       + (f", needs the system {round(float(mv.get('system_share') or 0) * 100)}%" if mv.get("system_share") else "")
+                       + (f", structural {round(float(mv.get('structural_share') or 0) * 100)}%" if mv.get("structural_share") else "")) if mv.get("scored") else "; movability not scored"
             lines.append(f"{it.get('rank')}. **{it.get('from')} → {it.get('to')}** — {round(float(it.get('conversion') or 0) * 100)}% get through "
                          f"(95% CI {round(float(it.get('low') or 0) * 100)}–{round(float(it.get('high') or 0) * 100)}%, {it.get('stuck')} of {it.get('n')} stuck)"
                          + (f"; ≈{int(it['stuck_people']):,} people stuck ({_people_range(it)})" if it.get("stuck_people") is not None else "")
+                         + mv_text
                          + (f"; barriers: {bars}" if bars else ""))
         lines.append("")
     if report and report.get("answer"):

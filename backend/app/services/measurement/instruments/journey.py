@@ -200,10 +200,15 @@ def transitions_of(rows: list[dict], stages: list[dict], *, seed: int = 0) -> li
 
 
 def candidates_of(transitions: list[dict]) -> list[dict]:
-    """The candidate outcomes: every step where at least one twin is stuck, ranked by how many
-    are stuck there, then by the size of the gap, then journey order."""
+    """The candidate outcomes: every step where at least one twin is stuck, ranked by the
+    movable gap first once movability is scored (brief L7-03: a small movable gap outranks a
+    large immovable one), then by how many are stuck there, then by the size of the gap, then
+    journey order."""
     cands = [dict(t) for t in transitions if t.get("stuck")]
-    cands.sort(key=lambda t: (-t["stuck"], -(t.get("gap") or 0), t["step"]))
+    def movable(t: dict) -> int:
+        m = t.get("movability") or {}
+        return int(m.get("movable_count") or 0) if m.get("scored") else -1
+    cands.sort(key=lambda t: (-movable(t), -t["stuck"], -(t.get("gap") or 0), t["step"]))
     for r, c in enumerate(cands, 1):
         c["rank"] = r
     return cands
@@ -270,11 +275,17 @@ async def postprocess(probe_ids: list[str], model: str) -> None:
             await trace_evidence(pid, collect=_candidate_barriers)
         except Exception as e:  # noqa: BLE001 — tracing is a convenience; the ranking stands without it
             print(f"[journey] evidence tracing failed for {pid}: {type(e).__name__}: {e}")
-        # Headcounts last (L7-02): the shares are final by now; the denominator comes from the frame or the spec.
+        # Headcounts (L7-02): the shares are final by now; the denominator comes from the frame or the spec.
         try:
             await headcount.attach(pid)
         except Exception as e:  # noqa: BLE001 — the shares stand without headcounts
             print(f"[journey] headcounts failed for {pid}: {type(e).__name__}: {e}")
+        # Movability last (L7-03): who could reach each barrier, counted up per candidate, and the ranking by movable gap.
+        try:
+            from app.services.measurement import movability
+            await movability.attach(pid)
+        except Exception as e:  # noqa: BLE001 — unscored, never guessed
+            print(f"[journey] movability failed for {pid}: {type(e).__name__}: {e}")
 
 
 # ── proposing the journey ────────────────────────────────────────────────────

@@ -519,7 +519,8 @@ export type ReportStructure = {
       funnel: { label: string; share: number; reached: number; people?: number | null; people_low?: number | null; people_high?: number | null }[];
       items: { id: string; rank: number; from: string; to: string; label: string; n: number; stuck: number; conversion: number; low: number; high: number; gap: number | null; equity_gap: number | null;
         stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; at_risk_people?: number | null; basis?: HeadcountBasis;
-        barriers: { theme: string; count: number; weight_mean: number | null; removals: string[]; agent_ids: string[] }[] }[] } | null };
+        movability?: Partial<Movability>;
+        barriers: { theme: string; count: number; weight_mean: number | null; removals: string[]; agent_ids: string[]; reach?: Reach; lever?: string; actor?: string }[] }[] } | null };
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
@@ -528,6 +529,8 @@ export type ReportStructure = {
 export type UsedUnit = { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; route?: string; twins?: number; basis?: "used" | "could_see" };
 
 export type BarrierItem = { theme: string; count: number; share: number | null; low?: number | null; high?: number | null; weight_mean: number | null;
+  /** Movability (brief L7-03): who could reach it, the lever and who could pull it. Journey barriers only. */
+  reach?: Reach; lever?: string; actor?: string; reach_reason?: string;
   removals: ({ value: string; count: number; share: number } | string)[]; agent_ids: string[];
   evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string }[] };
 
@@ -536,8 +539,14 @@ export type JourneyStage = { key: string; label: string; definition?: string;
   /** A known headcount for this step (brief L7-02): held fixed, the steps after it scaled from it. Needs a source. */
   people?: number | string | null; people_source?: string };
 export type HeadcountBasis = "official_statistic" | "client_supplied" | "client_anchored" | "";
+/** Movability (brief L7-03): who could reach each barrier, counted up per candidate. */
+export type Reach = "partner" | "system" | "structural" | "none" | "unscored" | "";
+export type Movability = { scored: boolean; movable_count: number; movable_share: number; system_count: number; system_share: number; structural_count: number; structural_share: number;
+  unscored_count: number; unscored_share: number; movable_people?: number | null; movable_low?: number | null; movable_high?: number | null;
+  levers: { theme: string; lever: string; actor: string; count: number }[] };
 export type JourneyCandidate = { id: string; rank: number; step: number; from: { key: string; label: string }; to: { key: string; label: string }; label: string;
   n: number; through: number; stuck: number; conversion: number; low: number; high: number; gap: number | null;
+  movability?: Movability;
   /** Headcounts (brief L7-02): the gap in individuals, when a denominator exists. */
   at_risk_people?: number | null; through_people?: number | null; stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; basis?: HeadcountBasis;
   barriers: BarrierItem[]; equity: EquityBlock; confidence?: { score: number; drivers: string[] } };

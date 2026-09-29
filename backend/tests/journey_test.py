@@ -120,7 +120,7 @@ def test_a_journey_probe_becomes_a_record_with_stable_candidate_ids_and_the_prom
     assert c["barriers"][0]["theme"] == "GP access" and c["barriers"][0]["agent_ids"] == ["a1", "a2"] and c["equity"]["available"]
     assert 5 <= c["confidence"]["score"] <= 95 and [s["key"] for s in r["journey"]] == ["step1", "step2", "step3", "step4"] and len(r["funnel"]) == 4
     text, _ = rec.records_block([r])
-    assert "candidates ranked: 1. At risk → Assessed (75% get through, 2 of 8 stuck, top barrier GP access)" in text
+    assert "candidates ranked: 1. At risk → Assessed (75% get through, 2 of 8 stuck, top barrier GP access, movability not scored)" in text
     assert "funnel: At risk 100% → Assessed 62% → Started 38% → Still on it at 6 months 25%" in text
     assert "candidates ranked" in rec.FIGURE_RULES
     # a non-journey record carries none

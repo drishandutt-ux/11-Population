@@ -19,9 +19,21 @@ const STUCK = ["unlikely", "no"];
 type Stage = { key: string; label: string; definition?: string };
 type Row = { agent_id: string; name: string; role: string; answer: Record<string, any>; reasoning?: string; segments?: Record<string, string> };
 type Twin = { agent_id: string; name: string; role: string; answering_for: string; barrier: string; removal: string; weight: number; reasoning: string; deprivation?: string; used_units?: any[] };
-type Barrier = { theme: string; count: number; weight_mean: number; removals: string[]; twins: Twin[]; evidence: any[] };
+type Barrier = { theme: string; count: number; weight_mean: number; removals: string[]; twins: Twin[]; evidence: any[]; reach?: string; lever?: string; actor?: string; reach_reason?: string };
+type Mv = { scored: boolean; movable_count: number; movable_share: number; system_count: number; system_share: number; structural_count: number; structural_share: number; unscored_count: number; unscored_share: number; movable_people?: number | null; levers: { theme: string; lever: string; actor: string; count: number }[] };
+const REACH_LABEL: Record<string, string> = { partner: "a partner could fix it", system: "needs the whole system", structural: "nobody can fix it soon", none: "no removal named", unscored: "not scored" };
+const REACH_COLOR: Record<string, string> = { partner: "bg-emerald-400/70", system: "bg-amber-400/60", structural: "bg-zinc-500/60", none: "bg-zinc-500/60", unscored: "bg-zinc-700/50" };
+function movabilityOf(stuck: number, barriers: Barrier[]): Mv {
+  const counts: Record<string, number> = { partner: 0, system: 0, structural: 0, none: 0, unscored: 0 };
+  const levers: Mv["levers"] = [];
+  barriers.forEach((b) => { const r = b.reach && b.reach in counts ? b.reach : "unscored"; counts[r] += b.count; if (r === "partner") levers.push({ theme: b.theme, lever: b.lever || "", actor: b.actor || "", count: b.count }); });
+  counts.none += Math.max(0, stuck - Object.values(counts).reduce((a, c) => a + c, 0));
+  const sh = (k: string) => (stuck ? counts[k] / stuck : 0);
+  return { scored: stuck > 0 && counts.unscored < stuck, movable_count: counts.partner, movable_share: sh("partner"), system_count: counts.system, system_share: sh("system"),
+    structural_count: counts.structural + counts.none, structural_share: sh("structural") + sh("none"), unscored_count: counts.unscored, unscored_share: sh("unscored"), levers: levers.sort((a, b) => b.count - a.count) };
+}
 type Candidate = { id: string; step: number; from: Stage; to: Stage; n: number; through: number; stuck: number; conversion: number; low: number; high: number; barriers: Barrier[]; equity?: any; confidence?: { score: number; drivers: string[] };
-  at_risk_people?: number | null; stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; basis?: string };
+  at_risk_people?: number | null; stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; basis?: string; movability?: Mv };
 const people = (n: number | null | undefined) => (n == null ? "" : n.toLocaleString());
 const BASIS_LABEL: Record<string, string> = { official_statistic: "official statistic", client_supplied: "client supplied", client_anchored: "scaled from a client figure" };
 
@@ -43,7 +55,8 @@ function compute(rows: Row[], stages: Stage[], stored: Candidate[]) {
     const reached = placed.filter((r) => at(r) >= k).length;
     return { ...s, reached, atExactly: placed.filter((r) => at(r) === k).length, ...wilson(reached, n) };
   });
-  const evidenceFor = (id: string, theme: string) => stored.find((c) => c.id === id)?.barriers.find((b) => b.theme === theme)?.evidence || [];
+  const storedBarrier = (id: string, theme: string) => stored.find((c) => c.id === id)?.barriers.find((b) => b.theme === theme);
+  const evidenceFor = (id: string, theme: string) => storedBarrier(id, theme)?.evidence || [];
   const transitions: Candidate[] = [];
   for (let k = 0; k < stages.length - 1; k++) {
     const atRisk = placed.filter((r) => at(r) >= k);
@@ -57,11 +70,15 @@ function compute(rows: Row[], stages: Stage[], stored: Candidate[]) {
         removal: r.answer.removal || "", weight: Number(r.answer.weight || 0), reasoning: r.reasoning || r.answer.reasoning || "", deprivation: r.segments?.deprivation, used_units: r.answer.used_units }))
         .sort((x, y) => y.weight - x.weight);
       const removals = [...new Set(rs.map((r) => String(r.answer.removal__theme || r.answer.removal || "").trim()).filter(Boolean))].slice(0, 4);
-      return { theme, count: rs.length, weight_mean: twins.reduce((s, t) => s + t.weight, 0) / (twins.length || 1), removals, twins, evidence: evidenceFor(id, theme) };
+      const sb = storedBarrier(id, theme);
+      return { theme, count: rs.length, weight_mean: twins.reduce((s, t) => s + t.weight, 0) / (twins.length || 1), removals, twins, evidence: evidenceFor(id, theme),
+        reach: sb?.reach, lever: sb?.lever, actor: sb?.actor, reach_reason: sb?.reach_reason };
     }).sort((x, y) => y.count - x.count || y.weight_mean - x.weight_mean);
-    transitions.push({ id, step: k + 1, from: stages[k], to: stages[k + 1], n: atRisk.length, through: through.length, stuck: stuck.length, ...wilson(through.length, atRisk.length), conversion: atRisk.length ? through.length / atRisk.length : 0, barriers });
+    transitions.push({ id, step: k + 1, from: stages[k], to: stages[k + 1], n: atRisk.length, through: through.length, stuck: stuck.length, ...wilson(through.length, atRisk.length), conversion: atRisk.length ? through.length / atRisk.length : 0, barriers, movability: movabilityOf(stuck.length, barriers) });
   }
-  const candidates = transitions.filter((t) => t.stuck > 0).sort((x, y) => y.stuck - x.stuck || x.conversion - y.conversion || x.step - y.step);
+  // Ranked by the movable gap first (L7-03), then by who is stuck, then the gap.
+  const mv = (t: Candidate) => (t.movability?.scored ? t.movability.movable_count : -1);
+  const candidates = transitions.filter((t) => t.stuck > 0).sort((x, y) => mv(y) - mv(x) || y.stuck - x.stuck || x.conversion - y.conversion || x.step - y.step);
   return { n, funnel, transitions, candidates, completed: wilson(placed.filter((r) => at(r) === stages.length - 1).length, n) };
 }
 
@@ -169,7 +186,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       <div>
         <div className="text-xs text-muted-foreground mb-2">
           Candidate outcomes — where the population drops off
-          <span className="text-muted-foreground/60"> · ranked by how many are stuck there, then by the size of the gap · click one</span>
+          <span className="text-muted-foreground/60"> · ranked by what a partner could move, then by how many are stuck · click one</span>
         </div>
         {view.candidates.length === 0 && <p className="text-xs text-muted-foreground/70">Nobody in this cut reports being stuck at any step.</p>}
         <ol className="space-y-1.5">
@@ -198,6 +215,22 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                       {c.barriers.length ? <>barriers: {c.barriers.slice(0, 3).map((b) => `${b.theme} (${b.count})`).join(" · ")}</> : "no barrier named"}
                     </span>
                   </div>
+                  {c.movability && (
+                    <div className="flex items-center gap-2 mt-1.5 pl-8" title={c.movability.scored ? `Of the ${c.stuck} stuck: ${c.movability.movable_count} behind a barrier a partner could fix, ${c.movability.system_count} behind one that needs the whole system, ${c.movability.structural_count} behind one nobody can fix soon or with no removal named${c.movability.unscored_count ? `, ${c.movability.unscored_count} not scored` : ""}` : "Movability not scored for this step"}>
+                      <div className="w-40 h-1.5 bg-muted rounded-full overflow-hidden flex shrink-0">
+                        {(["partner", "system", "structural", "unscored"] as const).map((k) => {
+                          const share = k === "partner" ? c.movability!.movable_share : k === "system" ? c.movability!.system_share : k === "structural" ? c.movability!.structural_share : c.movability!.unscored_share;
+                          return <div key={k} className={`h-full ${REACH_COLOR[k]}`} style={{ width: `${Math.round(share * 100)}%` }} />;
+                        })}
+                      </div>
+                      <span className="text-[10px] tabular-nums">
+                        {c.movability.scored
+                          ? <><span className="text-emerald-300/90">movable {pct(c.movability.movable_share)}</span>{showPeople && storedFor(c.id)?.movability?.movable_people != null ? <span className="text-foreground/80"> · ≈{people(storedFor(c.id)!.movability!.movable_people)} people</span> : null}{c.movability.system_share > 0 ? <span className="text-muted-foreground/70"> · system {pct(c.movability.system_share)}</span> : null}{c.movability.structural_share > 0 ? <span className="text-muted-foreground/70"> · structural {pct(c.movability.structural_share)}</span> : null}</>
+                          : <span className="text-muted-foreground/60">movability not scored</span>}
+                      </span>
+                      {c.movability.levers.length > 0 && <span className="text-[10px] text-muted-foreground/70 truncate">lever: {c.movability.levers.slice(0, 2).map((l) => l.lever + (l.actor ? ` (${l.actor})` : "")).join("; ")}</span>}
+                    </div>
+                  )}
                   {(eq?.available || conf) && (
                     <div className="pl-8 mt-1 text-[10px] text-muted-foreground/70">
                       {eq?.available && <>Equity: {eq.most.label} {pct(eq.most.share ?? 0)} vs {eq.least.label} {pct(eq.least.share ?? 0)}{eq.gap != null ? ` · gap ${eq.gap > 0 ? "+" : ""}${eq.gap} pts` : ""} · {eq.significant ? "a real gap" : eq.significant === false ? "not distinguishable at this size" : "untested"}</>}
@@ -226,6 +259,12 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                                 <span className="text-muted-foreground tabular-nums">{b.count} twin{b.count === 1 ? "" : "s"} · weight {Math.round(b.weight_mean)}/100</span>
                               </div>
                               {b.removals.length > 0 && <div className="pl-6 text-[10px] text-muted-foreground/70">removed by: {b.removals.join(" · ")}</div>}
+                              <div className="pl-6 text-[10px]" title={b.reach_reason || ""}>
+                                <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${REACH_COLOR[b.reach || "unscored"]}`} />
+                                <span className={b.reach === "partner" ? "text-emerald-300/85" : "text-muted-foreground/70"}>{REACH_LABEL[b.reach || "unscored"]}</span>
+                                {b.lever && <span className="text-foreground/80"> · lever: {b.lever}</span>}
+                                {b.actor && <span className="text-muted-foreground/70"> · who: {b.actor}</span>}
+                              </div>
                             </button>
                             {bOpen && (
                               <div className="px-2.5 pb-2.5 pl-8 space-y-2">
@@ -269,7 +308,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       </div>
 
       <p className="text-[10px] text-muted-foreground/60">
-        Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts multiply a published or client-supplied denominator by the simulated share and are no more real than the share. Movability (L7-03) is the next step.
+        Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts multiply a published or client-supplied denominator by the simulated share and are no more real than the share. Movability classes each barrier by who could reach the removal the twins asked for; the report may not judge it on its own. Simulating a lever (L7-04) is the next step.
       </p>
     </div>
   );

@@ -283,8 +283,10 @@ def candidates_from_records(records: list[dict]) -> Optional[dict]:
                                "label": c.get("label"), "n": c.get("n"), "stuck": c.get("stuck"), "conversion": c.get("conversion"), "low": c.get("low"), "high": c.get("high"),
                                "gap": c.get("gap"), "equity_gap": (c.get("equity") or {}).get("gap") if (c.get("equity") or {}).get("available") else None,
                                "stuck_people": c.get("stuck_people"), "stuck_low": c.get("stuck_low"), "stuck_high": c.get("stuck_high"), "at_risk_people": c.get("at_risk_people"), "basis": c.get("basis") or "",
+                               "movability": {k: (c.get("movability") or {}).get(k) for k in ("scored", "movable_share", "movable_count", "system_share", "structural_share", "unscored_share", "movable_people", "movable_low", "movable_high", "levers")},
                                "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "weight_mean": b.get("weight_mean"),
                                              "removals": [x.get("value") if isinstance(x, dict) else x for x in (b.get("removals") or [])][:2],
+                                             "reach": b.get("reach") or "", "lever": b.get("lever") or "", "actor": b.get("actor") or "",
                                              "agent_ids": (b.get("agent_ids") or [])[:8]} for b in (c.get("barriers") or [])[:3]]}
                               for c in (r.get("candidates") or [])[:7]]}
     return None
