@@ -1,7 +1,7 @@
 "use client";
 
 import { PopulationConstraints, SimMode } from "@/lib/api";
-import { Brain, Rocket, Heart, Users, SlidersHorizontal, MapPin, Thermometer } from "lucide-react";
+import { Divider, Range, Seg, Section, SwitchRow } from "./controls";
 
 export const DEFAULT_CONSTRAINTS: PopulationConstraints = {
   stance: { direct: 33, indirect: 33, neutral: 34, follow_plan: true },
@@ -22,36 +22,41 @@ interface Props {
   disabled?: boolean;
 }
 
-function FromResearch({ basis }: { basis?: string }) {
+const FOR = "hsl(160 60% 45%)";
+const AGAINST = "hsl(0 70% 60%)";
+
+/** Marks a dial the detect stage set from the research. Compact form is a dot, for tight labels. */
+function FromResearch({ basis, compact }: { basis?: string; compact?: boolean }) {
   if (!basis) return null;
-  return <span className="text-[9px] px-1 rounded border border-emerald-500/30 text-emerald-300/90 ml-1.5" title={basis}>from research</span>;
+  if (compact) return <span className="dot bg-emerald-400 ml-1.5" title={`Set from the research: ${basis}`} />;
+  return <span className="chip chip-ok h-[18px] px-1.5 text-[10px] ml-1.5" title={basis}>research</span>;
 }
 
-function Row({ label, value, children, color = "text-foreground", basis }: { label: string; value: string; children: React.ReactNode; color?: string; basis?: string }) {
+function Row({ label, value, children, muted, basis }: { label: string; value: string; children: React.ReactNode; muted?: boolean; basis?: string }) {
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-[11px]">
-        <span className="text-muted-foreground">{label}<FromResearch basis={basis} /></span>
-        <span className={`font-semibold tabular-nums ${color}`}>{value}</span>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground inline-flex items-center">{label}<FromResearch basis={basis} /></span>
+        <span className={`tabular-nums ${muted ? "text-muted-foreground/60" : "text-foreground font-medium"}`}>{value}</span>
       </div>
       {children}
     </div>
   );
 }
 
-function Dial({ label, value, onChange, lo, hi, color, disabled, basis }: { label: string; value: number; onChange: (v: number) => void; lo: string; hi: string; color: string; disabled?: boolean; basis?: string }) {
+function Dial({ label, value, onChange, lo, hi, disabled, basis }: { label: string; value: number; onChange: (v: number) => void; lo: string; hi: string; disabled?: boolean; basis?: string }) {
   const moved = value !== 5;
   return (
-    <Row label={label} value={moved ? `${value}/10` : "auto"} color={moved ? color : "text-muted-foreground/60"} basis={basis}>
-      <input type="range" min={0} max={10} step={1} value={value} disabled={disabled} onChange={(e) => onChange(+e.target.value)} className={`w-full ${color.replace("text-", "accent-")} cursor-pointer h-1.5`} />
-      <div className="flex justify-between text-[9px] text-muted-foreground/50"><span>{lo}</span><span>{hi}</span></div>
+    <Row label={label} value={moved ? `${value} / 10` : "auto"} muted={!moved} basis={basis}>
+      <Range min={0} max={10} value={value} onChange={onChange} disabled={disabled} />
+      <div className="flex justify-between text-[10px] text-muted-foreground/50 -mt-0.5"><span>{lo}</span><span>{hi}</span></div>
     </Row>
   );
 }
 
 function Select({ value, onChange, options, disabled }: { value: string; onChange: (v: string) => void; options: [string, string][]; disabled?: boolean }) {
   return (
-    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="w-full bg-muted/50 border border-border rounded-lg px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="field field-sm">
       {options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
     </select>
   );
@@ -73,144 +78,150 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
   const from = c.derived_from_research ?? {};
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Size + model */}
-      <div className="glass rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Users className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Population</span>
-          <input type="number" min={1} max={1000} value={count} disabled={disabled} onChange={(e) => onCount(Math.max(1, Math.min(1000, +e.target.value || 0)))} className="ml-auto w-20 text-right text-2xl font-bold text-primary bg-transparent focus:outline-none tabular-nums" />
-        </div>
-        <input type="range" min={5} max={500} step={5} value={Math.min(count, 500)} disabled={disabled} onChange={(e) => onCount(+e.target.value)} className="w-full accent-purple-500 cursor-pointer" />
-        <div className="flex gap-1.5 flex-wrap">
-          {[20, 50, 100, 250, 500].map((n) => (
-            <button key={n} disabled={disabled} onClick={() => onCount(n)} className={`text-[11px] px-2 py-0.5 rounded-lg border transition-colors ${count === n ? "border-primary/50 bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:text-foreground"}`}>{n}</button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {([["fast", "Fast", "Haiku writes the personas", <Rocket key="r" className="w-3.5 h-3.5" />], ["pro", "Pro", "Sonnet · richer, slower, pricier", <Brain key="b" className="w-3.5 h-3.5" />]] as [SimMode, string, string, React.ReactNode][]).map(([k, l, d, icon]) => (
-            <button key={k} disabled={disabled} onClick={() => onMode(k)} className={`text-left rounded-xl border px-3 py-2 transition-all ${mode === k ? "border-primary/60 bg-primary/10 ring-1 ring-primary/30" : "border-border/50 bg-muted/30 hover:border-border"}`}>
-              <div className="flex items-center gap-1.5"><span className={mode === k ? "text-primary" : "text-muted-foreground"}>{icon}</span><span className={`text-xs font-semibold ${mode === k ? "text-foreground" : "text-muted-foreground"}`}>{l}</span></div>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5 leading-snug">{d}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Demographics */}
-      <div className="glass rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-3.5 h-3.5 text-sky-400" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Demographics</span>
-          <span className="text-[10px] text-muted-foreground/50 ml-auto">who they are</span>
-        </div>
-        <Row label="Age range" value={`${demo.age_min ?? 18} – ${demo.age_max ?? 75}`} color="text-sky-400" basis={from.age_range || from.age_skew}>
-          <div className="flex items-center gap-2">
-            <input type="number" min={10} max={100} value={demo.age_min ?? 18} disabled={disabled} onChange={(e) => setDemo({ age_min: Math.min(+e.target.value || 10, (demo.age_max ?? 75) - 1) })} className="w-14 bg-muted/50 border border-border rounded-lg px-2 py-1 text-[11px] text-foreground focus:outline-none" />
-            <input type="range" min={10} max={100} value={demo.age_max ?? 75} disabled={disabled} onChange={(e) => setDemo({ age_max: Math.max(+e.target.value, (demo.age_min ?? 18) + 1) })} className="flex-1 accent-sky-500 cursor-pointer h-1.5" />
-            <input type="number" min={10} max={100} value={demo.age_max ?? 75} disabled={disabled} onChange={(e) => setDemo({ age_max: Math.max(+e.target.value || 100, (demo.age_min ?? 18) + 1) })} className="w-14 bg-muted/50 border border-border rounded-lg px-2 py-1 text-[11px] text-foreground focus:outline-none" />
+      <Section title="Population">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <input type="number" min={1} max={1000} value={count} disabled={disabled} onChange={(e) => onCount(Math.max(1, Math.min(1000, +e.target.value || 0)))} className="w-24 text-3xl font-semibold text-foreground bg-transparent focus:outline-none tabular-nums tracking-tight leading-none" />
+            <p className="text-[11px] text-muted-foreground mt-0.5">agents</p>
           </div>
           <div className="flex gap-1">
-            {(["even", "younger", "older"] as const).map((k) => (
-              <button key={k} disabled={disabled} onClick={() => setDemo({ age_skew: k })} className={`flex-1 text-[10px] py-1 rounded-lg border ${(demo.age_skew ?? "even") === k ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-border/50 text-muted-foreground"}`}>{k === "even" ? "even spread" : `skew ${k}`}</button>
+            {[20, 50, 100, 250, 500].map((n) => (
+              <button key={n} type="button" disabled={disabled} onClick={() => onCount(n)} className={`chip transition-colors disabled:opacity-50 ${count === n ? "chip-on" : "hover:text-foreground"}`}>{n}</button>
             ))}
           </div>
+        </div>
+        <Range min={5} max={500} step={5} value={Math.min(count, 500)} onChange={onCount} disabled={disabled} />
+        <Seg<SimMode>
+          value={mode}
+          onChange={onMode}
+          disabled={disabled}
+          options={[
+            { value: "fast", label: "Fast", title: "Haiku writes the personas" },
+            { value: "pro", label: "Pro", title: "Sonnet · richer, slower, pricier" },
+          ]}
+        />
+        <p className="hint -mt-1">{mode === "pro" ? "Pro: Sonnet writes richer personas — slower and pricier." : "Fast: Haiku writes the personas."}</p>
+      </Section>
+
+      <Divider />
+
+      {/* Demographics */}
+      <Section title="Who they are">
+        <Row label="Age range" value={`${demo.age_min ?? 18} – ${demo.age_max ?? 75}`} basis={from.age_range || from.age_skew}>
+          <div className="flex items-center gap-2">
+            <input type="number" min={10} max={100} value={demo.age_min ?? 18} disabled={disabled} onChange={(e) => setDemo({ age_min: Math.min(+e.target.value || 10, (demo.age_max ?? 75) - 1) })} className="field field-sm w-14 text-center tabular-nums" />
+            <Range min={10} max={100} value={demo.age_max ?? 75} onChange={(v) => setDemo({ age_max: Math.max(v, (demo.age_min ?? 18) + 1) })} disabled={disabled} />
+            <input type="number" min={10} max={100} value={demo.age_max ?? 75} disabled={disabled} onChange={(e) => setDemo({ age_max: Math.max(+e.target.value || 100, (demo.age_min ?? 18) + 1) })} className="field field-sm w-14 text-center tabular-nums" />
+          </div>
+          <Seg
+            value={(demo.age_skew ?? "even") as "even" | "younger" | "older"}
+            onChange={(k) => setDemo({ age_skew: k })}
+            disabled={disabled}
+            options={[{ value: "even", label: "even spread" }, { value: "younger", label: "younger" }, { value: "older", label: "older" }]}
+          />
         </Row>
-        <Row label="Women" value={`${gender.female}%`} color="text-pink-400" basis={from.gender}>
-          <input type="range" min={0} max={100} step={5} value={gender.female} disabled={disabled} onChange={(e) => { const f = +e.target.value; const other = gender.other; setDemo({ gender: { female: f, male: Math.max(0, 100 - f - other), other } }); }} className="w-full accent-pink-500 cursor-pointer h-1.5" />
-          <div className="flex justify-between text-[9px] text-muted-foreground/50"><span>men {gender.male}%</span><span>non-binary {gender.other}%</span></div>
+        <Row label="Women" value={`${gender.female}%`} basis={from.gender}>
+          <Range min={0} max={100} step={5} value={gender.female} onChange={(f) => { const other = gender.other; setDemo({ gender: { female: f, male: Math.max(0, 100 - f - other), other } }); }} disabled={disabled} />
+          <div className="flex justify-between text-[10px] text-muted-foreground/50 -mt-0.5"><span>men {gender.male}%</span><span>non-binary {gender.other}%</span></div>
         </Row>
-        <Row label="Where they live" value={demo.regions?.length ? `${demo.regions.length} place${demo.regions.length > 1 ? "s" : ""}` : "from the evidence"} color={demo.regions?.length ? "text-sky-400" : "text-muted-foreground/60"} basis={from.regions}>
+        <Row label="Where they live" value={demo.regions?.length ? `${demo.regions.length} place${demo.regions.length > 1 ? "s" : ""}` : "from the evidence"} muted={!demo.regions?.length} basis={from.regions}>
           <input
             value={(demo.regions ?? []).join(", ")}
             disabled={disabled}
             onChange={(e) => setDemo({ regions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
-            placeholder="e.g. Greater Manchester, Leeds — comma separated"
-            className="w-full bg-muted/50 border border-border rounded-lg px-2 py-1.5 text-[11px] text-foreground placeholder-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            placeholder="Greater Manchester, Leeds — comma separated"
+            className="field field-sm"
           />
         </Row>
-        <div className="grid grid-cols-3 gap-1.5">
-          <div><p className="text-[10px] text-muted-foreground mb-1">Settlement<FromResearch basis={from.urban_rural} /></p><Select disabled={disabled} value={demo.urban_rural ?? "mixed"} onChange={(v) => setDemo({ urban_rural: v as any })} options={[["mixed", "mixed"], ["urban", "urban"], ["suburban", "suburban"], ["rural", "rural"]]} /></div>
-          <div><p className="text-[10px] text-muted-foreground mb-1">Income<FromResearch basis={from.income} /></p><Select disabled={disabled} value={demo.income ?? "mixed"} onChange={(v) => setDemo({ income: v as any })} options={[["mixed", "mixed"], ["low", "low"], ["middle", "middle"], ["high", "high"]]} /></div>
-          <div><p className="text-[10px] text-muted-foreground mb-1">Education<FromResearch basis={from.education} /></p><Select disabled={disabled} value={demo.education ?? "mixed"} onChange={(v) => setDemo({ education: v as any })} options={[["mixed", "mixed"], ["secondary", "secondary"], ["degree", "degree"], ["postgraduate", "postgrad"]]} /></div>
+        <div className="grid grid-cols-3 gap-2">
+          <div><p className="eyebrow mb-1 inline-flex items-center">Settlement<FromResearch basis={from.urban_rural} compact /></p><Select disabled={disabled} value={demo.urban_rural ?? "mixed"} onChange={(v) => setDemo({ urban_rural: v as any })} options={[["mixed", "mixed"], ["urban", "urban"], ["suburban", "suburban"], ["rural", "rural"]]} /></div>
+          <div><p className="eyebrow mb-1 inline-flex items-center">Income<FromResearch basis={from.income} compact /></p><Select disabled={disabled} value={demo.income ?? "mixed"} onChange={(v) => setDemo({ income: v as any })} options={[["mixed", "mixed"], ["low", "low"], ["middle", "middle"], ["high", "high"]]} /></div>
+          <div><p className="eyebrow mb-1 inline-flex items-center">Education<FromResearch basis={from.education} compact /></p><Select disabled={disabled} value={demo.education ?? "mixed"} onChange={(v) => setDemo({ education: v as any })} options={[["mixed", "mixed"], ["secondary", "secondary"], ["degree", "degree"], ["postgraduate", "postgrad"]]} /></div>
         </div>
-        <input value={demo.notes ?? ""} disabled={disabled} onChange={(e) => setDemo({ notes: e.target.value })} placeholder="Anything else about who they are (optional)" className="w-full bg-muted/50 border border-border rounded-lg px-2 py-1.5 text-[11px] text-foreground placeholder-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50" />
-      </div>
+        <input value={demo.notes ?? ""} disabled={disabled} onChange={(e) => setDemo({ notes: e.target.value })} placeholder="Anything else about who they are" className="field field-sm" />
+      </Section>
+
+      <Divider />
 
       {/* Sentiment */}
-      <div className="glass rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Thermometer className="w-3.5 h-3.5 text-rose-400" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sentiment</span>
-          <span className="text-[10px] text-muted-foreground/50 ml-auto">how they feel</span>
-        </div>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input type="checkbox" checked={sent.follow_evidence !== false} disabled={disabled} onChange={(e) => setSent({ follow_evidence: e.target.checked })} className="mt-0.5 accent-[hsl(var(--primary))]" />
-          <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Follow the evidence.</span> Let the observed for / against split set the mood. Untick to impose your own.{from.mood && <FromResearch basis={from.mood} />}</span>
-        </label>
+      <Section title="How they feel">
+        <SwitchRow
+          on={sent.follow_evidence !== false}
+          onChange={(v) => setSent({ follow_evidence: v })}
+          disabled={disabled}
+          title="Follow the evidence"
+          hint={<>The observed for / against split sets the mood. Turn off to impose your own.{from.mood && <FromResearch basis={from.mood} />}</>}
+        />
         {sent.follow_evidence === false && (
-          <div className="space-y-2 pl-1">
-            <Row label="For" value={`${mood.for}%`} color="text-emerald-400">
-              <input type="range" min={0} max={100} step={5} value={mood.for} disabled={disabled} onChange={(e) => { const f = +e.target.value; const ag = Math.min(mood.against, 100 - f); setSent({ mood: { for: f, against: ag, mixed: 100 - f - ag } }); }} className="w-full accent-emerald-500 cursor-pointer h-1.5" />
+          <div className="space-y-2.5 pl-1 animate-fade-in">
+            <Row label="For" value={`${mood.for}%`}>
+              <Range min={0} max={100} step={5} value={mood.for} fill={FOR} onChange={(f) => { const ag = Math.min(mood.against, 100 - f); setSent({ mood: { for: f, against: ag, mixed: 100 - f - ag } }); }} disabled={disabled} />
             </Row>
-            <Row label="Against" value={`${mood.against}%`} color="text-red-400">
-              <input type="range" min={0} max={100} step={5} value={mood.against} disabled={disabled} onChange={(e) => { const ag = +e.target.value; const f = Math.min(mood.for, 100 - ag); setSent({ mood: { for: f, against: ag, mixed: 100 - f - ag } }); }} className="w-full accent-red-500 cursor-pointer h-1.5" />
+            <Row label="Against" value={`${mood.against}%`}>
+              <Range min={0} max={100} step={5} value={mood.against} fill={AGAINST} onChange={(ag) => { const f = Math.min(mood.for, 100 - ag); setSent({ mood: { for: f, against: ag, mixed: 100 - f - ag } }); }} disabled={disabled} />
             </Row>
-            <div className="flex justify-between text-[11px]"><span className="text-muted-foreground">Mixed / undecided</span><span className="text-slate-400 font-semibold">{mood.mixed}% (auto)</span></div>
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Mixed / undecided</span><span className="text-muted-foreground/70 tabular-nums">{mood.mixed}% auto</span></div>
           </div>
         )}
-        <Dial label="Emotional temperature" value={sent.temperature ?? 5} onChange={(v) => setSent({ temperature: v })} lo="calm" hi="heated" color="text-rose-400" disabled={disabled} basis={from.temperature} />
-        <Dial label="Trust in institutions" value={sent.trust_in_institutions ?? 5} onChange={(v) => setSent({ trust_in_institutions: v })} lo="cynical" hi="trusting" color="text-blue-400" disabled={disabled} basis={from.trust_in_institutions} />
-        <Dial label="Price sensitivity" value={sent.price_sensitivity ?? 5} onChange={(v) => setSent({ price_sensitivity: v })} lo="price-blind" hi="every penny" color="text-teal-400" disabled={disabled} basis={from.price_sensitivity} />
-        <Dial label="Comfort with technology" value={sent.tech_savviness ?? 5} onChange={(v) => setSent({ tech_savviness: v })} lo="wary" hi="early adopter" color="text-cyan-400" disabled={disabled} basis={from.tech_savviness} />
-        <Dial label="Openness to change" value={sent.openness_to_change ?? 5} onChange={(v) => setSent({ openness_to_change: v })} lo="set in their ways" hi="restless" color="text-amber-400" disabled={disabled} basis={from.openness_to_change} />
-      </div>
+        <Dial label="Emotional temperature" value={sent.temperature ?? 5} onChange={(v) => setSent({ temperature: v })} lo="calm" hi="heated" disabled={disabled} basis={from.temperature} />
+        <Dial label="Trust in institutions" value={sent.trust_in_institutions ?? 5} onChange={(v) => setSent({ trust_in_institutions: v })} lo="cynical" hi="trusting" disabled={disabled} basis={from.trust_in_institutions} />
+        <Dial label="Price sensitivity" value={sent.price_sensitivity ?? 5} onChange={(v) => setSent({ price_sensitivity: v })} lo="price-blind" hi="every penny" disabled={disabled} basis={from.price_sensitivity} />
+        <Dial label="Comfort with technology" value={sent.tech_savviness ?? 5} onChange={(v) => setSent({ tech_savviness: v })} lo="wary" hi="early adopter" disabled={disabled} basis={from.tech_savviness} />
+        <Dial label="Openness to change" value={sent.openness_to_change ?? 5} onChange={(v) => setSent({ openness_to_change: v })} lo="set in their ways" hi="restless" disabled={disabled} basis={from.openness_to_change} />
+      </Section>
 
-      {/* Stance + humanity */}
-      <div className="glass rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-purple-400" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stance mix</span>
-        </div>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input type="checkbox" checked={st.follow_plan !== false} disabled={disabled} onChange={(e) => set({ stance: { ...st, follow_plan: e.target.checked } })} className="mt-0.5 accent-[hsl(var(--primary))]" />
-          <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Let the segments decide.</span> Stance follows each group's real relationship to the topic. Untick to target a mix.</span>
-        </label>
+      <Divider />
+
+      {/* Stance */}
+      <Section title="Stance mix">
+        <SwitchRow
+          on={st.follow_plan !== false}
+          onChange={(v) => set({ stance: { ...st, follow_plan: v } })}
+          disabled={disabled}
+          title="Let the segments decide"
+          hint="Stance follows each group's real relationship to the topic. Turn off to target a mix."
+        />
         {st.follow_plan === false && (
-          <div className="space-y-2">
-            <Row label="Direct" value={`${st.direct}%`} color="text-blue-400">
-              <input type="range" min={0} max={100} step={5} value={st.direct} disabled={disabled} onChange={(e) => { const d = +e.target.value; const i = Math.min(st.indirect, 100 - d); set({ stance: { ...st, direct: d, indirect: i, neutral: 100 - d - i } }); }} className="w-full accent-blue-500 cursor-pointer h-1.5" />
+          <div className="space-y-2.5 pl-1 animate-fade-in">
+            <Row label="Direct" value={`${st.direct}%`}>
+              <Range min={0} max={100} step={5} value={st.direct} onChange={(d) => { const i = Math.min(st.indirect, 100 - d); set({ stance: { ...st, direct: d, indirect: i, neutral: 100 - d - i } }); }} disabled={disabled} />
             </Row>
-            <Row label="Indirect" value={`${st.indirect}%`} color="text-purple-400">
-              <input type="range" min={0} max={100} step={5} value={st.indirect} disabled={disabled} onChange={(e) => { const i = +e.target.value; const d = Math.min(st.direct, 100 - i); set({ stance: { ...st, direct: d, indirect: i, neutral: 100 - d - i } }); }} className="w-full accent-purple-500 cursor-pointer h-1.5" />
+            <Row label="Indirect" value={`${st.indirect}%`}>
+              <Range min={0} max={100} step={5} value={st.indirect} onChange={(i) => { const d = Math.min(st.direct, 100 - i); set({ stance: { ...st, direct: d, indirect: i, neutral: 100 - d - i } }); }} disabled={disabled} />
             </Row>
-            <div className="flex justify-between text-[11px]"><span className="text-muted-foreground">Neutral</span><span className="text-slate-400 font-semibold">{neutral}% (auto)</span></div>
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Neutral</span><span className="text-muted-foreground/70 tabular-nums">{neutral}% auto</span></div>
           </div>
         )}
-        <div className="border-t border-border/40 pt-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Heart className="w-3.5 h-3.5 text-pink-400" />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expert ↔ Reactive</span>
-            <span className={`ml-auto text-[11px] font-semibold ${voice.auto ? "text-muted-foreground" : "text-pink-300"}`}>{voice.auto ? "auto" : `${voice.value}`}</span>
-          </div>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" checked={voice.auto} disabled={disabled} onChange={(e) => set({ voice: { ...voice, auto: e.target.checked } })} className="mt-0.5 accent-[hsl(var(--primary))]" />
-            <span className="text-[10px] text-muted-foreground leading-relaxed"><span className="text-foreground/80">Let the system decide</span> from the question how measured or feeling-led the voices should be.</span>
-          </label>
-          <input type="range" min={0} max={100} step={5} value={voice.value} disabled={disabled || voice.auto} onChange={(e) => set({ voice: { auto: false, value: +e.target.value } })} className={`w-full accent-pink-500 cursor-pointer h-1.5 ${voice.auto ? "opacity-40" : ""}`} />
-          <div className="flex justify-between text-[10px] text-muted-foreground/70"><span>expert</span><span>natural</span><span>reactive</span></div>
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Shapes <span className="text-foreground/80">how the personas feel and speak</span> — their sentiment dials and descriptions — never who is in the population: the plan always composes the most realistic mix for this demographic from the statistics.{" "}
-            {voice.auto
-              ? "The plan chooses a value from the question and says why; set it yourself and re-plan to override."
-              : voice.value >= 40 && voice.value <= 60
-                ? "In the middle nothing is imposed: each group speaks in its natural register."
-                : voice.value < 40
-                  ? "Toward expert: cooler sentiment, higher credibility, measured evidence-led descriptions, in proportion to how far left this sits."
-                  : "Toward reactive: hotter sentiment, lower credibility, people reacting from their own jobs, money and lives, in proportion to how far right this sits."}
-          </p>
+      </Section>
+
+      <Divider />
+
+      {/* Voice */}
+      <Section title="Expert ↔ Reactive" aside={voice.auto ? "auto" : `${voice.value}`}>
+        <SwitchRow
+          on={voice.auto}
+          onChange={(v) => set({ voice: { ...voice, auto: v } })}
+          disabled={disabled}
+          title="Let the system decide"
+          hint="From the question: how measured or feeling-led the voices should be."
+        />
+        <div className={voice.auto ? "opacity-50" : ""}>
+          <Range min={0} max={100} step={5} value={voice.value} onChange={(v) => set({ voice: { auto: false, value: v } })} disabled={disabled || voice.auto} />
+          <div className="flex justify-between text-[10px] text-muted-foreground/60 -mt-0.5"><span>expert</span><span>natural</span><span>reactive</span></div>
         </div>
-      </div>
+        <p className="hint">
+          Shapes how the personas feel and speak — never who is in the population.{" "}
+          {voice.auto
+            ? "The plan chooses a value from the question and says why; set it yourself and re-plan to override."
+            : voice.value >= 40 && voice.value <= 60
+              ? "In the middle nothing is imposed: each group speaks in its natural register."
+              : voice.value < 40
+                ? "Toward expert: cooler sentiment, higher credibility, measured evidence-led descriptions."
+                : "Toward reactive: hotter sentiment, lower credibility, people reacting from their own jobs, money and lives."}
+        </p>
+      </Section>
     </div>
   );
 }

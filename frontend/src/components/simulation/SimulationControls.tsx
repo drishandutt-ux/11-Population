@@ -26,7 +26,7 @@ export default function SimulationControls({ sessionId, status, intensity, mode,
       <button
         onClick={() => act(() => api.simulation.pause(sessionId))}
         disabled={loading}
-        className="flex items-center gap-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-400 text-sm font-medium px-4 py-2 rounded-lg transition-all disabled:opacity-50"
+        className="btn btn-sm text-amber-300 bg-amber-500/10 hover:bg-amber-500/15"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />}
         Pause
@@ -40,7 +40,7 @@ export default function SimulationControls({ sessionId, status, intensity, mode,
         <button
           onClick={() => act(() => api.simulation.start(sessionId, intensity, mode))}
           disabled={loading}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg transition-all"
+          className="btn btn-sm btn-primary"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
           Resume
@@ -48,7 +48,7 @@ export default function SimulationControls({ sessionId, status, intensity, mode,
         <button
           onClick={() => act(() => api.simulation.stop(sessionId))}
           disabled={loading}
-          className="flex items-center gap-2 border border-border text-muted-foreground hover:text-foreground text-sm px-3 py-2 rounded-lg transition-all disabled:opacity-50"
+          className="btn btn-sm btn-ghost px-2"
         >
           <Square className="w-4 h-4" />
         </button>

@@ -441,42 +441,38 @@ export default function SessionPage() {
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="border-b border-border/60 px-5 py-3 flex items-center gap-3 shrink-0">
-        <button
-          onClick={() => router.push("/")}
-          className="text-muted-foreground hover:text-foreground transition-colors p-1 -ml-1 rounded"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-medium text-foreground truncate">{session?.title || "Loading…"}</span>
+      {/* One bar: where you are, the tabs, and the run controls. */}
+      <header className="shrink-0 border-b hairline px-4 h-14 flex items-center gap-4">
+        <div className="flex items-center gap-2 min-w-0 shrink-0 max-w-[32%]">
+          <button
+            onClick={() => router.push("/")}
+            className="btn btn-xs btn-ghost px-1.5 -ml-1"
+            title="All sessions"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-semibold text-foreground truncate tracking-tight">{session?.title || "Loading…"}</span>
           {session && <StatusDot status={session.status} />}
         </div>
-        <div className="ml-auto">
+        <nav className="seg mx-auto shrink-0" aria-label="Session sections">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              data-on={activeTab === t.key}
+              className="seg-item"
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <div className="shrink-0 ml-auto">
           {session && (
             <SimulationControls sessionId={id} status={session.status} intensity={intensity} mode={simMode} onUpdate={refreshSession} />
           )}
         </div>
       </header>
-
-      {/* Tabs */}
-      <div className="border-b border-border/60 px-5 flex gap-0 shrink-0">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === t.key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
-      </div>
 
       {/* Tab content — each tab is isolated so one bad payload can't blank the whole session */}
       <div className="flex-1 overflow-hidden min-h-0">
@@ -586,8 +582,8 @@ function StatusDot({ status }: { status: string }) {
     simulating: "simulating", paused: "paused", complete: "complete", error: "error",
   };
   return (
-    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors[status] || colors.created}`} />
+    <span className="chip shrink-0">
+      <span className={`dot ${colors[status] || colors.created}`} />
       {labels[status] || status}
     </span>
   );

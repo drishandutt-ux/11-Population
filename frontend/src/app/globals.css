@@ -4,54 +4,297 @@
 
 @layer base {
   :root {
-    --background: 222 40% 9%;
-    --foreground: 210 20% 88%;
-    --card: 222 40% 11%;
-    --card-foreground: 210 20% 88%;
-    --border: 220 28% 15%;
-    --input: 220 28% 15%;
+    /* A calmer, more neutral dark surface: near-black with a faint cool cast, soft hairline
+       borders, and one accent (teal). Every colour on the page is one of these tokens or a
+       semantic status colour (emerald / amber / red / sky). */
+    --background: 228 14% 7%;
+    --foreground: 220 14% 92%;
+    --card: 228 12% 9.5%;
+    --card-foreground: 220 14% 92%;
+    --border: 228 10% 16%;
+    --input: 228 10% 14%;
     --ring: 170 65% 50%;
-    --primary: 170 65% 52%;
-    --primary-foreground: 222 40% 9%;
-    --muted: 222 35% 13%;
-    --muted-foreground: 215 15% 52%;
-    --accent: 220 28% 15%;
+    --primary: 170 62% 52%;
+    --primary-foreground: 228 14% 7%;
+    --muted: 228 12% 12%;
+    --muted-foreground: 225 8% 56%;
+    --accent: 228 10% 15%;
     --accent-foreground: 210 40% 98%;
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   * {
     @apply border-border;
   }
 
+  html {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    letter-spacing: -0.01em;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: -0.005em;
+    font-feature-settings: "cv11", "ss01", "tnum" 0;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
   }
 
   ::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
-    border-radius: 4px;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+
+  /* Native controls, quietly restyled so a panel of sliders and selects reads as one instrument. */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 16px;
+    background: transparent;
+    cursor: pointer;
+    --range-fill: hsl(var(--primary));
+    --range-pct: 50%;
+  }
+  input[type="range"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--range-fill) 0 var(--range-pct), hsl(var(--border)) var(--range-pct) 100%);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 3px;
+    border-radius: 3px;
+    background: hsl(var(--border));
+  }
+  input[type="range"]::-moz-range-progress {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--range-fill);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5.5px;
+    border-radius: 999px;
+    background: hsl(var(--foreground));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 0 1px hsl(var(--border)), 0 1px 4px rgba(0, 0, 0, 0.4);
+    transition: transform 120ms ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: hsl(var(--foreground));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 0 1px hsl(var(--border)), 0 1px 4px rgba(0, 0, 0, 0.4);
+  }
+  input[type="range"]:not(:disabled):hover::-webkit-slider-thumb,
+  input[type="range"]:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+  input[type="range"]:focus-visible {
+    outline: none;
+  }
+
+  input[type="checkbox"] {
+    accent-color: hsl(var(--primary));
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b90a0' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 1.75rem !important;
+  }
+  select option {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  details > summary {
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@layer components {
+  /* Surfaces. `.glass` is kept as the app-wide card: quieter than before (a hairline and a
+     barely-lighter fill) so every screen calms down without a rewrite. */
+  .glass,
+  .surface {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.7);
+  }
+  .surface-raised {
+    background: hsl(var(--muted) / 0.6);
+    border: 1px solid hsl(var(--border) / 0.8);
+  }
+  .hairline {
+    border-color: hsl(var(--border) / 0.7);
+  }
+
+  .glow-teal {
+    box-shadow: 0 0 24px hsl(var(--primary) / 0.12);
+  }
+
+  /* Type roles */
+  .eyebrow {
+    @apply text-[11px] font-medium text-muted-foreground;
+  }
+  .section-title {
+    @apply text-[13px] font-semibold text-foreground tracking-tight;
+  }
+  .hint {
+    @apply text-[11.5px] leading-relaxed text-muted-foreground/75;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg text-[13px] font-medium whitespace-nowrap select-none transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40;
+  }
+  .btn-sm {
+    @apply h-8 px-3 text-xs rounded-md;
+  }
+  .btn-xs {
+    @apply h-7 px-2.5 text-[11.5px] rounded-md;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground font-semibold hover:brightness-110 active:brightness-95;
+  }
+  .btn-secondary {
+    @apply text-foreground;
+    background: hsl(var(--foreground) / 0.07);
+  }
+  .btn-secondary:hover {
+    background: hsl(var(--foreground) / 0.11);
+  }
+  .btn-ghost {
+    @apply text-muted-foreground hover:text-foreground;
+  }
+  .btn-ghost:hover {
+    background: hsl(var(--foreground) / 0.06);
+  }
+  .btn-outline {
+    @apply text-foreground/90 border border-border hover:border-muted-foreground/40;
+  }
+  .btn-danger {
+    @apply text-red-300 hover:bg-red-500/10;
+  }
+  .btn-accent {
+    @apply text-primary bg-primary/10 hover:bg-primary/15;
+  }
+
+  /* Fields */
+  .field {
+    @apply w-full rounded-lg px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50;
+    background: hsl(var(--foreground) / 0.045);
+    border: 1px solid hsl(var(--border) / 0.9);
+  }
+  .field:hover:not(:disabled) {
+    border-color: hsl(var(--muted-foreground) / 0.4);
+  }
+  .field:focus {
+    border-color: hsl(var(--primary) / 0.6);
+  }
+  .field-sm {
+    @apply px-2.5 py-1.5 text-xs rounded-md;
+  }
+
+  /* Chips: one neutral shape, a few semantic tints. */
+  .chip {
+    @apply inline-flex items-center gap-1 h-[22px] px-2 rounded-full text-[11px] font-medium leading-none whitespace-nowrap text-muted-foreground;
+    background: hsl(var(--foreground) / 0.06);
+  }
+  .chip-on {
+    @apply text-primary bg-primary/10;
+  }
+  .chip-ok {
+    @apply text-emerald-300 bg-emerald-500/10;
+  }
+  .chip-warn {
+    @apply text-amber-300 bg-amber-500/10;
+  }
+  .chip-bad {
+    @apply text-red-300 bg-red-500/10;
+  }
+  .chip-info {
+    @apply text-sky-300 bg-sky-500/10;
+  }
+  .chip-violet {
+    @apply text-violet-300 bg-violet-500/10;
+  }
+  .chip-outline {
+    @apply bg-transparent border border-border;
+  }
+
+  /* Segmented control (tabs, mode pickers) */
+  .seg {
+    @apply inline-flex items-center gap-0.5 p-0.5 rounded-lg;
+    background: hsl(var(--foreground) / 0.05);
+  }
+  .seg-item {
+    @apply inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40;
+  }
+  .seg-item[data-on="true"] {
+    @apply text-foreground shadow-sm;
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px hsl(var(--border) / 0.8);
+  }
+
+  /* Toggle switch */
+  .switch {
+    @apply relative inline-flex h-[18px] w-8 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+    background: hsl(var(--foreground) / 0.14);
+  }
+  .switch[data-on="true"] {
+    background: hsl(var(--primary));
+  }
+  .switch-thumb {
+    @apply pointer-events-none block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform translate-x-0.5;
+  }
+  .switch[data-on="true"] .switch-thumb {
+    @apply translate-x-[15px];
+  }
+
+  /* Status dot */
+  .dot {
+    @apply inline-block w-1.5 h-1.5 rounded-full shrink-0;
   }
 }
 
 @layer utilities {
-  .glass {
-    background: rgba(255, 255, 255, 0.025);
-    border: 1px solid rgba(255, 255, 255, 0.055);
-  }
-
-  .glow-teal {
-    box-shadow: 0 0 20px rgba(62, 207, 178, 0.12);
-  }
-
   .report-prose h1,
   .report-prose h2,
   .report-prose h3 {
@@ -67,6 +310,14 @@
   .report-prose ul { list-style: disc; padding-left: 1.25em; margin-bottom: 0.75em; }
   .report-prose li { margin-bottom: 0.3em; }
   .report-prose strong { color: hsl(var(--foreground)); font-weight: 600; }
+
+  .animate-fade-in {
+    animation: fade-in 220ms ease-out both;
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(3px); }
+    to { opacity: 1; transform: none; }
+  }
 }
 
 /* ── Print / Save as PDF ─────────────────────────────────────────────────── */

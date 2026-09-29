@@ -535,7 +535,7 @@ export default function AgentDirectory({
 
         {/* Simulation settings (mode + intensity) */}
         {!isSimulating && !isComplete && (
-          <div className="glass rounded-2xl p-5 space-y-4">
+          <div className="surface rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Run settings</span>
               <span className="text-[10px] text-muted-foreground/50">
@@ -552,13 +552,13 @@ export default function AgentDirectory({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Activity intensity</span>
-                <span className="text-sm font-bold text-primary tabular-nums">L{intensity} · {INTENSITY_STEPS[Math.min(intensity, MAX_INTENSITY) - 1]?.label}</span>
+                <span className="text-sm font-semibold text-foreground tabular-nums">L{intensity} · {INTENSITY_STEPS[Math.min(intensity, MAX_INTENSITY) - 1]?.label}</span>
               </div>
               <input
                 type="range" min={1} max={MAX_INTENSITY} step={1}
                 value={intensity}
                 onChange={(e) => setIntensity(+e.target.value)}
-                className="w-full accent-teal-500 cursor-pointer h-1.5"
+                style={{ "--range-pct": `${(100 * (intensity - 1)) / (MAX_INTENSITY - 1)}%` } as React.CSSProperties}
               />
               <div className="flex justify-between text-[10px] text-muted-foreground/60">
                 <span>L1 · one post each</span>
@@ -569,19 +569,19 @@ export default function AgentDirectory({
         )}
 
         {!isSimulating && !isComplete && (
-          <div className={`glass rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 ${
-            isIngesting || isPendingSimulation ? "border border-yellow-500/25 bg-yellow-500/5" : ""
+          <div className={`surface rounded-xl p-5 space-y-4 ${
+            isIngesting || isPendingSimulation ? "ring-1 ring-amber-500/25" : ""
           }`}>
-            <div className="flex-1">
+            <div>
               {isIngesting || isPendingSimulation ? (
                 <>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse shrink-0" />
-                    <h3 className="font-semibold text-foreground">
+                    <span className="dot w-2 h-2 bg-amber-400 animate-pulse" />
+                    <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
                       {isPendingSimulation ? "Simulation queued — waiting for ingestion" : "Ingestion in progress"}
                     </h3>
                   </div>
-                  <p className="text-sm text-muted-foreground/70">
+                  <p className="text-[13px] text-muted-foreground">
                     {isPendingSimulation
                       ? "The simulation will start automatically once all content is processed."
                       : `${agents.length} agents ready. Simulation will start automatically when content finishes ingesting.`}
@@ -589,55 +589,52 @@ export default function AgentDirectory({
                 </>
               ) : (
                 <>
-                  <h3 className="font-semibold text-foreground">{agents.length} agents ready to debate</h3>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <h3 className="text-[15px] font-semibold text-foreground tracking-tight">{agents.length} agents ready to debate</h3>
+                  <p className="text-[13px] text-muted-foreground mt-0.5">
                     Start the simulation to watch them discuss your query in a live thread.
                   </p>
                 </>
               )}
+              {scoping && (
+                <p
+                  className={`mt-2 inline-flex items-center gap-1.5 text-[11.5px] ${
+                    scoping.status === "running" ? "text-sky-300"
+                    : scoping.status === "done" ? "text-muted-foreground"
+                    : scoping.status === "error" ? "text-red-300"
+                    : "text-muted-foreground/70"}`}
+                  title="Scoping: the knowledge is tagged by place, role, channel and register and every twin is given only what its profile can reach. It runs on its own when knowledge lands and again, if the graph has grown, before a build, a debate or a probe."
+                >
+                  <span className={`dot ${scoping.status === "running" ? "bg-sky-400 animate-pulse" : scoping.status === "done" ? "bg-sky-400/70" : scoping.status === "error" ? "bg-red-400" : "bg-muted-foreground/40"}`} />
+                  {scoping.status === "running" ? "Scoping the knowledge…"
+                    : scoping.status === "done" ? `Scoped · ${scoping.unitCount ?? 0} units · each twin sees only what it can reach`
+                    : scoping.status === "error" ? "Scoping failed — running on shared knowledge"
+                    : "Scoping runs automatically before the debate"}
+                </p>
+              )}
             </div>
-            <div className="flex gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
               {!isPendingSimulation && (
                 <>
                   <button
                     onClick={() => router.push(`/session/${sessionId}/agents/builder`)}
-                    className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground hover:text-foreground hover:border-border px-4 py-2 rounded-lg transition-all"
+                    className="btn btn-sm btn-ghost"
                     title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup"
                   >
                     <UserPlus className="w-3.5 h-3.5" /> Build your own agent
                   </button>
                   <button
                     onClick={() => setStudioOpen(true)}
-                    className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
+                    className="btn btn-sm btn-secondary"
                     title="Rebuild this population in the Studio: evidence, statistics, dials and a plan you approve"
                   >
                     <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio
                   </button>
                 </>
               )}
-              {scoping && (
-                <span
-                  className={`text-[10px] px-2 py-1 rounded border ${
-                    scoping.status === "running" ? "border-sky-500/40 text-sky-300 bg-sky-500/10 animate-pulse"
-                    : scoping.status === "done" ? "border-sky-500/30 text-sky-300/90 bg-sky-500/5"
-                    : scoping.status === "error" ? "border-red-500/30 text-red-300 bg-red-500/10"
-                    : "border-border text-muted-foreground/70"}`}
-                  title="Scoping: the knowledge is tagged by place, role, channel and register and every twin is given only what its profile can reach. It runs on its own when knowledge lands and again, if the graph has grown, before a build, a debate or a probe."
-                >
-                  {scoping.status === "running" ? "Scoping the knowledge…"
-                    : scoping.status === "done" ? `Scoped · ${scoping.unitCount ?? 0} units · each twin sees only what it can reach`
-                    : scoping.status === "error" ? "Scoping failed — running on shared knowledge"
-                    : "Scoping runs automatically before the debate"}
-                </span>
-              )}
               <button
                 onClick={() => onStartSimulation(intensity, mode)}
                 disabled={isPendingSimulation}
-                className={`flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all ${
-                  isPendingSimulation
-                    ? "bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 cursor-not-allowed"
-                    : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                }`}
+                className={`btn ml-auto ${isPendingSimulation ? "text-amber-300 bg-amber-500/10" : "btn-primary px-5"}`}
               >
                 {isPendingSimulation ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Waiting…</>
@@ -652,7 +649,7 @@ export default function AgentDirectory({
         )}
 
         {isSimulating && (
-          <div className="glass rounded-2xl p-5 flex items-center justify-between">
+          <div className="surface rounded-xl p-5 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
               <span className="font-semibold text-foreground">Simulation running</span>
@@ -661,14 +658,14 @@ export default function AgentDirectory({
             <div className="flex gap-2">
               <button
                 disabled
-                className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground/60 px-4 py-2 rounded-lg cursor-not-allowed"
+                className="btn btn-sm btn-ghost"
                 title="Stop the simulation first — rebuilding replaces the agents that are debating"
               >
                 <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio
               </button>
               <button
                 onClick={onGoToThread}
-                className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 text-blue-400 text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-all"
+                className="btn btn-sm text-sky-300 bg-sky-500/10 hover:bg-sky-500/15"
               >
                 <MessageCircle className="w-4 h-4" />
                 Watch Thread →
@@ -678,7 +675,7 @@ export default function AgentDirectory({
         )}
 
         {isComplete && (
-          <div className="glass rounded-2xl p-5 flex items-center justify-between">
+          <div className="surface rounded-xl p-5 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <span className="text-green-400">✓</span>
               <span className="font-semibold text-foreground">Simulation complete</span>
@@ -686,14 +683,14 @@ export default function AgentDirectory({
             <div className="flex gap-2">
               <button
                 onClick={() => router.push(`/session/${sessionId}/agents/builder`)}
-                className="flex items-center gap-1.5 text-sm border border-border/60 text-muted-foreground hover:text-foreground hover:border-border px-4 py-2 rounded-lg transition-all"
+                className="btn btn-sm btn-ghost"
                 title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup"
               >
                 <UserPlus className="w-3.5 h-3.5" /> Build your own agent
               </button>
               <button
                 onClick={() => setStudioOpen(true)}
-                className="flex items-center gap-1.5 text-sm border border-primary/30 text-primary hover:bg-primary/10 px-4 py-2 rounded-lg transition-all"
+                className="btn btn-sm btn-secondary"
                 title="Change the lineup and rebuild: the Studio keeps this plan, so you can edit segments, move the dials and build again"
               >
                 <Wand2 className="w-3.5 h-3.5" /> Rebuild in Studio

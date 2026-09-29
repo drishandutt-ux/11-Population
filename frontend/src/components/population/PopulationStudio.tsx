@@ -11,7 +11,8 @@ import PlanReview from "@/components/population/PlanReview";
 import SamplingFrameGraph from "@/components/population/SamplingFrameGraph";
 import FrameCard from "@/components/population/FrameCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { ArrowLeft, Users, Sparkles, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Bookmark, Network, UserPlus } from "lucide-react";
+import { SwitchRow } from "@/components/population/controls";
+import { ArrowLeft, Users, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Network, UserPlus, Bookmark, Trash2 } from "lucide-react";
 
 interface Props {
   sessionId: string;
@@ -229,38 +230,41 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   };
 
   const dialsLocked = active;
+  const statusTone = status === "error" ? "chip-bad" : status === "complete" ? "chip-ok" : status === "awaiting_review" || status === "clarifying" || status === "stopped" ? "chip-warn" : "chip-on";
+  const statusText = status === "stopped" && build?.plan ? "stopped — plan ready to build" : status ? STATUS_LABEL[status] || status : null;
 
   return (
     <div className={`${embedded ? "h-full" : "h-screen"} bg-background flex flex-col overflow-hidden`}>
-      <header className="border-b border-border/60 px-5 py-3 flex items-center gap-3 shrink-0">
-        {!embedded && (
-          <button onClick={viewAgents} className="text-muted-foreground hover:text-foreground transition-colors p-1 -ml-1 rounded" title="Back to Agents"><ArrowLeft className="w-4 h-4" /></button>
-        )}
-        <Wand2 className="w-4 h-4 text-primary" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">Population Studio</span>
-            {status && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${status === "error" ? "border-red-500/30 text-red-300" : status === "complete" ? "border-emerald-500/30 text-emerald-300" : status === "awaiting_review" || status === "clarifying" || status === "stopped" ? "border-amber-500/30 text-amber-300" : "border-primary/30 text-primary"}`}>{status === "stopped" && build?.plan ? "stopped — plan ready to build" : STATUS_LABEL[status] || status}</span>}
-          </div>
-          <p className="text-[11px] text-muted-foreground truncate">{embedded ? "Build the population from evidence and statistics, with you in the loop" : session?.title || "Loading…"}</p>
+      {/* One rail: where the build is, and the two things you can open from here. */}
+      <header className="shrink-0 border-b hairline px-5 h-14 flex items-center gap-5">
+        <div className="flex items-center gap-2.5 min-w-0 shrink-0">
+          {!embedded && (
+            <button onClick={viewAgents} className="btn btn-xs btn-ghost -ml-2 px-1.5" title="Back to Agents"><ArrowLeft className="w-4 h-4" /></button>
+          )}
+          <span className="text-sm font-semibold text-foreground tracking-tight">Population Studio</span>
+          {statusText && <span className={`chip ${statusTone}`}>{active && <Loader2 className="w-3 h-3 animate-spin" />}{statusText}</span>}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="hidden lg:block flex-1 min-w-0 max-w-xl mx-auto"><Stepper status={status} /></div>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          {spawn && <span className="inline-flex items-center gap-1.5 text-xs text-primary tabular-nums"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {spawn.current}/{spawn.total} agents</span>}
+          {active && build && (
+            <button disabled={busy} onClick={stop} className="btn btn-sm btn-ghost btn-danger" title={status === "spawning" ? "Stop generating; the personas already written are kept" : "Skip the rest of the gathering and compose the plan from what is on file"}><Square className="w-3 h-3" /> {status === "spawning" ? "Stop & keep" : "Stop & plan now"}</button>
+          )}
           {build && (
-            <button onClick={() => setFrameOpen(true)} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10" title="The cells the population is drawn from, inflating with personas as they are written">
+            <button onClick={() => setFrameOpen(true)} className="btn btn-sm btn-secondary" title="The cells the population is drawn from, inflating with personas as they are written">
               <Network className="w-3.5 h-3.5" /> Sampling frame
-              {(active || spawn) && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
+              {(active || spawn) && <span className="dot bg-primary animate-pulse" />}
             </button>
           )}
-          {spawn && <span className="flex items-center gap-1.5 text-[11px] text-primary"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {spawn.current}/{spawn.total} agents</span>}
           {agentCount > 0 && !spawn && (
-            <button onClick={viewAgents} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border/60 text-muted-foreground hover:text-foreground"><Users className="w-3.5 h-3.5" /> {agentCount} agents</button>
+            <button onClick={viewAgents} className="btn btn-sm btn-secondary"><Users className="w-3.5 h-3.5" /> {agentCount} agents</button>
           )}
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_340px] xl:grid-rows-[minmax(0,1fr)]">
-        {/* Sources */}
-        <aside className="xl:min-h-0 xl:overflow-y-auto border-b xl:border-b-0 xl:border-r border-border/40 p-4 order-2 xl:order-1">
+      <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)_336px] xl:grid-rows-[minmax(0,1fr)]">
+        {/* Inputs */}
+        <aside className="xl:min-h-0 xl:overflow-y-auto border-b xl:border-b-0 xl:border-r hairline px-5 py-5 order-2 xl:order-1">
           <ErrorBoundary label="The sources panel">
             <SourcesPanel
               sessionQuery={session?.query || ""}
@@ -288,148 +292,151 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
         </aside>
 
         {/* Build */}
-        <main className="xl:min-h-0 xl:overflow-y-auto p-4 space-y-4 order-1 xl:order-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Stepper status={status} />
-            {active && build && (
-              <button disabled={busy} onClick={stop} className="ml-auto flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-40" title={status === "spawning" ? "Stop generating; the personas already written are kept" : "Skip the rest of the gathering and compose the plan from what is on file"}><Square className="w-3 h-3" /> {status === "spawning" ? "Stop & keep" : "Stop & plan now"}</button>
+        <main className="xl:min-h-0 xl:overflow-y-auto order-1 xl:order-2">
+          <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 text-xs text-red-200 bg-red-500/10 rounded-lg px-3.5 py-2.5 animate-fade-in"><AlertCircle className="w-4 h-4 shrink-0" /> {error}</div>
+            )}
+
+            {!build && (
+              <div className="pt-10 pb-6 text-center space-y-4 animate-fade-in">
+                <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto"><Wand2 className="w-5 h-5 text-primary" /></div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-semibold text-foreground tracking-tight">Build a population you can vouch for</h2>
+                  <p className="text-[13px] text-muted-foreground max-w-md mx-auto leading-relaxed">
+                    The Studio reads your evidence, gathers base rates from statistics publishers, asks what it can&apos;t infer, and proposes the population as segments you accept, edit or reject before a single agent is written.
+                  </p>
+                </div>
+                <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+                  <button disabled={busy || !session} onClick={startBuild} className="btn btn-primary px-5">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} Detect &amp; plan for {count} agents
+                  </button>
+                  <button onClick={() => router.push(`/session/${id}/agents/builder`)} className="btn btn-ghost" title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup you can load here">
+                    <UserPlus className="w-4 h-4" /> Build your own agent
+                  </button>
+                </div>
+                <p className="hint max-w-md mx-auto">
+                  {archetypes.length > 0
+                    ? `${archetypes.length} archetype${archetypes.length === 1 ? "" : "s"} on file (${archetypes.slice(0, 3).map((a) => a.name).join(", ")}${archetypes.length > 3 ? ", …" : ""}): segments that match one by job are cast from it — its rules and dials kept, the model writing only names, lives and places.`
+                    : "An agent you build with 'use as an archetype' becomes a mould: the plan casts every matching segment from it, keeping its rules and dials."}
+                </p>
+              </div>
+            )}
+
+            {!build && presets.length > 0 && onApplyPreset && (
+              <div className="surface rounded-xl overflow-hidden animate-fade-in">
+                <div className="flex items-center gap-2 px-4 h-11 border-b hairline">
+                  <Bookmark className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-[13px] font-medium text-foreground">Or load a saved lineup</span>
+                </div>
+                <ul className="divide-y divide-border/60">
+                  {presets.map((preset) => (
+                    <li key={preset.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium text-foreground truncate">{preset.name}</div>
+                        <div className="text-[11px] text-muted-foreground tabular-nums">{preset.agent_count} agents · {new Date(preset.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <button onClick={() => onApplyPreset(preset.id)} className="btn btn-sm btn-secondary">Load</button>
+                      {onDeletePreset && (
+                        <button onClick={() => onDeletePreset(preset.id)} className="btn btn-xs btn-ghost px-1.5 text-muted-foreground/50 hover:text-red-300" title="Delete this lineup"><Trash2 className="w-3.5 h-3.5" /></button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {build?.detected && (
+              <div className="surface rounded-xl px-5 py-4 space-y-1.5 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-foreground">Detected</span>
+                  <span className={`chip ${build.detected.confidence >= 60 ? "chip-ok" : "chip-warn"}`}>{build.detected.confidence}% confident</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground/70 capitalize">{build.detected.population_kind} · {build.detected.geography}</span>
+                </div>
+                <p className="text-[13px] text-foreground/90 leading-relaxed">{build.detected.target_population}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{build.detected.decision}</p>
+                {build.detected.segments_hinted?.length ? (
+                  <div className="flex flex-wrap gap-1.5 pt-1">{build.detected.segments_hinted.map((s) => <span key={s} className="chip">{s}</span>)}</div>
+                ) : null}
+              </div>
+            )}
+
+            {build && status === "clarifying" && (
+              <ErrorBoundary label="The questions">
+                <QuestionsCard build={build} onAnswer={answer} busy={busy} />
+              </ErrorBoundary>
+            )}
+
+            {build?.plan && (
+              <ErrorBoundary label="The plan">
+                <PlanReview build={build} onDecide={decide} busyIds={new Set([...busySegs, ...regenerating])} readOnly={status === "spawning"} archetypes={archetypes} />
+              </ErrorBoundary>
+            )}
+
+            {status === "complete" && (
+              <div className="surface rounded-xl p-5 flex items-center gap-4 ring-1 ring-emerald-500/25 animate-fade-in">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0"><Check className="w-[18px] h-[18px] text-emerald-300" /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-foreground">Population built</p>
+                  <p className="text-xs text-muted-foreground">{agentCount} agents carry their segment, demographics and dials. Adjust the dials and re-plan, or go and run them.</p>
+                </div>
+                <button onClick={viewAgents} className="btn btn-sm btn-primary"><Users className="w-3.5 h-3.5" /> View agents</button>
+              </div>
+            )}
+
+            {build?.frame && (
+              <ErrorBoundary label="The sampling frame">
+                <FrameCard build={build} busy={busy} readOnly={active} onAction={frameAction} onEstimateAll={estimateAll} />
+              </ErrorBoundary>
+            )}
+
+            {(build || entries.length > 0 || searching) && (
+              <ErrorBoundary label="The build log">
+                <BuildLog entries={entries} active={active || searching} quiet={!!build?.plan && !active && !searching} />
+              </ErrorBoundary>
             )}
           </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-xs text-red-300 bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2"><AlertCircle className="w-4 h-4 shrink-0" /> {error}</div>
-          )}
-
-          {!build && (
-            <div className="glass rounded-2xl p-6 text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto"><Sparkles className="w-6 h-6 text-primary" /></div>
-              <h2 className="text-base font-semibold text-foreground">Build a population you can vouch for</h2>
-              <p className="text-xs text-muted-foreground max-w-lg mx-auto leading-relaxed">
-                The Studio reads your evidence, gathers base rates from statistics publishers, asks you what it can&apos;t infer, and proposes the population as
-                segments — each with its share, demographics, mood and the logic behind it. You accept, edit or reject every segment before a single agent is written.
-              </p>
-              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
-                <button disabled={busy || !session} onClick={startBuild} className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 py-2.5 rounded-xl text-sm disabled:opacity-50">
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} Detect &amp; plan for {count} agents
-                </button>
-                <button onClick={() => router.push(`/session/${id}/agents/builder`)} className="inline-flex items-center gap-2 border border-border/60 text-muted-foreground hover:text-foreground hover:border-border font-medium px-4 py-2.5 rounded-xl text-sm" title="Write one agent yourself — name, job, place, character and dials — and save it into a lineup you can load here">
-                  <UserPlus className="w-4 h-4" /> Build your own agent
-                </button>
-              </div>
-              <p className="text-[10px] text-muted-foreground/60">
-                {archetypes.length > 0
-                  ? `${archetypes.length} archetype${archetypes.length === 1 ? "" : "s"} on file (${archetypes.slice(0, 3).map((a) => a.name).join(", ")}${archetypes.length > 3 ? ", …" : ""}): segments that match one by job are cast from it — its rules and dials kept, the model writing only names, lives and places.`
-                  : "Tip: an agent you build with 'use as an archetype' becomes a mould — the plan casts every segment that matches its job from it, so its rules and dials are kept and the model writes only names, lives and places."}
-              </p>
-            </div>
-          )}
-
-          {!build && presets.length > 0 && onApplyPreset && (
-            <div className="glass rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Bookmark className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Or load a saved lineup</span>
-              </div>
-              <div className="space-y-2">
-                {presets.map((preset) => (
-                  <div key={preset.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border/40 bg-muted/30">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{preset.name}</div>
-                      <div className="text-[11px] text-muted-foreground">{preset.agent_count} agents · {new Date(preset.created_at).toLocaleDateString()}</div>
-                    </div>
-                    <button onClick={() => onApplyPreset(preset.id)} className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-colors">Load</button>
-                    {onDeletePreset && (
-                      <button onClick={() => onDeletePreset(preset.id)} className="shrink-0 text-xs text-muted-foreground/50 hover:text-red-400 transition-colors px-1" title="Delete this lineup">×</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <ErrorBoundary label="The build log">
-            <BuildLog entries={entries} active={active || searching} />
-          </ErrorBoundary>
-
-          {build?.detected && (
-            <div className="glass rounded-2xl p-4 space-y-1.5">
-              <div className="flex items-center gap-2"><span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Detected</span><span className={`text-[10px] px-1.5 py-0.5 rounded border ${build.detected.confidence >= 60 ? "border-emerald-500/30 text-emerald-300" : "border-yellow-500/30 text-yellow-300"}`}>{build.detected.confidence}% confident</span></div>
-              <p className="text-xs text-foreground/90"><span className="text-muted-foreground">Population:</span> {build.detected.target_population}</p>
-              <p className="text-[11px] text-muted-foreground"><span className="text-foreground/70">{build.detected.population_kind}</span> · {build.detected.geography} · {build.detected.decision}</p>
-              {build.detected.segments_hinted?.length ? <p className="text-[11px] text-muted-foreground/80">Groups implied: {build.detected.segments_hinted.join(" · ")}</p> : null}
-            </div>
-          )}
-
-          {build?.frame && (
-            <ErrorBoundary label="The sampling frame">
-              <FrameCard build={build} busy={busy} readOnly={active} onAction={frameAction} onEstimateAll={estimateAll} />
-            </ErrorBoundary>
-          )}
-
-          {build && status === "clarifying" && (
-            <ErrorBoundary label="The questions">
-              <QuestionsCard build={build} onAnswer={answer} busy={busy} />
-            </ErrorBoundary>
-          )}
-
-          {build?.plan && (
-            <ErrorBoundary label="The plan">
-              <PlanReview build={build} onDecide={decide} busyIds={new Set([...busySegs, ...regenerating])} readOnly={status === "spawning"} archetypes={archetypes} />
-            </ErrorBoundary>
-          )}
-
-          {status === "complete" && (
-            <div className="glass rounded-2xl p-4 flex items-center gap-3 border border-emerald-500/25">
-              <Check className="w-5 h-5 text-emerald-400" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-foreground">Population built</p>
-                <p className="text-[11px] text-muted-foreground">{agentCount} agents carry their segment, demographics and dials. Adjust the dials and re-plan, or go and run them.</p>
-              </div>
-              <button onClick={viewAgents} className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"><Users className="w-3.5 h-3.5" /> View agents</button>
-            </div>
-          )}
         </main>
 
         {/* Dials */}
-        <aside className="xl:min-h-0 flex flex-col border-t xl:border-t-0 xl:border-l border-border/40 order-3">
-          <div className="flex-1 min-h-0 xl:overflow-y-auto p-4">
+        <aside className="xl:min-h-0 flex flex-col border-t xl:border-t-0 xl:border-l hairline order-3">
+          <div className="flex-1 min-h-0 xl:overflow-y-auto px-5 py-5">
             <ErrorBoundary label="The dials">
               <DialsPanel constraints={constraints} onChange={setConstraints} count={count} onCount={setCount} mode={mode} onMode={setMode} disabled={active} />
               {build?.plan?.voice && (
-                <p className="text-[10px] text-pink-300/80 mt-3 leading-relaxed"><span className="font-semibold">Expert ↔ Reactive for this build: {build.plan.voice.value}/100</span>{build.plan.voice.auto ? " (chosen by the system)" : " (set by you)"} · voice only, not composition{build.plan.voice.reason ? ` — ${build.plan.voice.reason}` : ""}</p>
+                <p className="hint mt-3"><span className="text-foreground/80">Expert ↔ Reactive for this build: {build.plan.voice.value}/100</span>{build.plan.voice.auto ? " (chosen by the system)" : " (set by you)"} · voice only, not composition{build.plan.voice.reason ? ` — ${build.plan.voice.reason}` : ""}</p>
               )}
               {constraints.derived_from_research && Object.keys(constraints.derived_from_research).length > 0 && (
-                <p className="text-[10px] text-emerald-300/80 mt-3 leading-relaxed"><span className="font-semibold">Set from the research:</span> {Object.keys(constraints.derived_from_research).map((k) => k.replace(/_/g, " ")).join(", ")}. Move any dial to override it; Re-plan applies your change.</p>
+                <p className="hint mt-3"><span className="text-emerald-300/90">Set from the research:</span> {Object.keys(constraints.derived_from_research).map((k) => k.replace(/_/g, " ")).join(", ")}. Move any dial to override it; Re-plan applies your change.</p>
               )}
             </ErrorBoundary>
-            <label className="flex items-start gap-2 mt-3 cursor-pointer">
-              <input type="checkbox" checked={!!constraints.skip_questions} disabled={active} onChange={(e) => setConstraints((c) => ({ ...c, skip_questions: e.target.checked }))} className="mt-0.5 accent-[hsl(var(--primary))]" />
-              <span className="text-[10px] text-muted-foreground leading-relaxed">Don&apos;t ask me clarifying questions — plan on the defaults.</span>
-            </label>
+            <div className="mt-5 pt-5 border-t hairline">
+              <SwitchRow on={!!constraints.skip_questions} disabled={active} onChange={(v) => setConstraints((c) => ({ ...c, skip_questions: v }))} title="Skip clarifying questions" hint="Plan on the defaults without asking." />
+            </div>
           </div>
-          <div className="p-4 border-t border-border/40 space-y-2 shrink-0 sticky bottom-0 bg-background xl:static">
+          <div className="px-5 py-4 border-t hairline space-y-2 shrink-0 sticky bottom-0 bg-background/95 backdrop-blur xl:static">
             {/* A plan on file can always be built — after review, after a stop, or again after a build. */}
             {build?.plan && !active && (
               <>
-                <button disabled={busy || regenerating.size > 0} onClick={approve} className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm disabled:opacity-50">
+                <button disabled={busy || regenerating.size > 0} onClick={approve} className="btn btn-primary w-full">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {status === "complete" ? "Rebuild" : "Approve & build"} {keptCount} agents · {mode === "pro" ? "Pro" : "Fast"}
                 </button>
-                <button disabled={busy} onClick={replan} className="w-full flex items-center justify-center gap-2 border border-border/60 text-muted-foreground hover:text-foreground font-medium py-2 rounded-xl text-xs disabled:opacity-50">
-                  <RefreshCw className="w-3.5 h-3.5" /> Re-plan with these dials (keeps accepted)
+                <button disabled={busy} onClick={replan} className="btn btn-sm btn-secondary w-full">
+                  <RefreshCw className="w-3.5 h-3.5" /> Re-plan with these dials
                 </button>
-                {regenerating.size > 0 && <p className="text-[10px] text-muted-foreground/70 text-center">Waiting for {regenerating.size} replacement segment{regenerating.size === 1 ? "" : "s"}…</p>}
-                {mode === "pro" && keptCount > 150 && <p className="text-[10px] text-amber-300/90 text-center">Pro writes {keptCount} personas on Sonnet — several minutes and real API spend.</p>}
+                {regenerating.size > 0 && <p className="text-[11px] text-muted-foreground/70 text-center">Waiting for {regenerating.size} replacement segment{regenerating.size === 1 ? "" : "s"}…</p>}
+                {mode === "pro" && keptCount > 150 && <p className="text-[11px] text-amber-300/90 text-center">Pro writes {keptCount} personas on Sonnet — several minutes and real API spend.</p>}
               </>
             )}
             {(!build || (!active && status !== "clarifying")) && (
-              <button disabled={busy || !session} onClick={startBuild} className={`w-full flex items-center justify-center gap-2 font-semibold rounded-xl disabled:opacity-50 ${build?.plan ? "border border-border/60 text-muted-foreground hover:text-foreground py-2 text-xs" : "bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 text-sm"}`}>
+              <button disabled={busy || !session} onClick={startBuild} className={`w-full ${build?.plan ? "btn btn-sm btn-ghost" : "btn btn-primary"}`}>
                 {busy && !build?.plan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className={build?.plan ? "w-3.5 h-3.5" : "w-4 h-4"} />} {build ? "Start a new plan from scratch" : "Detect & plan"} · {count} agents
               </button>
             )}
             {build && status === "clarifying" && (
               <>
                 <p className="text-[11px] text-muted-foreground text-center">Answer the questions in the middle, or</p>
-                <button disabled={busy} onClick={() => answer({}, true)} className="w-full flex items-center justify-center gap-2 border border-border/60 text-muted-foreground hover:text-foreground font-medium py-2 rounded-xl text-xs disabled:opacity-50">
+                <button disabled={busy} onClick={() => answer({}, true)} className="btn btn-sm btn-secondary w-full">
                   <Check className="w-3.5 h-3.5" /> Skip the questions &amp; plan now
                 </button>
               </>
@@ -437,7 +444,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
             {active && build && (
               <>
                 <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> {STATUS_LABEL[status || ""]}</p>
-                <button disabled={busy} onClick={stop} className="w-full flex items-center justify-center gap-2 border border-red-500/30 text-red-300 hover:bg-red-500/10 font-medium py-2 rounded-xl text-xs disabled:opacity-50">
+                <button disabled={busy} onClick={stop} className="btn btn-sm btn-ghost btn-danger w-full">
                   <Square className="w-3.5 h-3.5" /> {status === "spawning" ? "Stop — keep the agents written so far" : "Stop — plan now with what we have"}
                 </button>
               </>

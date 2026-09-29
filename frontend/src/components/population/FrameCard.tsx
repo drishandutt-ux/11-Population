@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, Check, Loader2, Ruler, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, Check, Loader2, Sparkles, Upload, ChevronDown } from "lucide-react";
 import type { FrameCategory, FrameReportCell, PopulationBuild } from "@/lib/api";
 
 /**
@@ -20,15 +20,15 @@ interface Props {
 }
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  found: { label: "found", cls: "border-emerald-500/40 text-emerald-300" },
-  proxy: { label: "proxy", cls: "border-sky-500/40 text-sky-300" },
-  uploaded: { label: "uploaded", cls: "border-yellow-500/40 text-yellow-300" },
-  estimated: { label: "model estimate", cls: "border-orange-500/40 text-orange-300" },
-  skipped: { label: "skipped", cls: "border-border text-muted-foreground" },
-  missing: { label: "no distribution", cls: "border-red-500/40 text-red-300" },
+  found: { label: "found", cls: "chip-ok" },
+  proxy: { label: "proxy", cls: "chip-info" },
+  uploaded: { label: "uploaded", cls: "chip-warn" },
+  estimated: { label: "model estimate", cls: "chip-warn" },
+  skipped: { label: "skipped", cls: "" },
+  missing: { label: "no distribution", cls: "chip-bad" },
 };
 const MODE_META: Record<string, string> = { exact: "matched exactly", weighted: "weighted only", unmatched: "not matched" };
-const LEVEL_CLS: Record<string, string> = { good: "border-emerald-500/40 text-emerald-300", fair: "border-yellow-500/40 text-yellow-300", poor: "border-red-500/40 text-red-300", none: "border-border text-muted-foreground" };
+const LEVEL_CLS: Record<string, string> = { good: "chip-ok", fair: "chip-warn", poor: "chip-bad", none: "" };
 
 function parseCsv(text: string): FrameCategory[] {
   const out: FrameCategory[] = [];
@@ -51,11 +51,11 @@ function Bar({ cell, stage }: { cell: FrameReportCell; stage: "planned" | "achie
   const max = Math.max(cell.target_pct, have, 1);
   const off = Math.abs(have - cell.target_pct);
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_120px_64px] items-center gap-2 text-[11px]">
-      <span className="truncate text-foreground/85" title={cell.label}>{cell.label}{cell.thin && <span className="ml-1 text-amber-400" title="Too few agents to cut by">thin</span>}</span>
-      <div className="relative h-2.5 bg-muted/40 rounded">
-        <div className={`absolute inset-y-0 left-0 rounded ${off <= 5 ? "bg-emerald-500/60" : off <= 12 ? "bg-yellow-500/60" : "bg-red-500/60"}`} style={{ width: `${(100 * have) / max}%` }} />
-        <div className="absolute inset-y-[-2px] w-0.5 bg-foreground/80" style={{ left: `calc(${(100 * cell.target_pct) / max}% - 1px)` }} title={`target ${cell.target_pct}%`} />
+    <div className="grid grid-cols-[minmax(0,1fr)_120px_72px] items-center gap-2 text-xs">
+      <span className="truncate text-foreground/85" title={cell.label}>{cell.label}{cell.thin && <span className="ml-1 text-amber-300" title="Too few agents to cut by">thin</span>}</span>
+      <div className="relative h-1.5 bg-border/70 rounded-full">
+        <div className={`absolute inset-y-0 left-0 rounded-full ${off <= 5 ? "bg-emerald-400/70" : off <= 12 ? "bg-amber-400/70" : "bg-red-400/70"}`} style={{ width: `${(100 * have) / max}%` }} />
+        <div className="absolute -inset-y-[2px] w-0.5 bg-foreground/80 rounded" style={{ left: `calc(${(100 * cell.target_pct) / max}% - 1px)` }} title={`target ${cell.target_pct}%`} />
       </div>
       <span className="text-right tabular-nums text-muted-foreground">{have.toFixed(0)}% <span className="text-muted-foreground/50">/ {cell.target_pct.toFixed(0)}%</span></span>
     </div>
@@ -90,23 +90,22 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
   }
 
   return (
-    <div className="glass rounded-2xl p-4 space-y-3">
+    <div className="surface rounded-xl p-5 space-y-4 animate-fade-in">
       <div className="flex items-center gap-2 flex-wrap">
-        <Ruler className="w-3.5 h-3.5 text-primary" />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sampling frame</span>
+        <h3 className="text-[15px] font-semibold text-foreground tracking-tight">Sampling frame</h3>
         {report && report.level !== "none" && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${LEVEL_CLS[report.level]}`}>
+          <span className={`chip ${LEVEL_CLS[report.level]}`}>
             {report.stage === "achieved" ? "built" : "plan"} · {report.level} · worst cell {report.worst_deviation_pts} pts off
           </span>
         )}
         {report?.ess != null && report.n != null && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground" title="Effective sample size after weighting: how many real people this panel is honestly worth">
+          <span className="chip" title="Effective sample size after weighting: how many real people this panel is honestly worth">
             effective n {report.ess} of {report.n}
           </span>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground/70">{frame.geography || ""}</span>
+        <span className="ml-auto text-[11px] text-muted-foreground/70">{frame.geography || ""}</span>
       </div>
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
+      <p className="hint -mt-1">
         The dimensions this population must be representative on, most important first. The top three are matched exactly; the rest are corrected by weighting. Every distribution says where it came from.
       </p>
 
@@ -115,17 +114,17 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
         <div className="grid grid-cols-3 gap-2">
           {(["tam", "sam", "som"] as const).map((k) => {
             const c = frame.sizing![k] || {};
-            const title = { tam: "TAM · everyone in the place", sam: "SAM · with the condition / in scope", som: "SOM · reached by the system today" }[k];
+            const title = { tam: "Everyone in the place", sam: "With the condition / in scope", som: "Reached by the system today" }[k];
             return (
-              <div key={k} className={`rounded-lg border px-2.5 py-2 ${c.value ? "border-border/50 bg-muted/20" : "border-dashed border-border/40"}`} title={c.label || title}>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{title}</div>
+              <div key={k} className={`rounded-lg px-3 py-2.5 ${c.value ? "surface-raised" : "border border-dashed border-border"}`} title={c.label || title}>
+                <div className="text-[10.5px] text-muted-foreground"><span className="uppercase tracking-wide font-medium text-muted-foreground/80">{k}</span> · {title}</div>
                 {c.value ? (
                   <>
-                    <div className="text-sm font-semibold text-foreground tabular-nums">{c.value}</div>
-                    <div className="text-[10px] text-muted-foreground/80 truncate">{c.label}{c.source ? ` · ${c.source}` : ""}{c.year ? ` ${c.year}` : ""}</div>
+                    <div className="text-base font-semibold text-foreground tabular-nums mt-0.5">{c.value}</div>
+                    <div className="text-[10.5px] text-muted-foreground/80 truncate">{c.label}{c.source ? ` · ${c.source}` : ""}{c.year ? ` ${c.year}` : ""}</div>
                   </>
                 ) : (
-                  <div className="text-[11px] text-muted-foreground/60">not on file</div>
+                  <div className="text-xs text-muted-foreground/50 mt-1">not on file</div>
                 )}
               </div>
             );
@@ -142,67 +141,67 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
           const isGap = t.status === "missing";
           const expanded = !!open[d.key];
           return (
-            <div key={d.key} className={`rounded-xl border px-3 py-2.5 space-y-2 ${isGap ? "border-red-500/25 bg-red-500/5" : "border-border/40 bg-muted/20"}`}>
-              <div className="flex items-start gap-2">
-                <span className="text-[10px] font-bold text-muted-foreground/60 w-4 pt-0.5 tabular-nums">{k + 1}</span>
+            <div key={d.key} className={`rounded-lg px-4 py-3 space-y-2 ${isGap ? "bg-red-500/[0.05] ring-1 ring-red-500/15" : "surface-raised"}`}>
+              <div className="flex items-start gap-3">
+                <span className="text-[11px] font-medium text-muted-foreground/50 w-3 pt-0.5 tabular-nums">{k + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-foreground">{d.label}</span>
-                    {d.equity && <span className="text-[9px] px-1.5 py-0.5 rounded border border-fuchsia-500/30 text-fuchsia-300 bg-fuchsia-500/10" title="Equity by default: every result is reported by deprivation level as well as the headline">equity · always on</span>}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
-                    {rep && rep.mode !== "unmatched" && <span className="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground">{MODE_META[rep.mode]}</span>}
-                    {t.status === "proxy" && <span className="text-[10px] text-sky-300/80">via {t.proxy_attribute}</span>}
-                    {d.kind === "attitudinal" && <span className="text-[10px] text-muted-foreground/60">attitudinal</span>}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[13px] font-medium text-foreground">{d.label}</span>
+                    <span className={`chip ${meta.cls}`}>{meta.label}</span>
+                    {d.equity && <span className="chip chip-violet" title="Equity by default: every result is reported by deprivation level as well as the headline">equity · always on</span>}
+                    {rep && rep.mode !== "unmatched" && <span className="chip chip-outline">{MODE_META[rep.mode]}</span>}
+                    {t.status === "proxy" && <span className="text-[11px] text-sky-300/80">via {t.proxy_attribute}</span>}
+                    {d.kind === "attitudinal" && <span className="text-[11px] text-muted-foreground/60">attitudinal</span>}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{d.why}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{d.why}</p>
                   {t.status !== "missing" && t.status !== "skipped" && (
-                    <p className="text-[10.5px] text-muted-foreground/80 mt-0.5">
+                    <p className="text-[11px] text-muted-foreground/80 mt-0.5">
                       <span className="text-foreground/70">{t.source || "—"}</span>{t.geography ? ` · ${t.geography}` : ""}{t.year ? ` · ${t.year}` : ""}
                       {t.status === "estimated" && typeof t.confidence === "number" ? ` · confidence ${t.confidence}%` : ""}
-                      {t.note && t.status === "estimated" ? <span className="block italic text-orange-300/70">{t.note}</span> : null}
+                      {t.note && t.status === "estimated" ? <span className="block italic text-amber-300/70">{t.note}</span> : null}
                     </p>
                   )}
-                  {t.status === "skipped" && <p className="text-[10.5px] text-muted-foreground/70 mt-0.5">{t.note}</p>}
+                  {t.status === "skipped" && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{t.note}</p>}
                 </div>
                 {(t.categories?.length || 0) > 0 && (
-                  <button onClick={() => setOpen((o) => ({ ...o, [d.key]: !o[d.key] }))} className="text-[10px] text-muted-foreground hover:text-foreground shrink-0">{expanded ? "hide" : `${t.categories.length} cells`}</button>
+                  <button onClick={() => setOpen((o) => ({ ...o, [d.key]: !o[d.key] }))} className="btn btn-xs btn-ghost shrink-0"><ChevronDown className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`} /> {t.categories.length} cells</button>
                 )}
               </div>
 
               {/* cells: target vs planned/achieved */}
               {expanded && (
-                <div className="space-y-1 pl-6">
+                <div className="space-y-1 pl-6 animate-fade-in">
                   {rep?.cells ? rep.cells.map((c) => <Bar key={c.label} cell={c} stage={report!.stage} />) :
                     t.categories.map((c) => (
-                      <div key={c.label} className="grid grid-cols-[minmax(0,1fr)_64px] text-[11px]"><span className="truncate text-foreground/85">{c.label}</span><span className="text-right tabular-nums text-muted-foreground">{c.share_pct}%</span></div>
+                      <div key={c.label} className="grid grid-cols-[minmax(0,1fr)_64px] text-xs"><span className="truncate text-foreground/85">{c.label}</span><span className="text-right tabular-nums text-muted-foreground">{c.share_pct}%</span></div>
                     ))}
-                  {rep && rep.unplaced ? <p className="text-[10px] text-muted-foreground/60">{rep.unplaced} agent{rep.unplaced === 1 ? "" : "s"} could not be placed in a cell</p> : null}
+                  {rep && rep.unplaced ? <p className="text-[11px] text-muted-foreground/60">{rep.unplaced} agent{rep.unplaced === 1 ? "" : "s"} could not be placed in a cell</p> : null}
                 </div>
               )}
 
               {/* the ladder */}
               {isGap && !readOnly && (
                 <div className="pl-6 space-y-2">
-                  <p className="text-[11px] text-red-200/80">No published distribution found for {frame.geography || "this place"}. Choose how to fill it:</p>
+                  <p className="text-xs text-red-200/80">No published distribution found for {frame.geography || "this place"}. Choose how to fill it:</p>
                   <div className="flex flex-wrap gap-1.5 items-center">
-                    <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "estimate" })} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border border-orange-500/40 text-orange-300 hover:bg-orange-500/10 disabled:opacity-40" title="The model states a distribution from what it knows — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
+                    <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "estimate" })} className="btn btn-xs btn-secondary" title="The model states a distribution from what it knows — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
                       {working === d.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Model estimate
                     </button>
                     <input ref={(el) => { fileRefs.current[d.key] = el; }} type="file" accept=".csv,.txt,.tsv" className="hidden" onChange={(e) => onFile(d.key, e.target.files?.[0] || null)} />
-                    <button disabled={busy || working === d.key} onClick={() => fileRefs.current[d.key]?.click()} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10 disabled:opacity-40" title="A CSV of `category, share` — a client panel, a crosstab, a spreadsheet">
+                    <button disabled={busy || working === d.key} onClick={() => fileRefs.current[d.key]?.click()} className="btn btn-xs btn-secondary" title="A CSV of `category, share` — a client panel, a crosstab, a spreadsheet">
                       <Upload className="w-3 h-3" /> Upload a table
                     </button>
-                    <input value={uploadSource[d.key] || ""} onChange={(e) => setUploadSource((s) => ({ ...s, [d.key]: e.target.value }))} placeholder="source of the upload (optional)" className="bg-input border border-border rounded-lg px-2 py-1 text-[11px] w-44" />
+                    <input value={uploadSource[d.key] || ""} onChange={(e) => setUploadSource((s) => ({ ...s, [d.key]: e.target.value }))} placeholder="source of the upload (optional)" className="field field-sm w-44 py-1" />
                     {withData.length > 0 && (
                       <span className="flex items-center gap-1">
-                        <select value={proxyPick[d.key] || ""} onChange={(e) => setProxyPick((s) => ({ ...s, [d.key]: e.target.value }))} className="bg-input border border-border rounded-lg px-2 py-1 text-[11px]">
+                        <select value={proxyPick[d.key] || ""} onChange={(e) => setProxyPick((s) => ({ ...s, [d.key]: e.target.value }))} className="field field-sm w-auto py-1">
                           <option value="">use a proxy…</option>
                           {withData.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                         </select>
-                        <button disabled={busy || !proxyPick[d.key]} onClick={() => act(d.key, { action: "proxy", proxy_of: proxyPick[d.key] })} className="text-[11px] px-2 py-1 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10 disabled:opacity-40">Use</button>
+                        <button disabled={busy || !proxyPick[d.key]} onClick={() => act(d.key, { action: "proxy", proxy_of: proxyPick[d.key] })} className="btn btn-xs btn-secondary">Use</button>
                       </span>
                     )}
-                    <button disabled={busy} onClick={() => act(d.key, { action: "skip" })} className="text-[11px] px-2.5 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground disabled:opacity-40" title="Don't match on it; weight only where a later source appears">Skip</button>
+                    <button disabled={busy} onClick={() => act(d.key, { action: "skip" })} className="btn btn-xs btn-ghost" title="Don't match on it; weight only where a later source appears">Skip</button>
                   </div>
                 </div>
               )}
@@ -212,17 +211,17 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
       </div>
 
       {gaps.length > 0 && !readOnly && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <button disabled={busy} onClick={onEstimateAll} className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-200 hover:bg-orange-500/25 disabled:opacity-40">
-            <Sparkles className="w-3 h-3" /> Use the model's estimate for all {gaps.length} gap{gaps.length === 1 ? "" : "s"}
+        <div className="flex items-center gap-3 flex-wrap">
+          <button disabled={busy} onClick={onEstimateAll} className="btn btn-sm btn-secondary">
+            <Sparkles className="w-3 h-3" /> Use the model&apos;s estimate for all {gaps.length} gap{gaps.length === 1 ? "" : "s"}
           </button>
-          <span className="text-[10px] text-muted-foreground/70">Each will be labelled as a model estimate; the model declines attitudinal ones.</span>
+          <span className="hint">Each will be labelled as a model estimate; the model declines attitudinal ones.</span>
         </div>
       )}
 
       {/* report summary */}
       {report && report.level !== "none" && (
-        <div className="border-t border-border/40 pt-3 space-y-1.5 text-[11px]">
+        <div className="border-t hairline pt-3 space-y-1.5 text-xs">
           <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
             <Check className="w-3 h-3 text-emerald-400" />
             <span>Matched exactly: <span className="text-foreground/85">{report.matched_exactly.join(", ") || "none"}</span></span>
@@ -230,7 +229,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
             {report.unmatched.length > 0 && <span>· not matched: <span className="text-foreground/85">{report.unmatched.join(", ")}</span></span>}
           </div>
           {report.estimated.length > 0 && (
-            <div className="flex items-start gap-2 text-orange-300/90"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Model-estimated distributions: {report.estimated.join(", ")}. The report will say so, and confidence is lower for it.</div>
+            <div className="flex items-start gap-2 text-amber-300/90"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Model-estimated distributions: {report.estimated.join(", ")}. The report will say so, and confidence is lower for it.</div>
           )}
           {report.thin_cells.length > 0 && (
             <div className="flex items-start gap-2 text-amber-300/90"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Not safe to cut by (too few agents): {report.thin_cells.join("; ")}</div>
