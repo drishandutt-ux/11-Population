@@ -273,11 +273,16 @@ def candidates_from_records(records: list[dict]) -> Optional[dict]:
     stuck and the top barriers with their twins."""
     for r in records:
         if r.get("candidates") or r.get("funnel"):
+            hc = r.get("headcount") or {}
             return {"record_id": r.get("id"), "n": int((r.get("estimate") or {}).get("n") or 0),
-                    "funnel": [{"label": f.get("label"), "share": f.get("share"), "reached": f.get("reached")} for f in (r.get("funnel") or [])],
+                    "headcount": {"available": bool(hc.get("available")), "sentence": hc.get("sentence") or "", "reason": hc.get("reason") or "",
+                                  "basis": ((hc.get("denominator") or {}).get("basis") or ("client_supplied" if hc.get("anchors") else "")), "weighted": bool(hc.get("weighted"))},
+                    "funnel": [{"label": f.get("label"), "share": f.get("share"), "reached": f.get("reached"), "people": f.get("people"), "people_low": f.get("people_low"), "people_high": f.get("people_high")}
+                               for f in (r.get("funnel") or [])],
                     "items": [{"id": c.get("id"), "rank": c.get("rank"), "from": (c.get("from") or {}).get("label"), "to": (c.get("to") or {}).get("label"),
                                "label": c.get("label"), "n": c.get("n"), "stuck": c.get("stuck"), "conversion": c.get("conversion"), "low": c.get("low"), "high": c.get("high"),
                                "gap": c.get("gap"), "equity_gap": (c.get("equity") or {}).get("gap") if (c.get("equity") or {}).get("available") else None,
+                               "stuck_people": c.get("stuck_people"), "stuck_low": c.get("stuck_low"), "stuck_high": c.get("stuck_high"), "at_risk_people": c.get("at_risk_people"), "basis": c.get("basis") or "",
                                "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "weight_mean": b.get("weight_mean"),
                                              "removals": [x.get("value") if isinstance(x, dict) else x for x in (b.get("removals") or [])][:2],
                                              "agent_ids": (b.get("agent_ids") or [])[:8]} for b in (c.get("barriers") or [])[:3]]}

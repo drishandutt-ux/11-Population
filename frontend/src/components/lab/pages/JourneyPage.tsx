@@ -20,7 +20,10 @@ type Stage = { key: string; label: string; definition?: string };
 type Row = { agent_id: string; name: string; role: string; answer: Record<string, any>; reasoning?: string; segments?: Record<string, string> };
 type Twin = { agent_id: string; name: string; role: string; answering_for: string; barrier: string; removal: string; weight: number; reasoning: string; deprivation?: string; used_units?: any[] };
 type Barrier = { theme: string; count: number; weight_mean: number; removals: string[]; twins: Twin[]; evidence: any[] };
-type Candidate = { id: string; step: number; from: Stage; to: Stage; n: number; through: number; stuck: number; conversion: number; low: number; high: number; barriers: Barrier[]; equity?: any; confidence?: { score: number; drivers: string[] } };
+type Candidate = { id: string; step: number; from: Stage; to: Stage; n: number; through: number; stuck: number; conversion: number; low: number; high: number; barriers: Barrier[]; equity?: any; confidence?: { score: number; drivers: string[] };
+  at_risk_people?: number | null; stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; basis?: string };
+const people = (n: number | null | undefined) => (n == null ? "" : n.toLocaleString());
+const BASIS_LABEL: Record<string, string> = { official_statistic: "official statistic", client_supplied: "client supplied", client_anchored: "scaled from a client figure" };
 
 // Wilson interval, the same as the backend's, so a cut reads with its own uncertainty.
 function wilson(k: number, n: number) {
@@ -89,6 +92,10 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   const last = stages[stages.length - 1];
   const stored: Candidate[] = a.candidates || [];
   const equityFor = (id: string) => stored.find((c) => c.id === id)?.equity;
+  const storedFor = (id: string) => stored.find((c) => c.id === id);
+  const hc = a.headcount || null;
+  const showPeople = Boolean(hc?.available) && !filtered;
+  const funnelPeople = (key: string) => (a.funnel || []).find((f: any) => f.key === key);
 
   return (
     <div className="space-y-5">
@@ -123,17 +130,34 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
           <span className="text-muted-foreground/60"> — share who have reached each step</span>
         </div>
         <div className="space-y-1.5">
-          {view.funnel.map((f, k) => (
-            <div key={f.key} className="flex items-center gap-3 text-xs">
-              <span className="w-5 text-muted-foreground tabular-nums">{k + 1}.</span>
-              <span className="w-44 truncate text-foreground/90" title={f.definition}>{f.label}</span>
-              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${k === stages.length - 1 ? "bg-emerald-400/70" : "bg-primary/70"}`} style={{ width: `${Math.round(f.share * 100)}%` }} />
+          {view.funnel.map((f, k) => {
+            const fp = showPeople ? funnelPeople(f.key) : null;
+            return (
+              <div key={f.key} className="flex items-center gap-3 text-xs">
+                <span className="w-5 text-muted-foreground tabular-nums">{k + 1}.</span>
+                <span className="w-44 truncate text-foreground/90" title={f.definition}>{f.label}</span>
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${k === stages.length - 1 ? "bg-emerald-400/70" : "bg-primary/70"}`} style={{ width: `${Math.round(f.share * 100)}%` }} />
+                </div>
+                <span className="w-28 text-right text-muted-foreground tabular-nums">{pct(f.share)} <span className="opacity-60">({f.reached})</span></span>
+                {showPeople && (
+                  <span className={`w-36 text-right tabular-nums ${fp?.people != null ? "text-foreground/85" : "text-muted-foreground/50"}`}
+                    title={fp?.people != null ? `${BASIS_LABEL[fp.basis] || fp.basis}${fp.people_low != null && fp.people_low !== fp.people_high ? ` · ${people(fp.people_low)}–${people(fp.people_high)}` : ""}${fp.anchor ? ` · scaled from '${fp.anchor}'` : ""}` : "no figure for this step"}>
+                    {fp?.people != null ? <>≈{people(fp.people)} <span className="opacity-60">{fp.fixed ? "fixed" : "people"}</span></> : "—"}
+                  </span>
+                )}
               </div>
-              <span className="w-28 text-right text-muted-foreground tabular-nums">{pct(f.share)} <span className="opacity-60">({f.reached})</span></span>
-            </div>
-          ))}
+            );
+          })}
         </div>
+        {hc && !filtered && (
+          <p className="text-[10px] mt-2" title="A headcount is a published or client-supplied denominator multiplied by the simulated share; it is no more real than the share.">
+            {hc.available
+              ? <span className="text-muted-foreground/80">Headcounts: {hc.sentence}{hc.weighted && hc.ess ? ` Effective n ${hc.ess}.` : ""}</span>
+              : <span className="text-yellow-300/70">Headcounts not available — {hc.reason}</span>}
+          </p>
+        )}
+        {hc?.available && filtered && <p className="text-[10px] text-muted-foreground/60 mt-2">Headcounts are for the whole population; a cut shows shares only.</p>}
         <p className="text-[11px] text-foreground/70 mt-3 leading-relaxed">
           {!filtered && a.sentence
             ? a.sentence
@@ -161,6 +185,9 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                     <span className="flex-1 text-foreground/95 font-medium">{c.from.label} <span className="text-muted-foreground font-normal">→</span> {c.to.label}</span>
                     <span className="text-muted-foreground tabular-nums">{pct(c.conversion)} get through <span className="opacity-60">({pct(c.low)}–{pct(c.high)})</span></span>
                     <span className="text-muted-foreground/80 tabular-nums w-24 text-right">{c.stuck} of {c.n} stuck</span>
+                    {showPeople && (() => { const sc = storedFor(c.id); return sc?.stuck_people != null
+                      ? <span className="text-foreground/90 tabular-nums w-40 text-right" title={`${BASIS_LABEL[sc.basis || ""] || sc.basis} · of ≈${people(sc.at_risk_people)} at '${c.from.label}'`}>≈{people(sc.stuck_people)} people <span className="opacity-60">{sc.stuck_low != null && sc.stuck_low !== sc.stuck_high ? `(${people(sc.stuck_low)}–${people(sc.stuck_high)})` : "fixed"}</span></span>
+                      : <span className="text-muted-foreground/50 w-40 text-right">—</span>; })()}
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 pl-8">
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden flex">
@@ -181,7 +208,8 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                 {isOpen && (
                   <div className="px-3 pb-3 pl-11 space-y-3">
                     <p className="text-[11px] text-foreground/70">
-                      Candidate outcome: <span className="text-foreground/90">share of those at &lsquo;{c.from.label}&rsquo; who reach &lsquo;{c.to.label}&rsquo;</span> — modelled at {pct(c.conversion)} today, so the gap is {pct(1 - c.conversion)} of {c.n}.
+                      Candidate outcome: <span className="text-foreground/90">share of those at &lsquo;{c.from.label}&rsquo; who reach &lsquo;{c.to.label}&rsquo;</span> — modelled at {pct(c.conversion)} today, so the gap is {pct(1 - c.conversion)} of {c.n}
+                      {(() => { const sc = showPeople ? storedFor(c.id) : null; return sc?.stuck_people != null ? <>: about <span className="text-foreground/90 tabular-nums">{people(sc.stuck_people)} people</span> stuck of ≈{people(sc.at_risk_people)} at this step ({BASIS_LABEL[sc.basis || ""] || sc.basis})</> : null; })()}.
                     </p>
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">What stops the next step — by how many named it, then weight</div>
                     {c.barriers.length === 0 && <p className="text-[11px] text-muted-foreground/70">The stuck twins named no barrier.</p>}
@@ -241,7 +269,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       </div>
 
       <p className="text-[10px] text-muted-foreground/60">
-        Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts (L7-02) and movability (L7-03) are the next steps.
+        Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts multiply a published or client-supplied denominator by the simulated share and are no more real than the share. Movability (L7-03) is the next step.
       </p>
     </div>
   );

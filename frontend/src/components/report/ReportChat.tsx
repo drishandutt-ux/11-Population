@@ -1245,7 +1245,14 @@ function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["o
       </div>
       {c.funnel?.length > 0 && (
         <p className="text-[10px] text-muted-foreground/70 mb-1.5">
-          {c.funnel.map((f, i) => <span key={f.label}>{i > 0 ? " → " : ""}{f.label} <span className="text-foreground/80 tabular-nums">{Math.round(f.share * 100)}%</span></span>)}
+          {c.funnel.map((f, i) => <span key={f.label}>{i > 0 ? " → " : ""}{f.label} <span className="text-foreground/80 tabular-nums">{Math.round(f.share * 100)}%</span>{f.people != null ? <span className="tabular-nums"> (≈{f.people.toLocaleString()})</span> : null}</span>)}
+        </p>
+      )}
+      {c.headcount && (
+        <p className="text-[10px] mb-1.5" title="Headcounts are a published or client-supplied denominator multiplied by the simulated share; they are no more real than the share.">
+          {c.headcount.available
+            ? <span className="text-muted-foreground/80">Headcounts: {c.headcount.sentence} <span className={c.headcount.basis === "official_statistic" ? "text-sky-300/80" : "text-pink-300/80"}>· {c.headcount.basis === "official_statistic" ? "official statistic" : "client supplied"}</span></span>
+            : <span className="text-yellow-300/70">Headcounts not available — {c.headcount.reason || "no sizing figure on file"}</span>}
         </p>
       )}
       {c.items?.length === 0 && <p className="text-[10px] text-muted-foreground/60">Nobody reported being stuck at any step.</p>}
@@ -1256,6 +1263,7 @@ function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["o
             <span>
               <span className="font-medium">{it.from} → {it.to}</span>
               <span className="text-muted-foreground"> · {Math.round(it.conversion * 100)}% get through ({Math.round(it.low * 100)}–{Math.round(it.high * 100)}%) · {it.stuck} of {it.n} stuck</span>
+              {it.stuck_people != null && <span className="text-foreground/85 tabular-nums"> · ≈{it.stuck_people.toLocaleString()} people{it.stuck_low != null && it.stuck_high != null && it.stuck_low !== it.stuck_high ? ` (${it.stuck_low.toLocaleString()}–${it.stuck_high.toLocaleString()})` : ""}</span>}
               {it.equity_gap != null && <span className="text-muted-foreground"> · equity gap {it.equity_gap > 0 ? "+" : ""}{it.equity_gap} pts</span>}
               {it.barriers?.length > 0 && (
                 <span className="text-muted-foreground"> · barriers: {it.barriers.map((b, k) => {

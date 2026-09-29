@@ -54,7 +54,10 @@ FIGURE_RULES = (
     "order, cite the record, and cite the twins who raised them. Never invent a barrier or reorder them.\n"
     "- A record with 'candidates ranked' is the only source for where the population drops off and which outcomes are worth "
     "pursuing: name the steps and the candidate outcomes from that list, in that order, with the conversion it gives, cite the "
-    "record, and never propose an outcome that is not on it."
+    "record, and never propose an outcome that is not on it.\n"
+    "- A number of PEOPLE (a headcount) may be stated only where the record gives one ('≈ N people stuck'), with its range, "
+    "and the sentence must say what the denominator was (the record's 'headcounts:' line). Where the record says headcounts are "
+    "not available, give no number of people at all."
 )
 
 
@@ -187,6 +190,9 @@ def candidate_summary(c: dict, probe_id: str) -> dict:
         "from": c.get("from"), "to": c.get("to"), "label": c.get("label"),
         "n": c.get("n", 0), "through": c.get("through", 0), "stuck": c.get("stuck", 0),
         "conversion": c.get("conversion"), "low": c.get("low"), "high": c.get("high"), "gap": c.get("gap"),
+        # Headcounts (brief L7-02): the gap in individuals, with the basis of the denominator.
+        "at_risk_people": c.get("at_risk_people"), "through_people": c.get("through_people"), "stuck_people": c.get("stuck_people"),
+        "stuck_low": c.get("stuck_low"), "stuck_high": c.get("stuck_high"), "basis": c.get("basis") or "",
         "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "share": b.get("share"), "weight_mean": b.get("weight_mean"),
                       "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [], "evidence": b.get("evidence") or []}
                      for b in (c.get("barriers") or [])[:7]],
@@ -235,6 +241,7 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "journey": [{"key": st.get("key"), "label": st.get("label"), "definition": st.get("definition", "")} for st in (agg.get("stages") or [])] if instrument == "journey" else [],
         "funnel": list(agg.get("funnel") or []) if instrument == "journey" else [],
         "candidates": [candidate_summary(c, p.id) for c in (agg.get("candidates") or [])] if instrument == "journey" else [],
+        "headcount": dict(agg.get("headcount") or {}) if instrument == "journey" else {},
         # The documents the twins drew on, by their own citation (L6-05); filled by the aggregator when it has the answers.
         "sources": list(agg.get("sources_used") or []),
         "refusals": refusals,
@@ -311,6 +318,13 @@ def _fmt_value(est: dict) -> str:
     return f"{v} (n={est.get('n', 0)})"
 
 
+def people_phrase(c: dict) -> str:
+    """'≈11,985 people stuck (7,388–50,816)', or '≈78,700 people stuck (held fixed)' when the figure is a client's own."""
+    lo, hi = int(c.get("stuck_low") or 0), int(c.get("stuck_high") or 0)
+    rng = "held fixed" if lo == hi else f"{lo:,}–{hi:,}"
+    return f", ≈{int(c['stuck_people']):,} people stuck ({rng})"
+
+
 def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
     """The records as the report model sees them, numbered R1 … Rn, plus handle → id."""
     handles: dict[str, str] = {}
@@ -334,11 +348,15 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
         if cands:
             bar_line += "; candidates ranked: " + "; ".join(
                 f"{c.get('rank')}. {c.get('from', {}).get('label')} → {c.get('to', {}).get('label')} ({round(_num(c.get('conversion')) * 100)}% get through, "
-                f"{c.get('stuck')} of {c.get('n')} stuck" + (f", top barrier {c['barriers'][0]['theme']}" if c.get("barriers") else "") + ")"
+                f"{c.get('stuck')} of {c.get('n')} stuck"
+                + (people_phrase(c) if c.get("stuck_people") is not None else "")
+                + (f", top barrier {c['barriers'][0]['theme']}" if c.get("barriers") else "") + ")"
                 for c in cands[:7])
             fun = r.get("funnel") or []
             if fun:
-                bar_line += "; funnel: " + " → ".join(f"{f.get('label')} {round(_num(f.get('share')) * 100)}%" for f in fun)
+                bar_line += "; funnel: " + " → ".join(f"{f.get('label')} {round(_num(f.get('share')) * 100)}%" + (f" (≈{int(f['people']):,} people)" if f.get("people") is not None else "") for f in fun)
+            hc = r.get("headcount") or {}
+            bar_line += ("; headcounts: " + str(hc.get("sentence") or "").rstrip(".")) if hc.get("available") else "; headcounts: not available (no sizing figure on file) — give no number of people"
         flags = []
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")

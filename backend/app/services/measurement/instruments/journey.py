@@ -64,15 +64,26 @@ def stages_of(spec: dict) -> list[dict]:
         items = []
     out: list[dict] = []
     for x in items:
+        people, people_source = None, ""
         if isinstance(x, dict):
             label = str(x.get("label") or "").strip()
             definition = str(x.get("definition") or "").strip()
+            # A known headcount for this step (brief L7-02): held fixed, the steps after it scaled from it.
+            try:
+                people = int(float(str(x.get("people")).replace(",", ""))) if str(x.get("people") or "").strip() else None
+            except ValueError:
+                people = None
+            people_source = str(x.get("people_source") or "").strip()
         else:
             label = str(x or "").strip()
             definition = ""
         if not label:
             continue
-        out.append({"key": f"step{len(out) + 1}", "label": label[:80], "definition": definition[:240], "slug": _slug(label)})
+        st = {"key": f"step{len(out) + 1}", "label": label[:80], "definition": definition[:240], "slug": _slug(label)}
+        if people and people > 0:
+            st["people"] = people
+            st["people_source"] = people_source[:160]
+        out.append(st)
     return out
 
 
@@ -252,12 +263,18 @@ def _candidate_barriers(agg: dict) -> list[dict]:
 
 
 async def postprocess(probe_ids: list[str], model: str) -> None:
+    from app.services.measurement import headcount
     await apply_themes(probe_ids, model=model, fields=[BARRIER_KEY, REMOVAL_KEY], max_themes=MAX_BARRIER_THEMES)
     for pid in probe_ids:
         try:
             await trace_evidence(pid, collect=_candidate_barriers)
         except Exception as e:  # noqa: BLE001 — tracing is a convenience; the ranking stands without it
             print(f"[journey] evidence tracing failed for {pid}: {type(e).__name__}: {e}")
+        # Headcounts last (L7-02): the shares are final by now; the denominator comes from the frame or the spec.
+        try:
+            await headcount.attach(pid)
+        except Exception as e:  # noqa: BLE001 — the shares stand without headcounts
+            print(f"[journey] headcounts failed for {pid}: {type(e).__name__}: {e}")
 
 
 # ── proposing the journey ────────────────────────────────────────────────────
@@ -317,7 +334,18 @@ async def suggest_stages(session_id: str, question: str, *, mode: str = "pro") -
                            model=settings.orchestration_model(mode), max_tokens=1200)
     stages = stages_of({"stages": result.get("stages") or []})[:MAX_STAGES]
     return {"outcome": str(result.get("outcome") or "")[:120], "stages": stages, "basis": str(result.get("basis") or "")[:200],
-            "grounded": bool(context_parts)}
+            "grounded": bool(context_parts), "denominator": await frame_denominator(session_id)}
+
+
+async def frame_denominator(session_id: str) -> Optional[dict]:
+    """The in-scope headcount the frame can offer (brief L7-02), for the builder to show before a run."""
+    try:
+        from app.services.measurement.headcount import denominator_from_frame
+        from app.services.population.builder import latest_build
+        bld = await latest_build(session_id)
+        return denominator_from_frame(bld.frame if bld and bld.frame else None)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # ── the instrument ───────────────────────────────────────────────────────────
@@ -340,6 +368,17 @@ class JourneyInstrument(Instrument):
             if st["slug"] in seen:
                 return [f"Two steps are called '{st['label']}'."]
             seen.add(st["slug"])
+        den = spec.get("denominator") if isinstance(spec.get("denominator"), dict) else None
+        if den and str(den.get("people") or "").strip():
+            from app.services.measurement.headcount import parse_figure
+            p = parse_figure(den.get("people"))
+            if not p or p["kind"] != "count":
+                return ["The number of people in scope must be a count, e.g. 141,000."]
+            if not str(den.get("source") or "").strip():
+                return ["A typed number of people in scope needs a source line."]
+        for st in stages:
+            if st.get("people") and not st.get("people_source"):
+                return [f"The known headcount at '{st['label']}' needs a source line."]
         return []
 
 
@@ -347,6 +386,10 @@ INPUTS = (
     InputField(
         key="stages", type="stages", label="The journey", required=True,
         help="The ordered steps a person passes through on the way to the outcome in the question. Proposed from what the session knows; edit before running.",
+    ),
+    InputField(
+        key="denominator", type="denominator", label="People in scope",
+        help="The number of people the journey is about, for headcounts (brief L7-02). Read from the frame's sizing figures when on file; type one with its source otherwise.",
     ),
 )
 

@@ -60,6 +60,7 @@ def statement(run: dict) -> str:
         + (f"; the distribution of {', '.join(est)} was model-estimated, not published" if est else "") + ". "
         f"Its knowledge was limited to the evidence gathered for this session ({ev_line}); each twin was given only what a person of its place, role and register could plausibly reach. "
         "Shares and intervals describe this synthetic panel, not a real population, and every number was counted from the twins' answers, never typed by a model. "
+        "Any headcount is a published or client-supplied denominator multiplied by a simulated share, and is no more real than the share. "
         "This output must not be used as evidence of what real people think or will do, as a substitute for research with real participants, "
         "for clinical, regulatory or safety decisions, or to describe any individual. It is a modelling aid for forming and testing hypotheses before real research. "
         f"Generated {run.get('generated_at', '')} for the question: \"{run.get('question', '')}\"."
@@ -101,7 +102,8 @@ async def run_record(session_id: str) -> dict:
         "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "population": {"n": int(n), "build_id": bld.id if bld else None, "mode": getattr(bld, "mode", None) if bld else None},
         "frame": {"level": rep.get("level") or "none", "matched_exactly": rep.get("matched_exactly") or [], "weighted_only": rep.get("weighted_only") or [],
-                  "estimated": rep.get("estimated") or [], "ess": rep.get("ess"), "thin_cells": rep.get("thin_cells") or [], "geography": (bld.frame or {}).get("geography") if bld and bld.frame else None},
+                  "estimated": rep.get("estimated") or [], "ess": rep.get("ess"), "thin_cells": rep.get("thin_cells") or [], "geography": (bld.frame or {}).get("geography") if bld and bld.frame else None,
+                  "sizing": (bld.frame or {}).get("sizing") if bld and bld.frame else None},
         "evidence": {str(k): int(v) for k, v in ev_rows},
         "scoping_snapshot": snapshot,
         "runs": [{"kind": "probe", "id": p.id, "instrument": p.instrument, "schema_id": p.schema_id, "seed": p.seed, "model": p.model, "prompt_hash": p.prompt_hash,
@@ -125,7 +127,7 @@ def _csv(rows: list[dict], columns: list[str]) -> str:
 
 RECORD_COLUMNS = ["record_id", "kind", "instrument", "label", "question", "metric", "format", "value", "low", "high", "n", "weighted_value", "effective_n",
                   "refused", "unanimity_flagged", "confidence", "frame_level", "scoped", "model", "seed", "created_at", "equity_most", "equity_most_value", "equity_least",
-                  "equity_least_value", "equity_gap", "equity_significant", "top_barrier", "top_candidate", "sources_cited", "caveats"]
+                  "equity_least_value", "equity_gap", "equity_significant", "top_barrier", "top_candidate", "top_candidate_people", "headcount_basis", "sources_cited", "caveats"]
 
 
 def records_rows(records: list[dict]) -> list[dict]:
@@ -147,6 +149,8 @@ def records_rows(records: list[dict]) -> list[dict]:
             "equity_gap": eq.get("gap") if eq.get("available") else "", "equity_significant": eq.get("significant") if eq.get("available") else "",
             "top_barrier": (r.get("barriers") or [{}])[0].get("theme") if r.get("barriers") else "",
             "top_candidate": (r.get("candidates") or [{}])[0].get("label") if r.get("candidates") else "",
+            "top_candidate_people": (r.get("candidates") or [{}])[0].get("stuck_people") if r.get("candidates") else "",
+            "headcount_basis": ((r.get("headcount") or {}).get("denominator") or {}).get("basis", "") if (r.get("headcount") or {}).get("available") else "",
             "sources_cited": len(r.get("sources") or []), "caveats": " | ".join(r.get("caveats") or []),
         })
     return out
@@ -217,6 +221,11 @@ def resolve_citations(text: str, *, agents: dict[str, str], records: dict[str, d
     return re.sub(r"[ \t]{2,}", " ", out)
 
 
+def _people_range(it: dict) -> str:
+    lo, hi = int(it.get("stuck_low") or 0), int(it.get("stuck_high") or 0)
+    return "held fixed" if lo == hi else f"{lo:,}–{hi:,}"
+
+
 def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], agents: dict[str, str], ledger: dict) -> str:
     st = statement(run)
     facts = {f["id"]: f for f in (ledger.get("facts") or [])}
@@ -247,12 +256,18 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
     cands = (structure.get("outcome") or {}).get("candidates") if structure else None
     if cands and cands.get("items"):
         lines += ["## Where the population drops off — candidate outcomes", ""]
+        hc = cands.get("headcount") or {}
+        if hc.get("available"):
+            lines += ["Headcounts: " + hc.get("sentence", "") + " Headcounts are published (or client-supplied) denominators multiplied by the simulated shares, and inherit every caveat below.", ""]
+        else:
+            lines += ["Headcounts: not available — " + (hc.get("reason") or "no sizing figure on file."), ""]
         if cands.get("funnel"):
-            lines += ["Funnel: " + " → ".join(f"{f.get('label')} {round(float(f.get('share') or 0) * 100)}%" for f in cands["funnel"]), ""]
+            lines += ["Funnel: " + " → ".join(f"{f.get('label')} {round(float(f.get('share') or 0) * 100)}%" + (f" (≈{int(f['people']):,} people)" if f.get("people") is not None else "") for f in cands["funnel"]), ""]
         for it in cands["items"]:
             bars = "; ".join(f"{b.get('theme')} ({b.get('count')} twins)" for b in (it.get("barriers") or []))
             lines.append(f"{it.get('rank')}. **{it.get('from')} → {it.get('to')}** — {round(float(it.get('conversion') or 0) * 100)}% get through "
                          f"(95% CI {round(float(it.get('low') or 0) * 100)}–{round(float(it.get('high') or 0) * 100)}%, {it.get('stuck')} of {it.get('n')} stuck)"
+                         + (f"; ≈{int(it['stuck_people']):,} people stuck ({_people_range(it)})" if it.get("stuck_people") is not None else "")
                          + (f"; barriers: {bars}" if bars else ""))
         lines.append("")
     if report and report.get("answer"):

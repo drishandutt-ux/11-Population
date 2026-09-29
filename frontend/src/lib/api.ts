@@ -488,8 +488,10 @@ export type OutcomeRecord = {
   outcome?: string;
   /** Journey (brief L7-01): the steps, the funnel and the ranked candidate outcomes; empty for every other record. */
   journey?: JourneyStage[];
-  funnel?: { key: string; label: string; reached: number; at: number; share: number; low: number; high: number }[];
+  funnel?: { key: string; label: string; reached: number; at: number; share: number; low: number; high: number;
+    people?: number | null; people_low?: number | null; people_high?: number | null; basis?: HeadcountBasis; fixed?: boolean; anchor?: string; share_weighted?: number }[];
   candidates?: JourneyCandidate[];
+  headcount?: JourneyHeadcount;
   refusals: { n: number; refused: number; share: number; reasons: { value: string; count: number; share: number }[]; who: { agent_id: string; name: string; why: string }[] } | null;
   unanimity: { flagged: boolean; top_share: number; widest_split: string; widest_spread: number; n: number; reason?: string } | null;
   weighted: { metric: string; label: string; format: string; weighted: number | null; unweighted: number | null; ess: number; n: number } | null;
@@ -512,8 +514,11 @@ export type ReportStructure = {
   records: { all: string[]; cited: string[] };
   outcome: { caveats: { text: string; record_ids: string[] }[]; barriers?: { record_id: string | null; outcome: string; n: number; items: BarrierItem[] } | null;
     /** Where the population drops off (brief L7-01): the funnel and the ranked candidate outcomes from the newest Journey record. */
-    candidates?: { record_id: string | null; n: number; funnel: { label: string; share: number; reached: number }[];
+    candidates?: { record_id: string | null; n: number;
+      headcount?: { available: boolean; sentence: string; reason: string; basis: HeadcountBasis; weighted: boolean };
+      funnel: { label: string; share: number; reached: number; people?: number | null; people_low?: number | null; people_high?: number | null }[];
       items: { id: string; rank: number; from: string; to: string; label: string; n: number; stuck: number; conversion: number; low: number; high: number; gap: number | null; equity_gap: number | null;
+        stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; at_risk_people?: number | null; basis?: HeadcountBasis;
         barriers: { theme: string; count: number; weight_mean: number | null; removals: string[]; agent_ids: string[] }[] }[] } | null };
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
@@ -527,11 +532,20 @@ export type BarrierItem = { theme: string; count: number; share: number | null; 
   evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string }[] };
 
 /** A candidate outcome (brief L7-01): one step of the journey where the twins drop off. */
-export type JourneyStage = { key: string; label: string; definition?: string };
+export type JourneyStage = { key: string; label: string; definition?: string;
+  /** A known headcount for this step (brief L7-02): held fixed, the steps after it scaled from it. Needs a source. */
+  people?: number | string | null; people_source?: string };
+export type HeadcountBasis = "official_statistic" | "client_supplied" | "client_anchored" | "";
 export type JourneyCandidate = { id: string; rank: number; step: number; from: { key: string; label: string }; to: { key: string; label: string }; label: string;
   n: number; through: number; stuck: number; conversion: number; low: number; high: number; gap: number | null;
+  /** Headcounts (brief L7-02): the gap in individuals, when a denominator exists. */
+  at_risk_people?: number | null; through_people?: number | null; stuck_people?: number | null; stuck_low?: number | null; stuck_high?: number | null; basis?: HeadcountBasis;
   barriers: BarrierItem[]; equity: EquityBlock; confidence?: { score: number; drivers: string[] } };
-export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean };
+/** The in-scope slice the frame can offer as a denominator (brief L7-02), or one the analyst typed. */
+export type JourneyDenominator = { people: number; basis: HeadcountBasis; label: string; source: string; year: string; derived?: string };
+export type JourneyHeadcount = { available: boolean; reason?: string; sentence?: string; denominator?: JourneyDenominator | null;
+  anchors?: { step: string; people: number; source: string }[]; weighted?: boolean; ess?: number | null; unit?: string };
+export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean; denominator: JourneyDenominator | null };
 
 export type ClientReport = {
   run: { session_id: string; question: string; title: string; generated_at: string; population: { n: number }; frame: { level: string; matched_exactly: string[]; weighted_only: string[]; estimated: string[]; ess: number | null; thin_cells: string[] }; evidence: Record<string, number>; scoping_snapshot: string | null; runs: any[] };
