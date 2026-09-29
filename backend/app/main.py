@@ -53,7 +53,12 @@ async def _unhandled(request: Request, exc: Exception):
     "Couldn't reach the server" instead of the real message."""
     import traceback
     traceback.print_exception(type(exc), exc, exc.__traceback__)
-    return JSONResponse(status_code=500, content={"detail": f"Server error: {type(exc).__name__}: {str(exc)[:300]}"})
+    # Starlette binds the `Exception` handler to the outermost (server-error) middleware, which
+    # runs OUTSIDE CORSMiddleware — so the CORS headers must be set here by hand, or the browser
+    # still reports a network failure instead of the message below.
+    origin = request.headers.get("origin") or "*"
+    return JSONResponse(status_code=500, content={"detail": f"Server error: {type(exc).__name__}: {str(exc)[:300]}"},
+                        headers={"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Vary": "Origin"})
 
 
 app.include_router(sessions.router, prefix="/api/v1")

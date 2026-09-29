@@ -247,7 +247,7 @@ async def start(session_id: str, *, journey_probe_id: str, candidate_id: str, le
     model = get_settings().agent_model("pro" if mode == "pro" else "fast")
     async with AsyncSessionLocal() as db:
         e = Experiment(
-            id=str(uuid.uuid4()), session_id=session_id, name=f"Lever: {rule['lever']} at {lever_arm.get('from')} → {lever_arm.get('to')}",
+            id=str(uuid.uuid4()), session_id=session_id, name=f"Lever: {rule['lever']} at {lever_arm.get('from')} → {lever_arm.get('to')}"[:160],
             design="within", instrument="journey",
             variants=[{"key": "baseline", "label": "As things are", "spec": {}}, {"key": "lever", "label": rule["lever"], "spec": {"lever": lever_arm}}],
             spec={**base_spec, "lever_run": {"journey_probe_id": journey_probe_id, "candidate_id": candidate.get("id"), "rule_id": rule["id"], "lever": rule["lever"]}},

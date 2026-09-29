@@ -130,14 +130,17 @@ async def start(session_id: str, *, journey_probe_id: str, candidate_id: str, be
 
     inst = instruments.get("journey")
     model = get_settings().agent_model("pro" if mode == "pro" else "fast")
+    # Arm keys are short (`n1`, `n2` …): `probes.variant_key` is VARCHAR(48) in Postgres and a
+    # behaviour key such as `dynamic.deprivation_support_access` would not fit. The behaviour
+    # itself travels in the arm's `spec.nudge.dial`.
     variants = [{"key": "baseline", "label": "As things are", "spec": {"targeting_baseline": True}}]
-    for k in keys:
+    for j, k in enumerate(keys, 1):
         n = nudge_spec(k, pts, menu)
-        variants.append({"key": f"nudge:{k}", "label": f"{n['label']} {pts:+d}", "spec": {"nudge": n}})
+        variants.append({"key": f"n{j}", "label": f"{n['label']} {pts:+d}", "spec": {"nudge": n}})
     async with AsyncSessionLocal() as db:
         e = Experiment(
             id=str(uuid.uuid4()), session_id=session_id,
-            name=f"Behaviours ranked at {(candidate.get('from') or {}).get('label')} → {(candidate.get('to') or {}).get('label')}",
+            name=f"Behaviours ranked at {(candidate.get('from') or {}).get('label')} → {(candidate.get('to') or {}).get('label')}"[:160],
             design="within", instrument="journey", variants=variants,
             spec={**shared, "targeting": {"journey_probe_id": journey_probe_id, "candidate_id": candidate.get("id"), "points": pts, "behaviours": keys, "at_risk": len(ids)}},
             seed=base_seed, model=model, status="queued",
@@ -286,11 +289,12 @@ async def attach_ranking(experiment_id: str) -> None:
         arms = {}
         for v in (e.variants or []):
             k = v.get("key") or ""
-            if not k.startswith("nudge:"):
+            dial = str(((v.get("spec") or {}).get("nudge") or {}).get("dial") or "")
+            if not dial:
                 continue
             p = probes.get(k)
             if p and (p.aggregates or {}).get("transitions"):
-                arms[k[len("nudge:"):]] = (p.aggregates, rows.get(k) or {})
+                arms[dial] = (p.aggregates, rows.get(k) or {})
         t = rank(control_agg=base.aggregates, control_rows=rows["baseline"], arms=arms, candidate_id=info.get("candidate_id"), points=int(info.get("points") or POINTS_DEFAULT),
                  menu=menu, seed=int(e.seed or 0))
         t["journey_probe_id"] = info.get("journey_probe_id")
