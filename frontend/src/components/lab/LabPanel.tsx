@@ -458,11 +458,11 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         )}
 
         {selected && (
-          <div className="space-y-5 max-w-3xl">
+          <div className="space-y-5 max-w-[1400px]">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{instrument.label}</div>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 max-w-3xl">
                   {instrument.inputs.map((f) => selected.spec?.[f.key]).filter((v) => typeof v === "string" && v).join(" · ")}
                 </p>
               </div>

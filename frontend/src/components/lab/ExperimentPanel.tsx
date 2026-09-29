@@ -320,7 +320,7 @@ export default function ExperimentPanel({
         )}
 
         {selected && (
-          <div className="space-y-5 max-w-3xl">
+          <div className="space-y-5 max-w-[1400px]">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{selected.name || "A/B test"}</div>
