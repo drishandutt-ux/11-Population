@@ -13,7 +13,7 @@ may name barriers only from its ranked list.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from app.services.evidence.llm import enum, i, obj, s
 from app.services.measurement import stats
@@ -64,10 +64,15 @@ def _twin(r: dict) -> dict:
             "deprivation": (r.get("segments") or {}).get("deprivation", "")}
 
 
-def rank_barriers(rows: list[dict], *, seed: int = 0) -> list[dict]:
+def is_blocked(answer: dict) -> bool:
+    return answer.get("blocked") in ("yes", "partly")
+
+
+def rank_barriers(rows: list[dict], *, seed: int = 0, blocked_by: Callable[[dict], bool] = is_blocked) -> list[dict]:
     """The ranked list: one entry per coded barrier (falling back to the raw phrase before coding),
-    with its share of all who answered, mean weight, the removals its twins named, and the twins."""
-    blocked = [r for r in rows if r["answer"].get("blocked") in ("yes", "partly")]
+    with its share of all who answered, mean weight, the removals its twins named, and the twins.
+    `blocked_by` says which answers carry a barrier (the Journey tool passes its own test)."""
+    blocked = [r for r in rows if blocked_by(r["answer"])]
     groups: dict[str, list[dict]] = {}
     for r in blocked:
         key = str(r["answer"].get(BARRIER_THEME) or r["answer"].get(BARRIER_KEY) or "").strip()
@@ -132,11 +137,16 @@ def _terms(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z£]{4,}", str(text or "").lower()) if w not in _STOP}
 
 
-async def trace_evidence(probe_id: str) -> None:
+def _all_barriers(agg: dict) -> list[dict]:
+    return list(agg.get("barriers") or [])
+
+
+async def trace_evidence(probe_id: str, *, collect: Callable[[dict], list[dict]] = _all_barriers) -> None:
     """For every ranked barrier, the knowledge units the citing twins could actually see that
     speak to it: each twin's scoped retrieval for the barrier's own words, units counted across
     the twins, the top few kept with their source and provenance class. Quiet when the session
-    is not scoped."""
+    is not scoped. `collect` returns the barrier dicts to trace inside the aggregates (the
+    Journey tool nests its lists under each candidate); they are updated in place."""
     from sqlalchemy import select
     from sqlalchemy.orm.attributes import flag_modified
     from app.core import database as dbm
@@ -146,16 +156,19 @@ async def trace_evidence(probe_id: str) -> None:
 
     async with dbm.AsyncSessionLocal() as db:
         probe = await db.get(Probe, probe_id)
-        if not probe or not isinstance(probe.aggregates, dict) or not probe.aggregates.get("barriers"):
+        if not probe or not isinstance(probe.aggregates, dict):
+            return
+        agg = dict(probe.aggregates)
+        targets = collect(agg)
+        if not targets:
             return
         if not await scoping.is_scoped(probe.session_id):
             return
         agents = {a.id: a for a in (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == probe.session_id))).scalars().all()}
-        agg = dict(probe.aggregates)
         # What the twins actually cited comes first (L6-05: traceable to the documents used).
         from app.models.measurement import ProbeAnswer
         answers = {a.agent_id: (a.answer or {}) for a in (await db.execute(select(ProbeAnswer).where(ProbeAnswer.probe_id == probe_id))).scalars().all()}
-        for b in agg["barriers"]:
+        for b in targets:
             used: dict[str, dict] = {}
             for aid in b.get("agent_ids") or []:
                 for u in (answers.get(aid) or {}).get("used_units") or []:

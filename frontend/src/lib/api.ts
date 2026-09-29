@@ -209,6 +209,9 @@ export const api = {
   },
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
+    /** The Journey tool (brief L7-01): propose the steps to the outcome from what the session knows. */
+    journeySuggest: (sessionId: string, question?: string) =>
+      request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
       request<ProbeEstimate>(`/sessions/${sessionId}/probes/estimate`, { method: "POST", body: JSON.stringify(body) }),
     run: (sessionId: string, body: ProbeRequest) =>
@@ -483,6 +486,10 @@ export type OutcomeRecord = {
   /** The documents the answering twins cited for this record, by their own citation (L6-05), most cited first. */
   sources?: UsedUnit[];
   outcome?: string;
+  /** Journey (brief L7-01): the steps, the funnel and the ranked candidate outcomes; empty for every other record. */
+  journey?: JourneyStage[];
+  funnel?: { key: string; label: string; reached: number; at: number; share: number; low: number; high: number }[];
+  candidates?: JourneyCandidate[];
   refusals: { n: number; refused: number; share: number; reasons: { value: string; count: number; share: number }[]; who: { agent_id: string; name: string; why: string }[] } | null;
   unanimity: { flagged: boolean; top_share: number; widest_split: string; widest_spread: number; n: number; reason?: string } | null;
   weighted: { metric: string; label: string; format: string; weighted: number | null; unweighted: number | null; ess: number; n: number } | null;
@@ -503,7 +510,11 @@ export type ReportStructure = {
   };
   discussion: { record_id: string | null; positions: { value: string; count: number; share: number }[]; n: number; majority: string | null; dissent: { agent_id: string; position: string; confidence: number; verdict: string }[] };
   records: { all: string[]; cited: string[] };
-  outcome: { caveats: { text: string; record_ids: string[] }[]; barriers?: { record_id: string | null; outcome: string; n: number; items: BarrierItem[] } | null };
+  outcome: { caveats: { text: string; record_ids: string[] }[]; barriers?: { record_id: string | null; outcome: string; n: number; items: BarrierItem[] } | null;
+    /** Where the population drops off (brief L7-01): the funnel and the ranked candidate outcomes from the newest Journey record. */
+    candidates?: { record_id: string | null; n: number; funnel: { label: string; share: number; reached: number }[];
+      items: { id: string; rank: number; from: string; to: string; label: string; n: number; stuck: number; conversion: number; low: number; high: number; gap: number | null; equity_gap: number | null;
+        barriers: { theme: string; count: number; weight_mean: number | null; removals: string[]; agent_ids: string[] }[] }[] } | null };
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
@@ -514,6 +525,13 @@ export type UsedUnit = { unit_id: string; source_ref: string; provenance_class: 
 export type BarrierItem = { theme: string; count: number; share: number | null; low?: number | null; high?: number | null; weight_mean: number | null;
   removals: ({ value: string; count: number; share: number } | string)[]; agent_ids: string[];
   evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string }[] };
+
+/** A candidate outcome (brief L7-01): one step of the journey where the twins drop off. */
+export type JourneyStage = { key: string; label: string; definition?: string };
+export type JourneyCandidate = { id: string; rank: number; step: number; from: { key: string; label: string }; to: { key: string; label: string }; label: string;
+  n: number; through: number; stuck: number; conversion: number; low: number; high: number; gap: number | null;
+  barriers: BarrierItem[]; equity: EquityBlock; confidence?: { score: number; drivers: string[] } };
+export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean };
 
 export type ClientReport = {
   run: { session_id: string; question: string; title: string; generated_at: string; population: { n: number }; frame: { level: string; matched_exactly: string[]; weighted_only: string[]; estimated: string[]; ess: number | null; thin_cells: string[] }; evidence: Record<string, number>; scoping_snapshot: string | null; runs: any[] };

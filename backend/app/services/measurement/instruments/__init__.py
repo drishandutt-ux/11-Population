@@ -193,7 +193,7 @@ def _load() -> None:
     global _loaded
     if _loaded:
         return
-    from app.services.measurement.instruments import ask, barriers, choice, purchase_intent, survey, verdict  # noqa: F401
+    from app.services.measurement.instruments import ask, barriers, choice, journey, purchase_intent, survey, verdict  # noqa: F401
     # Only after a clean import: a module that raises must keep raising, not leave the
     # registry half-built and every later lookup silently returning None.
     _loaded = True

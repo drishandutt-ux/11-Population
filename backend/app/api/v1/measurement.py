@@ -113,6 +113,30 @@ def _probe_payload(p: Probe) -> dict:
     }
 
 
+class JourneySuggestRequest(BaseModel):
+    question: Optional[str] = None
+    mode: str = "pro"
+
+
+@router.post("/sessions/{session_id}/journey/suggest")
+async def suggest_journey(
+    session_id: str,
+    body: JourneySuggestRequest,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Propose the journey for the Journey tool (brief L7-01): the ordered steps to the outcome
+    in the question, drawn from the evidence brief, the sampling frame and the knowledge graph.
+    The analyst edits the result before running; nothing is stored here."""
+    session = await get_owned_session(session_id, user, db)
+    from app.services.measurement.instruments import journey as journey_mod
+    question = (body.question or "").strip() or session.query
+    try:
+        return await journey_mod.suggest_stages(session_id, question, mode="pro" if body.mode == "pro" else "fast")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Could not propose the journey: {type(e).__name__}: {str(e)[:160]}")
+
+
 @router.get("/lab/instruments")
 async def list_instruments(user: AuthUser = Depends(get_current_user)):
     """The instrument library. The UI builds its picker from this, so a new instrument

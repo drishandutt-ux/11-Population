@@ -380,6 +380,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
           instrument={instrument}
           values={values}
           onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
+          sessionId={sessionId}
         />
 
         <div>

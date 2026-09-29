@@ -125,7 +125,7 @@ def _csv(rows: list[dict], columns: list[str]) -> str:
 
 RECORD_COLUMNS = ["record_id", "kind", "instrument", "label", "question", "metric", "format", "value", "low", "high", "n", "weighted_value", "effective_n",
                   "refused", "unanimity_flagged", "confidence", "frame_level", "scoped", "model", "seed", "created_at", "equity_most", "equity_most_value", "equity_least",
-                  "equity_least_value", "equity_gap", "equity_significant", "top_barrier", "sources_cited", "caveats"]
+                  "equity_least_value", "equity_gap", "equity_significant", "top_barrier", "top_candidate", "sources_cited", "caveats"]
 
 
 def records_rows(records: list[dict]) -> list[dict]:
@@ -146,6 +146,7 @@ def records_rows(records: list[dict]) -> list[dict]:
             "equity_least": (eq.get("least") or {}).get("label") if eq.get("available") else "", "equity_least_value": (eq.get("least") or {}).get("share") if eq.get("available") else "",
             "equity_gap": eq.get("gap") if eq.get("available") else "", "equity_significant": eq.get("significant") if eq.get("available") else "",
             "top_barrier": (r.get("barriers") or [{}])[0].get("theme") if r.get("barriers") else "",
+            "top_candidate": (r.get("candidates") or [{}])[0].get("label") if r.get("candidates") else "",
             "sources_cited": len(r.get("sources") or []), "caveats": " | ".join(r.get("caveats") or []),
         })
     return out
@@ -242,6 +243,17 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
             names = [agents.get(a) for a in it.get("agent_ids") or [] if agents.get(a)]
             lines.append(f"{k}. **{it.get('theme')}** — {it.get('count')} twins, weight {round(float(it.get('weight_mean') or 0))}/100"
                          + (f"; removed by {', '.join(it.get('removals') or [])}" if it.get("removals") else "") + (f"; raised by {', '.join(names[:4])}" if names else ""))
+        lines.append("")
+    cands = (structure.get("outcome") or {}).get("candidates") if structure else None
+    if cands and cands.get("items"):
+        lines += ["## Where the population drops off — candidate outcomes", ""]
+        if cands.get("funnel"):
+            lines += ["Funnel: " + " → ".join(f"{f.get('label')} {round(float(f.get('share') or 0) * 100)}%" for f in cands["funnel"]), ""]
+        for it in cands["items"]:
+            bars = "; ".join(f"{b.get('theme')} ({b.get('count')} twins)" for b in (it.get("barriers") or []))
+            lines.append(f"{it.get('rank')}. **{it.get('from')} → {it.get('to')}** — {round(float(it.get('conversion') or 0) * 100)}% get through "
+                         f"(95% CI {round(float(it.get('low') or 0) * 100)}–{round(float(it.get('high') or 0) * 100)}%, {it.get('stuck')} of {it.get('n')} stuck)"
+                         + (f"; barriers: {bars}" if bars else ""))
         lines.append("")
     if report and report.get("answer"):
         lines += ["## The report", "", resolve_citations(report["answer"], agents=agents, records=by_id, facts=facts, items=items), ""]

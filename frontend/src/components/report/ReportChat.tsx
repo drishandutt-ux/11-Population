@@ -961,6 +961,7 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
         );
       })}
       {structure?.outcome?.barriers && hasOutcome && <WhatsInTheWay b={structure.outcome.barriers} agentsById={agentsById} />}
+      {structure?.outcome?.candidates && hasOutcome && <WhereTheyDropOff c={structure.outcome.candidates} agentsById={agentsById} />}
       {structure && hasOutcome && <ComputedCaveats caveats={structure.outcome.caveats} />}
     </div>
   );
@@ -1225,6 +1226,52 @@ function WhatsInTheWay({ b, agentsById }: { b: NonNullable<ReportStructure["outc
             </li>
           );
         })}
+      </ol>
+    </div>
+  );
+}
+
+/** Journey (brief L7-01): the funnel in one line and a plain numbered list of the candidate
+ *  outcomes — the step, how many get through, how many are stuck, the top barriers and who raised
+ *  them. The model may only quote candidates from this list, in this order. */
+function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["outcome"]["candidates"]>; agentsById: Record<string, Agent> }) {
+  if (!c.items?.length && !c.funnel?.length) return null;
+  return (
+    <div className="mt-4 rounded-lg border border-border/50 bg-muted/10 px-3.5 py-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">Where the population drops off · candidate outcomes</span>
+        {c.record_id && <button type="button" data-record={c.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">record</button>}
+        <span className="text-[10px] text-muted-foreground/60">n={c.n}</span>
+      </div>
+      {c.funnel?.length > 0 && (
+        <p className="text-[10px] text-muted-foreground/70 mb-1.5">
+          {c.funnel.map((f, i) => <span key={f.label}>{i > 0 ? " → " : ""}{f.label} <span className="text-foreground/80 tabular-nums">{Math.round(f.share * 100)}%</span></span>)}
+        </p>
+      )}
+      {c.items?.length === 0 && <p className="text-[10px] text-muted-foreground/60">Nobody reported being stuck at any step.</p>}
+      <ol className="space-y-1">
+        {c.items.map((it) => (
+          <li key={it.id} className="text-[11px] text-foreground/85 leading-snug flex gap-2">
+            <span className="text-muted-foreground/60 tabular-nums w-4 shrink-0">{it.rank}.</span>
+            <span>
+              <span className="font-medium">{it.from} → {it.to}</span>
+              <span className="text-muted-foreground"> · {Math.round(it.conversion * 100)}% get through ({Math.round(it.low * 100)}–{Math.round(it.high * 100)}%) · {it.stuck} of {it.n} stuck</span>
+              {it.equity_gap != null && <span className="text-muted-foreground"> · equity gap {it.equity_gap > 0 ? "+" : ""}{it.equity_gap} pts</span>}
+              {it.barriers?.length > 0 && (
+                <span className="text-muted-foreground"> · barriers: {it.barriers.map((b, k) => {
+                  const names = b.agent_ids.map((id) => agentsById[id]).filter(Boolean);
+                  return (
+                    <span key={b.theme}>{k > 0 ? "; " : ""}<span className="text-foreground/80 first-letter:uppercase">{b.theme}</span> ({b.count})
+                      {names.length > 0 && <> — {names.slice(0, 3).map((ag, i) => (
+                        <span key={ag.id}>{i > 0 ? ", " : ""}<button type="button" data-twin={ag.id} className="twin-cite text-primary underline decoration-dotted underline-offset-2">{ag.name}</button></span>
+                      ))}{names.length > 3 ? ` +${names.length - 3}` : ""}</>}
+                    </span>
+                  );
+                })}</span>
+              )}
+            </span>
+          </li>
+        ))}
       </ol>
     </div>
   );

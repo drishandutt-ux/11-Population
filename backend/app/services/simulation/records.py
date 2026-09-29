@@ -51,7 +51,10 @@ FIGURE_RULES = (
     "- Every record carries an equity line (most vs least deprived cell). State the gap only as the record gives it, "
     "say when it is not distinguishable at this size, and never read a gap into a record whose equity line is unavailable.\n"
     "- A record with 'barriers ranked' is the only source for what stands in the way: name barriers from that list, in that "
-    "order, cite the record, and cite the twins who raised them. Never invent a barrier or reorder them."
+    "order, cite the record, and cite the twins who raised them. Never invent a barrier or reorder them.\n"
+    "- A record with 'candidates ranked' is the only source for where the population drops off and which outcomes are worth "
+    "pursuing: name the steps and the candidate outcomes from that list, in that order, with the conversion it gives, cite the "
+    "record, and never propose an outcome that is not on it."
 )
 
 
@@ -169,8 +172,28 @@ def _label_for(instrument: str, spec: dict, agg: dict) -> str:
     if instrument == "barriers":
         o = str(spec.get("outcome") or "").strip()
         return f"What's in the way of: {o[:70]}" if o else "What's in the way"
+    if instrument == "journey":
+        stages = agg.get("stages") or []
+        return f"Where the population drops off on the way to: {str(stages[-1].get('label'))[:60]}" if stages else "Where the population drops off"
     q = str(spec.get("question") or "").strip()
     return q[:80] if q else str(instrument).replace("_", " ").title()
+
+
+def candidate_summary(c: dict, probe_id: str) -> dict:
+    """One candidate outcome as the record carries it (L7-01): the stable id, the step, the
+    modelled conversion, the gap, who is stuck, the ranked barriers and the deprivation block."""
+    return {
+        "id": f"{probe_id}:{c.get('id')}", "rank": c.get("rank"), "step": c.get("step"),
+        "from": c.get("from"), "to": c.get("to"), "label": c.get("label"),
+        "n": c.get("n", 0), "through": c.get("through", 0), "stuck": c.get("stuck", 0),
+        "conversion": c.get("conversion"), "low": c.get("low"), "high": c.get("high"), "gap": c.get("gap"),
+        "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "share": b.get("share"), "weight_mean": b.get("weight_mean"),
+                      "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [], "evidence": b.get("evidence") or []}
+                     for b in (c.get("barriers") or [])[:7]],
+        "equity": c.get("equity") or {},
+        "confidence": confidence_for(n=int(c.get("n") or 0), low=c.get("low"), high=c.get("high"), fmt="share", unanimity=None, refusals=None,
+                                     frame_level=None, weighted=False),
+    }
 
 
 def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
@@ -208,6 +231,10 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
                       "weight_mean": b.get("weight_mean"), "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [],
                       "evidence": b.get("evidence") or []} for b in (agg.get("barriers") or [])] if instrument == "barriers" else [],
         "outcome": str(agg.get("outcome") or "") if instrument == "barriers" else "",
+        # Candidate outcomes (brief L7-01): one per step where the twins drop off, ranked; each with a stable id.
+        "journey": [{"key": st.get("key"), "label": st.get("label"), "definition": st.get("definition", "")} for st in (agg.get("stages") or [])] if instrument == "journey" else [],
+        "funnel": list(agg.get("funnel") or []) if instrument == "journey" else [],
+        "candidates": [candidate_summary(c, p.id) for c in (agg.get("candidates") or [])] if instrument == "journey" else [],
         # The documents the twins drew on, by their own citation (L6-05); filled by the aggregator when it has the answers.
         "sources": list(agg.get("sources_used") or []),
         "refusals": refusals,
@@ -303,6 +330,15 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
         eq_line = equity_mod.prompt_line(r.get("equity") or {})
         bars = r.get("barriers") or []
         bar_line = ("; barriers ranked: " + "; ".join(f"{k}. {b['theme']} ({b['count']} twins, weight {round(float(b.get('weight_mean') or 0))}/100)" for k, b in enumerate(bars[:7], 1))) if bars else ""
+        cands = r.get("candidates") or []
+        if cands:
+            bar_line += "; candidates ranked: " + "; ".join(
+                f"{c.get('rank')}. {c.get('from', {}).get('label')} → {c.get('to', {}).get('label')} ({round(_num(c.get('conversion')) * 100)}% get through, "
+                f"{c.get('stuck')} of {c.get('n')} stuck" + (f", top barrier {c['barriers'][0]['theme']}" if c.get("barriers") else "") + ")"
+                for c in cands[:7])
+            fun = r.get("funnel") or []
+            if fun:
+                bar_line += "; funnel: " + " → ".join(f"{f.get('label')} {round(_num(f.get('share')) * 100)}%" for f in fun)
         flags = []
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")

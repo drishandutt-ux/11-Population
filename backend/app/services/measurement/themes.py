@@ -43,7 +43,16 @@ def _norm(t: str) -> str:
     return " ".join(str(t or "").lower().split())[:120]
 
 
-async def code_factors(factors: list[str], *, session_id: Optional[str], model: str) -> list[str]:
+def _coding_schema(max_themes: int) -> dict:
+    return obj({
+        "themes": arr(obj({
+            "label": s("2-4 word theme label, in the language of the answers, e.g. 'peak-time cost'"),
+            "items": arr(i("indices of the factors that belong to this theme")),
+        }), f"At most {max_themes} themes covering every factor; one theme per factor", max_items=max_themes),
+    })
+
+
+async def code_factors(factors: list[str], *, session_id: Optional[str], model: str, max_themes: int = MAX_THEMES) -> list[str]:
     """One theme label per input factor (aligned by position). Empty factors get ''."""
     uniq: dict[str, int] = {}
     order: list[str] = []
@@ -57,8 +66,9 @@ async def code_factors(factors: list[str], *, session_id: Optional[str], model: 
     sent = order[:MAX_UNIQUE]
     listing = "\n".join(f"{k}. {t}" for k, t in enumerate(sent))
     user = f"FACTORS ({len(sent)}):\n{listing}\n\nCode them into themes."
-    result = await analyze(CODING_SCHEMA, SYSTEM, user, session_id=session_id, label="probe:themes",
-                           model=model, max_tokens=1500)
+    system = SYSTEM if max_themes == MAX_THEMES else SYSTEM.replace("at most 7 themes", f"at most {max_themes} themes")
+    result = await analyze(_coding_schema(max_themes), system, user, session_id=session_id, label="probe:themes",
+                           model=model, max_tokens=1500 + 100 * max(0, max_themes - MAX_THEMES))
     label_of: dict[int, str] = {}
     for theme in result.get("themes") or []:
         label = str(theme.get("label") or "").strip()
@@ -87,7 +97,7 @@ def theme_key_for(field: str) -> str:
 
 
 async def apply_themes(probe_ids: list[str], *, model: Optional[str] = None,
-                       fields: Optional[list[str]] = None) -> None:
+                       fields: Optional[list[str]] = None, max_themes: int = MAX_THEMES) -> None:
     """Code the free-text `fields` (default: the key factor) of every answer in `probe_ids`
     together, write the theme onto each answer, and refresh each probe's aggregates. Safe to
     call twice (recodes)."""
@@ -110,7 +120,7 @@ async def apply_themes(probe_ids: list[str], *, model: Optional[str] = None,
                 continue
             try:
                 coded[field] = await code_factors(factors, session_id=session_id,
-                                                  model=model or get_settings().agent_model("fast"))
+                                                  model=model or get_settings().agent_model("fast"), max_themes=max_themes)
             except Exception as e:  # noqa: BLE001 — coding is a convenience; the run must not fail on it
                 print(f"[themes] coding failed for {field}, keeping raw text: {type(e).__name__}: {e}")
                 coded[field] = [_norm(f) for f in factors]

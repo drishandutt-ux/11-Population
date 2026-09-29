@@ -267,6 +267,24 @@ def barriers_from_records(records: list[dict]) -> Optional[dict]:
     return None
 
 
+def candidates_from_records(records: list[dict]) -> Optional[dict]:
+    """The newest journey record's candidate outcomes (brief L7-01), for the report's *Where the
+    population drops off* block: the funnel and, per candidate, the step, the conversion, who is
+    stuck and the top barriers with their twins."""
+    for r in records:
+        if r.get("candidates") or r.get("funnel"):
+            return {"record_id": r.get("id"), "n": int((r.get("estimate") or {}).get("n") or 0),
+                    "funnel": [{"label": f.get("label"), "share": f.get("share"), "reached": f.get("reached")} for f in (r.get("funnel") or [])],
+                    "items": [{"id": c.get("id"), "rank": c.get("rank"), "from": (c.get("from") or {}).get("label"), "to": (c.get("to") or {}).get("label"),
+                               "label": c.get("label"), "n": c.get("n"), "stuck": c.get("stuck"), "conversion": c.get("conversion"), "low": c.get("low"), "high": c.get("high"),
+                               "gap": c.get("gap"), "equity_gap": (c.get("equity") or {}).get("gap") if (c.get("equity") or {}).get("available") else None,
+                               "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "weight_mean": b.get("weight_mean"),
+                                             "removals": [x.get("value") if isinstance(x, dict) else x for x in (b.get("removals") or [])][:2],
+                                             "agent_ids": (b.get("agent_ids") or [])[:8]} for b in (c.get("barriers") or [])[:3]]}
+                              for c in (r.get("candidates") or [])[:7]]}
+    return None
+
+
 # ── assembly ─────────────────────────────────────────────────────────────────
 
 def build_structure(*, session_query: str, records: list[dict], headline: Optional[dict], positions: list[dict],
@@ -300,7 +318,8 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
             "dissent": dissent,
         },
         "records": {"all": [r.get("id") for r in records], "cited": list(cited_record_ids)},
-        "outcome": {"caveats": caveats_from_records(records, cited_record_ids), "barriers": barriers_from_records(records)},
+        "outcome": {"caveats": caveats_from_records(records, cited_record_ids), "barriers": barriers_from_records(records),
+                    "candidates": candidates_from_records(records)},
         # L6-03: which source figures the prose cites, and every number it typed with no source.
         "figures": figures or {"facts_cited": [], "items_cited": [], "unsourced": []},
     }
