@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass, EquityBlock, EquityCell } from "@/lib/api";
+import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass, EquityBlock, EquityCell, ReportDelta } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
-  ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle,
-} from "lucide-react";
+  ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle, GitCompare, Printer } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 interface Message {
@@ -60,6 +59,31 @@ export default function ReportChat({
   // A record citation ([[record:…]]) or record card that was clicked: the computed figure behind the claim.
   const [openRecord, setOpenRecord] = useState<{ record: OutcomeRecord; x: number; y: number } | null>(null);
   const [loadedRecords, setLoadedRecords] = useState<OutcomeRecord[]>([]);
+  // Export and the delta view (brief L6-06).
+  const [exporting, setExporting] = useState(false);
+  const [showDelta, setShowDelta] = useState(false);
+  const [delta, setDelta] = useState<ReportDelta | null>(null);
+  const [deltaError, setDeltaError] = useState<string | null>(null);
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const blob = await api.report.exportZip(sessionId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `population-${sessionId.slice(0, 8)}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e: any) {
+      alert(e?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+  async function loadDelta(a?: string, b?: string) {
+    setDeltaError(null);
+    try { setDelta(await api.report.delta(sessionId, a, b)); }
+    catch (e: any) { setDelta(null); setDeltaError(/404|at least twice/.test(e?.message || "") ? "Generate the report again after new research, then compare the two runs here." : e?.message || "Could not compare"); }
+  }
+  useEffect(() => { setDelta(null); }, [reportContent]);
   useEffect(() => {
     if (recordsProp && recordsProp.length) return;
     api.records.list(sessionId).then((r) => setLoadedRecords(r.records || [])).catch(() => {});
@@ -185,12 +209,36 @@ export default function ReportChat({
             <div className="flex items-center gap-2">
               {!isGeneratingReport && reportContent && (
                 <>
+                  <a
+                    href={`/session/${sessionId}/report/client`} target="_blank" rel="noreferrer"
+                    title="The client-facing document: the report, the records, the equity split, what's in the way, the caveats — with the synthetic-population statement at the top and bottom. Print-ready."
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                  >
+                    <FileText className="w-3 h-3" />
+                    Client report
+                  </a>
+                  <button
+                    onClick={handleExport} disabled={exporting}
+                    title="Download every outcome record (JSON + CSV), the report with its structure, the source ledger, the roster and the run record as one zip. Every file carries the synthetic-population statement."
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-3 h-3" />
+                    {exporting ? "Exporting…" : "Export data"}
+                  </button>
+                  <button
+                    onClick={() => { setShowDelta((v) => !v); if (!delta && !deltaError) loadDelta(); }}
+                    title="What changed since the previous run of this report: the headline, the positions, the equity gap, the barriers, the dissent, the evidence base."
+                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border transition-colors ${showDelta ? "border-primary/50 text-primary" : "border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40"}`}
+                  >
+                    <GitCompare className="w-3 h-3" />
+                    Compare runs
+                  </button>
                   <button
                     onClick={handleSaveAsPDF}
                     className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
                   >
-                    <Download className="w-3 h-3" />
-                    Save as PDF
+                    <Printer className="w-3 h-3" />
+                    Print
                   </button>
                   {onMakeReport && (
                     <button
@@ -222,9 +270,16 @@ export default function ReportChat({
                 <span className="text-sm">Generating report from all agents and sources…</span>
               </div>
             ) : (
-              <div id="report-printable" className="max-w-2xl" onClick={handleCiteClick}>
-                <ReportDocument content={reportContent!} agentsById={agentsById} records={records} structure={structure} />
-              </div>
+              <>
+                {showDelta && (
+                  <div className="max-w-2xl mb-4 no-print" onClick={handleCiteClick}>
+                    <DeltaPanel delta={delta} error={deltaError} agentsById={agentsById} onPick={(a, b) => loadDelta(a, b)} />
+                  </div>
+                )}
+                <div id="report-printable" className="max-w-2xl" onClick={handleCiteClick}>
+                  <ReportDocument content={reportContent!} agentsById={agentsById} records={records} structure={structure} />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -1003,6 +1058,69 @@ function Positions({ d, agentsById }: { d: ReportStructure["discussion"]; agents
         </div>
       ) : (
         <div className="text-[10px] text-muted-foreground/70">No dissent: every twin who answered held the majority position.</div>
+      )}
+    </div>
+  );
+}
+
+// ── The delta view (brief L6-06) ──────────────────────────────────────────────
+// What changed between two runs of the same question, as plain then → now lines: the headline
+// and whether its change is real, the positions, the equity gap, the barriers that appeared,
+// dropped or moved, the dissenters who joined or left, the evidence base, the computed confidence.
+
+function pctOr(v: number | null | undefined): string { return typeof v === "number" ? `${Math.round(v * 100)}%` : "—"; }
+
+function DeltaPanel({ delta, error, agentsById, onPick }: { delta: ReportDelta | null; error: string | null; agentsById: Record<string, Agent>; onPick: (a?: string, b?: string) => void }) {
+  if (error) return <div className="rounded-lg border border-border/50 bg-muted/10 px-3.5 py-3 text-[11px] text-muted-foreground">{error}</div>;
+  if (!delta) return <div className="rounded-lg border border-border/50 bg-muted/10 px-3.5 py-3 text-[11px] text-muted-foreground">Comparing runs…</div>;
+  const when = (t: string | null) => (t ? new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
+  const h = delta.headline;
+  const Row = ({ label, then, now, note }: { label: string; then: string; now: string; note?: string }) => (
+    <div className="flex items-baseline gap-2 text-[11px]">
+      <span className="w-40 shrink-0 text-muted-foreground">{label}</span>
+      <span className="text-foreground/70 tabular-nums">{then}</span>
+      <span className="text-muted-foreground/50">→</span>
+      <span className="text-foreground/95 tabular-nums font-medium">{now}</span>
+      {note && <span className="text-muted-foreground/70">· {note}</span>}
+    </div>
+  );
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/10 px-3.5 py-3 space-y-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground/80">What changed</span>
+        <span className="text-[10px] text-muted-foreground/70">{when(delta.a.created_at)} → {when(delta.b.created_at)}</span>
+        {delta.available.length > 2 && (
+          <span className="ml-auto text-[10px] text-muted-foreground/70">compare with:{" "}
+            {delta.available.filter((r) => r.id !== delta.b.report_id).map((r) => (
+              <button key={r.id} type="button" onClick={() => onPick(r.id, delta.b.report_id)} className={`ml-1 underline decoration-dotted ${r.id === delta.a.report_id ? "text-primary" : ""}`}>{when(r.created_at)}</button>
+            ))}
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-foreground/85 leading-snug">{delta.summary}</p>
+      <div className="space-y-1">
+        {h && <Row label={h.label || "Headline"} then={pctOr(h.then?.value)} now={pctOr(h.now?.value)} note={h.real === true ? "a real change — the intervals do not overlap" : h.real === false ? "not distinguishable — the intervals overlap" : undefined} />}
+        {delta.positions.map((p) => <Row key={p.value} label={`position · ${p.value}`} then={pctOr(p.then)} now={pctOr(p.now)} note={`${p.change_points > 0 ? "+" : ""}${p.change_points} pts`} />)}
+        <Row label="equity gap (Q1 vs Q5)" then={delta.equity.then ? `${delta.equity.then.gap ?? "—"} pts${delta.equity.then.significant ? " (real)" : ""}` : "n/a"} now={delta.equity.now ? `${delta.equity.now.gap ?? "—"} pts${delta.equity.now.significant ? " (real)" : ""}` : "n/a"} />
+        <Row label="computed confidence" then={delta.confidence.then.band ? `${delta.confidence.then.band} ${delta.confidence.then.score}` : "—"} now={delta.confidence.now.band ? `${delta.confidence.now.band} ${delta.confidence.now.score}` : "—"} />
+        <Row label="evidence items" then={String(delta.evidence_total.then)} now={String(delta.evidence_total.now)} note={delta.evidence.filter((e) => e.change).map((e) => `${e.class} ${e.change > 0 ? "+" : ""}${e.change}`).join(", ") || undefined} />
+        <Row label="twins answering" then={String(delta.a.n)} now={String(delta.b.n)} />
+        <Row label="unsourced figures" then={String(delta.unsourced.then)} now={String(delta.unsourced.now)} />
+      </div>
+      {delta.barriers && (delta.barriers.appeared.length + delta.barriers.dropped.length + delta.barriers.moved.length > 0) && (
+        <div className="text-[11px] space-y-0.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Barriers</div>
+          {delta.barriers.appeared.map((b) => <div key={`a${b.theme}`}>· <span className="text-foreground/90">{b.theme}</span> appeared at #{b.rank} ({b.count} twins)</div>)}
+          {delta.barriers.dropped.map((b) => <div key={`d${b.theme}`}>· <span className="text-foreground/90">{b.theme}</span> gone (was #{b.rank}, {b.count} twins)</div>)}
+          {delta.barriers.moved.map((b) => <div key={`m${b.theme}`}>· <span className="text-foreground/90">{b.theme}</span> #{b.then} → #{b.now} ({b.count_then} → {b.count_now} twins)</div>)}
+        </div>
+      )}
+      {(delta.dissent.joined.length > 0 || delta.dissent.left.length > 0) && (
+        <div className="text-[11px] space-y-0.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Named dissent{delta.dissent.majority_then !== delta.dissent.majority_now ? ` · majority ${delta.dissent.majority_then} → ${delta.dissent.majority_now}` : ""}</div>
+          {delta.dissent.joined.length > 0 && <div>· joined: {delta.dissent.joined.map((d, i) => <span key={d.agent_id}>{i > 0 ? ", " : ""}<button type="button" data-twin={d.agent_id} className="twin-cite text-primary underline decoration-dotted underline-offset-2">{agentsById[d.agent_id]?.name || "a twin"}</button></span>)}</div>}
+          {delta.dissent.left.length > 0 && <div>· left: {delta.dissent.left.map((d, i) => <span key={d.agent_id}>{i > 0 ? ", " : ""}<button type="button" data-twin={d.agent_id} className="twin-cite text-primary underline decoration-dotted underline-offset-2">{agentsById[d.agent_id]?.name || "a twin"}</button></span>)}</div>}
+        </div>
       )}
     </div>
   );

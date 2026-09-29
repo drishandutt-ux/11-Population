@@ -168,6 +168,17 @@ export const api = {
         body: JSON.stringify({}),
       }),
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
+    /** The client-facing document (brief L6-06) with the synthetic-population statement (L6-07). */
+    client: (sessionId: string) => request<ClientReport>(`/sessions/${sessionId}/report/client`),
+    /** What changed between two reports proper (brief L6-06): b (default latest) against a (default the one before). */
+    delta: (sessionId: string, a?: string, b?: string) =>
+      request<ReportDelta>(`/sessions/${sessionId}/report/delta${a || b ? `?${[a ? `a=${a}` : "", b ? `b=${b}` : ""].filter(Boolean).join("&")}` : ""}`),
+    /** The structured export as a zip (brief L6-06): fetched with auth, handed to the browser as a download. */
+    exportZip: async (sessionId: string): Promise<Blob> => {
+      const res = await apiFetch(`/sessions/${sessionId}/export.zip`);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      return res.blob();
+    },
   },
   records: {
     /** Every outcome record on file for the session — the headline verdict first, then Lab results. */
@@ -503,6 +514,27 @@ export type UsedUnit = { unit_id: string; source_ref: string; provenance_class: 
 export type BarrierItem = { theme: string; count: number; share: number | null; low?: number | null; high?: number | null; weight_mean: number | null;
   removals: ({ value: string; count: number; share: number } | string)[]; agent_ids: string[];
   evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string }[] };
+
+export type ClientReport = {
+  run: { session_id: string; question: string; title: string; generated_at: string; population: { n: number }; frame: { level: string; matched_exactly: string[]; weighted_only: string[]; estimated: string[]; ess: number | null; thin_cells: string[] }; evidence: Record<string, number>; scoping_snapshot: string | null; runs: any[] };
+  statement: string;
+  report: { id: string; created_at: string | null; answer: string; structure: ReportStructure | null } | null;
+  records: OutcomeRecord[];
+  ledger: FigureLedger;
+  markdown: string;
+};
+export type ReportDelta = {
+  a: { report_id: string; created_at: string | null; n: number }; b: { report_id: string; created_at: string | null; n: number };
+  headline: { label: string; then: any; now: any; change_points: number | null; real: boolean | null } | null;
+  positions: { value: string; then: number | null; now: number | null; change_points: number }[];
+  equity: { then: { gap: number | null; significant: boolean | null } | null; now: { gap: number | null; significant: boolean | null } | null };
+  dissent: { joined: { agent_id: string; position: string; verdict?: string }[]; left: { agent_id: string; position: string; verdict?: string }[]; stayed: any[]; majority_then: string | null; majority_now: string | null };
+  barriers: { appeared: { theme: string; rank: number; count: number }[]; dropped: { theme: string; rank: number; count: number }[]; moved: { theme: string; then: number; now: number; count_then: number; count_now: number }[]; same: { theme: string; rank: number; count_then: number; count_now: number }[] } | null;
+  evidence: { class: string; then: number; now: number; change: number }[]; evidence_total: { then: number; now: number };
+  confidence: { then: { band: string | null; score: number | null }; now: { band: string | null; score: number | null } };
+  unsourced: { then: number; now: number }; records: { then: number; now: number }; summary: string;
+  available: { id: string; created_at: string | null }[];
+};
 
 export type EquityCell = { rank: number; label: string; value: string; n: number; thin: boolean; share?: number | null; low?: number | null; high?: number | null; mean?: number | null };
 export type EquityBlock =

@@ -389,6 +389,25 @@ async def records_for_session(session_id: str) -> list[dict]:
     return heads + rest
 
 
+async def records_by_ids(session_id: str, ids: list[str]) -> list[dict]:
+    """The records a past report was written from, in the report's own order (L6-06 delta):
+    probes and experiments never change once complete, so an old report's records can be
+    shaped again exactly."""
+    if not ids:
+        return []
+    mix = await evidence_mix(session_id)
+    frame = await _frame(session_id)
+    async with AsyncSessionLocal() as db:
+        probes = {p.id: p for p in (await db.execute(select(Probe).where(Probe.session_id == session_id, Probe.id.in_(ids)))).scalars().all()}
+        exps = {e.id: e for e in (await db.execute(select(Experiment).where(Experiment.session_id == session_id, Experiment.id.in_(ids)))).scalars().all()}
+    out = []
+    for rid in ids:
+        r = record_from_probe(probes[rid], evidence_mix=mix, frame=frame) if rid in probes else (record_from_experiment(exps[rid], evidence_mix=mix, frame=frame) if rid in exps else None)
+        if r:
+            out.append(r)
+    return out
+
+
 async def ensure_headline(session_id: str, query: str, *, mode: str = "fast") -> Optional[dict]:
     """The population's answer to the session question as a record. Reused while the roster is
     unchanged; otherwise the verdict probe is run now (synchronously — a report waits for it).
