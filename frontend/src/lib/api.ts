@@ -224,6 +224,11 @@ export const api = {
     runLever: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; lever: string; rule_id?: string; mode?: string }) =>
       request<Experiment & { rule: CalibrationRule }>(`/sessions/${sessionId}/levers/run`, { method: "POST", body: JSON.stringify(body) }),
     leverRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/levers`),
+    // Behaviour targeting (brief L7-05): rank behaviours by modelled movement per point at a candidate's step.
+    targetingBehaviours: (sessionId: string) => request<TargetingMenu>(`/sessions/${sessionId}/targeting/behaviours`),
+    runTargeting: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; behaviours?: string[]; points?: number; mode?: string }) =>
+      request<Experiment & { behaviours: string[]; points: number; at_risk: number }>(`/sessions/${sessionId}/targeting/run`, { method: "POST", body: JSON.stringify(body) }),
+    targetingRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/targeting`),
     journeySuggest: (sessionId: string, question?: string) =>
       request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -585,6 +590,18 @@ export type LeverShift = { available: boolean; reason?: string; candidate_id: st
     basis_class?: "evidence_anchored" | "assumption"; evidence_count?: number };
   assumed?: boolean; covered: number; journey_probe_id: string; sentence: string };
 export type LeverRefusal = { refused: true; lever: string; reason: string; drafts: string[]; missing: boolean };
+/** What a behaviour-targeting run can rank (brief L7-05): the question-specific dials (ticked by default) and the fixed dial vocabulary. */
+export type TargetingMenu = { behaviours: { key: string; label: string; group: string; why: string; low: string; high: string; question_specific: boolean }[];
+  fixed: Record<string, string[]>; points_default: number; points_max: number; max_behaviours: number };
+export type TargetingBand = { value: string; n: number; thin: boolean; then: number; now: number; lift: number; low: number; high: number };
+export type TargetingRow = { rank?: number; key: string; label: string; group: string; question_specific: boolean; available: boolean; reason?: string;
+  points: number; lift: number; low: number; high: number; n: number; significant: boolean; per_point: number; per_point_low: number; per_point_high: number;
+  direction: "up" | "down" | "none"; then: number; now: number; movement: { up: number; down: number; unchanged: number; n: number };
+  end?: { label: string; then: number; now: number; lift: number }; bands: TargetingBand[]; backfire: { value: string; n: number; lift: number; per_point: number }[]; hurts: boolean;
+  people?: { per_point: number; at_points: number; low: number; high: number; basis: string } };
+export type TargetingResult = { available: boolean; candidate_id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string }; points: number; n: number;
+  behaviours: TargetingRow[]; any_significant: boolean; backfires: { key: string; label: string; direction: string; bands: { value: string; per_point: number }[]; hurts: boolean }[];
+  end_label?: string; sentence: string; journey_probe_id?: string };
 export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean; denominator: JourneyDenominator | null };
 
 export type ClientReport = {
@@ -979,6 +996,7 @@ export type Preference = Interval & {
 export type ExperimentResults = {
   /** A lever run (brief L7-04): the counted shift, once both arms are in. */
   lever?: LeverShift;
+  targeting?: TargetingResult;
   design: ExperimentDesign;
   instrument: string;
   control: string;

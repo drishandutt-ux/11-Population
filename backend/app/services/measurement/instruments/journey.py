@@ -267,10 +267,39 @@ def _candidate_barriers(agg: dict) -> list[dict]:
     return [b for t in (agg.get("transitions") or []) for b in (t.get("barriers") or [])]
 
 
+async def _targeting_kinds(probe_ids: list[str]) -> dict[str, str]:
+    """Which probes belong to a behaviour-targeting run (brief L7-05): its nudge arms need no
+    coding, tracing or movability (the ranking reads only the funnel), and its baseline needs
+    only headcounts. Anything else is a full journey run."""
+    from sqlalchemy import select
+    from app.core import database as dbm
+    from app.models.measurement import Probe
+    out: dict[str, str] = {}
+    async with dbm.AsyncSessionLocal() as db:
+        for p in (await db.execute(select(Probe).where(Probe.id.in_(probe_ids)))).scalars().all():
+            spec = p.spec or {}
+            out[p.id] = "nudge" if spec.get("nudge") else "baseline" if spec.get("targeting_baseline") else "full"
+    return out
+
+
 async def postprocess(probe_ids: list[str], model: str) -> None:
     from app.services.measurement import headcount
-    await apply_themes(probe_ids, model=model, fields=[BARRIER_KEY, REMOVAL_KEY], max_themes=MAX_BARRIER_THEMES)
+    try:
+        kinds = await _targeting_kinds(probe_ids)
+    except Exception:  # noqa: BLE001
+        kinds = {}
+    full = [pid for pid in probe_ids if kinds.get(pid, "full") == "full"]
+    if full:
+        await apply_themes(full, model=model, fields=[BARRIER_KEY, REMOVAL_KEY], max_themes=MAX_BARRIER_THEMES)
     for pid in probe_ids:
+        if kinds.get(pid) == "nudge":
+            continue
+        if kinds.get(pid) == "baseline":
+            try:
+                await headcount.attach(pid)
+            except Exception as e:  # noqa: BLE001
+                print(f"[journey] headcounts failed for {pid}: {type(e).__name__}: {e}")
+            continue
         try:
             await trace_evidence(pid, collect=_candidate_barriers)
         except Exception as e:  # noqa: BLE001 — tracing is a convenience; the ranking stands without it

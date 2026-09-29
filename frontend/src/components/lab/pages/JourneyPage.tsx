@@ -7,12 +7,12 @@
  *  the stored answers, so no call is needed. */
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Play, Sparkles } from "lucide-react";
+import { BookOpen, ListOrdered, Play, Sparkles } from "lucide-react";
 import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import RuleBook from "../RuleBook";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
-import { api, CalibrationRule, Experiment, LeverRefusal, LeverShift } from "@/lib/api";
+import { api, CalibrationRule, Experiment, LeverRefusal, LeverShift, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
 import { InstrumentPageProps } from "./types";
 
 /** The 409 body of a refused lever run, from the API client's error text. */
@@ -129,10 +129,28 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
     } finally { setDrafting(null); }
   };
   const loadRuns = () => api.lab.leverRuns(sessionId).then((r) => setRuns(r.runs.filter((x) => x.spec?.lever_run?.journey_probe_id === probe.id))).catch(() => {});
+  // Behaviour targeting (brief L7-05): which behaviour to change, as a counted ranking.
+  const [menu, setMenu] = useState<TargetingMenu | null>(null);
+  const [tgRuns, setTgRuns] = useState<Experiment[]>([]);
+  const [tgOpen, setTgOpen] = useState<Record<string, boolean>>({});
+  const [tgSel, setTgSel] = useState<Record<string, string[]>>({});
+  const [tgPoints, setTgPoints] = useState<Record<string, number>>({});
+  const [tgStarting, setTgStarting] = useState<string | null>(null);
+  const [tgError, setTgError] = useState<Record<string, string>>({});
+  const loadTg = () => api.lab.targetingRuns(sessionId).then((r) => setTgRuns(r.runs.filter((x) => x.spec?.targeting?.journey_probe_id === probe.id))).catch(() => {});
+  const selFor = (cid: string) => tgSel[cid] ?? (menu?.behaviours || []).map((b) => b.key);
+  const rankBehaviours = async (cid: string) => {
+    setTgStarting(cid); setTgError((e) => ({ ...e, [cid]: "" }));
+    try {
+      await api.lab.runTargeting(sessionId, { journey_probe_id: probe.id, candidate_id: cid, behaviours: selFor(cid), points: tgPoints[cid] ?? menu?.points_default ?? 2 });
+      await loadTg();
+    } catch (e: any) { setTgError((er) => ({ ...er, [cid]: e?.message || "Could not start the run" })); } finally { setTgStarting(null); }
+  };
   useEffect(() => {
     api.lab.rules(sessionId).then((r) => setRules(r.rules)).catch(() => {});
-    loadRuns();
-    const t = setInterval(loadRuns, 5000);
+    api.lab.targetingBehaviours(sessionId).then(setMenu).catch(() => {});
+    loadRuns(); loadTg();
+    const t = setInterval(() => { loadRuns(); loadTg(); }, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, probe.id]);
@@ -415,6 +433,58 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                       )}
                       {runs.filter((r) => r.spec?.lever_run?.candidate_id === c.id).map((r) => <LeverRun key={r.id} run={r} />)}
                     </div>
+
+                    {/* Behaviour targeting (brief L7-05): every behaviour nudged by the same few points over the stuck twins; ranked by movement per point; backfire beside the winner. */}
+                    <div className="rounded-lg border border-border/50 bg-card/20 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Rank behaviours · which behaviour to change, counted: each one nudged by the same few points for the twins at risk here</div>
+                        <button type="button" onClick={() => setTgOpen((o) => ({ ...o, [c.id]: !o[c.id] }))} className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted shrink-0">{tgOpen[c.id] ? "hide the list" : "choose behaviours"}</button>
+                      </div>
+                      {tgOpen[c.id] && menu && (
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap gap-1">
+                            {menu.behaviours.map((b) => {
+                              const on = selFor(c.id).includes(b.key);
+                              return (
+                                <button key={b.key} type="button" title={`${b.why}\n0 = ${b.low}\n10 = ${b.high}`} onClick={() => setTgSel((t) => ({ ...t, [c.id]: on ? selFor(c.id).filter((k) => k !== b.key) : [...selFor(c.id), b.key] }))}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] border ${on ? "border-primary bg-primary/15 text-foreground" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>
+                                  {b.label}
+                                </button>
+                              );
+                            })}
+                            {selFor(c.id).filter((k) => !menu.behaviours.some((b) => b.key === k)).map((k) => (
+                              <button key={k} type="button" onClick={() => setTgSel((t) => ({ ...t, [c.id]: selFor(c.id).filter((x) => x !== k) }))}
+                                className="px-2 py-0.5 rounded-full text-[10px] border border-primary bg-primary/15 text-foreground">{k.split(".")[1]?.replace(/_/g, " ")} <span className="opacity-60">· {k.split(".")[0]} ×</span></button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground">
+                            <label className="flex items-center gap-1">add a fixed dial
+                              <select value="" onChange={(e) => { const k = e.target.value; if (k && !selFor(c.id).includes(k) && selFor(c.id).length < menu.max_behaviours) setTgSel((t) => ({ ...t, [c.id]: [...selFor(c.id), k] })); }}
+                                className="bg-input border border-border rounded px-1.5 py-0.5 text-[10px] text-foreground">
+                                <option value="">…</option>
+                                {Object.entries(menu.fixed).map(([g, ds]) => <optgroup key={g} label={g}>{ds.map((d) => <option key={`${g}.${d}`} value={`${g}.${d}`}>{d.replace(/_/g, " ")}</option>)}</optgroup>)}
+                              </select>
+                            </label>
+                            <label className="flex items-center gap-1">nudge by
+                              <input type="number" min={1} max={menu.points_max} value={tgPoints[c.id] ?? menu.points_default} onChange={(e) => setTgPoints((p) => ({ ...p, [c.id]: Math.max(1, Math.min(menu.points_max, Number(e.target.value) || menu.points_default)) }))}
+                                className="w-12 bg-input border border-border rounded px-1.5 py-0.5 text-[10px] text-foreground tabular-nums" /> point{(tgPoints[c.id] ?? menu.points_default) === 1 ? "" : "s"}
+                            </label>
+                            <span>{selFor(c.id).length} behaviour{selFor(c.id).length === 1 ? "" : "s"} · one run of the {c.n} at-risk twins each</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button type="button" disabled={tgStarting === c.id || !menu || selFor(c.id).length === 0} onClick={() => rankBehaviours(c.id)}
+                          title="The twins at risk at this step answer the journey again once per behaviour, with that one dial nudged; the shift per point is counted and ranked."
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs disabled:opacity-50">
+                          <ListOrdered className="w-3 h-3" /> {tgStarting === c.id ? "Starting…" : "Rank behaviours"}
+                        </button>
+                        {menu && !tgOpen[c.id] && <span className="text-[10px] text-muted-foreground">{selFor(c.id).length} behaviour{selFor(c.id).length === 1 ? "" : "s"}{menu.behaviours.length ? ", the question's own dials" : ""} · nudge {tgPoints[c.id] ?? menu.points_default} pt{(tgPoints[c.id] ?? menu.points_default) === 1 ? "" : "s"}</span>}
+                        {menu && menu.behaviours.length === 0 && <span className="text-[10px] text-yellow-300/70">This session has no question-specific dials; add fixed dials from the list.</span>}
+                      </div>
+                      {tgError[c.id] && <p className="text-[11px] text-red-400">{tgError[c.id]}</p>}
+                      {tgRuns.filter((r) => r.spec?.targeting?.candidate_id === c.id).map((r) => <TargetingRun key={r.id} run={r} />)}
+                    </div>
                   </div>
                 )}
               </li>
@@ -470,6 +540,63 @@ function LeverRun({ run }: { run: Experiment }) {
       <div className="text-[10px] text-muted-foreground/70">
         rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · {assumed ? "no evidence (assumption)" : `${lv.rule.evidence_count ?? ""} evidence line${lv.rule.evidence_count === 1 ? "" : "s"}`} · reviewed by {lv.rule.reviewed_by}
       </div>
+    </div>
+  );
+}
+
+
+/** One behaviour-targeting run (brief L7-05): the behaviours ranked by modelled movement per dial
+ *  point at the step, the direction to push each, its interval, who moved, the people per point —
+ *  and every backfire shown as prominently as the winner. */
+function TargetingRun({ run }: { run: Experiment }) {
+  const t: TargetingResult | undefined = run.results?.targeting;
+  const info = run.spec?.targeting as { behaviours?: string[]; points?: number; at_risk?: number } | undefined;
+  if (!t?.available) {
+    return (
+      <div className="rounded-md border border-border/40 px-2.5 py-2 text-[11px] text-muted-foreground">
+        <span className="text-foreground/85">{run.name}</span> · {run.status === "complete" ? "counting the ranking…" : run.status === "failed" ? `failed: ${run.error || ""}` : `${run.status}…`}
+        {info && <span className="opacity-70"> · {info.behaviours?.length || 0} behaviours × {info.at_risk} twins, nudge {info.points} pt{info.points === 1 ? "" : "s"}</span>}
+      </div>
+    );
+  }
+  const pp = (x: number) => `${x > 0 ? "+" : ""}${(x * 100).toFixed(1)}`;
+  const push = (r: TargetingRow) => (r.direction === "up" ? "push up" : r.direction === "down" ? "push down" : "no direction");
+  const rows = t.behaviours.filter((r) => r.available);
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 space-y-1.5 text-[11px]">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-medium text-foreground/95">Behaviours ranked by movement per point</span>
+        <span className="text-muted-foreground tabular-nums">{t.n} twins at risk · nudge {t.points} pt{t.points === 1 ? "" : "s"} · {rows.length} behaviour{rows.length === 1 ? "" : "s"}</span>
+        {!t.any_significant && <span className="text-yellow-300/80">no movement distinguishable from zero at this size</span>}
+      </div>
+      {t.backfires.length > 0 && (
+        <div className="rounded border border-red-400/40 bg-red-500/10 px-2 py-1.5 text-red-200/90">
+          <span className="font-semibold uppercase tracking-wide text-[10px]">Backfire</span>{" "}
+          {t.backfires.map((b) => [b.hurts ? `raising ‘${b.label}’ lowers conversion overall` : "", ...b.bands.map((x) => `pushing ‘${b.label}’ ${b.direction} lowers it for ${x.value} (${pp(x.per_point)} per point)`)].filter(Boolean).join("; ")).join("; ")}
+        </div>
+      )}
+      <ol className="space-y-1">
+        {rows.map((r) => (
+          <li key={r.key} className={`grid grid-cols-[1.25rem_1fr] gap-x-2 rounded px-1.5 py-1 ${r.hurts || r.backfire.length ? "bg-red-500/5" : r.rank === 1 ? "bg-emerald-500/5" : ""}`}>
+            <span className="text-muted-foreground tabular-nums">{r.rank}.</span>
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.direction === "up" ? "border-emerald-400/40 text-emerald-300/90" : r.direction === "down" ? "border-sky-400/40 text-sky-300/90" : "border-border/60 text-muted-foreground"}`}>{push(r)}</span>
+                <span className="font-medium text-foreground/95">{r.label}</span>
+                {!r.question_specific && <span className="text-[10px] text-muted-foreground/60">{r.group} dial</span>}
+                <span className={`tabular-nums ${r.significant ? "text-foreground/90" : "text-muted-foreground"}`}>{pp(Math.abs(r.per_point))} pts per point <span className="text-muted-foreground">({pp(Math.min(r.per_point_low, r.per_point_high))} to {pp(Math.max(r.per_point_low, r.per_point_high))}) · {r.significant ? "real" : "not distinguishable from zero"}</span></span>
+                {r.people && <span className="text-foreground/85 tabular-nums">≈{Math.abs(r.people.per_point).toLocaleString()} people per point</span>}
+                {(r.hurts || r.backfire.length > 0) && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-red-400/50 text-red-300/90">{r.hurts ? "hurts when raised" : "backfires in a band"}</span>}
+              </div>
+              <div className="text-muted-foreground">
+                at {r.points} pt{r.points === 1 ? "" : "s"}: {Math.round(r.then * 100)}% → {Math.round(r.now * 100)}% get through · {r.movement.up} moved through · {r.movement.down} fell back · {r.movement.unchanged} unchanged
+                {r.bands.length > 1 && <> · by deprivation: {r.bands.map((b) => `${b.value} ${pp(b.lift / r.points)}${b.thin ? " (thin)" : ""}`).join(" · ")}</>}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[10px] text-muted-foreground/70">The modelled population&apos;s sensitivity to each behaviour, counted from the twins&apos; own placements. It says which behaviour the twins respond to most per point, not that a real intervention moves it that far — that is what a reviewed rule and a lever run are for. The report may only quote this list, in this order, with every backfire.</p>
     </div>
   );
 }

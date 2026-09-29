@@ -337,6 +337,12 @@ async def answer_one(
         from app.services.measurement import levers as lever_mod
         if lever_mod.applies(lever, segments):
             agent.dials = lever_mod.adjusted_dials(original_dials, lever)
+    # A targeting run (brief L7-05): one behaviour dial nudged by a few points for every twin in
+    # the arm, nothing described — the nudge is a disposition, not an event in the world.
+    nudge = spec.get("nudge") if isinstance(spec.get("nudge"), dict) else None
+    if nudge and nudge.get("dial"):
+        from app.services.measurement import levers as lever_mod
+        agent.dials = lever_mod.adjusted_dials(agent.dials, {"deltas": {str(nudge["dial"]): int(nudge.get("points") or 0)}, "bound": lever_mod.MAX_BOUND})
     try:
         # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
         system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE + (SOURCES_RULE if served else "")

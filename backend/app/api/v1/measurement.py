@@ -157,6 +157,14 @@ class DraftRuleRequest(BaseModel):
     mode: str = "pro"
 
 
+class TargetingRunRequest(BaseModel):
+    journey_probe_id: str
+    candidate_id: str
+    behaviours: Optional[list[str]] = None
+    points: Optional[int] = None
+    mode: str = "fast"
+
+
 class ReviewRequest(BaseModel):
     reviewed_by: str
     approve: bool = True
@@ -299,6 +307,38 @@ async def list_lever_runs(session_id: str, user: AuthUser = Depends(get_current_
     await get_owned_session(session_id, user, db)
     rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
     return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("lever_run")]}
+
+
+@router.get("/sessions/{session_id}/targeting/behaviours")
+async def targeting_behaviours(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """What a behaviour-targeting run can rank (brief L7-05): the session's question-specific dials
+    (ticked by default) and the fixed dial vocabulary, with the nudge size limits."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import targeting
+    return await targeting.behaviours_for(session_id)
+
+
+@router.post("/sessions/{session_id}/targeting/run")
+async def run_targeting(session_id: str, body: TargetingRunRequest, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Rank behaviours by modelled movement per point at a candidate's step (brief L7-05): the twins
+    at risk at that step answer the journey again once per behaviour with that one dial nudged by
+    the same few points; the shift per point is counted and ranked, backfire flagged."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import targeting
+    res = await targeting.start(session_id, journey_probe_id=body.journey_probe_id, candidate_id=body.candidate_id, behaviours=body.behaviours, points=body.points, mode=body.mode)
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    background_tasks.add_task(targeting.run, res["experiment_id"])
+    e = await db.get(Experiment, res["experiment_id"])
+    return {**_experiment_payload(e), "behaviours": res["behaviours"], "points": res["points"], "at_risk": res["at_risk"]}
+
+
+@router.get("/sessions/{session_id}/targeting")
+async def list_targeting_runs(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Every behaviour-targeting run in the session, newest first, with `results.targeting` when counted."""
+    await get_owned_session(session_id, user, db)
+    rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
+    return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("targeting")]}
 
 
 @router.get("/lab/instruments")
