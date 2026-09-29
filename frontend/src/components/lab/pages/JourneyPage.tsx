@@ -6,11 +6,27 @@
  *  the Verdict and Barriers pages: the funnel and the ranking are recounted inside the cut from
  *  the stored answers, so no call is needed. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { BookOpen, Play } from "lucide-react";
 import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
+import RuleBook from "../RuleBook";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+import { api, CalibrationRule, Experiment, LeverRefusal, LeverShift } from "@/lib/api";
 import { InstrumentPageProps } from "./types";
+
+/** The 409 body of a refused lever run, from the API client's error text. */
+function refusalOf(e: any): LeverRefusal | null {
+  const text = String(e?.message || "");
+  if (!/\(409\)/.test(text) || !/"refused"\s*:\s*true/.test(text)) return null;
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m) {
+    try { const j = JSON.parse(m[0]); const d = j.detail || j; if (d?.refused) return d as LeverRefusal; } catch { /* the client trims long bodies; read the fields below */ }
+  }
+  const field = (k: string) => (text.match(new RegExp(`"${k}"\\s*:\\s*"([^"]*)`)) || [])[1] || "";
+  const reason = field("reason");
+  return { refused: true, lever: field("lever"), reason: reason + (/"reason"\s*:\s*"[^"]*"/.test(text) ? "" : "…"), drafts: [], missing: !/"drafts"\s*:\s*\["/.test(text) };
+}
 
 const SPLIT_ORDER = ["deprivation", "stance", "age_band", "segment", "region", "income_band", "gender", "education", "humanity_band"];
 const rankOf = (v: string) => { const m = v.match(/^[QD](\d{1,2})/i); return m ? parseInt(m[1], 10) : 99; };
@@ -90,6 +106,40 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   const [segValue, setSegValue] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [openBarrier, setOpenBarrier] = useState<string | null>(null);
+  // Lever simulation (brief L7-04), gated on the rule book (brief L4-02).
+  const sessionId = probe.session_id;
+  const [rules, setRules] = useState<CalibrationRule[]>([]);
+  const [runs, setRuns] = useState<Experiment[]>([]);
+  const [leverText, setLeverText] = useState<Record<string, string>>({});
+  const [refusal, setRefusal] = useState<Record<string, LeverRefusal | string>>({});
+  const [ruleBook, setRuleBook] = useState<{ lever?: string } | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const loadRuns = () => api.lab.leverRuns(sessionId).then((r) => setRuns(r.runs.filter((x) => x.spec?.lever_run?.journey_probe_id === probe.id))).catch(() => {});
+  useEffect(() => {
+    api.lab.rules(sessionId).then((r) => setRules(r.rules)).catch(() => {});
+    loadRuns();
+    const t = setInterval(loadRuns, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, probe.id]);
+  const reviewedFor = (lever: string) => {
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const want = norm(lever);
+    return rules.find((r) => r.status === "reviewed" && want && (norm(r.lever) === want || norm(r.lever).includes(want) || want.includes(norm(r.lever)))) || null;
+  };
+  const simulate = async (candidateId: string) => {
+    const lever = (leverText[candidateId] || "").trim();
+    if (!lever) return;
+    setStarting(candidateId);
+    setRefusal((r) => ({ ...r, [candidateId]: "" }));
+    try {
+      await api.lab.runLever(sessionId, { journey_probe_id: probe.id, candidate_id: candidateId, lever, rule_id: reviewedFor(lever)?.id });
+      await loadRuns();
+    } catch (e: any) {
+      const ref = refusalOf(e);
+      setRefusal((r) => ({ ...r, [candidateId]: ref || (e?.message || "Could not start the run") }));
+    } finally { setStarting(null); }
+  };
 
   const splitKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -138,7 +188,12 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
           </div>
         )}
         <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{view.n} twin{view.n === 1 ? "" : "s"}{filtered ? " in this cut" : ""}</span>
+        <button type="button" onClick={() => setRuleBook({})} title="The calibration rules a lever can be simulated against (brief L4-02)"
+          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground border border-border/60 rounded-lg px-2 py-1">
+          <BookOpen className="w-3 h-3" /> Rule book <span className="opacity-60">{rules.filter((r) => r.status === "reviewed").length}/{rules.length}</span>
+        </button>
       </div>
+      {ruleBook && <RuleBook sessionId={sessionId} initialLever={ruleBook.lever} onClose={() => setRuleBook(null)} onChanged={setRules} />}
 
       {/* The funnel: share of everyone who reached each step. */}
       <div className="rounded-xl border border-border/60 bg-card/40 p-4">
@@ -299,6 +354,45 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                         );
                       })}
                     </ol>
+
+                    {/* Lever simulation (brief L7-04): only against a reviewed rule; otherwise a refusal, never a guess. */}
+                    <div className="rounded-lg border border-border/50 bg-card/20 p-2.5 space-y-2">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Simulate a lever · the same twins answer again with a reviewed rule applied</div>
+                      <div className="flex flex-wrap gap-1">
+                        {(c.movability?.levers || []).filter((l) => l.lever).map((l) => (
+                          <button key={l.lever} type="button" onClick={() => setLeverText((t) => ({ ...t, [c.id]: l.lever }))}
+                            className={`px-2 py-0.5 rounded-full text-[10px] border ${leverText[c.id] === l.lever ? "border-primary bg-primary/15 text-foreground" : "border-border/60 text-muted-foreground hover:text-foreground"}`}>
+                            {l.lever}{reviewedFor(l.lever) ? " ✓" : ""}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input value={leverText[c.id] || ""} onChange={(e) => setLeverText((t) => ({ ...t, [c.id]: e.target.value }))} placeholder="the lever, e.g. nurse phone line"
+                          className="flex-1 bg-input border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground" />
+                        <button type="button" disabled={starting === c.id || !(leverText[c.id] || "").trim()} onClick={() => simulate(c.id)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs disabled:opacity-50">
+                          <Play className="w-3 h-3" /> {starting === c.id ? "Starting…" : "Simulate"}
+                        </button>
+                      </div>
+                      {(leverText[c.id] || "").trim() && (
+                        reviewedFor(leverText[c.id]) ? (
+                          <p className="text-[10px] text-emerald-300/80">Rule on file: <span className="text-foreground/80">{reviewedFor(leverText[c.id])!.lever}</span> · reviewed by {reviewedFor(leverText[c.id])!.reviewed_by} · dials {Object.entries(reviewedFor(leverText[c.id])!.deltas).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")}</p>
+                        ) : (
+                          <p className="text-[10px] text-yellow-300/70">No reviewed rule for this lever — the run will refuse. <button type="button" onClick={() => setRuleBook({ lever: leverText[c.id] })} className="underline decoration-dotted">Write a rule</button></p>
+                        )
+                      )}
+                      {refusal[c.id] && (
+                        <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-2.5 py-2 text-[11px] text-yellow-200/90">
+                          {typeof refusal[c.id] === "string" ? (refusal[c.id] as string) : (
+                            <>
+                              <span className="font-medium">Refused — no number without a reviewed rule.</span> {(refusal[c.id] as LeverRefusal).reason}{" "}
+                              <button type="button" onClick={() => setRuleBook({ lever: (refusal[c.id] as LeverRefusal).lever })} className="underline decoration-dotted">{(refusal[c.id] as LeverRefusal).missing ? "Write the rule" : "Open the rule book"}</button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {runs.filter((r) => r.spec?.lever_run?.candidate_id === c.id).map((r) => <LeverRun key={r.id} run={r} />)}
+                    </div>
                   </div>
                 )}
               </li>
@@ -310,6 +404,44 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       <p className="text-[10px] text-muted-foreground/60">
         Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts multiply a published or client-supplied denominator by the simulated share and are no more real than the share. Movability classes each barrier by who could reach the removal the twins asked for; the report may not judge it on its own. Simulating a lever (L7-04) is the next step.
       </p>
+    </div>
+  );
+}
+
+
+/** One lever run: the counted shift (brief L7-04) — conversion then → now with its interval, who
+ *  moved, the end of the journey, the people moved, and the rule it ran under. */
+function LeverRun({ run }: { run: Experiment }) {
+  const lv: LeverShift | undefined = run.results?.lever;
+  const rule = run.variants?.find((v) => v.key === "lever")?.spec?.lever;
+  if (!lv?.available) {
+    return (
+      <div className="rounded-md border border-border/40 px-2.5 py-2 text-[11px] text-muted-foreground">
+        <span className="text-foreground/85">{run.name}</span> · {run.status === "complete" ? "counting the shift…" : run.status === "failed" ? `failed: ${run.error || ""}` : `${run.status}…`}
+        {rule && <span className="opacity-70"> · rule reviewed by {rule.reviewed_by}</span>}
+      </div>
+    );
+  }
+  const cv = lv.conversion;
+  const sign = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}`;
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 space-y-1 text-[11px]">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-medium text-foreground/95">{lv.rule.lever}</span>
+        <span className={`tabular-nums ${cv.significant ? "text-emerald-300/90" : "text-muted-foreground"}`}>{sign(cv.lift)} points ({sign(cv.low)} to {sign(cv.high)}) · {cv.significant ? "real" : "not distinguishable from zero"}</span>
+        <span className="text-muted-foreground tabular-nums">{Math.round(cv.then * 100)}% → {Math.round(cv.now * 100)}% get through · n={cv.n}</span>
+        {lv.people && <span className="text-foreground/85 tabular-nums">≈{lv.people.moved.toLocaleString()} people moved ({lv.people.low.toLocaleString()}–{lv.people.high.toLocaleString()})</span>}
+      </div>
+      <div className="text-muted-foreground">
+        {lv.movement.up} moved through · {lv.movement.down} fell back · {lv.movement.unchanged} unchanged · covered {lv.covered} twins
+        {" · "}end of journey ‘{lv.end.label}’: {Math.round(lv.end.then * 100)}% → {Math.round(lv.end.now * 100)}% ({sign(lv.end.lift)} pts)
+      </div>
+      {lv.segments?.deprivation && (
+        <div className="text-muted-foreground/80">by deprivation: {lv.segments.deprivation.map((r) => `${r.value} ${sign(r.lift)}${r.thin ? " (thin)" : ""}`).join(" · ")}</div>
+      )}
+      <div className="text-[10px] text-muted-foreground/70">
+        rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · reviewed by {lv.rule.reviewed_by}
+      </div>
     </div>
   );
 }

@@ -61,7 +61,10 @@ FIGURE_RULES = (
     "not available, give no number of people at all.\n"
     "- MOVABILITY (how much of a gap a partner could reach) comes only from the record's own 'movable' figure and its levers; "
     "candidates are already ranked by the movable gap. Never call a gap movable, fixable or structural on your own judgement, and "
-    "where a candidate says 'movability not scored', say it is unscored."
+    "where a candidate says 'movability not scored', say it is unscored.\n"
+    "- A MODELLED SHIFT from a lever (what would move if an intervention were in place) may be stated only from a "
+    "'lever run' record, with its interval, the rule it ran under and who reviewed it. Never estimate what a lever would do "
+    "on your own; where no lever record exists, say the lever has not been simulated."
 )
 
 
@@ -271,9 +274,54 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
     }
 
 
-def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
-    """One complete experiment → one record: the best variant's lift on the primary metric."""
+def record_from_lever(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
+    """A lever run (brief L7-04) → one record: the modelled shift in conversion at the candidate's
+    step, with the rule it ran under. None until the shift is counted."""
     res = getattr(e, "results", None) or {}
+    lv = res.get("lever") if isinstance(res, dict) else None
+    if not lv or not lv.get("available"):
+        return None
+    rep = (frame or {}).get("report") if isinstance(frame, dict) else None
+    frame_level = (rep or {}).get("level") if isinstance(rep, dict) else None
+    conv = lv.get("conversion") or {}
+    n = int(conv.get("n") or 0)
+    created = getattr(e, "created_at", None)
+    rule = lv.get("rule") or {}
+    model = str(getattr(e, "model", "") or "")
+    return {
+        "id": e.id,
+        "kind": "lever",
+        "instrument": "journey",
+        "label": f"Lever: {rule.get('lever')} — shift at {(lv.get('from') or {}).get('label')} → {(lv.get('to') or {}).get('label')}",
+        "question": str(getattr(e, "name", "") or "")[:300],
+        "basis": "simulated",
+        "estimate": {"metric": "conversion_shift", "label": "Shift in those getting through", "format": "lift",
+                     "value": _num(conv.get("lift")), "low": _num(conv.get("low")), "high": _num(conv.get("high")), "n": n,
+                     "significant": bool(conv.get("significant")), "control": conv.get("then"), "variant": conv.get("now")},
+        "sentence": str(lv.get("sentence") or ""),
+        "distribution": [],
+        "splits": {k: [{"segment": k, "value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in v] for k, v in (lv.get("segments") or {}).items()},
+        "equity": equity_mod.equity_block([{"value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in (lv.get("segments") or {}).get(equity_mod.KEY, [])], fmt="lift"),
+        "lever": {"rule": rule, "candidate_id": lv.get("candidate_id"), "journey_probe_id": lv.get("journey_probe_id"), "covered": lv.get("covered"),
+                  "movement": lv.get("movement"), "end": lv.get("end"), "people": lv.get("people"), "stuck": lv.get("stuck")},
+        "refusals": None, "unanimity": None, "weighted": None,
+        "provenance": {"model": model, "seed": int(getattr(e, "seed", 0) or 0), "design": "within", "arms": ["baseline", "lever"], "evidence_mix": evidence_mix or {},
+                       "frame_level": frame_level or "none", "created_at": created.isoformat() if isinstance(created, datetime) else None,
+                       "rule_id": rule.get("rule_id"), "reviewed_by": rule.get("reviewed_by"), "reviewed_at": rule.get("reviewed_at")},
+        "confidence": confidence_for(n=n, low=None, high=None, fmt="lift", unanimity=None, refusals=None, frame_level=frame_level, weighted=False, model=model),
+        "caveats": ([] if conv.get("significant") else ["The shift is not distinguishable from zero: the interval crosses it."])
+                   + [f"Modelled under calibration rule '{rule.get('lever')}' (reviewed by {rule.get('reviewed_by') or 'nobody'}): the shift is only as good as that rule's evidence."]
+                   + caveats_for(n=n, unanimity=None, refusals=None, frame_level=frame_level),
+        "tags": {},
+    }
+
+
+def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
+    """One complete experiment → one record: the best variant's lift on the primary metric.
+    A lever run (brief L7-04) is shaped by `record_from_lever` instead."""
+    res = getattr(e, "results", None) or {}
+    if isinstance(res, dict) and res.get("lever"):
+        return record_from_lever(e, evidence_mix=evidence_mix, frame=frame)
     comps = res.get("comparisons") if isinstance(res, dict) else None
     if not comps:
         return None
@@ -366,6 +414,15 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             hc = r.get("headcount") or {}
             bar_line += ("; headcounts: " + str(hc.get("sentence") or "").rstrip(".")) if hc.get("available") else "; headcounts: not available (no sizing figure on file) — give no number of people"
         flags = []
+        lv = r.get("lever") or {}
+        if lv:
+            rule = lv.get("rule") or {}
+            ppl = lv.get("people") or {}
+            dial_text = ", ".join(f"{k} {int(v):+d}" for k, v in (rule.get("deltas") or {}).items())
+            applies_text = ("applies to " + ", ".join(f"{k}={'/'.join(map(str, v))}" for k, v in (rule.get("applies_to") or {}).items())) if rule.get("applies_to") else "applies to everyone"
+            bar_line += (f"; lever run under rule '{rule.get('lever')}' (reviewed by {rule.get('reviewed_by') or 'nobody'}; dials {dial_text}; {applies_text})"
+                         + (f"; ≈{int(ppl['moved']):,} people moved ({int(ppl['low']):,}–{int(ppl['high']):,})" if ppl.get("moved") is not None else "")
+                         + (f"; end of journey {round(_num((lv.get('end') or {}).get('then')) * 100)}% → {round(_num((lv.get('end') or {}).get('now')) * 100)}%" if lv.get("end") else ""))
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")
         if (r.get("refusals") or {}).get("refused"):

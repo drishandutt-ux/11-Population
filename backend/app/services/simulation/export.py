@@ -69,6 +69,14 @@ def statement(run: dict) -> str:
 
 # ── the run record ───────────────────────────────────────────────────────────
 
+async def _rules(session_id: str) -> list[dict]:
+    try:
+        from app.services.measurement import levers
+        return await levers.rules_for_session(session_id)
+    except Exception:  # noqa: BLE001
+        return []
+
+
 async def run_record(session_id: str) -> dict:
     from app.models.agent import SpawnedAgent
     from app.models.evidence import Evidence
@@ -106,6 +114,8 @@ async def run_record(session_id: str) -> dict:
                   "sizing": (bld.frame or {}).get("sizing") if bld and bld.frame else None},
         "evidence": {str(k): int(v) for k, v in ev_rows},
         "scoping_snapshot": snapshot,
+        # The assumption log (brief L4-01 / L4-02): every calibration rule, reviewed or not, that a lever run could have used.
+        "calibration_rules": await _rules(session_id),
         "runs": [{"kind": "probe", "id": p.id, "instrument": p.instrument, "schema_id": p.schema_id, "seed": p.seed, "model": p.model, "prompt_hash": p.prompt_hash,
                   "agents": p.agent_count, "answered": p.answer_count, "created_at": p.created_at.isoformat() if p.created_at else None,
                   "scoped": bool(((p.aggregates or {}).get("scoping") or {}).get("scoped")) if isinstance(p.aggregates, dict) else None} for p in probes]

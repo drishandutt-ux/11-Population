@@ -78,3 +78,26 @@ class Experiment(Base):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class CalibrationMapping(Base):
+    """A calibration rule (brief L4-02, the minimum of it): what evidence shows a lever does to
+    behaviour — which twins it covers, which dials it moves and by how much, the evidence and
+    who reviewed it. The lever simulation (L7-04) runs only against a reviewed rule."""
+    __tablename__ = "calibration_mappings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), index=True)
+    lever: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    applies_to: Mapped[dict] = mapped_column(JSON, default=dict)        # {segment_key: [values]}; {} = everyone
+    deltas: Mapped[dict] = mapped_column(JSON, default=dict)            # {"friction.time_cost": -3}
+    bound: Mapped[int] = mapped_column(Integer, default=4)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)          # [{ref, note}]
+    basis: Mapped[str] = mapped_column(Text, default="")
+    author: Mapped[str] = mapped_column(String(120), default="")
+    status: Mapped[str] = mapped_column(String(16), default="draft", index=True)   # draft | reviewed
+    reviewed_by: Mapped[str] = mapped_column(String(120), default="")
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

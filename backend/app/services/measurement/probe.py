@@ -220,6 +220,11 @@ def _build_user_message(
             head += f" (asking price: {sym}{float(price):g})"
         blocks.append(f"{head}\n{clip(stimulus, 6000)}")
 
+    lever = spec.get("lever") if isinstance(spec.get("lever"), dict) else None
+    if lever:
+        from app.services.measurement import levers as lever_mod
+        blocks.append(lever_mod.counterfactual_block(lever))
+
     blocks.append("THE QUESTION: " + instrument.question_for(spec) + "\n\nRecord your answer with the tool.")
     return "\n\n".join(blocks)
 
@@ -322,8 +327,21 @@ async def answer_one(
         said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id)
 
     from app.services.agents import dynamic_dials as dyn_mod
-    # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
-    system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE + (SOURCES_RULE if served else "")
+    # A lever run (brief L7-04): the twins the rule covers answer with their dials shifted as the
+    # reviewed calibration rule says, and with the change described to them. The stored agent is
+    # never written; the shift lives only in this call.
+    segments = segments_for(agent)
+    lever = spec.get("lever") if isinstance(spec.get("lever"), dict) else None
+    original_dials = agent.dials
+    if lever:
+        from app.services.measurement import levers as lever_mod
+        if lever_mod.applies(lever, segments):
+            agent.dials = lever_mod.adjusted_dials(original_dials, lever)
+    try:
+        # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
+        system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE + (SOURCES_RULE if served else "")
+    finally:
+        agent.dials = original_dials
     user = _build_user_message(
         agent=agent, instrument=instrument, spec=spec, query=query,
         kg_context=kg_context, said=said, decided=decided,
@@ -360,7 +378,7 @@ async def answer_one(
         "agent_id": agent.id,
         "agent": {"name": agent.name, "role": agent.role, "avatar_color": agent.avatar_color},
         "answer": answer,
-        "segments": segments_for(agent),
+        "segments": segments,
     }
 
     async with AsyncSessionLocal() as db:

@@ -27,7 +27,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`Request failed (${res.status})${text ? `: ${text.slice(0, 300)}` : ""}`);
+      throw new Error(`Request failed (${res.status})${text ? `: ${text.slice(0, 600)}` : ""}`);
     }
     if (res.status === 204) return undefined as T;
     return res.json();
@@ -210,6 +210,17 @@ export const api = {
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
     /** The Journey tool (brief L7-01): propose the steps to the outcome from what the session knows. */
+    // Calibration rules (brief L4-02) and lever runs (brief L7-04).
+    rules: (sessionId: string) => request<{ rules: CalibrationRule[]; dials: Record<string, string[]>; bound_max: number; bound_default: number }>(`/sessions/${sessionId}/rules`),
+    createRule: (sessionId: string, body: RuleRequest) => request<CalibrationRule>(`/sessions/${sessionId}/rules`, { method: "POST", body: JSON.stringify(body) }),
+    updateRule: (sessionId: string, ruleId: string, body: RuleRequest) => request<CalibrationRule>(`/sessions/${sessionId}/rules/${ruleId}`, { method: "PUT", body: JSON.stringify(body) }),
+    reviewRule: (sessionId: string, ruleId: string, reviewed_by: string, approve = true) =>
+      request<CalibrationRule>(`/sessions/${sessionId}/rules/${ruleId}/review`, { method: "POST", body: JSON.stringify({ reviewed_by, approve }) }),
+    deleteRule: (sessionId: string, ruleId: string) => request(`/sessions/${sessionId}/rules/${ruleId}`, { method: "DELETE" }),
+    /** 409 with a LeverRefusal in the body when no reviewed rule exists for the lever. */
+    runLever: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; lever: string; rule_id?: string; mode?: string }) =>
+      request<Experiment & { rule: CalibrationRule }>(`/sessions/${sessionId}/levers/run`, { method: "POST", body: JSON.stringify(body) }),
+    leverRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/levers`),
     journeySuggest: (sessionId: string, question?: string) =>
       request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -554,6 +565,20 @@ export type JourneyCandidate = { id: string; rank: number; step: number; from: {
 export type JourneyDenominator = { people: number; basis: HeadcountBasis; label: string; source: string; year: string; derived?: string };
 export type JourneyHeadcount = { available: boolean; reason?: string; sentence?: string; denominator?: JourneyDenominator | null;
   anchors?: { step: string; people: number; source: string }[]; weighted?: boolean; ess?: number | null; unit?: string };
+/** A calibration rule (brief L4-02): what evidence shows a lever does to behaviour. */
+export type CalibrationRule = { id: string; session_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number;
+  evidence: { ref: string; note: string }[]; basis: string; author: string; status: "draft" | "reviewed"; reviewed_by: string; reviewed_at: string | null; created_at: string | null; updated_at: string | null };
+export type RuleRequest = Omit<CalibrationRule, "id" | "session_id" | "status" | "reviewed_by" | "reviewed_at" | "created_at" | "updated_at">;
+/** The modelled shift of a lever run (brief L7-04), counted from the two arms on the same twins. */
+export type LeverShift = { available: boolean; reason?: string; candidate_id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string };
+  conversion: { then: number; now: number; lift: number; low: number; high: number; n: number; significant: boolean };
+  stuck: { then: number; now: number }; movement: { up: number; down: number; unchanged: number; n: number };
+  end: { label: string; then: number; now: number; lift: number; low: number; high: number; n: number; significant: boolean };
+  segments: Record<string, { value: string; n: number; thin: boolean; then: number; now: number; lift: number; low: number; high: number }[]>;
+  people?: { moved: number; low: number; high: number; stuck_then: number | null; stuck_now: number; basis: string };
+  rule: { rule_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number; reviewed_by: string; reviewed_at: string | null };
+  covered: number; journey_probe_id: string; sentence: string };
+export type LeverRefusal = { refused: true; lever: string; reason: string; drafts: string[]; missing: boolean };
 export type JourneySuggestion = { outcome: string; stages: JourneyStage[]; basis: string; grounded: boolean; denominator: JourneyDenominator | null };
 
 export type ClientReport = {
@@ -946,6 +971,8 @@ export type Preference = Interval & {
 };
 
 export type ExperimentResults = {
+  /** A lever run (brief L7-04): the counted shift, once both arms are in. */
+  lever?: LeverShift;
   design: ExperimentDesign;
   instrument: string;
   control: string;

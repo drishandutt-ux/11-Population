@@ -137,6 +137,149 @@ async def suggest_journey(
         raise HTTPException(502, f"Could not propose the journey: {type(e).__name__}: {str(e)[:160]}")
 
 
+# ── Calibration rules (brief L4-02, the minimum of it) and lever runs (brief L7-04) ────────
+
+class RuleRequest(BaseModel):
+    lever: str
+    description: str = ""
+    applies_to: dict[str, Any] = {}
+    deltas: dict[str, Any] = {}
+    bound: int = 4
+    evidence: list[Any] = []
+    basis: str = ""
+    author: str = ""
+
+
+class ReviewRequest(BaseModel):
+    reviewed_by: str
+    approve: bool = True
+
+
+class LeverRunRequest(BaseModel):
+    journey_probe_id: str
+    candidate_id: str
+    lever: str
+    rule_id: Optional[str] = None
+    mode: str = "fast"
+
+
+def _rule_fields(body: RuleRequest) -> dict:
+    ev = []
+    for e in body.evidence or []:
+        if isinstance(e, dict):
+            if str(e.get("ref") or "").strip():
+                ev.append({"ref": str(e.get("ref"))[:300], "note": str(e.get("note") or "")[:300]})
+        elif str(e or "").strip():
+            ev.append({"ref": str(e)[:300], "note": ""})
+    return {"lever": body.lever.strip()[:160], "description": body.description.strip()[:1000], "applies_to": {k: v for k, v in (body.applies_to or {}).items() if v},
+            "deltas": {str(k): int(v) for k, v in (body.deltas or {}).items() if str(v).strip() not in ("", "0")}, "bound": int(body.bound or 4),
+            "evidence": ev, "basis": body.basis.strip()[:1000], "author": body.author.strip()[:120]}
+
+
+@router.get("/sessions/{session_id}/rules")
+async def list_rules(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The session's calibration rules, with the dial vocabulary a rule may move."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import levers
+    return {"rules": await levers.rules_for_session(session_id), "dials": levers.dial_keys(), "bound_max": levers.MAX_BOUND, "bound_default": levers.DEFAULT_BOUND}
+
+
+@router.post("/sessions/{session_id}/rules")
+async def create_rule(session_id: str, body: RuleRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await get_owned_session(session_id, user, db)
+    from app.models.measurement import CalibrationMapping
+    from app.services.measurement import levers
+    fields = _rule_fields(body)
+    problems = levers.validate_rule(fields)
+    if problems:
+        raise HTTPException(400, "; ".join(problems))
+    m = CalibrationMapping(session_id=session_id, status=levers.STATUS_DRAFT, **fields)
+    db.add(m)
+    await db.commit()
+    await db.refresh(m)
+    return levers.rule_payload(m)
+
+
+@router.put("/sessions/{session_id}/rules/{rule_id}")
+async def update_rule(session_id: str, rule_id: str, body: RuleRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Editing a rule sends it back to draft: a change must be reviewed again."""
+    await get_owned_session(session_id, user, db)
+    from app.models.measurement import CalibrationMapping
+    from app.services.measurement import levers
+    m = await db.get(CalibrationMapping, rule_id)
+    if not m or m.session_id != session_id:
+        raise HTTPException(404, "Rule not found")
+    fields = _rule_fields(body)
+    problems = levers.validate_rule(fields)
+    if problems:
+        raise HTTPException(400, "; ".join(problems))
+    for k, v in fields.items():
+        setattr(m, k, v)
+    m.status, m.reviewed_by, m.reviewed_at = levers.STATUS_DRAFT, "", None
+    await db.commit()
+    await db.refresh(m)
+    return levers.rule_payload(m)
+
+
+@router.post("/sessions/{session_id}/rules/{rule_id}/review")
+async def review_rule(session_id: str, rule_id: str, body: ReviewRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Sign a rule off (or withdraw the sign-off). Only a reviewed rule can be simulated."""
+    await get_owned_session(session_id, user, db)
+    from datetime import datetime as _dt
+    from app.models.measurement import CalibrationMapping
+    from app.services.measurement import levers
+    m = await db.get(CalibrationMapping, rule_id)
+    if not m or m.session_id != session_id:
+        raise HTTPException(404, "Rule not found")
+    if body.approve:
+        if not body.reviewed_by.strip():
+            raise HTTPException(400, "A review needs the reviewer's name.")
+        m.status, m.reviewed_by, m.reviewed_at = levers.STATUS_REVIEWED, body.reviewed_by.strip()[:120], _dt.utcnow()
+    else:
+        m.status, m.reviewed_by, m.reviewed_at = levers.STATUS_DRAFT, "", None
+    await db.commit()
+    await db.refresh(m)
+    return levers.rule_payload(m)
+
+
+@router.delete("/sessions/{session_id}/rules/{rule_id}")
+async def delete_rule(session_id: str, rule_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await get_owned_session(session_id, user, db)
+    from app.models.measurement import CalibrationMapping
+    m = await db.get(CalibrationMapping, rule_id)
+    if not m or m.session_id != session_id:
+        raise HTTPException(404, "Rule not found")
+    await db.delete(m)
+    await db.commit()
+    return {"deleted": rule_id}
+
+
+@router.post("/sessions/{session_id}/levers/run")
+async def run_lever(session_id: str, body: LeverRunRequest, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Simulate a lever on a candidate (brief L7-04): the same twins answer the journey again with
+    a reviewed rule's dial shifts applied. Refuses — 409 with the missing rule named — where no
+    reviewed rule exists for the lever; it never guesses."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import levers
+    res = await levers.start(session_id, journey_probe_id=body.journey_probe_id, candidate_id=body.candidate_id, lever=body.lever,
+                             rule_id=body.rule_id, mode=body.mode)
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    if res.get("refused"):
+        raise HTTPException(409, detail=res)
+    background_tasks.add_task(levers.run, res["experiment_id"])
+    e = await db.get(Experiment, res["experiment_id"])
+    return {**_experiment_payload(e), "rule": res["rule"]}
+
+
+@router.get("/sessions/{session_id}/levers")
+async def list_lever_runs(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Every lever run in the session, newest first, with its shift when complete."""
+    await get_owned_session(session_id, user, db)
+    rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
+    return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("lever_run")]}
+
+
 @router.get("/lab/instruments")
 async def list_instruments(user: AuthUser = Depends(get_current_user)):
     """The instrument library. The UI builds its picker from this, so a new instrument
