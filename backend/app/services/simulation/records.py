@@ -49,7 +49,9 @@ FIGURE_RULES = (
     "see SOURCE FIGURES: [[F3]] for a typed statistic, [[E5]] for the document it was read in.\n"
     "- The headline record (R1) is the population's answer to the question: lead with it.\n"
     "- Every record carries an equity line (most vs least deprived cell). State the gap only as the record gives it, "
-    "say when it is not distinguishable at this size, and never read a gap into a record whose equity line is unavailable."
+    "say when it is not distinguishable at this size, and never read a gap into a record whose equity line is unavailable.\n"
+    "- A record with 'barriers ranked' is the only source for what stands in the way: name barriers from that list, in that "
+    "order, cite the record, and cite the twins who raised them. Never invent a barrier or reorder them."
 )
 
 
@@ -151,6 +153,9 @@ def _label_for(instrument: str, spec: dict, agg: dict) -> str:
         return f"Would buy at {cur}{_num(price):g}" if price else "Would buy"
     if instrument == "survey":
         return str(spec.get("title") or "Survey")
+    if instrument == "barriers":
+        o = str(spec.get("outcome") or "").strip()
+        return f"What's in the way of: {o[:70]}" if o else "What's in the way"
     q = str(spec.get("question") or "").strip()
     return q[:80] if q else str(instrument).replace("_", " ").title()
 
@@ -185,6 +190,11 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "distribution": agg.get("position") or agg.get("would_buy") or agg.get("verdict") or [],
         "splits": splits,
         "equity": equity,
+        # Barriers (brief L6-05): the ranked list this record carries, traceable to twins and evidence.
+        "barriers": [{"theme": b.get("theme"), "count": b.get("count", 0), "share": b.get("share"), "low": b.get("low"), "high": b.get("high"),
+                      "weight_mean": b.get("weight_mean"), "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [],
+                      "evidence": b.get("evidence") or []} for b in (agg.get("barriers") or [])] if instrument == "barriers" else [],
+        "outcome": str(agg.get("outcome") or "") if instrument == "barriers" else "",
         "refusals": refusals,
         "unanimity": unanimity,
         "weighted": weighted,
@@ -276,6 +286,8 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
                 lo = min(buckets, key=lambda b: _num(b.get("share")))
                 notable.append(f"{key}: {hi.get('value')} {round(_num(hi.get('share')) * 100)}% vs {lo.get('value')} {round(_num(lo.get('share')) * 100)}%")
         eq_line = equity_mod.prompt_line(r.get("equity") or {})
+        bars = r.get("barriers") or []
+        bar_line = ("; barriers ranked: " + "; ".join(f"{k}. {b['theme']} ({b['count']} twins, weight {round(float(b.get('weight_mean') or 0))}/100)" for k, b in enumerate(bars[:7], 1))) if bars else ""
         flags = []
         if (r.get("unanimity") or {}).get("flagged"):
             flags.append("FLAGGED: more unanimous than the population should be")
@@ -286,6 +298,7 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             + (f"; question: {r['question']}" if r.get("question") else "")
             + (f"; splits: {'; '.join(notable)}" if notable else "")
             + f"; {eq_line}"
+            + bar_line
             + (f"; {'; '.join(flags)}" if flags else "")
             + f"; confidence {r.get('confidence', {}).get('score', '?')}/100"
         )

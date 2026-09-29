@@ -467,6 +467,9 @@ export type OutcomeRecord = {
   splits: Record<string, { value: string; share: number; low?: number; high?: number; n: number }[]>;
   /** Equity by default (brief L6-04): the record by deprivation level — most vs least deprived cell, the gap, whether it is real. */
   equity: EquityBlock;
+  /** Barriers (brief L6-05): the ranked list a Barriers record carries; empty for every other record. */
+  barriers?: BarrierItem[];
+  outcome?: string;
   refusals: { n: number; refused: number; share: number; reasons: { value: string; count: number; share: number }[]; who: { agent_id: string; name: string; why: string }[] } | null;
   unanimity: { flagged: boolean; top_share: number; widest_split: string; widest_spread: number; n: number; reason?: string } | null;
   weighted: { metric: string; label: string; format: string; weighted: number | null; unweighted: number | null; ess: number; n: number } | null;
@@ -487,10 +490,14 @@ export type ReportStructure = {
   };
   discussion: { record_id: string | null; positions: { value: string; count: number; share: number }[]; n: number; majority: string | null; dissent: { agent_id: string; position: string; confidence: number; verdict: string }[] };
   records: { all: string[]; cited: string[] };
-  outcome: { caveats: { text: string; record_ids: string[] }[] };
+  outcome: { caveats: { text: string; record_ids: string[] }[]; barriers?: { record_id: string | null; outcome: string; n: number; items: BarrierItem[] } | null };
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
+
+export type BarrierItem = { theme: string; count: number; share: number | null; low?: number | null; high?: number | null; weight_mean: number | null;
+  removals: ({ value: string; count: number; share: number } | string)[]; agent_ids: string[];
+  evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string }[] };
 
 export type EquityCell = { rank: number; label: string; value: string; n: number; thin: boolean; share?: number | null; low?: number | null; high?: number | null; mean?: number | null };
 export type EquityBlock =

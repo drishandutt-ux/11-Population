@@ -4,6 +4,7 @@ import PurchaseIntentPage from "./PurchaseIntentPage";
 import AskPage from "./AskPage";
 import SurveyPage from "./SurveyPage";
 import VerdictPage from "./VerdictPage";
+import BarriersPage from "./BarriersPage";
 import { InstrumentPageProps } from "./types";
 
 /** Instrument key (the backend's `page` field) → its own results page.
@@ -15,6 +16,7 @@ const PAGES: Record<string, ComponentType<InstrumentPageProps>> = {
   ask: AskPage,
   survey: SurveyPage,
   verdict: VerdictPage,
+  barriers: BarriersPage,
 };
 
 export function pageFor(key: string): ComponentType<InstrumentPageProps> {

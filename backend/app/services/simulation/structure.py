@@ -255,6 +255,18 @@ def caveats_from_records(records: list[dict], cited_ids: list[str]) -> list[dict
     return [{"text": c, "record_ids": seen[c]} for c in rest + synthetic]
 
 
+def barriers_from_records(records: list[dict]) -> Optional[dict]:
+    """The newest barriers record's ranked list (brief L6-05), for the report's *What's in the
+    way* block: theme, count, share, weight, removals, the twin ids and the evidence behind each."""
+    for r in records:
+        if r.get("barriers"):
+            return {"record_id": r.get("id"), "outcome": r.get("outcome") or r.get("question") or "", "n": int((r.get("estimate") or {}).get("n") or 0),
+                    "items": [{"theme": b.get("theme"), "count": b.get("count", 0), "share": b.get("share"), "weight_mean": b.get("weight_mean"),
+                               "removals": [x.get("value") for x in (b.get("removals") or [])][:3], "agent_ids": (b.get("agent_ids") or [])[:12],
+                               "evidence": (b.get("evidence") or [])[:5]} for b in r["barriers"][:7]]}
+    return None
+
+
 # ── assembly ─────────────────────────────────────────────────────────────────
 
 def build_structure(*, session_query: str, records: list[dict], headline: Optional[dict], positions: list[dict],
@@ -288,7 +300,7 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
             "dissent": dissent,
         },
         "records": {"all": [r.get("id") for r in records], "cited": list(cited_record_ids)},
-        "outcome": {"caveats": caveats_from_records(records, cited_record_ids)},
+        "outcome": {"caveats": caveats_from_records(records, cited_record_ids), "barriers": barriers_from_records(records)},
         # L6-03: which source figures the prose cites, and every number it typed with no source.
         "figures": figures or {"facts_cited": [], "items_cited": [], "unsourced": []},
     }

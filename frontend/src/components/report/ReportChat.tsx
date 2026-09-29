@@ -905,6 +905,7 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
             dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
         );
       })}
+      {structure?.outcome?.barriers && hasOutcome && <WhatsInTheWay b={structure.outcome.barriers} agentsById={agentsById} />}
       {structure && hasOutcome && <ComputedCaveats caveats={structure.outcome.caveats} />}
     </div>
   );
@@ -1071,6 +1072,43 @@ function SourceCard({ fact, item, x, y, onClose }: { fact?: SourceFact; item?: S
         </div>
       </div>
     </>
+  );
+}
+
+/** Barriers (brief L6-05): a plain numbered list from the Barriers record — no colour, the twin
+ *  names underlined as every citation is, each barrier's count and what would remove it. */
+function WhatsInTheWay({ b, agentsById }: { b: NonNullable<ReportStructure["outcome"]["barriers"]>; agentsById: Record<string, Agent> }) {
+  if (!b.items?.length) return null;
+  return (
+    <div className="mt-4 rounded-lg border border-border/50 bg-muted/10 px-3.5 py-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">What&apos;s in the way · ranked by the twins</span>
+        {b.record_id && <button type="button" data-record={b.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">record</button>}
+        <span className="text-[10px] text-muted-foreground/60">n={b.n}</span>
+      </div>
+      {b.outcome && <p className="text-[10px] text-muted-foreground/70 mb-1.5">Outcome: {b.outcome}</p>}
+      <ol className="space-y-1">
+        {b.items.map((it, k) => {
+          const names = it.agent_ids.map((id) => agentsById[id]).filter(Boolean);
+          return (
+            <li key={it.theme} className="text-[11px] text-foreground/85 leading-snug flex gap-2">
+              <span className="text-muted-foreground/60 tabular-nums w-4 shrink-0">{k + 1}.</span>
+              <span>
+                <span className="font-medium first-letter:uppercase">{it.theme}</span>
+                <span className="text-muted-foreground"> · {it.count} twin{it.count === 1 ? "" : "s"}{it.weight_mean != null ? ` · weight ${Math.round(it.weight_mean)}/100` : ""}</span>
+                {it.removals?.length > 0 && <span className="text-muted-foreground"> · removed by {it.removals.map((r) => (typeof r === "string" ? r : r.value)).join(", ")}</span>}
+                {names.length > 0 && (
+                  <span className="text-muted-foreground"> · {names.slice(0, 4).map((ag, i) => (
+                    <span key={ag.id}>{i > 0 ? ", " : ""}<button type="button" data-twin={ag.id} className="twin-cite text-primary underline decoration-dotted underline-offset-2">{ag.name}</button></span>
+                  ))}{names.length > 4 ? ` and ${names.length - 4} more` : ""}</span>
+                )}
+                {it.evidence?.length > 0 && <span className="text-muted-foreground/70"> · evidence: {it.evidence.slice(0, 2).map((e) => e.provenance_class.replace(/_/g, " ")).join(", ")}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
