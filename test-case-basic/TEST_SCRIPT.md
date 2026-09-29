@@ -28,7 +28,7 @@ If every step below produces what it says it should, the tool works end to end.
 | `01-scheme-brief.md` | Ingest tab → **Documents** (upload) | What the scheme is, what the council can and cannot change |
 | `02-facts.md` | Ingest tab → **Text** (paste the contents) | A table of illustrative statistics with test sources |
 | `03-resident-feedback.md` | Ingest tab → **Documents** (upload) | Twelve short pilot quotes |
-| `residents-panel.csv` | Agents tab → Studio → **Statistics & surveys** (upload) | A 12-row resident panel the Studio can read as a survey |
+| `residents-panel.csv` | Agents tab → Studio → **Your inputs → Survey / panel data** (*Upload respondents to mirror*) | A 12-row resident panel the Studio reads as a survey |
 
 ## The queries to type (copy exactly)
 
@@ -74,18 +74,23 @@ If every step below produces what it says it should, the tool works end to end.
 
 1. Open the **Agents** tab. It is the Population Studio while there are no twins.
 2. Set the twin count to **40** and the mode to **Fast**.
-3. Under **Statistics & surveys**, upload `residents-panel.csv`.
-4. Press **Detect**. **Check:** the detected population is Manchester households; the proposed
+3. Under **Your inputs → Survey / panel data**, press *Upload respondents to mirror* and pick
+   `residents-panel.csv`.
+4. Under **Statistics & surveys**, **untick** *Gather automatically when you press Detect & plan*.
+   The panel says "Automatic gathering is off" — expected. (Same reason as research off: the frame
+   then rests only on your files and the panel. Turn it on for the optional second pass.)
+5. Press **Detect & plan**. **Check:** the detected population is Manchester households; the proposed
    dials mention things like space at home, liner cost, smell tolerance, awareness of the scheme
    (these are the question's own dials, chosen for this question).
-5. **Gather** can stay on. **Check:** a *frame* card appears with dimensions; **deprivation** is
-   one of them, and each dimension shows a target share and its source, or says none was found.
-6. **Clarify**: answer one question or tick *skip the questions*.
-7. **Plan**. **Check:** four to seven segments such as: flat-dwellers with shared bins, terrace
+6. **Check:** a *frame* card appears with dimensions; **deprivation** is one of them, and each
+   dimension shows a target share from your files, or says none was found (with gathering off,
+   "none found" on some dimensions is normal).
+7. **Clarify**: answer one question or tick *skip the questions*.
+8. **Plan**. **Check:** four to seven segments such as: flat-dwellers with shared bins, terrace
    households in deprived wards, keen recyclers, people who never heard of it, large shared
    houses. Shares add to 100%.
-8. **Review**: change one segment's share and watch the others rescale. Then **Approve & build**.
-9. **Check:** twins stream in by segment. Each card has a segment badge and a deprivation band.
+9. **Review**: change one segment's share and watch the others rescale. Then **Approve & build**.
+10. **Check:** twins stream in by segment. Each card has a segment badge and a deprivation band.
    After a minute a small **confidence badge** appears beside twins as validation runs in the
    background. A *sees N/M* chip shows how much of the material each twin can see.
 
