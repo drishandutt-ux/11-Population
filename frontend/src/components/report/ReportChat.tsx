@@ -1297,6 +1297,16 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
             <p className="text-[10px] text-muted-foreground/80">{r.refusals.refused} of {r.refusals.n} said it was not theirs to answer — outside every denominator.</p>
           )}
           <EquitySplit eq={r.equity} />
+          {(r.sources?.length || 0) > 0 && (
+            <div>
+              <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1">Documents the twins drew on · by their own citation</div>
+              <ul className="text-[10px] text-foreground/75 space-y-0.5">
+                {r.sources!.slice(0, 6).map((u) => (
+                  <li key={u.unit_id} title={u.text}>· {u.provenance_class.replace(/_/g, " ")} · cited by {u.twins} twin{u.twins === 1 ? "" : "s"}{u.source_ref ? <span className="text-muted-foreground/60"> · {u.source_ref.replace(/^https?:\/\//, "").slice(0, 44)}</span> : null}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {splitKeys.length > 0 && (
             <div className="space-y-2">
               {splitKeys.map((k) => (

@@ -115,6 +115,37 @@ async def context_for_agent(session_id: str, agent: Any, query: str, *, purpose:
     return knowledge_block(res["visible"])
 
 
+def numbered_block(visible: list[dict], max_chars: int = 3600) -> tuple[str, list[dict]]:
+    """The knowledge block with every item numbered S1 … Sn, and the items themselves, so a
+    twin can cite what it drew on and the answer can be traced to the document (brief L6-05)."""
+    lines = ["Where you know each thing from is in brackets. Each item has a number (S1, S2 …) so you can say which you drew on."]
+    used = len(lines[0])
+    items: list[dict] = []
+    for k, r in enumerate(visible, 1):
+        u = r["unit"]
+        text = " ".join((u.get("text") or "").split())
+        line = f"[S{k}] ({r['route']}) {text[:420]}"
+        if used + len(line) > max_chars:
+            break
+        lines.append(line)
+        used += len(line) + 1
+        items.append({"sid": f"S{k}", "unit_id": u["id"], "source_ref": u.get("source_ref", ""), "provenance_class": u.get("provenance_class", ""),
+                      "trust_tier": u.get("trust_tier", ""), "text": text[:220], "route": r.get("route", "")})
+    return "\n".join(lines), items
+
+
+async def sources_for_agent(session_id: str, agent: Any, query: str, *, purpose: str = "probe", limit: int = 14, log: bool = True) -> Optional[tuple[str, list[dict]]]:
+    """(numbered knowledge block, served items) for one twin, or None when the session is not
+    scoped. The served list is what the twin was working from; its answer says which it used."""
+    got = await retrieval_for_agent(session_id, agent, query, purpose=purpose, limit=limit, log=log)
+    if got is None:
+        return None
+    _, res, _, _ = got
+    if not res["visible"]:
+        return f"Topic under discussion: {query}\n(You have not come across specifics on this yourself.)", []
+    return numbered_block(res["visible"])
+
+
 def _facet_counts(units: list[dict]) -> dict[str, dict[str, int]]:
     counts: dict[str, dict[str, int]] = {}
     for u in units:

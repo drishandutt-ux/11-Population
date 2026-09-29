@@ -6,7 +6,7 @@
  *  "why would the most deprived say yes?" is answered by the twins who did. */
 
 import { useMemo, useState } from "react";
-import { CategoryBars, SegmentTable, ShareBar, pct } from "../Charts";
+import { CategoryBars, DrewOn, SegmentTable, ShareBar, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { InstrumentPageProps } from "./types";
@@ -169,6 +169,7 @@ export default function VerdictPage({ probe, dynamicDials = [], agentsById = {} 
                 </div>
                 {r.answer?.verdict && <p className="text-xs text-foreground/90 mt-1">“{r.answer.verdict}”</p>}
                 {r.reasoning && <p className="text-[11px] text-foreground/65 mt-0.5 leading-relaxed">{r.reasoning}</p>}
+                <DrewOn units={r.answer?.used_units} />
               </div>
             );
           })}

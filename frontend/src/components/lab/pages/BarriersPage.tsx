@@ -6,7 +6,7 @@
  *  The same "Read by" picker as the Verdict, so the ranking can be compared cut by cut. */
 
 import { useMemo, useState } from "react";
-import { ShareBar, pct } from "../Charts";
+import { DrewOn, ShareBar, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { InstrumentPageProps } from "./types";
@@ -14,10 +14,10 @@ import { InstrumentPageProps } from "./types";
 const SPLIT_ORDER = ["deprivation", "stance", "age_band", "segment", "region", "income_band", "gender", "education", "humanity_band", "purchase_intent_prior"];
 const rankOf = (v: string) => { const m = v.match(/^[QD](\d{1,2})/i); return m ? parseInt(m[1], 10) : 99; };
 
-type Twin = { agent_id: string; name: string; role: string; blocked: string; barrier: string; removal: string; weight: number; reasoning: string; deprivation?: string };
+type Twin = { agent_id: string; name: string; role: string; blocked: string; barrier: string; removal: string; weight: number; reasoning: string; deprivation?: string; used_units?: { unit_id: string; provenance_class: string; source_ref: string; text: string }[] };
 type Barrier = { theme: string; count: number; share: number; low: number; high: number; weight_mean: number; score: number;
   removals: { value: string; count: number; share: number }[]; agent_ids: string[]; twins: Twin[];
-  evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string }[] };
+  evidence: { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; twins: number; route: string; basis?: "used" | "could_see" }[] };
 
 export default function BarriersPage({ probe, dynamicDials = [], agentsById = {} }: InstrumentPageProps) {
   const a: any = probe.aggregates;
@@ -49,7 +49,7 @@ export default function BarriersPage({ probe, dynamicDials = [], agentsById = {}
       .map((b) => {
         const twins = (answers.filter((r) => cutIds.has(r.agent_id) && b.agent_ids.includes(r.agent_id)).map((r) => ({
           agent_id: r.agent_id, name: r.name, role: r.role, blocked: r.answer?.blocked, barrier: r.answer?.barrier, removal: r.answer?.removal,
-          weight: r.answer?.weight || 0, reasoning: r.reasoning, deprivation: r.segments?.deprivation,
+          weight: r.answer?.weight || 0, reasoning: r.reasoning, deprivation: r.segments?.deprivation, used_units: r.answer?.used_units,
         })) as Twin[]).sort((x, y) => y.weight - x.weight);
         const w = twins.length ? twins.reduce((s, t) => s + t.weight, 0) / twins.length : 0;
         return { ...b, count: twins.length, share: twins.length / n, low: 0, high: 0, weight_mean: Math.round(w * 10) / 10, twins, agent_ids: twins.map((t) => t.agent_id) };
@@ -141,15 +141,16 @@ export default function BarriersPage({ probe, dynamicDials = [], agentsById = {}
                           {" "}<ConfidenceBadge validation={agentsById[t.agent_id]?.validation} size="xs" />
                           <div className="text-foreground/80 mt-0.5">“{t.barrier}”{t.removal ? <span className="text-muted-foreground"> — would be removed by: {t.removal}</span> : null}</div>
                           {t.reasoning && <div className="text-[11px] text-foreground/60 leading-relaxed">{t.reasoning}</div>}
+                          <DrewOn units={t.used_units ?? answers.find((r) => r.agent_id === t.agent_id)?.answer?.used_units} />
                         </div>
                       ))}
                     </div>
                     {b.evidence?.length > 0 ? (
                       <div className="space-y-1">
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Evidence these twins could see that speaks to it</div>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">{b.evidence[0]?.basis === "could_see" ? "Evidence these twins could see that speaks to it (none cited)" : "Documents these twins drew on"}</div>
                         {b.evidence.map((e) => (
                           <div key={e.unit_id} className="text-[11px] text-foreground/75 leading-snug">
-                            <span className="text-muted-foreground">{e.provenance_class.replace(/_/g, " ")} · trust {e.trust_tier} · {e.twins} of these twins</span>
+                            <span className="text-muted-foreground">{e.provenance_class.replace(/_/g, " ")} · trust {e.trust_tier} · {e.basis === "could_see" ? "could see" : "cited by"} {e.twins} of these twins</span>
                             <div>{e.text}</div>
                             {e.source_ref && <div className="text-[10px] text-muted-foreground/60 truncate">{e.source_ref}</div>}
                           </div>

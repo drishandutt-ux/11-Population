@@ -576,3 +576,17 @@ export function OptionBars({ rows, selected, onSelect }: {
     </div>
   );
 }
+
+/** The documents this twin said it drew on (L6-05), as plain source lines. */
+export function DrewOn({ units }: { units?: { unit_id: string; provenance_class: string; source_ref: string; text: string }[] }) {
+  if (!units?.length) return null;
+  return (
+    <div className="mt-1 text-[10px] text-muted-foreground/80 leading-snug">
+      <span className="text-muted-foreground/60">drew on:</span>{" "}
+      {units.slice(0, 3).map((u, i) => (
+        <span key={u.unit_id} title={u.text}>{i > 0 ? " · " : ""}{u.provenance_class.replace(/_/g, " ")}{u.source_ref ? ` (${u.source_ref.replace(/^https?:\/\//, "").slice(0, 40)})` : ""}</span>
+      ))}
+      {units.length > 3 ? ` · +${units.length - 3}` : ""}
+    </div>
+  );
+}

@@ -144,6 +144,19 @@ def _estimate_from_aggregates(instrument: str, agg: dict, spec: dict) -> dict:
     return {"metric": "", "label": "Result", "format": "text", "value": None, "low": None, "high": None, "n": int(agg.get("n") or 0)}
 
 
+def sources_used(rows: list) -> list[dict]:
+    """The documents the answering twins cited (L6-05), rolled up: each unit with how many
+    twins drew on it, most cited first. `rows` are ProbeAnswer rows or answer dicts."""
+    seen: dict[str, dict] = {}
+    for r in rows:
+        ans = r if isinstance(r, dict) else (getattr(r, "answer", None) or {})
+        for u in ans.get("used_units") or []:
+            e = seen.setdefault(u["unit_id"], {"unit_id": u["unit_id"], "source_ref": u.get("source_ref", ""), "provenance_class": u.get("provenance_class", ""),
+                                               "trust_tier": u.get("trust_tier", ""), "text": u.get("text", ""), "twins": 0})
+            e["twins"] += 1
+    return sorted(seen.values(), key=lambda e: (-e["twins"], e["provenance_class"]))[:10]
+
+
 def _label_for(instrument: str, spec: dict, agg: dict) -> str:
     if instrument == "verdict":
         return "Population verdict on the question"
@@ -195,6 +208,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
                       "weight_mean": b.get("weight_mean"), "removals": b.get("removals") or [], "agent_ids": b.get("agent_ids") or [],
                       "evidence": b.get("evidence") or []} for b in (agg.get("barriers") or [])] if instrument == "barriers" else [],
         "outcome": str(agg.get("outcome") or "") if instrument == "barriers" else "",
+        # The documents the twins drew on, by their own citation (L6-05); filled by the aggregator when it has the answers.
+        "sources": list(agg.get("sources_used") or []),
         "refusals": refusals,
         "unanimity": unanimity,
         "weighted": weighted,

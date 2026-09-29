@@ -250,6 +250,42 @@ def with_dont_know(schema: dict) -> dict:
     return {**schema, "properties": props, "required": required + [CAN_ANSWER, WHY_NOT]}
 
 
+SOURCES_USED = "sources_used"
+USED_UNITS = "used_units"
+SERVED_UNITS = "served_units"
+SOURCES_RULE = (
+    "\n\nSOURCES: the items under WHAT YOU KNOW ABOUT IT are numbered [S1], [S2] … In " + SOURCES_USED +
+    " list the numbers of the items you actually drew on for this answer — only those, and none when your answer came from your own life rather than from them."
+)
+
+
+def with_sources(schema: dict) -> dict:
+    """The schema plus the twin's own citations: which numbered knowledge items it drew on
+    (brief L6-05 — an answer traceable to the documents behind it)."""
+    props = dict(schema.get("properties") or {})
+    props[SOURCES_USED] = {"type": "array", "items": {"type": "string"}, "description": "The numbers (e.g. \"S2\") of the knowledge items you drew on for this answer; empty when none."}
+    return {**schema, "properties": props}
+
+
+def resolve_sources(answer: dict, served: list[dict]) -> dict:
+    """Turn the twin's S-numbers into the documents themselves, and record everything it was
+    given. A number that names nothing is dropped."""
+    by_sid = {it["sid"]: it for it in served}
+    cited = []
+    for raw in (answer.get(SOURCES_USED) or []):
+        key = str(raw).strip().upper().replace("[", "").replace("]", "")
+        if not key.startswith("S"):
+            key = "S" + key
+        it = by_sid.get(key)
+        if it and it["unit_id"] not in [c["unit_id"] for c in cited]:
+            cited.append({k: it[k] for k in ("unit_id", "source_ref", "provenance_class", "trust_tier", "text", "route")})
+    out = dict(answer)
+    out[SOURCES_USED] = [c["unit_id"] for c in cited] and [it["sid"] for it in served if it["unit_id"] in {c["unit_id"] for c in cited}]
+    out[USED_UNITS] = cited
+    out[SERVED_UNITS] = [it["unit_id"] for it in served]
+    return out
+
+
 def answered(row: dict) -> bool:
     """False when the twin said this was not theirs to answer."""
     return str(((row.get("answer") or {}).get(CAN_ANSWER) or "yes")).lower() != "no"
@@ -274,8 +310,10 @@ def dont_know_block(rows: list[dict]) -> dict:
 async def answer_one(
     agent: SpawnedAgent, *, instrument, spec: dict, probe_id: str, session_id: str,
     query: str, kg_context: str, model: str, experiment_id: Optional[str] = None,
+    served: Optional[list[dict]] = None,
 ) -> Optional[dict]:
-    """Ask one agent the instrument's question and persist the typed answer.
+    """Ask one agent the instrument's question and persist the typed answer. `served` (L6-05):
+    the numbered knowledge items in `kg_context`, so the answer can say which it drew on.
 
     Returns the answer dict, or None if the call failed (a failed agent is dropped from the
     denominator rather than filled with a default — a made-up answer would corrupt the share)."""
@@ -285,13 +323,15 @@ async def answer_one(
 
     from app.services.agents import dynamic_dials as dyn_mod
     # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
-    system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE
+    system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE + (SOURCES_RULE if served else "")
     user = _build_user_message(
         agent=agent, instrument=instrument, spec=spec, query=query,
         kg_context=kg_context, said=said, decided=decided,
     )
 
     schema = with_dont_know(instrument.schema_for(spec))
+    if served:
+        schema = with_sources(schema)
     try:
         answer = await analyze(
             schema, system, user,
@@ -314,6 +354,8 @@ async def answer_one(
         return None
 
     latency_ms = int((time.monotonic() - started) * 1000)
+    if served is not None:
+        answer = resolve_sources(answer, served)
     row = {
         "agent_id": agent.id,
         "agent": {"name": agent.name, "role": agent.role, "avatar_color": agent.avatar_color},
@@ -445,12 +487,15 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
                 if await_stop.is_set():
                     return
                 ctx = kg_context
+                served = None
                 if scoped:
-                    ctx = (await scoping.context_for_agent(session_id, agent, query, purpose="probe")) or kg_context
+                    got = await scoping.sources_for_agent(session_id, agent, query, purpose="probe")
+                    if got:
+                        ctx, served = got
                 row = await answer_one(
                     agent, instrument=instrument, spec=spec, probe_id=probe_id,
                     session_id=session_id, query=query, kg_context=ctx, model=model,
-                    experiment_id=experiment_id,
+                    experiment_id=experiment_id, served=served,
                 )
             async with lock:
                 if row:
@@ -488,6 +533,9 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
         else:
             aggregates = instrument.aggregate(rows, spec)
         aggregates["dont_know"] = refusals
+        # The documents the twins cited, rolled up (L6-05) — read by the record and the pages.
+        from app.services.simulation.records import sources_used
+        aggregates["sources_used"] = sources_used([r["answer"] for r in rows])
         # Run record (L1-06 / L6-01 provenance): whether every twin answered from its own scoped
         # knowledge, and which snapshot of it.
         aggregates["scoping"] = {"scoped": bool(scoped), "snapshot_id": scoping_snapshot}

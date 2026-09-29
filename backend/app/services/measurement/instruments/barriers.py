@@ -152,7 +152,18 @@ async def trace_evidence(probe_id: str) -> None:
             return
         agents = {a.id: a for a in (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == probe.session_id))).scalars().all()}
         agg = dict(probe.aggregates)
+        # What the twins actually cited comes first (L6-05: traceable to the documents used).
+        from app.models.measurement import ProbeAnswer
+        answers = {a.agent_id: (a.answer or {}) for a in (await db.execute(select(ProbeAnswer).where(ProbeAnswer.probe_id == probe_id))).scalars().all()}
         for b in agg["barriers"]:
+            used: dict[str, dict] = {}
+            for aid in b.get("agent_ids") or []:
+                for u in (answers.get(aid) or {}).get("used_units") or []:
+                    e = used.setdefault(u["unit_id"], {**u, "twins": 0, "basis": "used"})
+                    e["twins"] += 1
+            if used:
+                b["evidence"] = sorted(used.values(), key=lambda e: (-e["twins"], e["provenance_class"]))[:MAX_EVIDENCE]
+                continue
             # A unit counts only when it speaks to this barrier: it shares a word (4+ letters) with
             # the coded label or with the twins' own barrier phrases. Scoping decides who could see
             # it; the words decide whether it is about this.
@@ -171,7 +182,7 @@ async def trace_evidence(probe_id: str) -> None:
                     if terms and not (terms & _terms(u.get("text", ""))):
                         continue
                     e = seen.setdefault(u["id"], {"unit_id": u["id"], "source_ref": u.get("source_ref", ""), "provenance_class": u.get("provenance_class", ""),
-                                                   "trust_tier": u.get("trust_tier", ""), "text": str(u.get("text") or "")[:220], "twins": 0, "route": r.get("route", "")})
+                                                   "trust_tier": u.get("trust_tier", ""), "text": str(u.get("text") or "")[:220], "twins": 0, "route": r.get("route", ""), "basis": "could_see"})
                     e["twins"] += 1
             b["evidence"] = sorted(seen.values(), key=lambda e: (-e["twins"], e["provenance_class"]))[:MAX_EVIDENCE]
         probe.aggregates = agg

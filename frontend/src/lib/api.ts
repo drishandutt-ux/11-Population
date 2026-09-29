@@ -469,6 +469,8 @@ export type OutcomeRecord = {
   equity: EquityBlock;
   /** Barriers (brief L6-05): the ranked list a Barriers record carries; empty for every other record. */
   barriers?: BarrierItem[];
+  /** The documents the answering twins cited for this record, by their own citation (L6-05), most cited first. */
+  sources?: UsedUnit[];
   outcome?: string;
   refusals: { n: number; refused: number; share: number; reasons: { value: string; count: number; share: number }[]; who: { agent_id: string; name: string; why: string }[] } | null;
   unanimity: { flagged: boolean; top_share: number; widest_split: string; widest_spread: number; n: number; reason?: string } | null;
@@ -494,6 +496,9 @@ export type ReportStructure = {
   /** L6-03: the source figures the prose cites, and every number it typed with no source behind it. */
   figures?: { facts_cited: string[]; items_cited: string[]; unsourced: string[] };
 };
+
+/** A knowledge item a twin said it drew on (L6-05). */
+export type UsedUnit = { unit_id: string; source_ref: string; provenance_class: string; trust_tier: string; text: string; route?: string; twins?: number; basis?: "used" | "could_see" };
 
 export type BarrierItem = { theme: string; count: number; share: number | null; low?: number | null; high?: number | null; weight_mean: number | null;
   removals: ({ value: string; count: number; share: number } | string)[]; agent_ids: string[];
