@@ -405,6 +405,18 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
             ))}
           </div>
           <p className="text-[11px] text-foreground/70 mt-3 leading-relaxed">{growth.sentence}</p>
+          {growth.why && (growth.why.through.length + growth.why.back.length + growth.why.still_stuck.length > 0) ? (
+            <div className="mt-2 pt-2 border-t border-border/30 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80" title="Each twin answered the journey in both runs. Those who now get further, and those who now stop earlier, are grouped by what they say with the amendments in place, with one sentence copied verbatim from a twin in each group. Those the amendments did not move are grouped by the barrier they still name.">
+                Why it moved · in their words{growth.why.coded ? "" : " · uncoded, one twin per line"}
+              </div>
+              <WhyGroup title={`Get further now (${growth.why.n.through})`} rows={growth.why.through} tone="text-emerald-300/90" />
+              <WhyGroup title={`Stop earlier now (${growth.why.n.back})`} rows={growth.why.back} tone="text-red-300/90" />
+              <WhyGroup title={`Still stuck (${growth.why.n.still_stuck}) · what still stops them`} rows={growth.why.still_stuck} tone="text-muted-foreground" />
+            </div>
+          ) : !growth.why ? (
+            <p className="text-[10px] text-muted-foreground/60 mt-1">Reading what the twins said about why they moved…</p>
+          ) : null}
           <p className="text-[10px] text-muted-foreground/60 mt-1">Paired on the same twins, same seed and steps; the earlier journey answers were hidden from them so the change could move them. Re-run after signing more rules to see the growth change.</p>
         </div>
       )}
