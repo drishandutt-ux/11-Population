@@ -1,7 +1,7 @@
 # The six use-case cards (TEST DATA)
 
-Short stimulus cards. Each is shown to a respondent on its own. Used in the Lab as the material
-for the survey, the A/B test and the message test. Prices as in the concept brief.
+Short stimulus cards. Uploaded as a document so the twins can read them. Optionally, one card at a
+time can be pasted as the material of a Reaction-template survey. Prices as in the concept brief.
 
 ## Card A — Wardrobe shop
 Clip Pip inside the wardrobe door. Over two days it learns every item you own. The app then gives

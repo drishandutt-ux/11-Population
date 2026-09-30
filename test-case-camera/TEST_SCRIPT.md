@@ -37,7 +37,7 @@ concept with research on.
 | `01-concept-brief.md` | 1 Sources → **Documents** (upload) | The concept as a respondent would see it, prices, levers, what cannot change |
 | `02-market-facts.md` | 1 Sources → **Text** (paste the contents) | Illustrative statistics with test sources, including the sizing rows |
 | `03-early-reactions.md` | 1 Sources → **Documents** (upload) | Fourteen short concept-screener quotes |
-| `04-use-case-cards.md` | 1 Sources → **Documents** (upload), and copied into the Lab as material | The six one-paragraph use-case cards |
+| `04-use-case-cards.md` | 1 Sources → **Documents** (upload) | The six one-paragraph use-case cards. Optional: paste one card into a Reaction-template survey's material box to test jobs one at a time |
 | `audience-profile.txt` | 2 Twins → Studio → **Your inputs → Audience profile** (paste) | Who to build, in one paragraph |
 | `respondents-panel.csv` | 2 Twins → Studio → **Your inputs → Survey / panel data** (*Upload respondents to mirror*) | A 14-row panel the Studio reads as a survey |
 
