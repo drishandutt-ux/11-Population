@@ -272,6 +272,7 @@ def test_shift_records_carry_a_reader_summary_instead_of_a_bare_zero():
     assert rec._shift_summary("'door-knock'", 0.0, False) == "No distinguishable shift from 'door-knock'"
     assert rec._shift_summary("'bus pass'", 0.1, True, what_if=True) == "'bus pass' +10 pts if the assumption holds"
     assert rec._shift_summary("'bus pass'", None, False) == "'bus pass': shift not counted"
+    assert rec.round_half_up(22.5) == 23 and rec.round_half_up(-22.5) == -23 and rec.round_half_up(22.49) == 22 and rec._pts(0.225) == "+23 pts"
     # A messaging run whose messages were all unavailable has no value, not a zero.
     e = SimpleNamespace(id="e1", name="", seed=1, model="m", created_at=None,
                         results={"messaging": {"available": True, "n": 7, "from": {"label": "A"}, "to": {"label": "B"}, "messages": [{"available": False, "label": "x"}], "any_significant": False}})

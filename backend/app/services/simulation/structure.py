@@ -426,11 +426,15 @@ def follow_ups(records: list[dict], positions: list[dict], names: Optional[dict[
     levers = [r for r in records if r.get("lever") and (r.get("estimate") or {}).get("significant") and (r.get("estimate") or {}).get("value") is not None]
     if levers:
         best = max(levers, key=lambda r: float(r["estimate"]["value"]))
-        out.append(f"Where does the gain from '{(best['lever'].get('rule') or {}).get('lever')}' go after '{(best['lever'].get('to') or {}).get('label') or 'that step'}'?")
+        # The step is in the label ("Lever: x — shift at A → B"); the lever block carries no step labels.
+        step = str(best.get("label") or "").split(" → ")[-1].strip() if " → " in str(best.get("label") or "") else ""
+        out.append(f"Where does the gain from '{(best['lever'].get('rule') or {}).get('lever')}' go after '{step or 'that step'}'?")
     gaps = [r for r in records if (r.get("equity") or {}).get("available") and (r.get("equity") or {}).get("significant")]
     if gaps:
         g = max(gaps, key=lambda r: abs(float((r.get("equity") or {}).get("gap") or 0)))
-        out.append(f"Why do the most deprived twins differ so much from the least deprived on '{g.get('label')}'?")
+        # A record label can carry the whole question ("What's in the way of: Will …"); ask about the part before it.
+        short = str(g.get("label") or "").split(": ")[0].split(" — ")[0]
+        out.append(f"Why do the most deprived twins differ so much from the least deprived on '{short}'?")
     flat = next((r for r in records if r.get("messaging") and not (r.get("messaging") or {}).get("any_significant") and (r.get("messaging") or {}).get("messages")), None)
     if flat:
         step = str(flat.get("label") or "").replace("Messages tested at ", "") or "that step"

@@ -140,7 +140,7 @@ def test_follow_up_questions_are_written_from_the_records():
         _rec("probe", instrument="journey", label="Where the population drops off",
              candidates=[{"from": {"label": "Tries it"}, "to": {"label": "Keeps it up"}, "stuck": 14, "n": 25}, {"from": {"label": "Hears"}, "to": {"label": "Tries it"}, "stuck": 9, "n": 40}]),
         _rec("probe", instrument="barriers", label="What's in the way", barriers=[{"theme": "communal bin mismanagement", "count": 6}]),
-        _rec("lever", lever={"rule": {"lever": "door-knock"}, "to": {"label": "Aware"}}, estimate={"value": 0.23, "significant": True, "n": 40}),
+        _rec("lever", label="Lever: door-knock — shift at Hears → Aware", lever={"rule": {"lever": "door-knock"}}, estimate={"value": 0.23, "significant": True, "n": 40}),
         _rec("messaging", label="Messages tested at Hears → Tries it", messaging={"any_significant": False, "messages": [{}, {}, {}]}),
         _rec("headline", instrument="verdict", equity={"available": True, "significant": True, "gap": -60.0}, label="Population verdict on the question"),
     ]
@@ -150,7 +150,7 @@ def test_follow_up_questions_are_written_from_the_records():
     assert qs[1] == "What would it take to remove 'communal bin mismanagement' for the 6 twins who raised it?"
     assert qs[2] == "What would have to be true for Gary Pendleton to be right?"
     assert qs[3] == "Where does the gain from 'door-knock' go after 'Aware'?"
-    assert qs[4].startswith("Why do the most deprived twins differ") and len(qs) == 5
+    assert qs[4] == "Why do the most deprived twins differ so much from the least deprived on 'Population verdict on the question'?" and len(qs) == 5
     # a session with no records still gets something to ask, in the twins' vocabulary
     generic = st.follow_ups([], [], {})
     assert len(generic) == 3 and all("agent" not in q for q in generic)

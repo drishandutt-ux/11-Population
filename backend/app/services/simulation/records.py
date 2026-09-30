@@ -562,8 +562,14 @@ def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame
 # A shift record's big number is the winner's shift. When nothing moved, "0 pts" tells a reader
 # nothing; the summary says what was tested and that none of it moved the twins.
 
+def round_half_up(x: float) -> int:
+    """22.5 → 23, as the page rounds (Python's round() would give 22)."""
+    import math
+    return int(math.floor(abs(x) + 0.5)) * (1 if x >= 0 else -1)
+
+
 def _pts(v: Optional[float]) -> str:
-    return "—" if v is None else f"{round(v * 100):+d} pts"
+    return "—" if v is None else f"{round_half_up(v * 100):+d} pts"
 
 
 def _shift_summary(what: str, lift: Optional[float], significant: bool, *, what_if: bool = False) -> str:

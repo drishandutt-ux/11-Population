@@ -232,8 +232,9 @@ def _fmt(est: dict) -> str:
         ci = f"95% CI {round(lo * 100)}–{round(hi * 100)}%, " if lo is not None and hi is not None else ""
         return f"{round(float(v) * 100)}% ({ci}{n_part})"
     if est.get("format") == "lift":
-        ci = f"95% CI {lo * 100:+.0f} to {hi * 100:+.0f}, " if lo is not None and hi is not None else ""
-        return f"{float(v) * 100:+.0f} points ({ci}{n_part})"
+        from app.services.simulation.records import round_half_up as rh
+        ci = f"95% CI {rh(lo * 100):+d} to {rh(hi * 100):+d}, " if lo is not None and hi is not None else ""
+        return f"{rh(float(v) * 100):+d} points ({ci}{n_part})"
     return f"{v} ({n_part})"
 
 
