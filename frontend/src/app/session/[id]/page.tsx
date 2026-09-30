@@ -559,6 +559,7 @@ export default function SessionPage() {
             isGeneratingReport={isGeneratingReport}
             onMakeReport={handleMakeReport}
             onClearReport={() => setReportContent(null)}
+            onGoToLab={() => setActiveTab("lab")}
           />
         )}
         </ErrorBoundary>

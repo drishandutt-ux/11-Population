@@ -235,3 +235,68 @@ def test_generate_runs_the_verdict_once_and_renders_from_records(client):
     c.post(f"/api/v1/sessions/{sid}/report/generate", json={"question": "Again"})
     assert len(runs) == 1
     assert c.get(f"/api/v1/sessions/{sid}/records").json()["records"][0]["id"] == rid
+
+
+# ── report overhaul (2026-09-30): no zeros for the uncounted, one record per tool and step ──
+
+def test_confidence_judges_the_interval_relative_to_the_estimate_and_caps_a_poor_frame():
+    # 3–20% around 8% spans 17 points but is twice the figure: not tight, wide relative to the estimate.
+    small = rec.confidence_for(n=40, low=0.03, high=0.20, fmt="share", unanimity=None, refusals=None, frame_level="poor", weighted=False, model="claude-sonnet-4-6", value=0.08)
+    assert any(d.startswith("wide interval relative to the estimate (3–20% around 8%)") for d in small["drivers"])
+    assert "tight interval" not in small["drivers"] and small["score"] <= rec.POOR_FRAME_CAP
+    # The same width around 50% is tight.
+    mid = rec.confidence_for(n=40, low=0.42, high=0.58, fmt="share", unanimity=None, refusals=None, frame_level="good", weighted=False, value=0.5)
+    assert "tight interval" in mid["drivers"]
+    # A poorly matched panel never reads HIGH, whatever else is true.
+    capped = rec.confidence_for(n=200, low=0.45, high=0.55, fmt="share", unanimity=None, refusals=None, frame_level="poor", weighted=True, model="claude-opus", value=0.5)
+    assert capped["score"] == rec.POOR_FRAME_CAP and any(d.startswith("capped below HIGH") for d in capped["drivers"])
+    from app.services.simulation import structure as st
+    assert st.confidence_band(capped["score"]) == "MEDIUM"
+
+
+def test_a_missing_interval_or_value_is_said_to_be_missing_never_written_as_zero():
+    assert rec._fmt_value({"format": "share", "value": 0.75, "low": None, "high": None, "n": 20}) == "75% (interval not counted, n=20)"
+    assert rec._fmt_value({"format": "lift", "value": None, "n": 11}) == "not counted (n=11)"
+    assert rec._fmt_value({"format": "lift", "value": 0.05, "low": None, "high": None, "n": 11}) == "+0.05 (interval not counted, n=11, not significant)"
+    assert rec.people_phrase({"stuck_people": 4200, "stuck_low": None, "stuck_high": None}) == ", ≈4,200 people stuck"
+    assert rec._opt("x") is None and rec._opt(None) is None and rec._opt("0.5") == 0.5
+
+
+def test_shift_records_carry_a_reader_summary_instead_of_a_bare_zero():
+    assert rec._ranking_summary("message", [], False, unit="", label_key="label", lift_key="lift") == "No message could be ranked"
+    flat = [{"label": "Free liners", "lift": 0.0}, {"label": "Smell", "lift": 0.0}]
+    assert rec._ranking_summary("message", flat, False, unit="", label_key="label", lift_key="lift") == "No message moved the twins (2 messages tested)"
+    win = [{"label": "Free liners", "lift": 0.12}]
+    assert rec._ranking_summary("message", win, True, unit="", label_key="label", lift_key="lift") == "'Free liners' +12 pts (1 message tested)"
+    assert rec._shift_summary("'door-knock'", 0.23, True) == "'door-knock' +23 pts"
+    assert rec._shift_summary("'door-knock'", 0.0, False) == "No distinguishable shift from 'door-knock'"
+    assert rec._shift_summary("'bus pass'", 0.1, True, what_if=True) == "'bus pass' +10 pts if the assumption holds"
+    assert rec._shift_summary("'bus pass'", None, False) == "'bus pass': shift not counted"
+    # A messaging run whose messages were all unavailable has no value, not a zero.
+    e = SimpleNamespace(id="e1", name="", seed=1, model="m", created_at=None,
+                        results={"messaging": {"available": True, "n": 7, "from": {"label": "A"}, "to": {"label": "B"}, "messages": [{"available": False, "label": "x"}], "any_significant": False}})
+    r = rec.record_from_messaging(e)
+    assert r["estimate"]["value"] is None and r["estimate"]["label"].startswith("No message could be tested") and r["summary"] == "No message could be ranked"
+    text, _ = rec.records_block([r])
+    assert "not counted (n=7" in text and "in words: No message could be ranked" in text
+    assert "equity: not cut by deprivation for this kind of record" in text and "no deprivation levels on this population" not in text
+
+
+def test_only_the_latest_run_of_a_tool_at_a_step_is_kept_and_the_count_is_carried():
+    def mk(id_, kind, label, when, instrument="journey"):
+        return {"id": id_, "kind": kind, "instrument": instrument, "label": label, "provenance": {"created_at": when}}
+    recs = [
+        mk("h", "headline", "Population verdict on the question", "2026-09-30T09:00", "verdict"),
+        mk("m2", "messaging", "Messages tested at A → B", "2026-09-30T08:00"),
+        mk("m1", "messaging", "Messages tested at A → B", "2026-09-30T07:00"),
+        mk("m3", "messaging", "Messages tested at B → C", "2026-09-30T06:00"),
+        mk("c1", "commitment", "Committed: A → B", "2026-09-30T05:00"),
+        mk("c2", "commitment", "Committed: A → B", "2026-09-30T04:00"),
+    ]
+    out = rec.latest_runs(recs)
+    assert [r["id"] for r in out] == ["h", "m2", "m3", "c1", "c2"]  # order preserved, m1 folded into m2
+    assert out[1]["runs"] == {"count": 2, "superseded": ["m1"]} and out[2]["runs"] == {"count": 1, "superseded": []}
+    # commitments are frozen copies: never folded
+    assert out[3]["runs"]["count"] == 1 and out[4]["runs"]["count"] == 1
+    text, _ = rec.records_block(out[1:2])
+    assert "latest of 2 runs of this tool at this step" in text

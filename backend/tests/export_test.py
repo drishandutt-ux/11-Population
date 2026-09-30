@@ -106,3 +106,43 @@ def test_the_client_document_names_a_twin_once_per_paragraph():
             f"Later, [[twin:{a}]] agreed.")
     out = ex.resolve_citations(text, agents={a: "Gary Pendleton"}, records={}, facts={}, items={})
     assert out == "Gary Pendleton: \"Most will try it\". For him to be right, his claim must hold.\nLater, Gary Pendleton agreed."
+
+
+# ── report overhaul (2026-09-30) ──────────────────────────────────────────────
+
+def test_the_document_never_prints_none_or_a_zero_interval_and_says_what_was_run():
+    r = _record(id="m1", kind="messaging", label="Messages tested at A → B", equity=None, sources=[],
+                estimate={"metric": "message_shift", "label": "Top message", "format": "lift", "value": 0.0, "low": 0.0, "high": 0.0, "n": 40, "significant": False},
+                summary="No message moved the twins (4 messages tested)", runs={"count": 2, "superseded": ["m0"]})
+    lever = _record(id="l1", kind="lever", label="Lever: x", sources=[], confidence={"score": None, "drivers": []},
+                    estimate={"metric": "conversion_shift", "label": "Shift", "format": "lift", "value": 0.05, "low": None, "high": None, "n": 13, "significant": True},
+                    equity={"available": True, "most": {"label": "Q1 most deprived"}, "least": {"label": "Q4"}, "gap": None, "significant": None}, summary="'x' +5 pts")
+    report = {"answer": "Nothing moved.", "structure": {"direct_answer": {"confidence": {"band": "MEDIUM", "score": 58, "drivers": ["49 twins answered"]}},
+              "coverage": {"ran": [{"key": "debate", "phrase": "a debate of 80 posts"}, {"key": "messaging", "phrase": "2 message tests"}],
+                           "not_run": [{"key": "lever", "label": "lever run", "needs": None}, {"key": "commitment", "label": "committed outcome", "needs": "a journey first"}]},
+              "outcome": {"caveats": [], "barriers": {"outcome": "x", "items": [{"theme": "cost", "count": 3, "weight_mean": None, "removals": [], "agent_ids": []}]}}}}
+    md = ex.client_markdown(run=RUN, report=report, records=[r, lever], agents={}, ledger={"facts": [], "items": []})
+    assert "**What this report rests on.** A debate of 80 posts, 2 message tests. Not run in this session: lever run, committed outcome (needs a journey first)" in md
+    assert "No message moved the twins (4 messages tested) (+0 points (95% CI +0 to +0, n=40)); confidence 58/100; equity: not cut by deprivation for this kind of record; latest of 2 runs" in md
+    assert "+5 points (n=13); confidence not computed; equity: Q1 most deprived vs Q4, gap not computed" in md
+    assert "1. **cost** — 3 twins;" not in md and "1. **cost** — 3 twins" in md and "weight 0/100" not in md
+    assert "None" not in md
+    assert ex._fmt({"format": "share", "value": 0.4, "low": None, "high": None, "n": 9}) == "40% (n=9)"
+    assert ex._people_range({"stuck_low": None, "stuck_high": 5}) == "range not counted"
+
+
+def test_the_statement_counts_ingested_text_beside_evidence_items():
+    st = ex.statement({"question": "Q", "population": {"n": 12}, "frame": {"level": "none"}, "evidence": {}, "ingested_chunks": 86})
+    assert "86 ingested text passages" in st and "no evidence items" not in st
+
+
+def test_the_delta_says_none_not_zero_where_a_side_has_no_record():
+    a = {"report": {"id": "a", "created_at": "t", "structure": {"discussion": {"positions": [{"value": "for", "share": 0.4}]}, "coverage": {"ran": [{"key": "debate"}]}}}, "records": []}
+    b = {"report": {"id": "b", "created_at": "t", "structure": {"discussion": {"positions": [{"value": "for", "share": 0.5}, {"value": "mixed", "share": 0.5}]},
+                                                                  "figures": {"unsourced": []}, "coverage": {"ran": [{"key": "debate"}, {"key": "journey"}]}}}, "records": []}
+    d = dl.compare(a, b)
+    assert d["a"]["n"] is None and d["b"]["n"] is None and d["headline"] is None
+    assert d["unsourced"] == {"then": None, "now": 0}
+    mixed = next(p for p in d["positions"] if p["value"] == "mixed")
+    assert mixed["then"] is None and mixed["change_points"] is None
+    assert d["coverage"] == {"added": ["journey"], "dropped": []} and "tools run since: journey" in d["summary"]

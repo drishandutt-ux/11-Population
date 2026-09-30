@@ -217,11 +217,17 @@ async def generate_report(
         print(f"[report] evidence summary unavailable: {type(e).__name__}: {e}")
 
     names = {a.id: a.name for a in ctx.agents}
+    # What was run and what was not: the model is told, so a tool that never ran is said to be
+    # unsimulated rather than silently absent (or, worse, estimated).
+    activity = {"posts": len(ctx.posts), "evidence_items": sum(int(e.get("count") or 0) for e in evidence if e.get("class") != "ingested")}
+    cov = structure_mod.coverage(records, posts=activity["posts"], evidence_items=activity["evidence_items"])
     extra = (
         f"\n== EVIDENCE BY CLASS (what grounds this population — SOURCE MATERIALS follows this order) ==\n"
         f"{structure_mod.evidence_block(evidence)}\n\n"
         f"== POSITIONS (every twin's verdict on the question, from the headline record — the named dissent under DISCUSSION comes from here) ==\n"
-        f"{structure_mod.positions_block(positions, ctx.handles.handle_of_agent, names)}\n"
+        f"{structure_mod.positions_block(positions, ctx.handles.handle_of_agent, names)}\n\n"
+        f"== WHAT WAS RUN (the tools that produced records, and the tools that were not run in this session) ==\n"
+        f"{structure_mod.coverage_block(cov)}\n"
     )
     system = _BASE_SYSTEM + "\n\n" + structure_mod.STRUCTURE_RULES
     answer = await _call(session_id, "report", system, _prompt(original_query, ctx, extra, request), ctx)
@@ -234,5 +240,6 @@ async def generate_report(
         session_query=original_query, records=records, headline=headline, positions=positions, evidence=evidence,
         frame=frame_summary, cited_record_ids=records_mod.cited_record_ids(answer), claimed_band=claimed,
         figures={"facts_cited": facts_cited, "items_cited": items_cited, "unsourced": list(ctx.unsourced)},
+        activity=activity, names=names,
     )
     return answer, _sources(ctx, answer, session_id), structure

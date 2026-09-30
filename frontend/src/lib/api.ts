@@ -501,8 +501,12 @@ export type AuthoredAgentDraft = {
 /** An outcome record (brief L6-01): one computed figure about the population, the backbone every report is rendered from. */
 export type OutcomeRecord = {
   id: string;
-  kind: "headline" | "probe" | "experiment";
+  kind: "headline" | "probe" | "experiment" | "lever" | "targeting" | "messaging" | "commitment";
   instrument: string;
+  /** A reader's one-line reading of a shift record ("No message moved the twins (4 tested)"), so a tile never shows a bare 0 pts. */
+  summary?: string | null;
+  /** How many runs of this tool at this step exist; only the latest is listed and the earlier ids are superseded. */
+  runs?: { count: number; superseded: string[] };
   label: string;
   question: string;
   basis: "simulated" | "evidence_anchored" | "client_reported";
@@ -536,7 +540,11 @@ export type OutcomeRecord = {
 export type ReportStructure = {
   version: number;
   direct_answer: { record_id: string | null; confidence: { band: "HIGH" | "MEDIUM" | "LOW" | null; score: number | null; drivers: string[] }; claimed_band: string | null };
-  question: { session_query: string; instrument: string | null; asked: number; answered: number };
+  question: { session_query: string; instrument: string | null; asked: number | null; answered: number | null };
+  /** What was run in the session and what was not (2026-09-30): the line under the direct answer, and the "not run" offers. */
+  coverage?: { ran: { key: string; label: string; count: number; phrase: string; record_ids: string[] }[]; not_run: { key: string; label: string; adds: string; instrument: string | null; needs: string | null }[] };
+  /** Follow-up questions written from the records, not a fixed list. */
+  follow_ups?: string[];
   source_materials: {
     evidence: { class: string; label: string; count: number; on_topic: number; trust: Record<string, number>; top: { id: string | null; title: string; author: string; source_ref: string; trust: string }[] }[];
     frame: { level: string; summary: string; dimensions: { key: string; label: string; status: string; source?: string | null; geography?: string | null; year?: string | number | null }[]; estimated: string[]; thin_cells: string[] };
@@ -656,15 +664,16 @@ export type ClientReport = {
   markdown: string;
 };
 export type ReportDelta = {
-  a: { report_id: string; created_at: string | null; n: number }; b: { report_id: string; created_at: string | null; n: number };
+  a: { report_id: string; created_at: string | null; n: number | null }; b: { report_id: string; created_at: string | null; n: number | null };
   headline: { label: string; then: any; now: any; change_points: number | null; real: boolean | null } | null;
-  positions: { value: string; then: number | null; now: number | null; change_points: number }[];
+  positions: { value: string; then: number | null; now: number | null; change_points: number | null }[];
   equity: { then: { gap: number | null; significant: boolean | null } | null; now: { gap: number | null; significant: boolean | null } | null };
   dissent: { joined: { agent_id: string; position: string; verdict?: string }[]; left: { agent_id: string; position: string; verdict?: string }[]; stayed: any[]; majority_then: string | null; majority_now: string | null };
   barriers: { appeared: { theme: string; rank: number; count: number }[]; dropped: { theme: string; rank: number; count: number }[]; moved: { theme: string; then: number; now: number; count_then: number; count_now: number }[]; same: { theme: string; rank: number; count_then: number; count_now: number }[] } | null;
   evidence: { class: string; then: number; now: number; change: number }[]; evidence_total: { then: number; now: number };
   confidence: { then: { band: string | null; score: number | null }; now: { band: string | null; score: number | null } };
-  unsourced: { then: number; now: number }; records: { then: number; now: number }; summary: string;
+  unsourced: { then: number | null; now: number | null }; records: { then: number; now: number }; summary: string;
+  coverage?: { added: string[]; dropped: string[] } | null;
   available: { id: string; created_at: string | null }[];
 };
 

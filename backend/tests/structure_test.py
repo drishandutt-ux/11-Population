@@ -104,3 +104,60 @@ def test_build_structure_wires_every_section():
     assert s["outcome"]["caveats"][0]["text"] == "Synthetic population: x."
     empty = st.build_structure(session_query="Q?", records=[], headline=None, positions=[], evidence=[], frame={"level": "none"}, cited_record_ids=[], claimed_band=None)
     assert empty["direct_answer"]["confidence"]["band"] is None and empty["discussion"]["majority"] is None
+
+
+# ── report overhaul (2026-09-30): what was run, and the questions the records raise ───────────
+
+def _rec(kind, **kw):
+    base = {"id": kw.pop("id", kind), "kind": kind, "instrument": kw.pop("instrument", "journey"), "label": kw.pop("label", kind), "estimate": {"n": 40}, "provenance": {}}
+    base.update(kw)
+    return base
+
+
+def test_coverage_names_what_ran_and_what_did_not_with_the_tool_to_run_it():
+    recs = [_rec("headline", instrument="verdict", estimate={"n": 40}),
+            _rec("probe", instrument="journey", candidates=[{"stuck": 9}, {"stuck": 14}], label="Where the population drops off"),
+            _rec("messaging", id="m1"), _rec("messaging", id="m2")]
+    cov = st.coverage(recs, posts=80, evidence_items=0)
+    ran = {x["key"]: x for x in cov["ran"]}
+    assert ran["debate"]["phrase"] == "a debate of 80 posts" and ran["verdict"]["phrase"] == "a verdict poll of 40 twins"
+    assert ran["journey"]["phrase"] == "a journey with 2 candidate steps" and ran["messaging"]["phrase"] == "2 message tests"
+    missing = {x["key"]: x for x in cov["not_run"]}
+    assert set(missing) == {"barriers", "lever", "targeting", "commitment"}
+    assert missing["lever"]["instrument"] == "journey" and missing["lever"]["needs"] is None  # a journey exists
+    based, not_run = st.coverage_line(cov)
+    assert based.startswith("a debate of 80 posts, a verdict poll of 40 twins, a journey with 2 candidate steps") and "barriers ranking" in not_run
+    block = st.coverage_block(cov)
+    assert block.startswith("Ran: a debate of 80 posts") and "Not run: barriers ranking" in block and "do not estimate what it would have shown" in block
+    # nothing run at all: every journey-dependent tool needs a journey first
+    empty = st.coverage([], posts=0)
+    assert st.coverage_line(empty)[0] == "the session's material only"
+    assert next(x for x in empty["not_run"] if x["key"] == "messaging")["needs"] == "a journey first"
+
+
+def test_follow_up_questions_are_written_from_the_records():
+    recs = [
+        _rec("probe", instrument="journey", label="Where the population drops off",
+             candidates=[{"from": {"label": "Tries it"}, "to": {"label": "Keeps it up"}, "stuck": 14, "n": 25}, {"from": {"label": "Hears"}, "to": {"label": "Tries it"}, "stuck": 9, "n": 40}]),
+        _rec("probe", instrument="barriers", label="What's in the way", barriers=[{"theme": "communal bin mismanagement", "count": 6}]),
+        _rec("lever", lever={"rule": {"lever": "door-knock"}, "to": {"label": "Aware"}}, estimate={"value": 0.23, "significant": True, "n": 40}),
+        _rec("messaging", label="Messages tested at Hears → Tries it", messaging={"any_significant": False, "messages": [{}, {}, {}]}),
+        _rec("headline", instrument="verdict", equity={"available": True, "significant": True, "gap": -60.0}, label="Population verdict on the question"),
+    ]
+    pos = st.positions_from_answers(_rows())
+    qs = st.follow_ups(recs, pos, names={"a3": "Gary Pendleton"})
+    assert qs[0] == "Why do 14 of 25 twins stall at 'Tries it → Keeps it up'?"
+    assert qs[1] == "What would it take to remove 'communal bin mismanagement' for the 6 twins who raised it?"
+    assert qs[2] == "What would have to be true for Gary Pendleton to be right?"
+    assert qs[3] == "Where does the gain from 'door-knock' go after 'Aware'?"
+    assert qs[4].startswith("Why do the most deprived twins differ") and len(qs) == 5
+    # a session with no records still gets something to ask, in the twins' vocabulary
+    generic = st.follow_ups([], [], {})
+    assert len(generic) == 3 and all("agent" not in q for q in generic)
+
+
+def test_build_structure_carries_coverage_follow_ups_and_no_zero_for_an_unasked_question():
+    s = st.build_structure(session_query="Q?", records=[], headline=None, positions=[], evidence=[], frame={"level": "none"}, cited_record_ids=[], claimed_band=None,
+                           activity={"posts": 12, "evidence_items": 3})
+    assert s["version"] == 2 and s["question"]["asked"] is None and s["question"]["answered"] is None
+    assert [x["key"] for x in s["coverage"]["ran"]] == ["debate", "evidence"] and s["follow_ups"]

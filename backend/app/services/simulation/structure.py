@@ -65,7 +65,12 @@ STRUCTURE_RULES = (
     "headline record and rendered beside your direct answer.\n"
     "- The dissent you name under DISCUSSION is the twins listed as DISSENT under == POSITIONS ==, "
     "cited by handle. Do not promote a majority twin to dissenter or invent a minority.\n"
-    "- Under SOURCE MATERIALS, describe only the classes and items listed under == EVIDENCE BY CLASS ==."
+    "- Under SOURCE MATERIALS, describe only the classes and items listed under == EVIDENCE BY CLASS ==.\n"
+    "- == WHAT WAS RUN == lists the tools that produced records and the tools that were not run. Where a "
+    "tool that was not run bears on the recommendation (no lever simulated, no message tested, no journey "
+    "mapped), say so in one plain clause under OUTCOME; never fill the gap with an estimate of what it would "
+    "have shown. A record whose 'in words' line says nothing moved is reported as nothing moved, not as a "
+    "shift of zero."
 )
 
 CLASS_LABELS = {
@@ -313,19 +318,150 @@ def commitments_from_records(records: list[dict]) -> Optional[list[dict]]:
     return out or None
 
 
+# ── what was run, and what was not ───────────────────────────────────────────
+# The report used to look the same whatever had been done in the session: the same headers,
+# the same reading order, tiles at zero where a tool had never run. Now the structure says which
+# tools produced records and which did not, so the page (and the model) can say "not run"
+# instead of showing nothing or a zero.
+
+#: key → (reader label, what it would add, the Lab instrument that runs it, needs a journey first)
+TOOLS: tuple[tuple[str, str, str, Optional[str], bool], ...] = (
+    ("debate", "debate", "what the twins argued", None, False),
+    ("verdict", "verdict poll", "the population's answer to the question", "verdict", False),
+    ("journey", "journey", "where people drop off on the way to the outcome", "journey", False),
+    ("barriers", "barriers ranking", "what stands in the way, ranked by the twins", "barriers", False),
+    ("lever", "lever run", "what a stated intervention would shift", "journey", True),
+    ("targeting", "behaviour ranking", "which behaviour the twins respond to most", "journey", True),
+    ("messaging", "message test", "which framing lands with the twins at risk", "journey", True),
+    ("commitment", "committed outcome", "a frozen forecast to check against results later", "journey", True),
+    ("experiment", "A/B test", "one framing against another", "experiment", False),
+    ("probe", "Lab result", "a survey, an ask or a purchase-intent read", None, False),
+)
+
+
+def _plural(n: int, one: str, many: Optional[str] = None) -> str:
+    return f"{n} {one if n == 1 else (many or one + 's')}"
+
+
+def coverage(records: list[dict], *, posts: int = 0, evidence_items: int = 0) -> dict:
+    """Which tools produced records (with a count and the plain phrase for the line under the
+    direct answer) and which did not (with what each would add and the Lab instrument to run)."""
+    by_kind: dict[str, list[dict]] = {}
+    for r in records:
+        kind = str(r.get("kind") or "")
+        if kind == "headline":
+            kind = "verdict"
+        elif kind == "probe":
+            kind = str(r.get("instrument") or "probe")
+            if kind not in ("journey", "barriers"):
+                kind = "probe"
+        by_kind.setdefault(kind, []).append(r)
+    ran: list[dict] = []
+    if posts:
+        ran.append({"key": "debate", "label": "debate", "count": posts, "phrase": f"a debate of {_plural(posts, 'post')}", "record_ids": []})
+    if evidence_items:
+        ran.append({"key": "evidence", "label": "evidence", "count": evidence_items, "phrase": _plural(evidence_items, "evidence item"), "record_ids": []})
+    not_run: list[dict] = []
+    has_journey = bool(by_kind.get("journey"))
+    for key, label, adds, instrument, needs_journey in TOOLS:
+        if key == "debate":
+            continue
+        recs = by_kind.get(key) or []
+        if recs:
+            k = len(recs)
+            if key == "verdict":
+                n = int(((recs[0].get("estimate") or {}).get("n")) or 0)
+                phrase = f"a verdict poll of {_plural(n, 'twin')}"
+            elif key == "journey":
+                cands = len(recs[0].get("candidates") or [])
+                phrase = f"a journey with {_plural(cands, 'candidate step')}" + (f" ({k} runs)" if k > 1 else "")
+            elif key == "barriers":
+                bars = len(recs[0].get("barriers") or [])
+                phrase = f"a barriers ranking ({_plural(bars, 'barrier')})" + (f" ({k} runs)" if k > 1 else "")
+            else:
+                phrase = _plural(k, label)
+            ran.append({"key": key, "label": label, "count": k, "phrase": phrase, "record_ids": [r.get("id") for r in recs]})
+        elif key not in ("probe", "experiment"):
+            not_run.append({"key": key, "label": label, "adds": adds, "instrument": instrument,
+                            "needs": "a journey first" if needs_journey and not has_journey else None})
+    return {"ran": ran, "not_run": not_run}
+
+
+def coverage_line(cov: dict) -> tuple[str, str]:
+    """The two halves of the sentence under the direct answer: 'Based on …' and 'Not run: …'."""
+    based = ", ".join(x["phrase"] for x in cov.get("ran") or []) or "the session's material only"
+    missing = ", ".join(x["label"] + (f" (needs {x['needs']})" if x.get("needs") else "") for x in cov.get("not_run") or [])
+    return based, missing
+
+
+def coverage_block(cov: dict) -> str:
+    """== WHAT WAS RUN == as the model sees it."""
+    based, missing = coverage_line(cov)
+    return f"Ran: {based}.\nNot run: {missing or 'nothing — every tool has a record'}." + (
+        "\nA tool that was not run has no record: say it was not simulated where it matters; do not estimate what it would have shown." if missing else "")
+
+
+# ── follow-up questions, from the records ────────────────────────────────────
+
+def follow_ups(records: list[dict], positions: list[dict], names: Optional[dict[str, str]] = None, limit: int = 5) -> list[str]:
+    """Questions a reader would ask next, written from what the records actually found: the step
+    where most stall, the top barrier, the strongest dissenter, the best lever, the widest equity
+    gap, a message test that moved nobody. Never generic while there is a record to ask about."""
+    out: list[str] = []
+    names = names or {}
+    journey = next((r for r in records if r.get("candidates")), None)
+    if journey:
+        worst = max(journey["candidates"], key=lambda c: int(c.get("stuck") or 0), default=None)
+        if worst and int(worst.get("stuck") or 0) > 0:
+            out.append(f"Why do {worst.get('stuck')} of {worst.get('n')} twins stall at '{(worst.get('from') or {}).get('label')} → {(worst.get('to') or {}).get('label')}'?")
+    bars = next((r for r in records if r.get("barriers")), None)
+    if bars and bars["barriers"]:
+        top = bars["barriers"][0]
+        out.append(f"What would it take to remove '{top.get('theme')}' for the {_plural(int(top.get('count') or 0), 'twin')} who raised it?")
+    maj, dissent = dissent_for(positions)
+    if dissent:
+        nm = names.get(dissent[0].get("agent_id") or "")
+        if nm:
+            out.append(f"What would have to be true for {nm} to be right?")
+    levers = [r for r in records if r.get("lever") and (r.get("estimate") or {}).get("significant") and (r.get("estimate") or {}).get("value") is not None]
+    if levers:
+        best = max(levers, key=lambda r: float(r["estimate"]["value"]))
+        out.append(f"Where does the gain from '{(best['lever'].get('rule') or {}).get('lever')}' go after '{(best['lever'].get('to') or {}).get('label') or 'that step'}'?")
+    gaps = [r for r in records if (r.get("equity") or {}).get("available") and (r.get("equity") or {}).get("significant")]
+    if gaps:
+        g = max(gaps, key=lambda r: abs(float((r.get("equity") or {}).get("gap") or 0)))
+        out.append(f"Why do the most deprived twins differ so much from the least deprived on '{g.get('label')}'?")
+    flat = next((r for r in records if r.get("messaging") and not (r.get("messaging") or {}).get("any_significant") and (r.get("messaging") or {}).get("messages")), None)
+    if flat:
+        step = str(flat.get("label") or "").replace("Messages tested at ", "") or "that step"
+        out.append(f"Why did none of the {_plural(len(flat['messaging']['messages']), 'message')} tested at '{step}' move anyone?")
+    if len(out) < 3:
+        out += ["What is the single strongest objection in the debate, and who holds it?",
+                "Which twins changed their mind during the debate, and why?",
+                "What would the least convinced twins need to see before they moved?"]
+    seen: list[str] = []
+    for q in out:
+        if q not in seen:
+            seen.append(q)
+    return seen[:limit]
+
+
 # ── assembly ─────────────────────────────────────────────────────────────────
 
 def build_structure(*, session_query: str, records: list[dict], headline: Optional[dict], positions: list[dict],
                     evidence: list[dict], frame: dict, cited_record_ids: list[str], claimed_band: Optional[str],
-                    figures: Optional[dict] = None) -> dict:
-    """Everything the rendered report reads from data rather than prose."""
+                    figures: Optional[dict] = None, activity: Optional[dict] = None, names: Optional[dict[str, str]] = None) -> dict:
+    """Everything the rendered report reads from data rather than prose. `activity` carries the
+    counts no record holds (posts in the debate, evidence items) for the coverage line."""
     maj, dissent = dissent_for(positions)
     counts = {k: sum(1 for p in positions if p["position"] == k) for k in ("for", "against", "mixed")}
     n = len(positions)
     conf = (headline or {}).get("confidence") or {}
     score = conf.get("score")
+    act = activity or {}
+    cov = coverage(records, posts=int(act.get("posts") or 0), evidence_items=int(act.get("evidence_items") or 0))
     return {
-        "version": 1,
+        "version": 2,
         "direct_answer": {
             "record_id": (headline or {}).get("id"),
             "confidence": {"band": confidence_band(score) if headline else None, "score": score, "drivers": list(conf.get("drivers") or [])},
@@ -334,9 +470,12 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
         "question": {
             "session_query": session_query,
             "instrument": (headline or {}).get("instrument"),
-            "asked": int(((headline or {}).get("provenance") or {}).get("agents") or 0),
-            "answered": int(((headline or {}).get("estimate") or {}).get("n") or 0),
+            # None, not 0, when no verdict poll ran: nobody was asked.
+            "asked": int(((headline or {}).get("provenance") or {}).get("agents") or 0) if headline else None,
+            "answered": int(((headline or {}).get("estimate") or {}).get("n") or 0) if headline else None,
         },
+        "coverage": cov,
+        "follow_ups": follow_ups(records, positions, names),
         "source_materials": {"evidence": evidence, "frame": frame},
         "discussion": {
             "record_id": (headline or {}).get("id"),

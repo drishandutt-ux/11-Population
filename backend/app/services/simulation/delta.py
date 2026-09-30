@@ -37,9 +37,10 @@ def compare(a: dict, b: dict) -> dict:
     sa, sb = (a.get("report") or {}).get("structure") or {}, (b.get("report") or {}).get("structure") or {}
     ha, hb = _headline(a.get("records") or []), _headline(b.get("records") or [])
     ea, eb = (ha or {}).get("estimate") or {}, (hb or {}).get("estimate") or {}
+    # A side with no headline record has no n: None, not 0 — nobody was asked.
     out: dict[str, Any] = {
-        "a": {"report_id": (a.get("report") or {}).get("id"), "created_at": (a.get("report") or {}).get("created_at"), "n": int(ea.get("n") or 0)},
-        "b": {"report_id": (b.get("report") or {}).get("id"), "created_at": (b.get("report") or {}).get("created_at"), "n": int(eb.get("n") or 0)},
+        "a": {"report_id": (a.get("report") or {}).get("id"), "created_at": (a.get("report") or {}).get("created_at"), "n": int(ea.get("n") or 0) if ea else None},
+        "b": {"report_id": (b.get("report") or {}).get("id"), "created_at": (b.get("report") or {}).get("created_at"), "n": int(eb.get("n") or 0) if eb else None},
     }
     # headline
     if ea.get("value") is not None and eb.get("value") is not None:
@@ -51,8 +52,11 @@ def compare(a: dict, b: dict) -> dict:
     # positions
     pa = {p["value"]: p for p in ((sa.get("discussion") or {}).get("positions") or [])}
     pb = {p["value"]: p for p in ((sb.get("discussion") or {}).get("positions") or [])}
-    out["positions"] = [{"value": k, "then": pa.get(k, {}).get("share"), "now": pb.get(k, {}).get("share"),
-                         "change_points": round(((pb.get(k, {}).get("share") or 0) - (pa.get(k, {}).get("share") or 0)) * 100, 1)} for k in ("for", "mixed", "against")] if pa or pb else []
+    def _pts(k: str) -> Optional[float]:
+        t, n_ = pa.get(k, {}).get("share"), pb.get(k, {}).get("share")
+        return round((float(n_) - float(t)) * 100, 1) if t is not None and n_ is not None else None
+    out["positions"] = [{"value": k, "then": pa.get(k, {}).get("share"), "now": pb.get(k, {}).get("share"), "change_points": _pts(k)}
+                        for k in ("for", "mixed", "against")] if pa or pb else []
     # equity
     qa, qb = (ha or {}).get("equity") or {}, (hb or {}).get("equity") or {}
     out["equity"] = {"then": {"gap": qa.get("gap"), "significant": qa.get("significant")} if qa.get("available") else None,
@@ -76,6 +80,8 @@ def compare(a: dict, b: dict) -> dict:
     else:
         out["barriers"] = None
     # evidence base
+    # An evidence class absent from one side was not there (0 items) — that is a real count. A
+    # report stored before the figures pass existed has no unsourced list at all: None, not 0.
     ev_a = {e["class"]: e["count"] for e in ((sa.get("source_materials") or {}).get("evidence") or [])}
     ev_b = {e["class"]: e["count"] for e in ((sb.get("source_materials") or {}).get("evidence") or [])}
     out["evidence"] = [{"class": k, "then": ev_a.get(k, 0), "now": ev_b.get(k, 0), "change": ev_b.get(k, 0) - ev_a.get(k, 0)} for k in sorted(set(ev_a) | set(ev_b))]
@@ -83,8 +89,17 @@ def compare(a: dict, b: dict) -> dict:
     # confidence and figures
     ca, cb = (sa.get("direct_answer") or {}).get("confidence") or {}, (sb.get("direct_answer") or {}).get("confidence") or {}
     out["confidence"] = {"then": {"band": ca.get("band"), "score": ca.get("score")}, "now": {"band": cb.get("band"), "score": cb.get("score")}}
-    out["unsourced"] = {"then": len(((sa.get("figures") or {}).get("unsourced") or [])), "now": len(((sb.get("figures") or {}).get("unsourced") or []))}
+    fa, fb = sa.get("figures"), sb.get("figures")
+    out["unsourced"] = {"then": len(fa.get("unsourced") or []) if isinstance(fa, dict) else None, "now": len(fb.get("unsourced") or []) if isinstance(fb, dict) else None}
     out["records"] = {"then": len(a.get("records") or []), "now": len(b.get("records") or [])}
+    # Tools that ran on one side and not the other (from the coverage block, when both reports carry one).
+    ka, kb = sa.get("coverage"), sb.get("coverage")
+    if isinstance(ka, dict) and isinstance(kb, dict):
+        ran_a = {x["key"] for x in ka.get("ran") or []}
+        ran_b = {x["key"] for x in kb.get("ran") or []}
+        out["coverage"] = {"added": sorted(ran_b - ran_a), "dropped": sorted(ran_a - ran_b)}
+    else:
+        out["coverage"] = None
     out["summary"] = summary(out)
     return out
 
@@ -109,6 +124,9 @@ def summary(d: dict) -> str:
     c = d.get("confidence") or {}
     if (c.get("then") or {}).get("band") and (c.get("now") or {}).get("band") and c["then"]["band"] != c["now"]["band"]:
         parts.append(f"computed confidence {c['then']['band']} → {c['now']['band']}")
+    cov = d.get("coverage") or {}
+    if cov.get("added"):
+        parts.append("tools run since: " + ", ".join(cov["added"]))
     return ("; ".join(parts) + ".") if parts else "Nothing measurable changed between the two runs."
 
 

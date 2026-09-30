@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass, EquityBlock, EquityCell, ReportDelta } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
-  ChevronDown, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle, GitCompare, Printer } from "lucide-react";
+  ChevronDown, ChevronRight, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle, GitCompare, Printer, Beaker } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 interface Message {
@@ -26,15 +26,50 @@ interface Props {
   isGeneratingReport?: boolean;
   onMakeReport?: () => void;
   onClearReport?: () => void;
+  /** Opens the Lab tab — the coverage line offers the tools that were not run. */
+  onGoToLab?: () => void;
 }
 
+/** Only while no report exists: once there is one, the questions come from its records (`structure.follow_ups`). */
 const STARTER_QUESTIONS = [
-  "What is the overall consensus among the agents?",
+  "Where do the twins agree, and where do they split?",
   "What are the strongest arguments for this idea?",
-  "What are the main risks or concerns raised?",
-  "Which agents were most insightful?",
-  "Summarize the key insights from the simulation",
+  "What are the main risks or concerns the twins raised?",
+  "Which twins argued most convincingly, and for what?",
+  "Summarise what the debate settled and what it left open",
 ];
+
+// ── Plain words for the units the records use ─────────────────────────────────
+// Every unit a reader meets on the page has a hover explanation; the page never assumes a
+// reader knows what n, a 95% interval, a deprivation quintile or movability is.
+
+const GLOSSARY: Record<string, string> = {
+  n: "How many twins answered this. A share of 8 twins is far less certain than a share of 80.",
+  ci: "The 95% interval: re-run the same twins many times and the share would land inside this range 95 times in 100. Wide means uncertain.",
+  pts: "Percentage points: the difference between two shares (30% to 35% is +5 pts).",
+  q1: "Q1 is the fifth of the population living in the most deprived areas (Index of Multiple Deprivation); Q5 the least deprived.",
+  gap: "The most deprived cell minus the least deprived cell, in percentage points. 'Real' means the two intervals do not overlap; 'not distinguishable' means they do, so the gap may be noise at this size.",
+  confidence: "A computed 5–95 score from the record's own numbers: how many answered, how wide the interval is, whether the panel matches published distributions, whether agreement looked too neat. Never typed by the model.",
+  movable: "The share of the stuck whose barrier a single partner could remove, from what the twins said would remove it.",
+  system: "Stuck behind a barrier only the wider system (council, landlord, NHS) could remove.",
+  structural: "Stuck behind a barrier nobody can remove soon (housing stock, geography).",
+  weight: "How heavily the twins who raised this barrier said it weighs on them, 0–100.",
+  ess: "Effective sample size: after weighting the twins to match the population, how many twins' worth of information is left.",
+  match: "How closely the twins match published distributions (age, deprivation, tenure…): good, fair, poor or none.",
+  verdict: "The record of the population's answer to the session question: every twin's for / against / mixed.",
+  runs: "This tool was run more than once at this step; only the latest run is shown. Earlier runs stay on file and appear in Compare runs.",
+  shift: "A shift is the change in the share getting through a step when the twins re-answer under a lever or a message: modelled, not observed.",
+  weighted: "The share after weighting the twins to the population's published distributions.",
+};
+
+function Term({ k, children, className = "" }: { k: keyof typeof GLOSSARY | string; children: React.ReactNode; className?: string }) {
+  return <abbr title={GLOSSARY[k] || undefined} className={`no-underline cursor-help border-b border-dotted border-muted-foreground/40 ${className}`}>{children}</abbr>;
+}
+
+/** A plain reading of a record kind for tiles and cards. */
+const KIND_LABEL: Record<string, string> = {
+  headline: "Population verdict", probe: "Lab result", experiment: "A/B test", lever: "Lever run", targeting: "Behaviour ranking", messaging: "Message test", commitment: "Committed outcome",
+};
 
 type Mode = "report" | "agent";
 
@@ -49,6 +84,7 @@ export default function ReportChat({
   isGeneratingReport = false,
   onMakeReport,
   onClearReport,
+  onGoToLab,
 }: Props) {
   const [mode, setMode] = useState<Mode>("report");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -267,7 +303,7 @@ export default function ReportChat({
             {isGeneratingReport && !reportContent ? (
               <div className="flex items-center justify-center h-full gap-3 text-muted-foreground/60">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Generating report from all agents and sources…</span>
+                <span className="text-sm">Writing the report from the twins&apos; answers and the source material…</span>
               </div>
             ) : (
               <>
@@ -277,7 +313,7 @@ export default function ReportChat({
                   </div>
                 )}
                 <div id="report-printable" className="max-w-2xl" onClick={handleCiteClick}>
-                  <ReportDocument content={reportContent!} agentsById={agentsById} records={records} structure={structure} />
+                  <ReportDocument content={reportContent!} agentsById={agentsById} records={records} structure={structure} onGoToLab={onGoToLab} />
                 </div>
               </>
             )}
@@ -307,6 +343,7 @@ export default function ReportChat({
             currentAgentColor={currentAgentColor}
             agentsById={agentsById}
             onCiteClick={handleCiteClick}
+            followUps={structure?.follow_ups}
             compact
           />
         </div>
@@ -345,7 +382,7 @@ export default function ReportChat({
             )}
           </button>
           <span className="text-xs text-muted-foreground/60">
-            Produces a structured briefing from all agents and source materials
+            A structured briefing from the twins, the debate and the source material — with every figure counted, never typed
           </span>
         </div>
       )}
@@ -500,6 +537,8 @@ interface ChatPanelProps {
   /** Resolves `[[twin:…]]` citations in an assistant reply to the twin's real name. */
   agentsById: Record<string, Agent>;
   onCiteClick: (e: React.MouseEvent) => void;
+  /** Questions written from the report's records; the generic starters are the fallback. */
+  followUps?: string[] | null;
 }
 
 function ChatPanel({
@@ -507,8 +546,9 @@ function ChatPanel({
   dropdownOpen, setDropdownOpen, dropdownRef,
   messages, loading, input, setInput, send,
   bottomRef, currentAgentColor, compact = false,
-  agentsById, onCiteClick,
+  agentsById, onCiteClick, followUps,
 }: ChatPanelProps) {
+  const suggestions = followUps && followUps.length ? followUps : STARTER_QUESTIONS;
   return (
     <div className={`flex flex-col min-h-0 ${compact ? "h-full" : "flex-1"}`}>
       {/* Mode toggle */}
@@ -530,7 +570,7 @@ function ChatPanel({
             }`}
           >
             <MessageCircle className="w-3 h-3" />
-            Talk to Agent
+            Talk to a twin
           </button>
         </div>
 
@@ -551,7 +591,7 @@ function ChatPanel({
                   <span className="text-foreground text-xs font-medium">{selectedAgent.name}</span>
                 </>
               ) : (
-                <span className="text-muted-foreground text-xs">Select agent…</span>
+                <span className="text-muted-foreground text-xs">Pick a twin…</span>
               )}
               <ChevronDown className="w-3 h-3 text-muted-foreground" />
             </button>
@@ -560,7 +600,7 @@ function ChatPanel({
               <div className="absolute top-full left-0 mt-1 w-72 bg-background border border-border rounded-xl shadow-xl z-50 overflow-hidden">
                 <div className="max-h-60 overflow-y-auto divide-y divide-border">
                   {agents.length === 0 ? (
-                    <p className="text-xs text-muted-foreground px-4 py-3">No agents spawned yet</p>
+                    <p className="text-xs text-muted-foreground px-4 py-3">No twins built yet</p>
                   ) : (
                     agents.map((a) => (
                       <button
@@ -600,9 +640,9 @@ function ChatPanel({
         <div className="max-w-3xl mx-auto space-y-3">
           {messages.length === 0 && mode === "report" && !compact && (
             <div className="text-center pt-4">
-              <p className="text-sm text-muted-foreground mb-6">Ask anything about the simulation, knowledge graph, or uploaded content.</p>
+              <p className="text-sm text-muted-foreground mb-6">Ask anything about the twins, the debate or the source material.</p>
               <div className="flex flex-col gap-2">
-                {STARTER_QUESTIONS.map((q) => (
+                {suggestions.map((q) => (
                   <button
                     key={q}
                     onClick={() => send(q)}
@@ -616,9 +656,22 @@ function ChatPanel({
           )}
 
           {messages.length === 0 && compact && (
-            <p className="text-xs text-muted-foreground/60 text-center py-2">
-              Ask follow-up questions about the report…
-            </p>
+            <div className="pt-1">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground/55 font-semibold mb-2">
+                {mode === "report" ? (followUps?.length ? "Questions this report raises" : "Ask about the report") : "Ask this twin"}
+              </p>
+              {mode === "report" && (
+                <div className="flex flex-col gap-1.5">
+                  {suggestions.map((q) => (
+                    <button key={q} onClick={() => send(q)}
+                      className="text-[11px] text-left rounded-lg px-3 py-2 border border-border/50 hover:border-primary/30 transition-all text-muted-foreground hover:text-foreground leading-snug">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {mode === "agent" && <p className="text-xs text-muted-foreground/60">Pick a twin above and ask them directly. They answer in character, from what they could see.</p>}
+            </div>
           )}
 
           {messages.map((msg, i) => {
@@ -681,8 +734,8 @@ function ChatPanel({
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
             placeholder={
               mode === "report"
-                ? "Ask about the simulation…"
-                : selectedAgent ? `Ask ${selectedAgent.name.split(" ")[0]}…` : "Select an agent first…"
+                ? "Ask about the report…"
+                : selectedAgent ? `Ask ${selectedAgent.name.split(" ")[0]}…` : "Pick a twin first…"
             }
             disabled={loading || (mode === "agent" && !selectedAgent)}
             className="flex-1 bg-muted border border-border/60 rounded-lg px-3 py-2 text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 text-xs disabled:opacity-50"
@@ -769,10 +822,17 @@ function renderSourceCitations(html: string): string {
 
 function fmtEstimate(r: OutcomeRecord): string {
   const e = r.estimate;
-  if (e.value == null) return "—";
+  if (e.value == null) return "not counted";
   if (e.format === "share") return `${Math.round(e.value * 100)}%`;
   if (e.format === "lift") return `${e.value > 0 ? "+" : ""}${Math.round(e.value * 100)} pts`;
+  if (typeof e.value === "number") return Number.isInteger(e.value) ? String(e.value) : e.value.toFixed(2);
   return String(e.value);
+}
+/** A shift record that moved nobody reads "no shift" in a chip, never "0 pts". */
+function chipFigure(r: OutcomeRecord): string {
+  const e = r.estimate;
+  if (e.format === "lift" && !e.significant && e.value != null && Math.round(e.value * 100) === 0) return "no shift";
+  return fmtEstimate(r);
 }
 function fmtInterval(r: OutcomeRecord): string {
   const e = r.estimate;
@@ -781,15 +841,29 @@ function fmtInterval(r: OutcomeRecord): string {
   if (e.format === "lift") return `95% CI ${Math.round(e.low * 100)} to ${Math.round(e.high * 100)} pts`;
   return `${e.low}–${e.high}`;
 }
+/** The interval in words, for tiles: "could be 3–20%" rather than "95% CI 3–20%". */
+function fmtIntervalText(r: OutcomeRecord): string {
+  const e = r.estimate;
+  if (e.low == null || e.high == null) return "interval not counted";
+  if (e.format === "share") return `could be ${Math.round(e.low * 100)}–${Math.round(e.high * 100)}%`;
+  if (e.format === "lift") return `could be ${Math.round(e.low * 100)} to ${Math.round(e.high * 100)} pts`;
+  return `${e.low}–${e.high}`;
+}
+/** The interval as a hoverable term. */
+function Interval({ r }: { r: OutcomeRecord }) {
+  const t = fmtInterval(r);
+  if (!t) return <span className="text-[10px] text-muted-foreground/60">interval not counted</span>;
+  return <Term k="ci" className="text-[10px] text-muted-foreground/70">{t}</Term>;
+}
 
 function renderRecordCitations(html: string): string {
   return html.replace(RECORD_RE, (_m, id: string) => {
     const r = RECORDS_BY_ID[id];
     if (!r) return "";
     return (
-      `<button type="button" data-record="${id}" title="${r.label} — ${fmtInterval(r)} · n=${r.estimate.n} · confidence ${r.confidence.score}/100 · Model-inferred: counted from the synthetic twins" ` +
+      `<button type="button" data-record="${id}" title="${esc(`${r.label} — ${fmtInterval(r) || "interval not counted"} · ${r.estimate.n} twins answered · confidence ${r.confidence.score ?? "not computed"}/100 · counted from the synthetic twins, never typed`)}" ` +
       `class="record-cite inline-flex items-center gap-1 align-baseline text-[11px] font-semibold px-1.5 py-px rounded border border-teal-500/40 text-teal-300 bg-teal-500/10 hover:bg-teal-500/20">` +
-      `${fmtEstimate(r)}<span class="font-normal text-teal-300/70">· ${r.label.length > 34 ? r.label.slice(0, 32) + "…" : r.label}</span></button>`
+      `${esc(chipFigure(r))}<span class="font-normal text-teal-300/70">· ${esc(r.label.length > 34 ? r.label.slice(0, 32) + "…" : r.label)}</span></button>`
     );
   });
 }
@@ -896,28 +970,30 @@ function MessageContent({ text, agentsById = {} }: { text: string; agentsById?: 
 
 // ── Report document renderer ──────────────────────────────────────────────────
 
-function ReportDocument({ content, agentsById, records = [], structure = null }: { content: string; agentsById: Record<string, Agent>; records?: OutcomeRecord[]; structure?: ReportStructure | null }) {
+function ReportDocument({ content, agentsById, records = [], structure = null, onGoToLab }: { content: string; agentsById: Record<string, Agent>; records?: OutcomeRecord[]; structure?: ReportStructure | null; onGoToLab?: () => void }) {
   const blocks = parseReport(content);
   const firstAnswer = blocks.findIndex((b) => b.type === "direct_answer");
   // The confidence beside the direct answer is the headline record's computed band (L6-02);
   // the model's own label is only a fallback for reports written before the structure existed.
   const computed = structure?.direct_answer?.confidence;
   const hasOutcome = blocks.some((b) => b.type === "h2" && /^outcome/i.test(b.text));
+  const isError = blocks.some((b) => b.type === "h2" && /^report (unavailable|generation failed)/i.test(b.text));
 
+  // Reading order: the answer, how sure we are and what it rests on, one tile per question the
+  // tools answered, then the prose, then the computed blocks, and every record last, folded.
   return (
     <div className="space-y-4 text-sm">
-      <FigureKey structure={structure} />
       {blocks.map((block, i) => {
         if (block.type === "direct_answer") {
           const band = computed?.band || block.confidence;
           return (
             <div key={i}>
             <div className="border-l-4 border-primary bg-primary/5 rounded-r-lg px-5 py-4 mb-2">
-              <div className="flex items-center gap-2 mb-2.5">
+              <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                 <span className="text-[10px] uppercase tracking-widest font-bold text-primary">Direct Answer</span>
                 {band && (
                   <button type="button" data-record={computed?.band ? structure?.direct_answer?.record_id || undefined : undefined}
-                    title={computed?.band ? `Computed from the headline record: ${computed.drivers.join(" · ")}` : "Stated by the model"}
+                    title={computed?.band ? `${GLOSSARY.confidence} Drivers: ${computed.drivers.join(" · ")}` : "Stated by the model"}
                     className={`text-[10px] px-1.5 py-0.5 rounded font-semibold leading-none border ${
                     band === "HIGH"
                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
@@ -928,13 +1004,18 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
                     {band} confidence{computed?.band && computed.score != null ? ` · ${computed.score}/100` : ""}
                   </button>
                 )}
-                {computed?.band && <span className="text-[9px] text-muted-foreground/55">computed</span>}
+                {computed?.band && computed.drivers.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground/70 leading-none">
+                    because {computed.drivers.slice(0, 4).join(" · ")}{computed.drivers.length > 4 ? " · …" : ""}
+                  </span>
+                )}
               </div>
               <p className="text-[15px] font-semibold text-foreground leading-snug"
                 dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
             </div>
-            {i === firstAnswer && records.length > 0 && <RecordGrid records={records} />}
-            {i === firstAnswer && records.length > 0 && <EquityStrip records={records} />}
+            {i === firstAnswer && structure?.coverage && <CoverageLine cov={structure.coverage} onGoToLab={onGoToLab} />}
+            {i === firstAnswer && records.length > 0 && <SummaryStrip records={records} />}
+            {i === firstAnswer && !isError && <FigureKey structure={structure} records={records} />}
             </div>
           );
         }
@@ -988,6 +1069,160 @@ function ReportDocument({ content, agentsById, records = [], structure = null }:
       {structure?.outcome?.candidates && hasOutcome && <WhereTheyDropOff c={structure.outcome.candidates} agentsById={agentsById} />}
       {structure?.outcome?.commitments && hasOutcome && <CommittedOutcomes items={structure.outcome.commitments} />}
       {structure && hasOutcome && <ComputedCaveats caveats={structure.outcome.caveats} />}
+      {records.length > 0 && !isError && <AllRecords records={records} />}
+    </div>
+  );
+}
+
+// ── What this report rests on ─────────────────────────────────────────────────
+// One line under the answer: the tools that produced records, and the tools that were not run
+// — each with what it would add and a way to the Lab. A report no longer looks the same
+// whatever was done in the session.
+
+function CoverageLine({ cov, onGoToLab }: { cov: NonNullable<ReportStructure["coverage"]>; onGoToLab?: () => void }) {
+  const ran = cov.ran || [];
+  const notRun = cov.not_run || [];
+  if (!ran.length && !notRun.length) return null;
+  return (
+    <div className="mt-2 mb-1 text-[11px] leading-relaxed text-muted-foreground/85">
+      <span className="text-foreground/80 font-medium">Based on</span>{" "}
+      {ran.length ? ran.map((x, i) => (
+        <span key={x.key}>{i > 0 ? ", " : ""}
+          {x.record_ids?.length ? <button type="button" data-record={x.record_ids[0]} className="underline decoration-dotted underline-offset-2 hover:text-foreground">{x.phrase}</button> : x.phrase}
+        </span>
+      )) : "the session's material only"}.
+      {notRun.length > 0 && (
+        <>
+          {" "}<span className="text-foreground/80 font-medium">Not run:</span>{" "}
+          {notRun.map((x, i) => (
+            <span key={x.key} className="inline-flex items-center gap-1">
+              {i > 0 ? <span className="mr-1">,</span> : null}
+              <span title={`${x.adds}${x.needs ? ` — needs ${x.needs}` : ""}`} className="border-b border-dotted border-muted-foreground/40 cursor-help">{x.label}</span>
+              {x.needs && <span className="text-muted-foreground/60">(needs {x.needs})</span>}
+            </span>
+          ))}
+          {onGoToLab && (
+            <button type="button" onClick={onGoToLab} className="ml-2 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 no-print">
+              <Beaker className="w-2.5 h-2.5" /> open the Lab
+            </button>
+          )}
+          <span className="block text-[10px] text-muted-foreground/60 mt-0.5">The report says where a tool that was not run would have mattered; it never estimates what it would have shown.</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── One tile per question the tools answered ──────────────────────────────────
+// Not one card per run. The latest verdict, the step where most stall, the top barrier, the
+// best lever, the best message, the most responsive behaviour and the widest real equity gap —
+// each in words a reader can act on, each opening its record.
+
+type Tile = { key: string; title: string; value: string; reading: string; recordId: string; tone?: "flat" | "good" | "warn"; runs?: number };
+
+function tilesFor(records: OutcomeRecord[]): Tile[] {
+  const out: Tile[] = [];
+  const head = records.find((r) => r.kind === "headline");
+  if (head) {
+    out.push({ key: "answer", title: "The answer", value: fmtEstimate(head), reading: `${head.estimate.label || "of the population"} · ${fmtIntervalText(head)} · ${head.estimate.n} twins`, recordId: head.id, runs: head.runs?.count });
+  }
+  const journey = records.find((r) => r.candidates?.length);
+  if (journey) {
+    const worst = [...(journey.candidates || [])].sort((a, b) => (b.stuck || 0) - (a.stuck || 0))[0];
+    const last = journey.funnel?.[journey.funnel.length - 1];
+    if (worst) {
+      out.push({ key: "dropoff", title: "Where most drop off", value: `${worst.stuck} of ${worst.n}`, tone: "warn",
+        reading: `stall at "${worst.from?.label} → ${worst.to?.label}"${worst.stuck_people != null ? ` · ≈${worst.stuck_people.toLocaleString()} people` : ""}${last ? ` · ${Math.round((last.share || 0) * 100)}% reach "${last.label}"` : ""}`, recordId: journey.id, runs: journey.runs?.count });
+    }
+  }
+  const bars = records.find((r) => r.barriers?.length);
+  if (bars) {
+    const top = bars.barriers![0];
+    out.push({ key: "barrier", title: "Biggest barrier", value: top.theme, reading: `${top.count} twin${top.count === 1 ? "" : "s"} raised it${bars.barriers!.length > 1 ? ` · ${bars.barriers!.length} barriers ranked` : ""}${top.removals?.length ? ` · removed by ${(typeof top.removals[0] === "string" ? top.removals[0] : (top.removals[0] as { value: string }).value)}` : ""}`, recordId: bars.id, runs: bars.runs?.count });
+  }
+  const pick = (kind: string) => {
+    const rs = records.filter((r) => r.kind === kind);
+    if (!rs.length) return null;
+    const sig = rs.filter((r) => r.estimate.significant && r.estimate.value != null);
+    return sig.length ? sig.sort((a, b) => (b.estimate.value || 0) - (a.estimate.value || 0))[0] : rs[0];
+  };
+  const lever = pick("lever");
+  if (lever) {
+    const sig = lever.estimate.significant && lever.estimate.value != null;
+    out.push({ key: "lever", title: "Best lever", value: sig ? fmtEstimate(lever) : "No shift", tone: sig ? "good" : "flat",
+      reading: lever.summary || lever.label.replace(/^(Lever|Assumed effect): /, ""), recordId: lever.id, runs: records.filter((r) => r.kind === "lever").length });
+  }
+  const msg = pick("messaging");
+  if (msg) {
+    const sig = msg.estimate.significant && msg.estimate.value != null;
+    out.push({ key: "message", title: "Best message", value: sig ? fmtEstimate(msg) : "No shift", tone: sig ? "good" : "flat",
+      reading: msg.summary || msg.label, recordId: msg.id, runs: records.filter((r) => r.kind === "messaging").length });
+  }
+  const tgt = pick("targeting");
+  if (tgt) {
+    const sig = tgt.estimate.significant && tgt.estimate.value != null;
+    out.push({ key: "behaviour", title: "Most responsive behaviour", value: sig ? `${fmtEstimate(tgt)}/pt` : "No shift", tone: sig ? "good" : "flat",
+      reading: tgt.summary || tgt.label, recordId: tgt.id, runs: records.filter((r) => r.kind === "targeting").length });
+  }
+  const gaps = records.filter((r) => r.equity && r.equity.available && r.equity.significant && r.equity.gap != null);
+  if (gaps.length) {
+    const g = gaps.sort((a, b) => Math.abs((b.equity as { gap: number }).gap) - Math.abs((a.equity as { gap: number }).gap))[0];
+    const eq = g.equity as Extract<EquityBlock, { available: true }>;
+    out.push({ key: "equity", title: "Widest equity gap", value: `${eq.gap! > 0 ? "+" : ""}${eq.gap} pts`, tone: "warn",
+      reading: `${eq.most.label.split(" ")[0]} ${fmtCell(eq.most)} vs ${eq.least.label.split(" ")[0]} ${fmtCell(eq.least)} on "${g.label}" · a real gap`, recordId: g.id });
+  }
+  const commits = records.filter((r) => r.kind === "commitment" && (r as OutcomeRecord & { commitment?: { status?: string } }).commitment?.status !== "superseded");
+  if (commits.length) {
+    const c = commits[0];
+    out.push({ key: "commit", title: "Committed forecast", value: fmtEstimate(c), reading: c.label.replace(/^Committed: /, "") + " · frozen", recordId: c.id });
+  }
+  return out;
+}
+
+function SummaryStrip({ records }: { records: OutcomeRecord[] }) {
+  const tiles = tilesFor(records);
+  if (!tiles.length) return null;
+  const toneCls = (t?: Tile["tone"]) => t === "good" ? "text-emerald-300" : t === "warn" ? "text-amber-300" : t === "flat" ? "text-muted-foreground/80" : "text-teal-300";
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-widest text-teal-300 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> At a glance</span>
+        <span className="text-[10px] text-muted-foreground/60">one tile per question the tools answered · counted from the twins · click for the record</span>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+        {tiles.map((t) => (
+          <button key={t.key} type="button" data-record={t.recordId} className="text-left border border-teal-500/25 rounded-lg px-3.5 py-3 bg-teal-500/5 hover:bg-teal-500/10 transition-colors">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">{t.title}</span>
+              {t.runs && t.runs > 1 ? <Term k="runs" className="text-[9px] text-muted-foreground/60">{t.runs} runs</Term> : null}
+            </div>
+            <div className={`text-lg font-bold leading-tight ${toneCls(t.tone)} ${t.value.length > 14 ? "text-[13px] leading-snug" : ""}`}>{t.value}</div>
+            <div className="text-[10.5px] text-muted-foreground/80 leading-snug mt-1">{t.reading}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Every record, folded ──────────────────────────────────────────────────────
+
+function AllRecords({ records }: { records: OutcomeRecord[] }) {
+  const [open, setOpen] = useState(false);
+  const folded = records.reduce((n, r) => n + Math.max(0, (r.runs?.count || 1) - 1), 0);
+  return (
+    <div className="mt-5 border-t border-border/40 pt-3">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 text-left w-full group">
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/60" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />}
+        <span className="text-[10px] uppercase tracking-widest text-teal-300 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> All outcome records</span>
+        <span className="text-[10px] text-muted-foreground/60 group-hover:text-muted-foreground">{records.length} counted from the twins&apos; answers · every figure in this report cites one{folded ? ` · ${folded} earlier run${folded === 1 ? "" : "s"} folded` : ""}</span>
+      </button>
+      {open && (
+        <>
+          <RecordGrid records={records} />
+          <EquityStrip records={records} />
+        </>
+      )}
     </div>
   );
 }
@@ -1028,7 +1263,7 @@ function SourceMaterials({ sm }: { sm: ReportStructure["source_materials"] }) {
       )}
       {fr && (
         <div className="text-[10px] text-muted-foreground/85 leading-snug">
-          <span className="font-semibold text-foreground/75">Frame:</span> {fr.summary}
+          <Term k="match" className="font-semibold text-foreground/75">Population match:</Term> {fr.summary}
           {sourced.length > 0 && (
             <span className="block mt-0.5">{sourced.map((d) => `${d.label} — ${d.source}${d.geography || d.year ? ` (${[d.geography, d.year].filter(Boolean).join(" ")})` : ""}`).join(" · ")}</span>
           )}
@@ -1047,7 +1282,7 @@ function Positions({ d, agentsById }: { d: ReportStructure["discussion"]; agents
     <div className="mb-3 rounded-lg border border-border/40 bg-muted/10 px-3.5 py-3 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-[9px] uppercase tracking-wide text-muted-foreground/60 font-semibold">Positions · {d.n} twins answered</span>
-        {d.record_id && <button type="button" data-record={d.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">headline record</button>}
+        {d.record_id && <button type="button" data-record={d.record_id} title={GLOSSARY.verdict} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">verdict record</button>}
       </div>
       <div className="flex h-2 rounded-full overflow-hidden bg-muted">
         {d.positions.filter((p) => p.count > 0).map((p) => (
@@ -1125,13 +1360,17 @@ function DeltaPanel({ delta, error, agentsById, onPick }: { delta: ReportDelta |
       </div>
       <p className="text-[11px] text-foreground/85 leading-snug">{delta.summary}</p>
       <div className="space-y-1">
-        {h && <Row label={h.label || "Headline"} then={pctOr(h.then?.value)} now={pctOr(h.now?.value)} note={h.real === true ? "a real change — the intervals do not overlap" : h.real === false ? "not distinguishable — the intervals overlap" : undefined} />}
-        {delta.positions.map((p) => <Row key={p.value} label={`position · ${p.value}`} then={pctOr(p.then)} now={pctOr(p.now)} note={`${p.change_points > 0 ? "+" : ""}${p.change_points} pts`} />)}
-        <Row label="equity gap (Q1 vs Q5)" then={delta.equity.then ? `${delta.equity.then.gap ?? "—"} pts${delta.equity.then.significant ? " (real)" : ""}` : "n/a"} now={delta.equity.now ? `${delta.equity.now.gap ?? "—"} pts${delta.equity.now.significant ? " (real)" : ""}` : "n/a"} />
-        <Row label="computed confidence" then={delta.confidence.then.band ? `${delta.confidence.then.band} ${delta.confidence.then.score}` : "—"} now={delta.confidence.now.band ? `${delta.confidence.now.band} ${delta.confidence.now.score}` : "—"} />
+        {h ? <Row label={h.label || "Headline"} then={pctOr(h.then?.value)} now={pctOr(h.now?.value)} note={h.real === true ? "a real change — the intervals do not overlap" : h.real === false ? "not distinguishable — the intervals overlap" : undefined} />
+           : <Row label="Headline" then="not polled" now="not polled" note="no verdict record on one or both runs" />}
+        {delta.positions.map((p) => <Row key={p.value} label={`position · ${p.value}`} then={pctOr(p.then)} now={pctOr(p.now)} note={p.change_points != null ? `${p.change_points > 0 ? "+" : ""}${p.change_points} pts` : undefined} />)}
+        <Row label="equity gap (most vs least deprived)" then={delta.equity.then ? `${delta.equity.then.gap ?? "not computed"} pts${delta.equity.then.significant ? " (real)" : ""}` : "not cut"} now={delta.equity.now ? `${delta.equity.now.gap ?? "not computed"} pts${delta.equity.now.significant ? " (real)" : ""}` : "not cut"} />
+        <Row label="computed confidence" then={delta.confidence.then.band ? `${delta.confidence.then.band} ${delta.confidence.then.score}` : "not computed"} now={delta.confidence.now.band ? `${delta.confidence.now.band} ${delta.confidence.now.score}` : "not computed"} />
         <Row label="evidence items" then={String(delta.evidence_total.then)} now={String(delta.evidence_total.now)} note={delta.evidence.filter((e) => e.change).map((e) => `${e.class} ${e.change > 0 ? "+" : ""}${e.change}`).join(", ") || undefined} />
-        <Row label="twins answering" then={String(delta.a.n)} now={String(delta.b.n)} />
-        <Row label="unsourced figures" then={String(delta.unsourced.then)} now={String(delta.unsourced.now)} />
+        <Row label="twins answering" then={delta.a.n == null ? "not polled" : String(delta.a.n)} now={delta.b.n == null ? "not polled" : String(delta.b.n)} />
+        <Row label="figures typed with no source" then={delta.unsourced.then == null ? "not checked" : String(delta.unsourced.then)} now={delta.unsourced.now == null ? "not checked" : String(delta.unsourced.now)} />
+        {delta.coverage && (delta.coverage.added.length > 0 || delta.coverage.dropped.length > 0) && (
+          <Row label="tools run" then={delta.coverage.dropped.length ? `had ${delta.coverage.dropped.join(", ")}` : "—"} now={delta.coverage.added.length ? `+ ${delta.coverage.added.join(", ")}` : "—"} />
+        )}
       </div>
       {delta.barriers && (delta.barriers.appeared.length + delta.barriers.dropped.length + delta.barriers.moved.length > 0) && (
         <div className="text-[11px] space-y-0.5">
@@ -1157,16 +1396,25 @@ function DeltaPanel({ delta, error, agentsById, onPick }: { delta: ReportDelta |
 // (model-inferred), an official statistic sky, a paper violet, grey literature slate, a social
 // claim orange, client data pink — and a number the model typed with no source is struck through.
 
-function FigureKey({ structure }: { structure?: ReportStructure | null }) {
+/** Only the figure classes this report actually uses; a legend for seven colours when the page
+ *  shows two is noise. Reads "what the colour of a figure means", not a taxonomy. */
+function FigureKey({ structure, records }: { structure?: ReportStructure | null; records: OutcomeRecord[] }) {
   const n = structure?.figures?.unsourced?.length || 0;
-  const entries: (ProvenanceClass | "unsourced")[] = ["model_inference", "official_statistic", "peer_reviewed", "grey_literature", "social_signal", "client_data", "unsourced"];
+  const present = new Set<ProvenanceClass | "unsourced">();
+  if ((structure?.records?.cited?.length || 0) > 0 || records.length) present.add("model_inference");
+  for (const id of structure?.figures?.facts_cited || []) { const f = FACTS_BY_ID[id]; if (f) present.add(f.provenance_class); }
+  for (const id of structure?.figures?.items_cited || []) { const it = ITEMS_BY_ID[id]; if (it) present.add(it.provenance_class); }
+  if (n) present.add("unsourced");
+  const order: (ProvenanceClass | "unsourced")[] = ["model_inference", "official_statistic", "peer_reviewed", "grey_literature", "commissioned_research", "social_signal", "client_data", "unsourced"];
+  const entries = order.filter((k) => present.has(k));
+  if (entries.length <= 1 && !n) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground/70 border-b border-border/30 pb-2">
-      <span className="uppercase tracking-wide text-[9px] font-semibold text-muted-foreground/60">Figure key</span>
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground/70 border-b border-border/30 pb-2">
+      <span className="uppercase tracking-wide text-[9px] font-semibold text-muted-foreground/60">Figures in this report</span>
       {entries.map((k) => (
         <span key={k} className="inline-flex items-center gap-1">
           <span className={`w-1.5 h-1.5 rounded-full ${CLASS_DOT[k]}`} />
-          {k === "model_inference" ? "counted from the twins (model-inferred)" : k === "unsourced" ? `unsourced — typed by the model${n ? ` (${n})` : ""}` : CLASS_LABEL[k].toLowerCase()}
+          {k === "model_inference" ? "counted from the twins" : k === "unsourced" ? `typed by the model with no source (${n}) — struck through` : `read from ${CLASS_LABEL[k].toLowerCase()}`}
         </span>
       ))}
     </div>
@@ -1228,7 +1476,7 @@ function WhatsInTheWay({ b, agentsById }: { b: NonNullable<ReportStructure["outc
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">What&apos;s in the way · ranked by the twins</span>
         {b.record_id && <button type="button" data-record={b.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">record</button>}
-        <span className="text-[10px] text-muted-foreground/60">n={b.n}</span>
+        {b.n > 0 && <Term k="n" className="text-[10px] text-muted-foreground/60">{b.n} twins</Term>}
       </div>
       {b.outcome && <p className="text-[10px] text-muted-foreground/70 mb-1.5">Outcome: {b.outcome}</p>}
       <ol className="space-y-1">
@@ -1239,7 +1487,7 @@ function WhatsInTheWay({ b, agentsById }: { b: NonNullable<ReportStructure["outc
               <span className="text-muted-foreground/60 tabular-nums w-4 shrink-0">{k + 1}.</span>
               <span>
                 <span className="font-medium first-letter:uppercase">{it.theme}</span>
-                <span className="text-muted-foreground"> · {it.count} twin{it.count === 1 ? "" : "s"}{it.weight_mean != null ? ` · weight ${Math.round(it.weight_mean)}/100` : ""}</span>
+                <span className="text-muted-foreground"> · {it.count} twin{it.count === 1 ? "" : "s"}{it.weight_mean != null ? <> · <Term k="weight">weight {Math.round(it.weight_mean)}/100</Term></> : null}</span>
                 {it.removals?.length > 0 && <span className="text-muted-foreground"> · removed by {it.removals.map((r) => (typeof r === "string" ? r : r.value)).join(", ")}</span>}
                 {names.length > 0 && (
                   <span className="text-muted-foreground"> · {names.slice(0, 4).map((ag, i) => (
@@ -1308,7 +1556,7 @@ function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["o
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold" title="Ranked by the movable gap first: the share of the stuck whose barrier a single partner could reach, from what the twins said would remove it.">Where the population drops off · candidate outcomes · ranked by what a partner could move</span>
         {c.record_id && <button type="button" data-record={c.record_id} className="text-[9px] text-teal-300/80 underline decoration-dotted underline-offset-2">record</button>}
-        <span className="text-[10px] text-muted-foreground/60">n={c.n}</span>
+        {c.n > 0 && <Term k="n" className="text-[10px] text-muted-foreground/60">{c.n} twins</Term>}
       </div>
       {c.funnel?.length > 0 && (
         <p className="text-[10px] text-muted-foreground/70 mb-1.5">
@@ -1329,12 +1577,12 @@ function WhereTheyDropOff({ c, agentsById }: { c: NonNullable<ReportStructure["o
             <span className="text-muted-foreground/60 tabular-nums w-4 shrink-0">{it.rank}.</span>
             <span>
               <span className="font-medium">{it.from} → {it.to}</span>
-              <span className="text-muted-foreground"> · {Math.round(it.conversion * 100)}% get through ({Math.round(it.low * 100)}–{Math.round(it.high * 100)}%) · {it.stuck} of {it.n} stuck</span>
+              <span className="text-muted-foreground"> · {typeof it.conversion === "number" ? `${Math.round(it.conversion * 100)}% get through` : "share not counted"}{typeof it.low === "number" && typeof it.high === "number" ? <> (<Term k="ci">{Math.round(it.low * 100)}–{Math.round(it.high * 100)}%</Term>)</> : null} · {it.stuck} of {it.n} stuck</span>
               {it.stuck_people != null && <span className="text-foreground/85 tabular-nums"> · ≈{it.stuck_people.toLocaleString()} people{it.stuck_low != null && it.stuck_high != null && it.stuck_low !== it.stuck_high ? ` (${it.stuck_low.toLocaleString()}–${it.stuck_high.toLocaleString()})` : ""}</span>}
               {it.movability?.scored
-                ? <span className="text-muted-foreground"> · <span className="text-emerald-300/85">movable {Math.round((it.movability.movable_share || 0) * 100)}%</span>{it.movability.movable_people != null ? <span className="tabular-nums"> (≈{it.movability.movable_people.toLocaleString()} people)</span> : null}{(it.movability.system_share || 0) > 0 ? ` · needs the system ${Math.round((it.movability.system_share || 0) * 100)}%` : ""}{(it.movability.structural_share || 0) > 0 ? ` · structural ${Math.round((it.movability.structural_share || 0) * 100)}%` : ""}{it.movability.levers?.length ? ` · lever: ${it.movability.levers.slice(0, 2).map((l) => l.lever + (l.actor ? ` (${l.actor})` : "")).join("; ")}` : ""}</span>
-                : <span className="text-muted-foreground/60"> · movability not scored</span>}
-              {it.equity_gap != null && <span className="text-muted-foreground"> · equity gap {it.equity_gap > 0 ? "+" : ""}{it.equity_gap} pts</span>}
+                ? <span className="text-muted-foreground"> · <Term k="movable" className="text-emerald-300/85">movable {Math.round((it.movability.movable_share || 0) * 100)}%</Term>{it.movability.movable_people != null ? <span className="tabular-nums"> (≈{it.movability.movable_people.toLocaleString()} people)</span> : null}{(it.movability.system_share || 0) > 0 ? <> · <Term k="system">needs the system {Math.round((it.movability.system_share || 0) * 100)}%</Term></> : null}{(it.movability.structural_share || 0) > 0 ? <> · <Term k="structural">structural {Math.round((it.movability.structural_share || 0) * 100)}%</Term></> : null}{it.movability.levers?.length ? ` · lever: ${it.movability.levers.slice(0, 2).map((l) => l.lever + (l.actor ? ` (${l.actor})` : "")).join("; ")}` : ""}</span>
+                : <span className="text-muted-foreground/60"> · <Term k="movable">movability not scored</Term></span>}
+              {it.equity_gap != null && <span className="text-muted-foreground"> · <Term k="gap">equity gap {it.equity_gap > 0 ? "+" : ""}{it.equity_gap} pts</Term></span>}
               {it.barriers?.length > 0 && (
                 <span className="text-muted-foreground"> · barriers: {it.barriers.map((b, k) => {
                   const names = b.agent_ids.map((id) => agentsById[id]).filter(Boolean);
@@ -1384,33 +1632,38 @@ function ComputedCaveats({ caveats }: { caveats: ReportStructure["outcome"]["cav
 // confidence — read from the record, never from the prose. Click one for the splits, the
 // refusals, the unanimity verdict, the provenance and the caveats.
 
-const KIND_LABEL: Record<string, string> = { headline: "Population verdict", probe: "Lab result", experiment: "A/B lift" };
+/** A shift record that moved nobody shows its reading in words, never a bare "0 pts". */
+function flatShift(r: OutcomeRecord): boolean {
+  return r.estimate.format === "lift" && !r.estimate.significant && !!r.summary;
+}
 
 function RecordGrid({ records }: { records: OutcomeRecord[] }) {
   return (
     <div className="mt-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] uppercase tracking-widest text-teal-300 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> Outcome records</span>
-        <span className="text-[10px] text-muted-foreground/60">{records.length} computed from the twins&apos; answers · every figure in this report cites one</span>
-      </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
         {records.map((r) => {
           const flagged = r.unanimity?.flagged;
           const refused = r.refusals?.refused || 0;
+          const flat = flatShift(r);
           return (
             <button key={r.id} type="button" data-record={r.id} className="text-left border border-teal-500/25 rounded-lg px-3.5 py-3 bg-teal-500/5 hover:bg-teal-500/10 transition-colors">
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">{KIND_LABEL[r.kind] || r.kind}</span>
                 {flagged && <AlertTriangle className="w-3 h-3 text-yellow-400" />}
+                {r.runs && r.runs.count > 1 ? <Term k="runs" className="text-[9px] text-muted-foreground/60 ml-auto">latest of {r.runs.count}</Term> : null}
               </div>
               <div className="text-[11px] text-foreground/85 leading-snug line-clamp-2">{r.label}</div>
-              <div className="flex items-baseline gap-2 mt-1.5">
-                <span className="text-xl font-bold text-teal-300 leading-none">{fmtEstimate(r)}</span>
-                <span className="text-[10px] text-muted-foreground/70">{fmtInterval(r)}</span>
-              </div>
+              {flat ? (
+                <div className="mt-1.5 text-[12px] font-semibold text-muted-foreground/85 leading-snug">{r.summary}</div>
+              ) : (
+                <div className="flex items-baseline gap-2 mt-1.5">
+                  <span className={`font-bold leading-none ${r.estimate.value == null ? "text-sm text-muted-foreground/70" : "text-xl text-teal-300"}`}>{fmtEstimate(r)}</span>
+                  <Interval r={r} />
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground/70">
-                <span>n={r.estimate.n}</span>
-                <span>· confidence {r.confidence.score}/100</span>
+                <Term k="n">{r.estimate.n} twins</Term>
+                <Term k="confidence">· confidence {r.confidence.score ?? "—"}/100</Term>
                 {refused > 0 && <span>· {refused} refused</span>}
               </div>
               <EquityLine eq={r.equity} compact />
@@ -1432,17 +1685,20 @@ function fmtCell(c: EquityCell): string {
   return "—";
 }
 
-function EquityLine({ eq, compact = false }: { eq: EquityBlock; compact?: boolean }) {
-  if (!eq) return null;
-  if (!eq.available) return <div className={`text-[10px] text-muted-foreground/55 ${compact ? "mt-1.5" : ""}`}>equity · no deprivation levels</div>;
+function EquityLine({ eq, compact = false }: { eq: EquityBlock | null; compact?: boolean }) {
+  // null: this kind of record is never cut by deprivation (a message test, a behaviour ranking).
+  if (!eq) return <div className={`text-[10px] text-muted-foreground/45 ${compact ? "mt-1.5" : ""}`}>not cut by deprivation</div>;
+  if (!eq.available) return <div className={`text-[10px] text-muted-foreground/55 ${compact ? "mt-1.5" : ""}`} title={eq.reason}>equity · no deprivation levels on this population</div>;
   const tone = eq.significant ? "text-fuchsia-300" : "text-muted-foreground/70";
   return (
     <div className={`flex flex-wrap items-center gap-x-2 text-[10px] ${compact ? "mt-1.5" : ""}`}>
-      <span className="text-fuchsia-300/80 font-semibold uppercase tracking-wide text-[9px]">equity</span>
-      <span className="text-foreground/80">{eq.most.label.split(" ")[0]} {fmtCell(eq.most)}</span>
+      <Term k="gap" className="text-fuchsia-300/80 font-semibold uppercase tracking-wide text-[9px]">equity</Term>
+      <Term k="q1" className="text-foreground/80">{eq.most.label.split(" ")[0]} {fmtCell(eq.most)}</Term>
       <span className="text-muted-foreground/50">vs</span>
-      <span className="text-foreground/80">{eq.least.label.split(" ")[0]} {fmtCell(eq.least)}</span>
-      {eq.gap != null && <span className={tone}>{eq.gap > 0 ? "+" : ""}{eq.gap} {eq.gap_unit === "points" ? "pts" : ""}{eq.significant ? " · real gap" : eq.significant === false ? " · not distinguishable" : ""}</span>}
+      <Term k="q1" className="text-foreground/80">{eq.least.label.split(" ")[0]} {fmtCell(eq.least)}</Term>
+      {eq.gap != null
+        ? <Term k="gap" className={tone}>{eq.gap > 0 ? "+" : ""}{eq.gap} {eq.gap_unit === "points" ? "pts" : ""}{eq.significant ? " · real gap" : eq.significant === false ? " · not distinguishable" : ""}</Term>
+        : <span className="text-muted-foreground/55">gap not computed</span>}
     </div>
   );
 }
@@ -1488,8 +1744,8 @@ function EquityStrip({ records }: { records: OutcomeRecord[] }) {
   return (
     <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/5 px-3.5 py-3">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10px] uppercase tracking-widest text-fuchsia-300 font-bold">Equity</span>
-        <span className="text-[10px] text-muted-foreground/60">every record by deprivation level, most vs least deprived</span>
+        <Term k="gap" className="text-[10px] uppercase tracking-widest text-fuchsia-300 font-bold">Equity</Term>
+        <span className="text-[10px] text-muted-foreground/60">every record by deprivation level, <Term k="q1">most vs least deprived</Term></span>
       </div>
       {none ? (
         <p className="text-[11px] text-muted-foreground/85 leading-snug">{(withEq[0].equity as { reason: string }).reason}</p>
@@ -1525,13 +1781,21 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
           <button onClick={onClose} className="text-muted-foreground/50 hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
         </div>
         <div className="px-4 py-3 space-y-3">
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-teal-300 leading-none">{fmtEstimate(r)}</span>
-            <span className="text-[11px] text-muted-foreground">{r.estimate.label} · {fmtInterval(r)} · n={r.estimate.n}</span>
-          </div>
+          {r.runs && r.runs.count > 1 ? <p className="text-[10px] text-muted-foreground/70"><Term k="runs">Latest of {r.runs.count} runs of this tool at this step</Term>; the earlier runs are on file and open from Compare runs.</p> : null}
+          {flatShift(r) ? (
+            <div>
+              <div className="text-base font-semibold text-foreground/90 leading-snug">{r.summary}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">{r.estimate.label} · counted as {fmtEstimate(r)}{fmtInterval(r) ? <> · <Interval r={r} /></> : null} · <Term k="n">{r.estimate.n} twins</Term></div>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className={`font-bold text-teal-300 leading-none ${r.estimate.value == null ? "text-base" : "text-3xl"}`}>{fmtEstimate(r)}</span>
+              <span className="text-[11px] text-muted-foreground">{r.estimate.label} · <Interval r={r} /> · <Term k="n">{r.estimate.n} twins</Term></span>
+            </div>
+          )}
           {r.sentence && <p className="text-[11px] text-foreground/80 leading-snug">{r.sentence}</p>}
           {r.weighted && r.weighted.weighted != null && (
-            <p className="text-[10px] text-muted-foreground/80">Weighted to the frame: {r.weighted.format === "share" ? `${Math.round((r.weighted.weighted || 0) * 100)}%` : r.weighted.weighted} (effective n {r.weighted.ess.toFixed(1)})</p>
+            <p className="text-[10px] text-muted-foreground/80"><Term k="weighted">Weighted to the population</Term>: {r.weighted.format === "share" ? `${Math.round((r.weighted.weighted || 0) * 100)}%` : r.weighted.weighted} (<Term k="ess">effective sample {r.weighted.ess.toFixed(1)}</Term>)</p>
           )}
           {r.unanimity?.flagged && (
             <div className="flex gap-2 text-[10px] text-yellow-200/90 bg-yellow-500/10 border border-yellow-500/25 rounded-lg px-2.5 py-2"><AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px text-yellow-400" /><span>{r.unanimity.reason}</span></div>
@@ -1569,7 +1833,7 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
             </div>
           )}
           <div>
-            <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1">Confidence {r.confidence.score}/100</div>
+            <div className="text-[9px] uppercase tracking-wide text-muted-foreground/50 mb-1"><Term k="confidence">Confidence {r.confidence.score ?? "not computed"}/100</Term></div>
             <ul className="text-[10px] text-foreground/75 space-y-0.5">{r.confidence.drivers.map((d, i) => <li key={i}>· {d}</li>)}</ul>
           </div>
           {r.caveats?.length > 0 && (
@@ -1579,9 +1843,9 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
             </div>
           )}
           <div className="text-[10px] text-muted-foreground/60 border-t border-border/40 pt-2">
-            {r.provenance.model && <span>model {r.provenance.model} · </span>}seed {r.provenance.seed} · frame {r.provenance.frame_level}
+            {r.provenance.model && <span>model {r.provenance.model} · </span>}<Term k="match">population match {r.provenance.frame_level === "none" || !r.provenance.frame_level ? "none" : r.provenance.frame_level}</Term>
             {mix.length > 0 && <span> · evidence {mix.map(([k, n]) => `${k} ${n}`).join(", ")}</span>}
-            <span className="block font-mono text-muted-foreground/45 mt-0.5">{r.id.slice(0, 8)}</span>
+            <span className="block font-mono text-muted-foreground/45 mt-0.5" title="The record id and the random seed the run used, so it can be reproduced">{r.id.slice(0, 8)} · seed {r.provenance.seed}</span>
           </div>
         </div>
       </div>

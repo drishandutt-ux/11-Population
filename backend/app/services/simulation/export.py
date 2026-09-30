@@ -52,7 +52,11 @@ def statement(run: dict) -> str:
         " and weighted on " + ", ".join(frame.get("weighted_only") or []) if frame.get("weighted_only") else "")) if level not in ("none", None) else "not matched to any published distribution"
     est = frame.get("estimated") or []
     ev = run.get("evidence") or {}
-    ev_line = ", ".join(f"{v} {k}" for k, v in sorted(ev.items())) or "no evidence items"
+    # Ingested text that never became an evidence row (a pasted document, a file) still grounded
+    # the twins: it is counted here so the statement never says "no evidence" beside 86 documents.
+    chunks = int(run.get("ingested_chunks") or 0)
+    parts = [f"{v} {k}" for k, v in sorted(ev.items())] + ([f"{chunks} ingested text passages"] if chunks else [])
+    ev_line = ", ".join(parts) or "no evidence items"
     return (
         "SYNTHETIC POPULATION STATEMENT\n"
         f"Every figure in this output was produced by {n} synthetic twins: language-model personas written from the evidence on file, "
@@ -80,6 +84,7 @@ async def _rules(session_id: str) -> list[dict]:
 async def run_record(session_id: str) -> dict:
     from app.models.agent import SpawnedAgent
     from app.models.evidence import Evidence
+    from app.models.kg import KnowledgeGraph
     from app.models.measurement import Experiment, Probe
     from app.models.report import ReportQuery
     from app.models.session import AnalysisSession
@@ -91,6 +96,11 @@ async def run_record(session_id: str) -> dict:
         n = (await db.execute(select(func.count(SpawnedAgent.id)).where(SpawnedAgent.session_id == session_id))).scalar_one()
         ev_rows = (await db.execute(select(Evidence.source_class, func.count(Evidence.id)).where(Evidence.session_id == session_id, Evidence.excluded == False)  # noqa: E712
                                     .group_by(Evidence.source_class))).all()
+        chunks = None
+        try:
+            chunks = (await db.execute(select(KnowledgeGraph.chunks).where(KnowledgeGraph.session_id == session_id))).scalar_one_or_none()
+        except Exception:  # noqa: BLE001
+            chunks = None
         probes = (await db.execute(select(Probe).where(Probe.session_id == session_id, Probe.status == "complete").order_by(Probe.created_at))).scalars().all()
         exps = (await db.execute(select(Experiment).where(Experiment.session_id == session_id, Experiment.status == "complete").order_by(Experiment.created_at))).scalars().all()
         reports = (await db.execute(select(ReportQuery).where(ReportQuery.session_id == session_id, ReportQuery.structure.isnot(None)).order_by(ReportQuery.created_at))).scalars().all()
@@ -113,6 +123,7 @@ async def run_record(session_id: str) -> dict:
                   "estimated": rep.get("estimated") or [], "ess": rep.get("ess"), "thin_cells": rep.get("thin_cells") or [], "geography": (bld.frame or {}).get("geography") if bld and bld.frame else None,
                   "sizing": (bld.frame or {}).get("sizing") if bld and bld.frame else None},
         "evidence": {str(k): int(v) for k, v in ev_rows},
+        "ingested_chunks": len(chunks or []),
         "scoping_snapshot": snapshot,
         # The assumption log (brief L4-01 / L4-02): every calibration rule, reviewed or not, that a lever run could have used.
         "calibration_rules": await _rules(session_id),
@@ -202,15 +213,43 @@ def roster_rows(agents: list[Any]) -> list[dict]:
 
 # ── the client document ──────────────────────────────────────────────────────
 
+def _opt(v: Any) -> Optional[float]:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _fmt(est: dict) -> str:
+    """The estimate for the document. A missing interval is left out, never written as 0–0; a
+    missing value reads 'not counted'."""
     v = est.get("value")
+    n_part = f"n={est.get('n', 0)}"
     if v is None:
-        return "n/a"
+        return f"not counted ({n_part})"
+    lo, hi = _opt(est.get("low")), _opt(est.get("high"))
     if est.get("format") == "share":
-        return f"{round(float(v) * 100)}% (95% CI {round(float(est.get('low') or 0) * 100)}–{round(float(est.get('high') or 0) * 100)}%, n={est.get('n', 0)})"
+        ci = f"95% CI {round(lo * 100)}–{round(hi * 100)}%, " if lo is not None and hi is not None else ""
+        return f"{round(float(v) * 100)}% ({ci}{n_part})"
     if est.get("format") == "lift":
-        return f"{float(v) * 100:+.0f} points (95% CI {float(est.get('low') or 0) * 100:+.0f} to {float(est.get('high') or 0) * 100:+.0f}, n={est.get('n', 0)})"
-    return f"{v} (n={est.get('n', 0)})"
+        ci = f"95% CI {lo * 100:+.0f} to {hi * 100:+.0f}, " if lo is not None and hi is not None else ""
+        return f"{float(v) * 100:+.0f} points ({ci}{n_part})"
+    return f"{v} ({n_part})"
+
+
+def _conf(r: dict) -> str:
+    s = (r.get("confidence") or {}).get("score")
+    return f"confidence {s}/100" if s is not None else "confidence not computed"
+
+
+def _equity(eq: Optional[dict]) -> str:
+    if eq is None:
+        return "equity: not cut by deprivation for this kind of record"
+    if not eq.get("available"):
+        return "equity: no deprivation levels"
+    gap = eq.get("gap")
+    gap_text = f"gap {gap} points, {'a real gap' if eq.get('significant') else 'not distinguishable at this size'}" if gap is not None else "gap not computed"
+    return f"equity: {eq['most']['label']} vs {eq['least']['label']}, {gap_text}"
 
 
 def resolve_citations(text: str, *, agents: dict[str, str], records: dict[str, dict], facts: dict[str, dict], items: dict[str, dict]) -> str:
@@ -248,11 +287,14 @@ def resolve_citations(text: str, *, agents: dict[str, str], records: dict[str, d
 
 
 def _people_range(it: dict) -> str:
-    lo, hi = int(it.get("stuck_low") or 0), int(it.get("stuck_high") or 0)
-    return "held fixed" if lo == hi else f"{lo:,}–{hi:,}"
+    lo, hi = _opt(it.get("stuck_low")), _opt(it.get("stuck_high"))
+    if lo is None or hi is None:
+        return "range not counted"
+    return "held fixed" if int(lo) == int(hi) else f"{int(lo):,}–{int(hi):,}"
 
 
 def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], agents: dict[str, str], ledger: dict) -> str:
+    from app.services.simulation.structure import coverage_line
     st = statement(run)
     facts = {f["id"]: f for f in (ledger.get("facts") or [])}
     items = {i["id"]: i for i in (ledger.get("items") or [])}
@@ -263,20 +305,30 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
         conf = (structure.get("direct_answer") or {}).get("confidence") or {}
         if conf.get("band"):
             lines += [f"**Confidence (computed): {conf['band']} · {conf.get('score')}/100** — " + "; ".join(conf.get("drivers") or []), ""]
+        cov = structure.get("coverage")
+        if cov:
+            based, missing = coverage_line(cov)
+            lines += [f"**What this report rests on.** {based[0].upper() + based[1:]}." + (f" Not run in this session: {missing} — the report says so where it matters rather than estimating what they would have shown." if missing else ""), ""]
     if records:
-        lines += ["## Outcome records", "", "Every figure below was counted from the twins' answers.", ""]
+        lines += ["## Outcome records", "", "Every figure below was counted from the twins' answers. Where a tool was run more than once at the same step, only the latest run is listed.", ""]
         for r in records:
-            eq = r.get("equity") or {}
-            lines.append(f"- **{r.get('label')}** — {_fmt(r.get('estimate') or {})}; confidence {(r.get('confidence') or {}).get('score')}/100"
-                         + (f"; equity: {eq['most']['label']} vs {eq['least']['label']}, gap {eq.get('gap')} points, {'a real gap' if eq.get('significant') else 'not distinguishable at this size'}" if eq.get("available") else "; equity: no deprivation levels")
-                         + (f"; {len(r.get('sources') or [])} document(s) cited by the twins" if r.get("sources") else ""))
+            est = r.get("estimate") or {}
+            figure = _fmt(est)
+            # A shift record that moved nobody reads as words, not as "+0 points".
+            if r.get("summary") and (est.get("format") == "lift") and not est.get("significant"):
+                figure = f"{r['summary']} ({figure})"
+            runs = r.get("runs") or {}
+            lines.append(f"- **{r.get('label')}** — {figure}; {_conf(r)}; {_equity(r.get('equity'))}"
+                         + (f"; {len(r.get('sources') or [])} document(s) cited by the twins" if r.get("sources") else "")
+                         + (f"; latest of {runs['count']} runs" if int(runs.get('count') or 0) > 1 else ""))
         lines.append("")
     bars = (structure.get("outcome") or {}).get("barriers") if structure else None
     if bars and bars.get("items"):
         lines += [f"## What's in the way — {bars.get('outcome', '')}", ""]
         for k, it in enumerate(bars["items"], 1):
             names = [agents.get(a) for a in it.get("agent_ids") or [] if agents.get(a)]
-            lines.append(f"{k}. **{it.get('theme')}** — {it.get('count')} twins, weight {round(float(it.get('weight_mean') or 0))}/100"
+            w = _opt(it.get("weight_mean"))
+            lines.append(f"{k}. **{it.get('theme')}** — {it.get('count')} twins" + (f", weight {round(w)}/100" if w is not None else "")
                          + (f"; removed by {', '.join(it.get('removals') or [])}" if it.get("removals") else "") + (f"; raised by {', '.join(names[:4])}" if names else ""))
         lines.append("")
     cands = (structure.get("outcome") or {}).get("candidates") if structure else None
@@ -296,8 +348,10 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
             mv_text = (f"; movable {round(float(mv.get('movable_share') or 0) * 100)}%" + (f" (≈{int(mv['movable_people']):,} people)" if mv.get("movable_people") is not None else "")
                        + (f", needs the system {round(float(mv.get('system_share') or 0) * 100)}%" if mv.get("system_share") else "")
                        + (f", structural {round(float(mv.get('structural_share') or 0) * 100)}%" if mv.get("structural_share") else "")) if mv.get("scored") else "; movability not scored"
-            lines.append(f"{it.get('rank')}. **{it.get('from')} → {it.get('to')}** — {round(float(it.get('conversion') or 0) * 100)}% get through "
-                         f"(95% CI {round(float(it.get('low') or 0) * 100)}–{round(float(it.get('high') or 0) * 100)}%, {it.get('stuck')} of {it.get('n')} stuck)"
+            conv, lo, hi = _opt(it.get("conversion")), _opt(it.get("low")), _opt(it.get("high"))
+            conv_text = (f"{round(conv * 100)}% get through " if conv is not None else "share not counted ") + (
+                f"(95% CI {round(lo * 100)}–{round(hi * 100)}%, " if lo is not None and hi is not None else "(") + f"{it.get('stuck')} of {it.get('n')} stuck)"
+            lines.append(f"{it.get('rank')}. **{it.get('from')} → {it.get('to')}** — {conv_text}"
                          + (f"; ≈{int(it['stuck_people']):,} people stuck ({_people_range(it)})" if it.get("stuck_people") is not None else "")
                          + mv_text
                          + (f"; barriers: {bars}" if bars else ""))
@@ -310,12 +364,15 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
         for k, c in enumerate(cms, 1):
             t = c.get("target") or {}
             cp = c.get("comparison")
-            line = (f"{k}. **{c.get('from')} → {c.get('to')}** — committed by {c.get('committed_by') or 'nobody'} on {str(c.get('committed_at') or '')[:10]}; "
-                    f"forecast {round(float(c.get('conversion') or 0) * 100)}% get through (95% CI {round(float(c.get('low') or 0) * 100)}–{round(float(c.get('high') or 0) * 100)}%, "
-                    f"{c.get('stuck')} of {c.get('n')} stuck)"
+            conv, lo, hi = _opt(c.get("conversion")), _opt(c.get("low")), _opt(c.get("high"))
+            forecast = (f"forecast {round(conv * 100)}% get through" if conv is not None else "forecast not counted") + (
+                f" (95% CI {round(lo * 100)}–{round(hi * 100)}%, " if lo is not None and hi is not None else " (") + f"{c.get('stuck')} of {c.get('n')} stuck)"
+            ev_n, rules_n = int(c.get("evidence_items") or 0), int(c.get("rules") or 0)
+            on_file = (f"{ev_n} evidence item{'s' if ev_n != 1 else ''}" if ev_n else "no evidence items") + " and " + (f"{rules_n} calibration rule{'s' if rules_n != 1 else ''}" if rules_n else "no calibration rules") + " on file"
+            frame_text = f"matched to published distributions: {c.get('frame_level')}" if c.get("frame_level") and c.get("frame_level") != "none" else "not matched to published distributions"
+            line = (f"{k}. **{c.get('from')} → {c.get('to')}** — committed by {c.get('committed_by') or 'nobody'}" + (f" on {str(c.get('committed_at'))[:10]}" if c.get("committed_at") else "") + f"; {forecast}"
                     + (f"; ≈{int(c['stuck_people']):,} people stuck ({_people_range(c)})" if c.get("stuck_people") is not None else "")
-                    + f"; population build {c.get('build_id') or 'unknown'} ({c.get('population_n')} twins, frame {c.get('frame_level') or 'none'}); "
-                    + f"{c.get('evidence_items')} evidence items and {c.get('rules')} calibration rules on file"
+                    + f"; population build {c.get('build_id') or 'unknown'} ({c.get('population_n')} twins, {frame_text}); {on_file}"
                     + (f"; target {round(float(t['value']) * 100)}%" + (f" by {t['horizon']}" if t.get("horizon") else "") if t.get("value") is not None else "; no target set"))
             if cp:
                 line += (f"; **observed {round(float(cp.get('observed') or 0) * 100)}%** on {cp.get('observed_date')} ({cp.get('observed_source')}): {round(float(cp.get('delta') or 0) * 100):+d} points against the forecast, "
@@ -348,13 +405,16 @@ async def bundle(session_id: str) -> bytes:
 
     run = await run_record(session_id)
     st = statement(run)
-    records = await records_mod.records_for_session(session_id)
+    # Every run stays in the export, superseded ones included; the report page shows the latest per tool and step.
+    records = await records_mod.records_for_session(session_id, latest_only=False)
     ledger = await figures_mod.load_ledger(session_id)
     async with dbm.AsyncSessionLocal() as db:
         agents = (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == session_id))).scalars().all()
         latest = (await db.execute(select(ReportQuery).where(ReportQuery.session_id == session_id, ReportQuery.structure.isnot(None)).order_by(ReportQuery.created_at.desc()))).scalars().first()
     names = {a.id: a.name for a in agents}
     report = {"id": latest.id, "created_at": latest.created_at.isoformat() if latest.created_at else None, "answer": latest.answer, "sources": latest.sources, "structure": latest.structure} if latest else None
+    # The document lists the records the report was written from (latest per tool and step).
+    doc_records = records_mod.latest_runs(list(records))
 
     stamp = {"statement": st}
     files = {
@@ -364,7 +424,7 @@ async def bundle(session_id: str) -> bytes:
         "records.csv": "# " + st.replace("\n", " ") + "\n" + _csv(records_rows(records), RECORD_COLUMNS),
         "splits.csv": "# " + st.replace("\n", " ") + "\n" + _csv(split_rows(records), SPLIT_COLUMNS),
         "report.json": json.dumps({**stamp, "report": report}, indent=2, default=str),
-        "report.md": client_markdown(run=run, report=report, records=records, agents=names, ledger=ledger),
+        "report.md": client_markdown(run=run, report=report, records=doc_records, agents=names, ledger=ledger),
         "sources.json": json.dumps({**stamp, **ledger}, indent=2, default=str),
         "roster.csv": "# " + st.replace("\n", " ") + "\n" + _csv(roster_rows(agents), ROSTER_COLUMNS),
     }

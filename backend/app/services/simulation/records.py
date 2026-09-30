@@ -93,9 +93,26 @@ def _num(v: Any, default: float = 0.0) -> float:
         return default
 
 
+def _opt(v: Any) -> Optional[float]:
+    """A number that may be missing stays missing: a figure that was never counted is None, never 0."""
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+#: A poorly matched panel can never read as HIGH confidence, whatever the interval says.
+POOR_FRAME_CAP = 65
+
+
 def confidence_for(*, n: int, low: Optional[float], high: Optional[float], fmt: str, unanimity: Optional[dict],
-                   refusals: Optional[dict], frame_level: Optional[str], weighted: bool, model: str = "") -> dict:
-    """A 5–95 score with the reasons it moved, from the record's own numbers. Deterministic."""
+                   refusals: Optional[dict], frame_level: Optional[str], weighted: bool, model: str = "",
+                   value: Optional[float] = None) -> dict:
+    """A 5–95 score with the reasons it moved, from the record's own numbers. Deterministic.
+
+    The interval is judged relative to the estimate when the estimate is known: 3–20% around 8%
+    is not tight (the interval is twice the figure) even though it spans only 17 points. A panel
+    that matches published distributions poorly is capped below the HIGH band."""
     score = 60
     drivers: list[str] = []
     if n >= 30:
@@ -106,10 +123,14 @@ def confidence_for(*, n: int, low: Optional[float], high: Optional[float], fmt: 
         score -= 15; drivers.append(f"only {n} twins answered")
     if fmt == "share" and low is not None and high is not None:
         width = high - low
-        if width <= 0.2:
+        rel = (width / max(float(value), 1e-9)) if value is not None and value > 0 else None
+        if width <= 0.2 and (rel is None or rel <= 1.0):
             score += 10; drivers.append("tight interval")
-        elif width > 0.4:
-            score -= 10; drivers.append(f"wide interval (±{round(width * 50)} points)")
+        elif width > 0.4 or (rel is not None and rel > 2.0):
+            if rel is not None and rel > 2.0 and width <= 0.4:
+                score -= 10; drivers.append(f"wide interval relative to the estimate ({round(low * 100)}–{round(high * 100)}% around {round(float(value) * 100)}%)")
+            else:
+                score -= 10; drivers.append(f"wide interval (±{round(width * 50)} points)")
     if unanimity and unanimity.get("flagged"):
         score -= 20; drivers.append("agreement the population should not have produced")
     ref_share = _num((refusals or {}).get("share"))
@@ -127,6 +148,8 @@ def confidence_for(*, n: int, low: Optional[float], high: Optional[float], fmt: 
         score += 5; drivers.append("weighted to the frame")
     if "sonnet" in (model or "").lower() or "opus" in (model or "").lower():
         score += 5; drivers.append("Pro model")
+    if frame_level == "poor" and score > POOR_FRAME_CAP:
+        score = POOR_FRAME_CAP; drivers.append("capped below HIGH: the panel is poorly matched to published distributions")
     return {"score": max(5, min(95, score)), "drivers": drivers}
 
 
@@ -224,7 +247,7 @@ def candidate_summary(c: dict, probe_id: str) -> dict:
         "movability": dict(c.get("movability") or {}),
         "equity": c.get("equity") or {},
         "confidence": confidence_for(n=int(c.get("n") or 0), low=c.get("low"), high=c.get("high"), fmt="share", unanimity=None, refusals=None,
-                                     frame_level=None, weighted=False),
+                                     frame_level=None, weighted=False, value=c.get("conversion")),
     }
 
 
@@ -281,8 +304,10 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
             "scoped": bool((agg.get("scoping") or {}).get("scoped")) if isinstance(agg.get("scoping"), dict) else None,
             "scoping_snapshot": (agg.get("scoping") or {}).get("snapshot_id") if isinstance(agg.get("scoping"), dict) else None,
         },
+        "summary": None,
         "confidence": confidence_for(n=n, low=est.get("low"), high=est.get("high"), fmt=est.get("format", "share"),
-                                     unanimity=unanimity, refusals=refusals, frame_level=frame_level, weighted=bool(weighted), model=model),
+                                     unanimity=unanimity, refusals=refusals, frame_level=frame_level, weighted=bool(weighted), model=model,
+                                     value=est.get("value")),
         "caveats": caveats_for(n=n, unanimity=unanimity, refusals=refusals, frame_level=frame_level,
                                estimated_dims=(rep or {}).get("estimated") if isinstance(rep, dict) else None,
                                thin_cells=(rep or {}).get("thin_cells") if isinstance(rep, dict) else None, equity=equity),
@@ -313,9 +338,10 @@ def record_from_lever(e: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "question": str(getattr(e, "name", "") or "")[:300],
         "basis": "simulated",
         "estimate": {"metric": "conversion_shift", "label": "Shift in those getting through", "format": "lift",
-                     "value": _num(conv.get("lift")), "low": _num(conv.get("low")), "high": _num(conv.get("high")), "n": n,
+                     "value": _opt(conv.get("lift")), "low": _opt(conv.get("low")), "high": _opt(conv.get("high")), "n": n,
                      "significant": bool(conv.get("significant")), "control": conv.get("then"), "variant": conv.get("now")},
         "sentence": str(lv.get("sentence") or ""),
+        "summary": _shift_summary(f"'{rule.get('lever')}'", _opt(conv.get("lift")), bool(conv.get("significant")), what_if=assumed),
         "distribution": [],
         "splits": {k: [{"segment": k, "value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in v] for k, v in (lv.get("segments") or {}).items()},
         "equity": equity_mod.equity_block([{"value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in (lv.get("segments") or {}).get(equity_mod.KEY, [])], fmt="lift"),
@@ -356,10 +382,13 @@ def record_from_targeting(e: Any, *, evidence_mix: Optional[dict] = None, frame:
         "label": f"Behaviours ranked at {(t.get('from') or {}).get('label')} → {(t.get('to') or {}).get('label')}",
         "question": str(getattr(e, "name", "") or "")[:300],
         "basis": "simulated",
-        "estimate": {"metric": "movement_per_point", "label": f"Top behaviour: {'push ' + top.get('direction', '') + ' ' if top.get('direction') in ('up', 'down') else ''}{top.get('label', '')} — conversion per dial point", "format": "lift",
-                     "value": _num(top.get("per_point")), "low": _num(top.get("per_point_low")), "high": _num(top.get("per_point_high")), "n": n,
+        "estimate": {"metric": "movement_per_point",
+                     "label": (f"Top behaviour: {'push ' + top.get('direction', '') + ' ' if top.get('direction') in ('up', 'down') else ''}{top.get('label', '')} — conversion per dial point"
+                               if ranked else "No behaviour could be ranked"), "format": "lift",
+                     "value": _opt(top.get("per_point")), "low": _opt(top.get("per_point_low")), "high": _opt(top.get("per_point_high")), "n": n,
                      "significant": bool(top.get("significant"))},
         "sentence": str(t.get("sentence") or ""),
+        "summary": _ranking_summary("behaviour", ranked, t.get("any_significant"), unit=" per point", label_key="label"),
         "distribution": [],
         "splits": {},
         "equity": None,
@@ -401,10 +430,13 @@ def record_from_messaging(e: Any, *, evidence_mix: Optional[dict] = None, frame:
         "label": f"Messages tested at {(t.get('from') or {}).get('label')} → {(t.get('to') or {}).get('label')}",
         "question": str(getattr(e, "name", "") or "")[:300],
         "basis": "simulated",
-        "estimate": {"metric": "message_shift", "label": f"Top message: '{top.get('label', '')}' — shift in conversion at the step (modelled reaction, not a forecast)", "format": "lift",
-                     "value": _num(top.get("lift")), "low": _num(top.get("low")), "high": _num(top.get("high")), "n": n,
+        "estimate": {"metric": "message_shift",
+                     "label": (f"Top message: '{top.get('label', '')}' — shift in conversion at the step (modelled reaction, not a forecast)"
+                               if ranked else "No message could be tested (modelled reaction, not a forecast)"), "format": "lift",
+                     "value": _opt(top.get("lift")), "low": _opt(top.get("low")), "high": _opt(top.get("high")), "n": n,
                      "significant": bool(top.get("significant"))},
         "sentence": str(t.get("sentence") or ""),
+        "summary": _ranking_summary("message", ranked, t.get("any_significant"), unit="", label_key="label", lift_key="lift"),
         "distribution": [],
         "splits": {},
         "equity": None,
@@ -446,9 +478,10 @@ def record_from_commitment(c: dict) -> Optional[dict]:
         "question": str(b.get("question") or "")[:300],
         "basis": "simulated",
         "estimate": {"metric": "conversion", "label": "Frozen forecast: share of those at the step who reach the next", "format": "share",
-                     "value": _num(cand.get("conversion")), "low": _num(cand.get("low")), "high": _num(cand.get("high")), "n": n,
+                     "value": _opt(cand.get("conversion")), "low": _opt(cand.get("low")), "high": _opt(cand.get("high")), "n": n,
                      "significant": None},
         "sentence": str(c.get("sentence") or ""),
+        "summary": None,
         "distribution": [],
         "splits": {},
         "equity": cand.get("equity") or None,
@@ -465,7 +498,7 @@ def record_from_commitment(c: dict) -> Optional[dict]:
         "refusals": None, "unanimity": None, "weighted": None,
         "provenance": {"model": str((b.get("journey") or {}).get("model") or ""), "seed": int((b.get("journey") or {}).get("seed") or 0), "design": "frozen",
                        "arms": [], "evidence_mix": {}, "frame_level": frame.get("level") or "none", "created_at": c.get("committed_at")},
-        "confidence": dict(cand.get("confidence") or confidence_for(n=n, low=cand.get("low"), high=cand.get("high"), fmt="share", unanimity=None, refusals=None, frame_level=frame.get("level"), weighted=False)),
+        "confidence": dict(cand.get("confidence") or confidence_for(n=n, low=cand.get("low"), high=cand.get("high"), fmt="share", unanimity=None, refusals=None, frame_level=frame.get("level"), weighted=False, value=cand.get("conversion"))),
         "caveats": [f"A frozen copy of the modelled baseline as it stood on {str(b.get('frozen_at') or '')[:10]}: later runs, documents, rules or population builds in this session do not change it."]
                    + (["No observed result has been entered against this forecast yet."] if not cmp_ else
                       ["The observed result is a figure entered by hand with its source; whether it sits inside the modelled interval is counted, not judged."])
@@ -504,9 +537,10 @@ def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame
         "question": str(getattr(e, "name", "") or "")[:300],
         "basis": "simulated",
         "estimate": {"metric": str((prim or {}).get("key") or ""), "label": str((prim or {}).get("label") or ""), "format": "lift",
-                     "value": _num(lift.get("mean")), "low": _num(lift.get("low")), "high": _num(lift.get("high")), "n": n,
+                     "value": _opt(lift.get("mean")), "low": _opt(lift.get("low")), "high": _opt(lift.get("high")), "n": n,
                      "significant": bool(lift.get("significant")), "control": (prim or {}).get("control"), "variant": (prim or {}).get("variant")},
         "sentence": str(res.get("verdict") or best.get("sentence") or ""),
+        "summary": _shift_summary(f"'{best.get('label')}'", _opt(lift.get("mean")), bool(lift.get("significant"))),
         "distribution": [],
         "splits": best.get("segments") if isinstance(best.get("segments"), dict) else {},
         "equity": equity_mod.equity_block(((best.get("segments") or {}) if isinstance(best.get("segments"), dict) else {}).get(equity_mod.KEY), fmt="lift"),
@@ -524,23 +558,59 @@ def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame
     }
 
 
+# ── reader summaries ─────────────────────────────────────────────────────────
+# A shift record's big number is the winner's shift. When nothing moved, "0 pts" tells a reader
+# nothing; the summary says what was tested and that none of it moved the twins.
+
+def _pts(v: Optional[float]) -> str:
+    return "—" if v is None else f"{round(v * 100):+d} pts"
+
+
+def _shift_summary(what: str, lift: Optional[float], significant: bool, *, what_if: bool = False) -> str:
+    if lift is None:
+        return f"{what}: shift not counted"
+    if not significant:
+        return f"No distinguishable shift from {what}" + (" (a what-if)" if what_if else "")
+    return f"{what} {_pts(lift)}" + (" if the assumption holds" if what_if else "")
+
+
+def _ranking_summary(noun: str, ranked: list[dict], any_significant: Any, *, unit: str, label_key: str, lift_key: str = "per_point") -> str:
+    k = len(ranked)
+    if not k:
+        return f"No {noun} could be ranked"
+    plural = f"{k} {noun}{'s' if k != 1 else ''} tested"
+    if not any_significant:
+        return f"No {noun} moved the twins ({plural})"
+    top = ranked[0]
+    return f"'{top.get(label_key, '')}' {_pts(_opt(top.get(lift_key)))}{unit} ({plural})"
+
+
 # ── the prompt side ──────────────────────────────────────────────────────────
 
 def _fmt_value(est: dict) -> str:
+    """The estimate as the model reads it. A missing interval is said to be missing, never
+    written as 0–0; a missing value is 'not counted'."""
     fmt, v = est.get("format"), est.get("value")
+    n_part = f"n={est.get('n', 0)}"
     if v is None:
-        return "n/a"
+        return f"not counted ({n_part})"
+    lo, hi = _opt(est.get("low")), _opt(est.get("high"))
     if fmt == "share":
-        return f"{round(_num(v) * 100)}% (95% CI {round(_num(est.get('low')) * 100)}–{round(_num(est.get('high')) * 100)}%, n={est.get('n', 0)})"
+        ci = f"95% CI {round(lo * 100)}–{round(hi * 100)}%" if lo is not None and hi is not None else "interval not counted"
+        return f"{round(_num(v) * 100)}% ({ci}, {n_part})"
     if fmt == "lift":
-        return f"{_num(v):+.3g} (95% CI {_num(est.get('low')):+.3g} to {_num(est.get('high')):+.3g}, n={est.get('n', 0)}{', significant' if est.get('significant') else ', not significant'})"
-    return f"{v} (n={est.get('n', 0)})"
+        ci = f"95% CI {lo:+.3g} to {hi:+.3g}" if lo is not None and hi is not None else "interval not counted"
+        return f"{_num(v):+.3g} ({ci}, {n_part}{', significant' if est.get('significant') else ', not significant'})"
+    return f"{v} ({n_part})"
 
 
 def people_phrase(c: dict) -> str:
-    """'≈11,985 people stuck (7,388–50,816)', or '≈78,700 people stuck (held fixed)' when the figure is a client's own."""
-    lo, hi = int(c.get("stuck_low") or 0), int(c.get("stuck_high") or 0)
-    rng = "held fixed" if lo == hi else f"{lo:,}–{hi:,}"
+    """'≈11,985 people stuck (7,388–50,816)', '≈78,700 people stuck (held fixed)' when the figure is a
+    client's own, and no range at all when the bounds were never counted."""
+    lo, hi = _opt(c.get("stuck_low")), _opt(c.get("stuck_high"))
+    if lo is None or hi is None:
+        return f", ≈{int(c['stuck_people']):,} people stuck"
+    rng = "held fixed" if int(lo) == int(hi) else f"{int(lo):,}–{int(hi):,}"
     return f", ≈{int(c['stuck_people']):,} people stuck ({rng})"
 
 
@@ -560,7 +630,9 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
                 hi = max(buckets, key=lambda b: _num(b.get("share")))
                 lo = min(buckets, key=lambda b: _num(b.get("share")))
                 notable.append(f"{key}: {hi.get('value')} {round(_num(hi.get('share')) * 100)}% vs {lo.get('value')} {round(_num(lo.get('share')) * 100)}%")
-        eq_line = equity_mod.prompt_line(r.get("equity") or {})
+        # A record type that is never cut by deprivation (a behaviour ranking, a message test) says
+        # so; only a record that tried and found no levels says the population has none.
+        eq_line = equity_mod.prompt_line(r["equity"]) if r.get("equity") is not None else "equity: not cut by deprivation for this kind of record (read the gap from the journey record instead)"
         bars = r.get("barriers") or []
         bar_line = ("; barriers ranked: " + "; ".join(f"{k}. {b['theme']} ({b['count']} twins, weight {round(float(b.get('weight_mean') or 0))}/100)" for k, b in enumerate(bars[:7], 1))) if bars else ""
         cands = r.get("candidates") or []
@@ -646,8 +718,11 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             flags.append("FLAGGED: more unanimous than the population should be")
         if (r.get("refusals") or {}).get("refused"):
             flags.append(f"{r['refusals']['refused']} refused to answer")
+        runs = r.get("runs") or {}
         lines.append(
             f"[[{h}]] {r.get('label')} — {est.get('label') or 'value'}: {_fmt_value(est)}"
+            + (f" — in words: {r['summary']}" if r.get("summary") else "")
+            + (f" (latest of {runs['count']} runs of this tool at this step; the earlier runs are superseded)" if int(runs.get("count") or 0) > 1 else "")
             + (f"; question: {r['question']}" if r.get("question") else "")
             + (f"; splits: {'; '.join(notable)}" if notable else "")
             + f"; {eq_line}"
@@ -695,8 +770,36 @@ async def _frame(session_id: str) -> Optional[dict]:
         return None
 
 
-async def records_for_session(session_id: str) -> list[dict]:
-    """Every outcome record on file: the latest verdict first, then Lab results newest first."""
+def latest_runs(records: list[dict]) -> list[dict]:
+    """One record per tool and step: re-running a message test on the same step used to add a
+    second card beside the first, so a report showed the same test twice. The newest record of
+    each (kind, label) is kept and carries `runs` — how many runs there were and the ids of the
+    superseded ones, which stay on file and open from Compare runs. The verdict is already one
+    per session; a commitment is a frozen copy and is never folded."""
+    order = sorted(records, key=lambda r: (r.get("provenance") or {}).get("created_at") or "", reverse=True)
+    kept: dict[tuple, dict] = {}
+    out: list[dict] = []
+    for r in order:
+        if r.get("kind") == "commitment":
+            r["runs"] = {"count": 1, "superseded": []}
+            out.append(r)
+            continue
+        key = (r.get("kind"), r.get("instrument"), r.get("label"))
+        if key in kept:
+            kept[key]["runs"]["count"] += 1
+            kept[key]["runs"]["superseded"].append(r["id"])
+            continue
+        r["runs"] = {"count": 1, "superseded": []}
+        kept[key] = r
+        out.append(r)
+    ids = {r["id"] for r in out}
+    return [r for r in records if r["id"] in ids]
+
+
+async def records_for_session(session_id: str, *, latest_only: bool = True) -> list[dict]:
+    """Every outcome record on file: the latest verdict first, then Lab results newest first.
+    `latest_only` (the default) keeps one record per tool and step — see `latest_runs`; the
+    export passes False so every run stays in the files."""
     mix = await evidence_mix(session_id)
     frame = await _frame(session_id)
     async with AsyncSessionLocal() as db:
@@ -733,7 +836,8 @@ async def records_for_session(session_id: str) -> list[dict]:
     out.sort(key=lambda r: (0 if r["kind"] == "headline" else 1, r.get("provenance", {}).get("created_at") or ""), reverse=False)
     heads = [r for r in out if r["kind"] == "headline"]
     rest = sorted([r for r in out if r["kind"] != "headline"], key=lambda r: r.get("provenance", {}).get("created_at") or "", reverse=True)
-    return heads + rest
+    ordered = heads + rest
+    return latest_runs(ordered) if latest_only else ordered
 
 
 async def records_by_ids(session_id: str, ids: list[str]) -> list[dict]:
