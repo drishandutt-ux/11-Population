@@ -127,17 +127,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Illustration — edges feathered so it melts into the background */}
+          {/* Illustration — shown whole (never cropped to the box), sitting on the bottom edge, side edges feathered into the background */}
           <div className="relative mt-6 flex-1 min-h-[160px] overflow-hidden">
             <img
               src="/minds-network.png"
-              alt="A diverse population of AI minds reasoning through a shared neural network"
-              className="absolute inset-0 w-full h-full object-cover object-center"
+              alt="A diverse population of synthetic twins reasoning through a shared network"
+              className="absolute inset-0 w-full h-full object-contain object-bottom"
               style={{
                 maskImage:
-                  "linear-gradient(to right, transparent 0%, #000 13%, #000 87%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 11%, #000 85%, transparent 100%)",
+                  "linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 8%, #000 100%)",
                 WebkitMaskImage:
-                  "linear-gradient(to right, transparent 0%, #000 13%, #000 87%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 11%, #000 85%, transparent 100%)",
+                  "linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 8%, #000 100%)",
                 maskComposite: "intersect",
                 WebkitMaskComposite: "source-in",
               }}
