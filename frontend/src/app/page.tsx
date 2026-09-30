@@ -127,12 +127,12 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Illustration — shown whole (never cropped to the box), sitting on the bottom edge, side edges feathered into the background */}
+          {/* Illustration — fills the width; when the window is short it is the network at the top that is cropped, never the faces at the bottom; edges feathered into the background */}
           <div className="relative mt-6 flex-1 min-h-[160px] overflow-hidden">
             <img
               src="/minds-network.png"
               alt="A diverse population of synthetic twins reasoning through a shared network"
-              className="absolute inset-0 w-full h-full object-contain object-bottom"
+              className="absolute inset-0 w-full h-full object-cover object-bottom"
               style={{
                 maskImage:
                   "linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 8%, #000 100%)",
