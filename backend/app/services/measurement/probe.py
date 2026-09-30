@@ -154,11 +154,15 @@ def _format_prior_answer(instrument: str, answer: dict) -> str:
 
 async def _agent_history(
     db, session_id: str, agent_id: str, probe_id: str, experiment_id: Optional[str] = None,
+    hide_instruments: tuple[str, ...] = (),
 ) -> tuple[list[str], list[str]]:
     """(what this agent said publicly, what it already decided privately).
 
     The other arms of the same experiment are never shown: a within-subjects A/B only measures
-    anything if the agent answers variant B with no memory of what it said to variant A."""
+    anything if the agent answers variant B with no memory of what it said to variant A. An
+    amended journey run (`hide_instruments`) likewise hides the twin's earlier journey answers:
+    it is being asked where it is now that the signed changes are in place, and an instruction
+    not to contradict its earlier position would pin it there."""
     posts = (await db.execute(
         select(SimulationPost.content)
         .where(SimulationPost.session_id == session_id, SimulationPost.agent_id == agent_id,
@@ -174,6 +178,8 @@ async def _agent_history(
     )
     if experiment_id:
         q = q.where(or_(Probe.experiment_id.is_(None), Probe.experiment_id != experiment_id))
+    if hide_instruments:
+        q = q.where(Probe.instrument.notin_(list(hide_instruments)))
     rows = (await db.execute(q.order_by(ProbeAnswer.created_at.desc()).limit(MAX_PRIOR_ANSWERS))).all()
 
     said = [clip(p, 320) for p in posts if p and p.strip()]
@@ -224,6 +230,13 @@ def _build_user_message(
     if lever:
         from app.services.measurement import levers as lever_mod
         blocks.append(lever_mod.counterfactual_block(lever))
+    # An amended run: every signed rule that reaches this twin, described together.
+    amendments = spec.get("amendments") if isinstance(spec.get("amendments"), dict) else None
+    if amendments and amendments.get("rules"):
+        from app.services.measurement import levers as lever_mod
+        block = lever_mod.amendments_block(amendments["rules"], segments_for(agent))
+        if block:
+            blocks.append(block)
     # A message run (brief L7-06): the twin has just read a framing. A stimulus, not a change in
     # the world and not a dial shift — the twin decides what it does to them.
     message = spec.get("message") if isinstance(spec.get("message"), dict) else None
@@ -329,8 +342,10 @@ async def answer_one(
     Returns the answer dict, or None if the call failed (a failed agent is dropped from the
     denominator rather than filled with a default — a made-up answer would corrupt the share)."""
     started = time.monotonic()
+    amendments = spec.get("amendments") if isinstance(spec.get("amendments"), dict) else None
     async with AsyncSessionLocal() as db:
-        said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id)
+        said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id,
+                                             hide_instruments=("journey",) if amendments and amendments.get("rules") else ())
 
     from app.services.agents import dynamic_dials as dyn_mod
     # A lever run (brief L7-04): the twins the rule covers answer with their dials shifted as the
@@ -343,6 +358,10 @@ async def answer_one(
         from app.services.measurement import levers as lever_mod
         if lever_mod.applies(lever, segments):
             agent.dials = lever_mod.adjusted_dials(original_dials, lever)
+    # An amended run: every signed rule that covers the twin, stacked, each within its own bound.
+    if amendments and amendments.get("rules"):
+        from app.services.measurement import levers as lever_mod
+        agent.dials = lever_mod.amended_dials(agent.dials, amendments["rules"], segments)
     # A targeting run (brief L7-05): one behaviour dial nudged by a few points for every twin in
     # the arm, nothing described — the nudge is a disposition, not an event in the world.
     nudge = spec.get("nudge") if isinstance(spec.get("nudge"), dict) else None

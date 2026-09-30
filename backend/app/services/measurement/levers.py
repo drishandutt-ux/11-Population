@@ -615,3 +615,228 @@ async def draft_rule(session_id: str, lever: str, *, journey_probe_id: Optional[
     out["drafted"] = True
     out["material"] = len(pool)
     return out
+
+
+# ── amendments: the journey re-read with every signed rule in place ──────────
+# A lever run answers one question — what one rule does at one step. The analyst's next question
+# is *if everything we have signed were in place, where would the population be now?* An
+# AMENDED RUN asks the same twins the same journey again with every reviewed rule applied to
+# the twins it covers (the dial shifts stacked, each within its own bound) and every change
+# described to them together. The GROWTH is counted step by step against the base run on the
+# same twins — the share reaching each step then → now with a paired interval, the conversion
+# at every transition, the end of the journey, who moved up or down, and the people where the
+# base run had headcounts. Nothing runs without at least one signed rule; a draft is not enough.
+
+AMENDMENTS_KEY = "amendments"
+
+
+def amendment_pack(rules: list[dict]) -> list[dict]:
+    """The reviewed rules frozen into an amended run's spec, in rule-book order."""
+    out = []
+    for r in rules:
+        if r.get("status") != STATUS_REVIEWED:
+            continue
+        out.append({
+            "rule_id": r.get("id"), "lever": r.get("lever"), "description": r.get("description") or "",
+            "applies_to": r.get("applies_to") or {}, "deltas": r.get("deltas") or {}, "bound": int(r.get("bound") or DEFAULT_BOUND),
+            "reviewed_by": r.get("reviewed_by") or "", "reviewed_at": r.get("reviewed_at"),
+            "basis_class": r.get("basis_class") or basis_class(r), "evidence_count": len(evidence_of(r)),
+        })
+    return out
+
+
+def covering(pack: list[dict], segments: dict) -> list[dict]:
+    """The rules of a pack that cover a twin, from its segment map."""
+    return [r for r in pack if applies(r, segments)]
+
+
+def amended_dials(dials: Optional[dict], pack: list[dict], segments: dict) -> dict:
+    """The twin's dials with every covering rule applied in order, each within its own bound and
+    the whole clamped to the 0–10 scale. The original object is never touched."""
+    out = json.loads(json.dumps(dials or {}))
+    for r in covering(pack, segments):
+        out = adjusted_dials(out, r)
+    return out
+
+
+def amendments_block(pack: list[dict], segments: dict) -> str:
+    """The changes in place, as the twin reads them — only the ones that reach this twin. Empty
+    when none does: that twin answers as things are."""
+    mine = covering(pack, segments)
+    if not mine:
+        return ""
+    lines = [f"{i}. {str(r.get('description') or r.get('lever') or '').strip().rstrip('.')}." for i, r in enumerate(mine, 1)]
+    head = ("CHANGES NOW IN PLACE (this run is a what-if; everything else about your life is as it was):"
+            if len(mine) > 1 else "A CHANGE NOW IN PLACE (this run is a what-if; everything else about your life is as it was):")
+    return head + "\n" + "\n".join(lines) + "\nAnswer as you would if these were really there for you — no more helpful than they would actually be."
+
+
+async def start_amended(session_id: str, *, journey_probe_id: str, rule_ids: Optional[list[str]] = None, mode: str = "fast") -> dict:
+    """Create the amended run — a fresh journey probe on the base run's steps, seed and filters
+    with the signed rules in its spec — or refuse when there is no signed rule. Returns
+    `{probe_id, rules}`, `{refused: True, ...}` or `{error}`. The caller schedules `run_amended`."""
+    from app.core.config import get_settings
+    from app.core.database import AsyncSessionLocal
+    from app.models.measurement import Probe
+    from app.services.measurement import instruments, probe as probe_svc
+
+    async with AsyncSessionLocal() as db:
+        base = await db.get(Probe, journey_probe_id)
+        if not base or base.session_id != session_id or base.instrument != "journey" or base.status != "complete":
+            return {"error": "The journey run was not found or is not complete."}
+        if (base.spec or {}).get(AMENDMENTS_KEY):
+            return {"error": "This is already an amended run — refresh from the base journey run it was counted against."}
+        base_spec = {k: v for k, v in (base.spec or {}).items() if k not in ("seed", "lever", "nudge", "message", AMENDMENTS_KEY)}
+        base_seed = int(base.seed or 0)
+
+    rules = await rules_for_session(session_id)
+    wanted = set(rule_ids or [])
+    chosen = [r for r in rules if (not wanted or r["id"] in wanted)]
+    pack = amendment_pack(chosen)
+    if not pack:
+        drafts = [r["id"] for r in chosen if r["status"] != STATUS_REVIEWED]
+        msg = ("There are rules in the rule book but none is signed. Nothing is simulated until a reviewer signs a rule off — "
+               "a number from an unreviewed rule would be a guess." if drafts else
+               "The rule book is empty, so there is nothing to amend the journey with: write a rule — what the change is, who it "
+               "applies to, which dials it moves and by how much — and have it signed.")
+        return {"refused": True, "lever": "", "reason": msg, "drafts": drafts, "missing": not drafts}
+
+    inst = instruments.get("journey")
+    spec = {**base_spec, "seed": base_seed, AMENDMENTS_KEY: {"base_probe_id": journey_probe_id, "rules": pack, "requested_at": datetime.utcnow().isoformat()}}
+    model = get_settings().agent_model("pro" if mode == "pro" else "fast")
+    async with AsyncSessionLocal() as db:
+        p = Probe(id=str(uuid.uuid4()), session_id=session_id, instrument="journey", schema_id=inst.schema_id(), spec=spec, seed=base_seed, model=model,
+                  prompt_hash=probe_svc.prompt_hash(inst, spec), status="queued")
+        db.add(p)
+        await db.commit()
+        return {"probe_id": p.id, "rules": pack}
+
+
+async def run_amended(probe_id: str) -> None:
+    """Run the amended journey, then count the growth against the base run and store it."""
+    from app.services.measurement.probe import run_probe
+    await run_probe(probe_id)
+    try:
+        await attach_growth(probe_id)
+    except Exception as e:  # noqa: BLE001
+        print(f"[levers] growth failed for {probe_id}: {type(e).__name__}: {e}")
+
+
+def growth(*, base_agg: dict, amended_agg: dict, base_rows: dict[str, dict], amended_rows: dict[str, dict], pack: list[dict], seed: int = 0) -> dict:
+    """The growth of the journey with the amendments in place, counted on the same twins: per step
+    the share reached then → now with a paired interval, per transition the conversion then → now,
+    the end of the journey, the movement and — where the base run had headcounts — the people."""
+    from app.services.measurement.instruments.journey import _index
+    stages = base_agg.get("stages") or []
+    idx = _index(stages)
+    if not stages:
+        return {"available": False, "reason": "The base run has no journey."}
+    r0, r1 = _reached_index(base_rows, stages), _reached_index(amended_rows, stages)
+    ids = [x for x in r0 if x in r1]
+    if not ids:
+        return {"available": False, "reason": "No twin answered both runs."}
+    base_funnel = {f.get("key"): f for f in (base_agg.get("funnel") or [])}
+    now_funnel = {f.get("key"): f for f in (amended_agg.get("funnel") or [])}
+    funnel = []
+    for k, st in enumerate(stages):
+        pairs = [(1.0 if r0[x] >= k else 0.0, 1.0 if r1[x] >= k else 0.0) for x in ids]
+        lf = stats.paired_lift(pairs, seed=seed)
+        then, now = sum(p[0] for p in pairs) / len(pairs), sum(p[1] for p in pairs) / len(pairs)
+        row = {"key": st.get("key"), "label": st.get("label"), "then": round(then, 4), "now": round(now, 4), "reached_then": int(sum(p[0] for p in pairs)),
+               "reached_now": int(sum(p[1] for p in pairs)), "lift": lf["mean"], "low": lf["low"], "high": lf["high"], "n": len(pairs), "significant": bool(lf.get("significant"))}
+        bf, nf = base_funnel.get(st.get("key")) or {}, now_funnel.get(st.get("key")) or {}
+        if bf.get("people") is not None:
+            row["people_then"] = bf.get("people")
+            # the amended run's own headcount where it has one (same denominator), else the base figure scaled by the growth
+            if nf.get("people") is not None and not bf.get("fixed"):
+                row["people_now"] = nf.get("people")
+            elif bf.get("fixed"):
+                row["people_now"] = bf.get("people")
+            elif then > 0:
+                row["people_now"] = int(round(float(bf["people"]) * now / then))
+            if row.get("people_now") is not None:
+                row["people_moved"] = int(row["people_now"]) - int(row["people_then"])
+            row["basis"] = bf.get("basis") or ""
+        funnel.append(row)
+    transitions = []
+    t0 = {t.get("id"): t for t in (base_agg.get("transitions") or [])}
+    t1 = {t.get("id"): t for t in (amended_agg.get("transitions") or [])}
+    for k in range(len(stages) - 1):
+        a, b = _through_flags(base_rows, stages, k), _through_flags(amended_rows, stages, k)
+        paired = [(a[x], b[x]) for x in a if x in b]
+        lf = stats.paired_lift(paired, seed=seed) if paired else {"mean": 0.0, "low": 0.0, "high": 0.0, "n": 0, "significant": False}
+        tid = f"{stages[k].get('key')}->{stages[k + 1].get('key')}"
+        c0, c1 = t0.get(tid) or {}, t1.get(tid) or {}
+        transitions.append({"id": tid, "step": k + 1, "from": {"key": stages[k].get("key"), "label": stages[k].get("label")}, "to": {"key": stages[k + 1].get("key"), "label": stages[k + 1].get("label")},
+                            "then": c0.get("conversion"), "now": c1.get("conversion"), "lift": lf["mean"], "low": lf["low"], "high": lf["high"], "n": lf.get("n", len(paired)),
+                            "significant": bool(lf.get("significant")), "stuck_then": c0.get("stuck"), "stuck_now": c1.get("stuck"),
+                            "up": sum(1 for x, y in paired if y > x), "down": sum(1 for x, y in paired if y < x)})
+    last = len(stages) - 1
+    end = next((f for f in funnel if f["key"] == stages[last].get("key")), funnel[-1])
+    up = sum(1 for x in ids if r1[x] > r0[x])
+    down = sum(1 for x in ids if r1[x] < r0[x])
+    out = {
+        "available": True, "n": len(ids), "rules": pack, "assumed": any(r.get("basis_class") == BASIS_ASSUMPTION for r in pack),
+        "covered": sum(1 for x in ids if covering(pack, (base_rows[x].get("segments") or {}))),
+        "funnel": funnel, "transitions": transitions,
+        "end": {"label": stages[last].get("label"), "then": end["then"], "now": end["now"], "lift": end["lift"], "low": end["low"], "high": end["high"], "n": end["n"],
+                "significant": end["significant"], "people_then": end.get("people_then"), "people_now": end.get("people_now"), "people_moved": end.get("people_moved")},
+        "movement": {"up": up, "down": down, "unchanged": len(ids) - up - down, "n": len(ids)},
+    }
+    out["sentence"] = _growth_sentence(out)
+    return out
+
+
+def _growth_sentence(g: dict) -> str:
+    end = g["end"]
+    rules = g.get("rules") or []
+    names = ", ".join(f"'{r.get('lever')}'" for r in rules[:4]) + (f" and {len(rules) - 4} more" if len(rules) > 4 else "")
+    pts, lo, hi = round(float(end["lift"]) * 100), round(float(end["low"]) * 100), round(float(end["high"]) * 100)
+    text = (("Assumed effect, not a forecast (at least one rule rests on no evidence): with " if g.get("assumed") else "With ")
+            + f"{len(rules)} signed rule{'s' if len(rules) != 1 else ''} in place ({names}), {round(float(end['now']) * 100)}% reach '{end['label']}' against "
+            f"{round(float(end['then']) * 100)}% before: growth of {pts:+d} points (95% CI {lo:+d} to {hi:+d}, n={end['n']}"
+            f"{', real' if end['significant'] else ', not distinguishable from zero'})")
+    mv = g["movement"]
+    text += f"; {mv['up']} twin{'s' if mv['up'] != 1 else ''} moved further along the journey, {mv['down']} fell back, {mv['unchanged']} unchanged"
+    if end.get("people_moved") is not None:
+        text += f"; ≈{int(end['people_moved']):+,} people at the end of the journey ({int(end['people_then']):,} → {int(end['people_now']):,})"
+    biggest = max((t for t in g.get("transitions") or [] if t.get("then") is not None), key=lambda t: float(t.get("lift") or 0), default=None)
+    if biggest and float(biggest.get("lift") or 0) > 0:
+        text += (f". The biggest gain is {biggest['from']['label']} → {biggest['to']['label']}: {round(float(biggest['then'] or 0) * 100)}% → "
+                 f"{round(float(biggest['now'] or 0) * 100)}% get through")
+    return text + "."
+
+
+async def attach_growth(probe_id: str) -> None:
+    """Count the growth of an amended run against its base run and store it on the amended run's
+    aggregates as `amended`."""
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.core.database import AsyncSessionLocal
+    from app.models.agent import SpawnedAgent
+    from app.models.measurement import Probe, ProbeAnswer
+    from app.services.measurement.probe import segments_for
+
+    async with AsyncSessionLocal() as db:
+        p = await db.get(Probe, probe_id)
+        info = ((p.spec or {}).get(AMENDMENTS_KEY) if p else None) or {}
+        if not p or not info.get("base_probe_id") or not (p.aggregates or {}).get("transitions"):
+            return
+        base = await db.get(Probe, info["base_probe_id"])
+        if not base or not (base.aggregates or {}).get("transitions"):
+            return
+        rows: dict[str, dict[str, dict]] = {}
+        for key, pr in (("base", base), ("amended", p)):
+            answers = (await db.execute(select(ProbeAnswer).where(ProbeAnswer.probe_id == pr.id))).scalars().all()
+            rows[key] = {x.agent_id: {"answer": x.answer or {}, "segments": {}} for x in answers}
+        ids = list(rows["base"].keys())
+        agents = (await db.execute(select(SpawnedAgent).where(SpawnedAgent.id.in_(ids)))).scalars().all() if ids else []
+        for ag in agents:
+            if ag.id in rows["base"]:
+                rows["base"][ag.id]["segments"] = segments_for(ag)
+        g = growth(base_agg=base.aggregates, amended_agg=p.aggregates, base_rows=rows["base"], amended_rows=rows["amended"], pack=info.get("rules") or [], seed=int(p.seed or 0))
+        g["base_probe_id"] = base.id
+        agg = dict(p.aggregates or {})
+        agg["amended"] = g
+        p.aggregates = agg
+        flag_modified(p, "aggregates")
+        await db.commit()

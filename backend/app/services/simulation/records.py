@@ -291,6 +291,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "funnel": list(agg.get("funnel") or []) if instrument == "journey" else [],
         "candidates": [candidate_summary(c, p.id) for c in (agg.get("candidates") or [])] if instrument == "journey" else [],
         "headcount": dict(agg.get("headcount") or {}) if instrument == "journey" else {},
+        "amended": ({k: v for k, v in (agg.get("amended") or {}).items() if k in ("available", "n", "rules", "assumed", "covered", "funnel", "end", "movement", "sentence", "base_probe_id")}
+                    if instrument == "journey" and (agg.get("amended") or {}).get("available") else {}),
         # The documents the twins drew on, by their own citation (L6-05); filled by the aggregator when it has the answers.
         "sources": list(agg.get("sources_used") or []),
         "refusals": refusals,
@@ -655,6 +657,12 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
                 bar_line += "; funnel: " + " → ".join(f"{f.get('label')} {round(_num(f.get('share')) * 100)}%" + (f" (≈{int(f['people']):,} people)" if f.get("people") is not None else "") for f in fun)
             hc = r.get("headcount") or {}
             bar_line += ("; headcounts: " + str(hc.get("sentence") or "").rstrip(".")) if hc.get("available") else "; headcounts: not available (no sizing figure on file) — give no number of people"
+            am = r.get("amended") or {}
+            if am.get("available"):
+                bar_line += ("; AMENDED RUN — the journey re-read with " + str(len(am.get("rules") or [])) + " signed rule(s) in place ("
+                             + ", ".join(f"'{x.get('lever')}' signed by {x.get('reviewed_by') or 'nobody'}" + (" — NO evidence, an assumption" if x.get("basis_class") == "assumption" else "") for x in (am.get("rules") or [])[:6])
+                             + "); growth: " + str(am.get("sentence") or "").rstrip(".")
+                             + "; the figures above are the amended ones — the 'then' figures in the growth line are the base run's")
         flags = []
         lv = r.get("lever") or {}
         if lv:

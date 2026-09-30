@@ -7,12 +7,12 @@
  *  the stored answers, so no call is needed. */
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ListOrdered, Lock, MessageSquare, Play, Sparkles } from "lucide-react";
+import { BookOpen, ListOrdered, Loader2, Lock, MessageSquare, Play, RefreshCw, Sparkles } from "lucide-react";
 import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import RuleBook from "../RuleBook";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
-import { api, CalibrationRule, Commitment, Experiment, LeverRefusal, LeverShift, MessagingResult, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
+import { api, CalibrationRule, Commitment, Experiment, JourneyGrowth, LeverRefusal, LeverShift, MessagingResult, Probe, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
 import { InstrumentPageProps } from "./types";
 
 /** The 409 body of a refused lever run, from the API client's error text. */
@@ -129,6 +129,24 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
     } finally { setDrafting(null); }
   };
   const loadRuns = () => api.lab.leverRuns(sessionId).then((r) => setRuns(r.runs.filter((x) => x.spec?.lever_run?.journey_probe_id === probe.id))).catch(() => {});
+  // Refresh with the simulation amendments: the same twins answer the journey again with every signed rule in place,
+  // and the growth per step is counted against this run. An amended run on screen reads its own growth.
+  const amendmentsOf = (probe.spec as any)?.amendments as { base_probe_id: string; rules: JourneyGrowth["rules"] } | undefined;
+  const [amends, setAmends] = useState<Probe[]>([]);
+  const [amending, setAmending] = useState(false);
+  const [amendError, setAmendError] = useState<LeverRefusal | string>("");
+  const [showAmended, setShowAmended] = useState(true);
+  const loadAm = () => (amendmentsOf ? Promise.resolve() : api.lab.journeyAmendments(sessionId, probe.id).then((r) => setAmends(r.runs)).catch(() => {}));
+  const signedRules = rules.filter((r) => r.status === "reviewed");
+  const refreshWithAmendments = async () => {
+    setAmending(true); setAmendError("");
+    try {
+      const p = await api.lab.amendJourney(sessionId, probe.id, {});
+      setAmends((prev) => [p, ...prev]);
+    } catch (e: any) {
+      setAmendError(refusalOf(e) || (e?.message || "Could not start the amended run"));
+    } finally { setAmending(false); }
+  };
   // Behaviour targeting (brief L7-05): which behaviour to change, as a counted ranking.
   const [menu, setMenu] = useState<TargetingMenu | null>(null);
   const [tgRuns, setTgRuns] = useState<Experiment[]>([]);
@@ -188,8 +206,8 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   useEffect(() => {
     api.lab.rules(sessionId).then((r) => setRules(r.rules)).catch(() => {});
     api.lab.targetingBehaviours(sessionId).then(setMenu).catch(() => {});
-    loadRuns(); loadTg(); loadMg(); loadCm();
-    const t = setInterval(() => { loadRuns(); loadTg(); loadMg(); }, 5000);
+    loadRuns(); loadTg(); loadMg(); loadCm(); loadAm();
+    const t = setInterval(() => { loadRuns(); loadTg(); loadMg(); loadAm(); }, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, probe.id]);
@@ -234,6 +252,11 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   const hc = a.headcount || null;
   const showPeople = Boolean(hc?.available) && !filtered;
   const funnelPeople = (key: string) => (a.funnel || []).find((f: any) => f.key === key);
+  const amendRunning = amends.find((p) => p.status === "queued" || p.status === "running") || null;
+  const amendLatest = amends.find((p) => p.status === "complete" && (p.aggregates as any)?.amended?.available) || null;
+  const growth: JourneyGrowth | null = amendmentsOf ? ((a.amended as JourneyGrowth) || null) : ((amendLatest?.aggregates as any)?.amended as JourneyGrowth) || null;
+  const growthFor = (key: string) => growth?.funnel.find((f) => f.key === key);
+  const overlay = Boolean(growth?.available && showAmended && !filtered && !amendmentsOf);
 
   return (
     <div className="space-y-5">
@@ -263,7 +286,29 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
           className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground border border-border/60 rounded-lg px-2 py-1">
           <BookOpen className="w-3 h-3" /> Rule book <span className="opacity-60">{rules.length ? `${rules.filter((r) => r.status === "reviewed").length} signed of ${rules.length}` : "empty"}</span>
         </button>
+        {!amendmentsOf && (
+          <button type="button" onClick={refreshWithAmendments} disabled={amending || Boolean(amendRunning) || !signedRules.length}
+            title={signedRules.length
+              ? `Ask the same ${a.n} twins the journey again with the ${signedRules.length} signed rule${signedRules.length === 1 ? "" : "s"} in place, and count the growth at every step against this run`
+              : "Sign at least one rule in the rule book first — the tool will not guess what an unsigned change does"}
+            className="flex items-center gap-1 text-[11px] border rounded-lg px-2 py-1 disabled:opacity-50 border-primary/50 text-foreground hover:bg-primary/10">
+            {amending || amendRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            {amendRunning ? `Refreshing with amendments · ${amendRunning.answer_count}/${amendRunning.agent_count || a.n}` : "Refresh with amendments"}
+          </button>
+        )}
       </div>
+      {amendError && (
+        <p className="text-[11px] text-yellow-300/80 -mt-2">
+          {typeof amendError === "string" ? amendError : amendError.reason}
+          {typeof amendError !== "string" && <> <button type="button" className="underline" onClick={() => setRuleBook({})}>Open the rule book</button>.</>}
+        </p>
+      )}
+      {amendmentsOf && (
+        <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 text-[11px] text-foreground/80">
+          <span className="font-medium text-foreground">Amended run.</span> This is the journey re-read with {amendmentsOf.rules.length} signed rule{amendmentsOf.rules.length === 1 ? "" : "s"} in place
+          ({amendmentsOf.rules.map((r) => `'${r.lever}'`).join(", ")}); the funnel and the candidates below are the amended figures. The growth against the base run is counted underneath.
+        </div>
+      )}
       {ruleBook && <RuleBook sessionId={sessionId} initialLever={ruleBook.lever} draft={ruleBook.draft} context={{ journey_probe_id: probe.id, candidate_id: ruleBook.candidate_id }} onClose={() => setRuleBook(null)} onChanged={setRules} />}
 
       {/* The funnel: share of everyone who reached each step. */}
@@ -279,10 +324,20 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
               <div key={f.key} className="flex items-center gap-3 text-xs">
                 <span className="w-5 text-muted-foreground tabular-nums">{k + 1}.</span>
                 <span className="w-44 truncate text-foreground/90" title={f.definition}>{f.label}</span>
-                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden relative">
                   <div className={`h-full rounded-full ${k === stages.length - 1 ? "bg-emerald-400/70" : "bg-primary/70"}`} style={{ width: `${Math.round(f.share * 100)}%` }} />
+                  {overlay && growthFor(f.key) && (growthFor(f.key)!.now > f.share) && (
+                    <div className="absolute inset-y-0 rounded-r-full bg-emerald-300/50" title="growth with the amendments in place"
+                      style={{ left: `${Math.round(f.share * 100)}%`, width: `${Math.round((growthFor(f.key)!.now - f.share) * 100)}%` }} />
+                  )}
                 </div>
                 <span className="w-28 text-right text-muted-foreground tabular-nums">{pct(f.share)} <span className="opacity-60">({f.reached})</span></span>
+                {overlay && (
+                  <span className={`w-24 text-right tabular-nums ${growthFor(f.key) && growthFor(f.key)!.lift > 0 ? "text-emerald-300/90" : growthFor(f.key) && growthFor(f.key)!.lift < 0 ? "text-red-300/80" : "text-muted-foreground/50"}`}
+                    title={growthFor(f.key) ? `with the amendments: ${pct(growthFor(f.key)!.now)} (95% CI ${Math.round(growthFor(f.key)!.low * 100) >= 0 ? "+" : ""}${Math.round(growthFor(f.key)!.low * 100)} to +${Math.round(growthFor(f.key)!.high * 100)} pts)` : ""}>
+                    {growthFor(f.key) ? <>→ {pct(growthFor(f.key)!.now)} <span className="opacity-70">{growthFor(f.key)!.lift >= 0 ? "+" : ""}{Math.round(growthFor(f.key)!.lift * 100)}</span></> : ""}
+                  </span>
+                )}
                 {showPeople && (
                   <span className={`w-36 text-right tabular-nums ${fp?.people != null ? "text-foreground/85" : "text-muted-foreground/50"}`}
                     title={fp?.people != null ? `${BASIS_LABEL[fp.basis] || fp.basis}${fp.people_low != null && fp.people_low !== fp.people_high ? ` · ${people(fp.people_low)}–${people(fp.people_high)}` : ""}${fp.anchor ? ` · scaled from '${fp.anchor}'` : ""}` : "no figure for this step"}>
@@ -307,6 +362,52 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
             : <>{pct(view.completed.share)} reach &lsquo;{last.label}&rsquo; (±{Math.round(((view.completed.high - view.completed.low) / 2) * 100)} points) in this cut.</>}
         </p>
       </div>
+
+      {/* The growth with the simulation amendments in place (the newest complete amended run, or this run's own when it is one). */}
+      {growth?.available && !filtered && (
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-4">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs text-foreground/90">The journey with the amendments in place</span>
+            <span className="text-[11px] text-muted-foreground/70">· {growth.rules.length} signed rule{growth.rules.length === 1 ? "" : "s"} · {growth.covered} of {growth.n} twins covered{amendLatest?.created_at ? ` · run ${new Date(amendLatest.created_at).toLocaleString()}` : ""}</span>
+            {!amendmentsOf && (
+              <label className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
+                <input type="checkbox" checked={showAmended} onChange={(e) => setShowAmended(e.target.checked)} /> show on the funnel
+              </label>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {growth.rules.map((r) => (
+              <span key={r.rule_id} className={`px-2 py-0.5 rounded-full text-[10px] border ${r.basis_class === "assumption" ? "border-yellow-300/40 text-yellow-200/80" : "border-emerald-400/40 text-emerald-200/80"}`}
+                title={`${r.description || r.lever}\nDials: ${Object.entries(r.deltas || {}).map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v}`).join(", ")}\nSigned by ${r.reviewed_by || "nobody"}${r.basis_class === "assumption" ? " · rests on no evidence (an assumption)" : ` · ${r.evidence_count || 0} evidence line(s)`}`}>
+                {r.lever}{r.basis_class === "assumption" ? " · assumed" : ""}
+              </span>
+            ))}
+          </div>
+          <div className="space-y-1.5">
+            {growth.funnel.map((f, k) => (
+              <div key={f.key} className="flex items-center gap-3 text-xs">
+                <span className="w-5 text-muted-foreground tabular-nums">{k + 1}.</span>
+                <span className="w-44 truncate text-foreground/90">{f.label}</span>
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden relative">
+                  <div className="h-full rounded-full bg-primary/40" style={{ width: `${Math.round(Math.min(f.then, f.now) * 100)}%` }} />
+                  {f.now > f.then && <div className="absolute inset-y-0 bg-emerald-400/70 rounded-r-full" style={{ left: `${Math.round(f.then * 100)}%`, width: `${Math.round((f.now - f.then) * 100)}%` }} />}
+                  {f.now < f.then && <div className="absolute inset-y-0 bg-red-400/50 rounded-r-full" style={{ left: `${Math.round(f.now * 100)}%`, width: `${Math.round((f.then - f.now) * 100)}%` }} />}
+                </div>
+                <span className="w-40 text-right tabular-nums text-muted-foreground" title={`95% CI ${Math.round(f.low * 100) >= 0 ? "+" : ""}${Math.round(f.low * 100)} to ${Math.round(f.high * 100) >= 0 ? "+" : ""}${Math.round(f.high * 100)} points, n=${f.n}${f.significant ? ", real" : ", not distinguishable from zero"}`}>
+                  {pct(f.then)} → <span className="text-foreground/90">{pct(f.now)}</span> <span className={f.lift > 0 ? "text-emerald-300/90" : f.lift < 0 ? "text-red-300/80" : "opacity-50"}>{f.lift >= 0 ? "+" : ""}{Math.round(f.lift * 100)}</span>
+                </span>
+                {f.people_then != null && (
+                  <span className="w-36 text-right tabular-nums text-foreground/75" title={`${BASIS_LABEL[f.basis || ""] || f.basis || ""} · ≈${people(f.people_then)} → ≈${people(f.people_now)} people`}>
+                    {f.people_moved != null ? <>{f.people_moved >= 0 ? "+" : ""}{people(f.people_moved)} <span className="opacity-60">people</span></> : "—"}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-foreground/70 mt-3 leading-relaxed">{growth.sentence}</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-1">Paired on the same twins, same seed and steps; the earlier journey answers were hidden from them so the change could move them. Re-run after signing more rules to see the growth change.</p>
+        </div>
+      )}
 
       {/* The candidates: one per step where twins drop off, ranked. */}
       <div>

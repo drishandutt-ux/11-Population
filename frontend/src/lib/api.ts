@@ -224,6 +224,10 @@ export const api = {
     runLever: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; lever: string; rule_id?: string; mode?: string }) =>
       request<Experiment & { rule: CalibrationRule }>(`/sessions/${sessionId}/levers/run`, { method: "POST", body: JSON.stringify(body) }),
     leverRuns: (sessionId: string) => request<{ runs: Experiment[] }>(`/sessions/${sessionId}/levers`),
+    /** Refresh a journey run with the simulation amendments: the same twins answer again with every signed rule in place; the growth per step is counted against the base run. 409 when nothing is signed. */
+    amendJourney: (sessionId: string, probeId: string, body: { rule_ids?: string[]; mode?: string } = {}) =>
+      request<Probe>(`/sessions/${sessionId}/journey/${probeId}/amend`, { method: "POST", body: JSON.stringify(body) }),
+    journeyAmendments: (sessionId: string, probeId: string) => request<{ runs: Probe[] }>(`/sessions/${sessionId}/journey/${probeId}/amendments`),
     // Behaviour targeting (brief L7-05): rank behaviours by modelled movement per point at a candidate's step.
     targetingBehaviours: (sessionId: string) => request<TargetingMenu>(`/sessions/${sessionId}/targeting/behaviours`),
     runTargeting: (sessionId: string, body: { journey_probe_id: string; candidate_id: string; behaviours?: string[]; points?: number; mode?: string }) =>
@@ -615,6 +619,16 @@ export type LeverShift = { available: boolean; reason?: string; candidate_id: st
     basis_class?: "evidence_anchored" | "assumption"; evidence_count?: number };
   assumed?: boolean; covered: number; journey_probe_id: string; sentence: string };
 export type LeverRefusal = { refused: true; lever: string; reason: string; drafts: string[]; missing: boolean };
+/** The growth of a journey refreshed with the simulation amendments — every signed rule in place — counted step by step against the base run on the same twins. */
+export type JourneyGrowth = { available: boolean; reason?: string; n: number; base_probe_id?: string; assumed: boolean; covered: number;
+  rules: { rule_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number; reviewed_by: string; reviewed_at: string | null;
+    basis_class?: "evidence_anchored" | "assumption"; evidence_count?: number }[];
+  funnel: { key: string; label: string; then: number; now: number; reached_then: number; reached_now: number; lift: number; low: number; high: number; n: number; significant: boolean;
+    people_then?: number | null; people_now?: number | null; people_moved?: number | null; basis?: string }[];
+  transitions: { id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string }; then: number | null; now: number | null; lift: number; low: number; high: number; n: number;
+    significant: boolean; stuck_then: number | null; stuck_now: number | null; up: number; down: number }[];
+  end: { label: string; then: number; now: number; lift: number; low: number; high: number; n: number; significant: boolean; people_then?: number | null; people_now?: number | null; people_moved?: number | null };
+  movement: { up: number; down: number; unchanged: number; n: number }; sentence: string };
 /** What a behaviour-targeting run can rank (brief L7-05): the question-specific dials (ticked by default) and the fixed dial vocabulary. */
 export type TargetingMenu = { behaviours: { key: string; label: string; group: string; why: string; low: string; high: string; question_specific: boolean }[];
   fixed: Record<string, string[]>; points_default: number; points_max: number; max_behaviours: number };

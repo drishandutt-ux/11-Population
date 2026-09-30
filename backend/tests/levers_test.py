@@ -200,3 +200,80 @@ def test_the_system_draft_cites_only_the_material_it_was_shown_and_keeps_real_di
     # nothing to cite → an honest assumption, still a valid draft
     g = lv.clean_draft({**raw, "evidence": [], "basis": ""}, lever="Free caddy liners", pool=[])
     assert g["evidence"] == [] and lv.basis_class(g) == lv.BASIS_ASSUMPTION and lv.validate_rule(g) == []
+
+
+# ── amendments: the journey refreshed with every signed rule in place ─────────
+
+RULE2 = {"id": "r2", "lever": "free prescriptions", "description": "Prescriptions are free for this group", "applies_to": {"deprivation": ["Q1 most deprived"]},
+         "deltas": {"friction.money_pain": -3}, "bound": 4, "status": "reviewed", "reviewed_by": "M. Hunt", "reviewed_at": "2026-09-30T00:00:00", "evidence": [], "basis": "assumed"}
+DRAFT = {**RULE2, "id": "d1", "lever": "bus subsidy", "status": "draft", "reviewed_by": ""}
+
+
+def test_an_amendment_pack_holds_only_signed_rules_and_stacks_the_ones_that_cover_a_twin():
+    pack = lv.amendment_pack([RULE, RULE2, DRAFT])
+    assert [r["rule_id"] for r in pack] == ["r1", "r2"]
+    assert pack[0]["basis_class"] == lv.BASIS_EVIDENCE and pack[1]["basis_class"] == lv.BASIS_ASSUMPTION
+    q1, q5 = {"deprivation": "Q1 most deprived"}, {"deprivation": "Q5 least deprived"}
+    assert [r["rule_id"] for r in lv.covering(pack, q1)] == ["r1", "r2"] and [r["rule_id"] for r in lv.covering(pack, q5)] == ["r1"]
+    dials = {"friction": {"emotional_resistance": 8, "money_pain": 7}, "trust": {"reliability": 9}}
+    out = lv.amended_dials(dials, pack, q1)
+    assert out["friction"]["emotional_resistance"] == 5 and out["trust"]["reliability"] == 10 and out["friction"]["money_pain"] == 4
+    assert lv.amended_dials(dials, pack, q5)["friction"]["money_pain"] == 7          # the second rule does not reach Q5
+    assert dials["friction"]["money_pain"] == 7                                        # the original is untouched
+    # the twin is told every change that reaches it, together, as a world — and nothing when none does
+    block = lv.amendments_block(pack, q1)
+    assert block.startswith("CHANGES NOW IN PLACE") and "1. A nurse phone line in weeks 4-12 of treatment." in block and "2. Prescriptions are free for this group." in block
+    assert lv.amendments_block(pack, q5).startswith("A CHANGE NOW IN PLACE") and "Prescriptions" not in lv.amendments_block(pack, q5)
+    assert lv.amendments_block(lv.amendment_pack([RULE2]), q5) == ""
+
+
+def test_the_growth_is_counted_step_by_step_against_the_base_run_on_the_same_twins():
+    base_rows = [_row(1, "step1", "no", "no slot", "GP access", "walk-in", 90), _row(2, "step1", "yes"), _row(3, "step2", "yes"),
+                 _row(4, "step2", "no", "cost", "cost", "free", 80, dep="Q5 least deprived"), _row(5, "step3", "no", "side effects", "side effects", "nurse", 60),
+                 _row(6, "step3", "no", "side effects", "side effects", "nurse", 60, dep="Q5 least deprived"), _row(7, "step4", "yes", dep="Q5 least deprived"), _row(8, "step4", "yes")]
+    # with the rules in place: a1 moves from step1 to step2, a5 and a6 reach step4, a8 unchanged
+    moved = {"a1": ("step2", "yes"), "a5": ("step4", "yes"), "a6": ("step4", "yes")}
+    amended_rows = []
+    for r in base_rows:
+        r2 = {**r, "answer": dict(r["answer"])}
+        if r["agent_id"] in moved:
+            r2["answer"].update({"reached": moved[r["agent_id"]][0], "progress": moved[r["agent_id"]][1], "barrier": "", "removal": "", "weight": 0, "barrier__theme": ""})
+        amended_rows.append(r2)
+    stages = jn.stages_of(SPEC)
+    b_agg = jn.aggregate(base_rows, SPEC)
+    hc.apply(b_agg, denominator=hc.denominator_for({}, FRAME), stages=stages)
+    a_agg = jn.aggregate(amended_rows, SPEC)
+    hc.apply(a_agg, denominator=hc.denominator_for({}, FRAME), stages=stages)
+    b_map = {r["agent_id"]: {"answer": r["answer"], "segments": r["segments"]} for r in base_rows}
+    a_map = {r["agent_id"]: {"answer": r["answer"], "segments": r["segments"]} for r in amended_rows}
+    pack = lv.amendment_pack([RULE, RULE2])
+    g = lv.growth(base_agg=b_agg, amended_agg=a_agg, base_rows=b_map, amended_rows=a_map, pack=pack, seed=1)
+    assert g["available"] and g["n"] == 8 and g["covered"] == 8 and g["assumed"] is True and len(g["rules"]) == 2
+    # step 2 (index 1): reached by 6 of 8 then, 7 of 8 now; the end (step4): 2 then, 4 now
+    f = {x["key"]: x for x in g["funnel"]}
+    assert f["step1"]["then"] == 1.0 and f["step1"]["now"] == 1.0 and f["step1"]["lift"] == 0.0
+    assert f["step2"]["reached_then"] == 6 and f["step2"]["reached_now"] == 7 and f["step2"]["lift"] == 0.125
+    assert f["step4"]["reached_then"] == 2 and f["step4"]["reached_now"] == 4 and f["step4"]["lift"] == 0.25
+    assert g["end"]["then"] == 0.25 and g["end"]["now"] == 0.5 and g["end"]["label"] == stages[-1]["label"]
+    assert g["movement"] == {"up": 3, "down": 0, "unchanged": 5, "n": 8}
+    # people: the base run's headcount at each step, and the amended run's, both on the same denominator
+    assert f["step4"]["people_then"] == b_agg["funnel"][3]["people"] and f["step4"]["people_now"] == a_agg["funnel"][3]["people"]
+    assert f["step4"]["people_moved"] == a_agg["funnel"][3]["people"] - b_agg["funnel"][3]["people"] > 0
+    assert g["end"]["people_moved"] == f["step4"]["people_moved"]
+    # the transition at step 3 → 4: 4 at risk, 2 through then, 4 now
+    t = {x["id"]: x for x in g["transitions"]}
+    assert t["step3->step4"]["lift"] == 0.5 and t["step3->step4"]["up"] == 2 and t["step3->step4"]["stuck_then"] == 2 and t["step3->step4"]["stuck_now"] == 0
+    assert "Assumed effect, not a forecast" in g["sentence"] and "2 signed rules in place" in g["sentence"] and "growth of +25 points" in g["sentence"]
+    assert "3 twins moved further along the journey" in g["sentence"] and "people at the end of the journey" in g["sentence"]
+    # every rule anchored on evidence: a plain forecast sentence
+    g2 = lv.growth(base_agg=b_agg, amended_agg=a_agg, base_rows=b_map, amended_rows=a_map, pack=lv.amendment_pack([RULE]), seed=1)
+    assert g2["sentence"].startswith("With 1 signed rule in place")
+    # nothing in common: refused
+    assert lv.growth(base_agg=b_agg, amended_agg=a_agg, base_rows=b_map, amended_rows={}, pack=pack)["available"] is False
+    # the record carries the growth and the records block says the figures are the amended ones
+    p = SimpleNamespace(id="p2", session_id="s", instrument="journey", spec={**SPEC, "amendments": {"base_probe_id": "p1", "rules": pack}}, seed=1, model="m",
+                        prompt_hash="h", aggregates={**a_agg, "amended": g}, status="complete", completed_at=None, created_at=None, agent_count=8, answer_count=8, failed_count=0)
+    r = rec.record_from_probe(p)
+    assert r["amended"]["available"] and len(r["amended"]["rules"]) == 2
+    text, _ = rec.records_block([r])
+    assert "AMENDED RUN" in text and "2 signed rule(s) in place" in text and "NO evidence, an assumption" in text and "growth of +25 points" in text

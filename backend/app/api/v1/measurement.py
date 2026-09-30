@@ -213,6 +213,11 @@ class LeverRunRequest(BaseModel):
     mode: str = "fast"
 
 
+class AmendRequest(BaseModel):
+    rule_ids: Optional[list[str]] = None
+    mode: str = "fast"
+
+
 def _rule_fields(body: RuleRequest) -> dict:
     ev = []
     for e in body.evidence or []:
@@ -334,6 +339,31 @@ async def run_lever(session_id: str, body: LeverRunRequest, background_tasks: Ba
     background_tasks.add_task(levers.run, res["experiment_id"])
     e = await db.get(Experiment, res["experiment_id"])
     return {**_experiment_payload(e), "rule": res["rule"]}
+
+
+@router.post("/sessions/{session_id}/journey/{probe_id}/amend")
+async def amend_journey(session_id: str, probe_id: str, body: AmendRequest, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Refresh a journey run with the simulation amendments: the same twins answer the same
+    journey again with every signed rule in place (or the `rule_ids` given), and the growth per
+    step is counted against this run. 409 with the reason where no rule is signed; it never guesses."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import levers
+    res = await levers.start_amended(session_id, journey_probe_id=probe_id, rule_ids=body.rule_ids, mode=body.mode)
+    if res.get("error"):
+        raise HTTPException(400, res["error"])
+    if res.get("refused"):
+        raise HTTPException(409, detail=res)
+    background_tasks.add_task(levers.run_amended, res["probe_id"])
+    p = await db.get(Probe, res["probe_id"])
+    return _probe_payload(p)
+
+
+@router.get("/sessions/{session_id}/journey/{probe_id}/amendments")
+async def list_journey_amendments(session_id: str, probe_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Every amended run counted against this journey run, newest first, with its growth when complete."""
+    await get_owned_session(session_id, user, db)
+    rows = (await db.execute(select(Probe).where(Probe.session_id == session_id, Probe.instrument == "journey").order_by(Probe.created_at.desc()))).scalars().all()
+    return {"runs": [_probe_payload(p) for p in rows if ((p.spec or {}).get("amendments") or {}).get("base_probe_id") == probe_id]}
 
 
 @router.get("/sessions/{session_id}/levers")
