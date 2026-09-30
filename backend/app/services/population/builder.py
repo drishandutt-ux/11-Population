@@ -29,7 +29,7 @@ from app.services.agents import archetypes as archetypes_mod
 from . import facets as facets_mod
 from app.services.agents import dynamic_dials as dyn_mod
 from . import frame as frame_mod
-from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts
+from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts, load_research_rows
 
 _tasks: dict[str, asyncio.Task] = {}
 _stop: dict[str, bool] = {}
@@ -812,8 +812,12 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 dims = list((bld.frame or {}).get("dimensions") or frame_dims)
                 if not dims:
                     raise ValueError("no frame dimensions")
-                targets = await frame_mod.derive_targets(bld.session_id, dims, detected.get("geography") or "", inp.get("facts_rows") or [])
-                sizing = await frame_mod.extract_sizing(bld.session_id, detected.get("geography") or "", detected.get("topic") or question, inp.get("facts_rows") or [])
+                research = await _research_material(bld)
+                n_stats = len(inp.get("facts_rows") or [])
+                await log(build_id, "frame", "info", "Reading the frame from everything on file: " + (f"{n_stats} statistics page(s); " if n_stats else "no statistics pages; ") + research.summary(),
+                          "Published statistics first, then your research pages, uploads and survey; the model estimates only what none of them states, and says so")
+                targets = await frame_mod.derive_targets(bld.session_id, dims, detected.get("geography") or "", inp.get("facts_rows") or [], research)
+                sizing = await frame_mod.extract_sizing(bld.session_id, detected.get("geography") or "", detected.get("topic") or question, inp.get("facts_rows") or [], research)
                 found_sz = [k for k in ("tam", "sam", "som") if sizing.get(k)]
                 if found_sz:
                     await log(build_id, "frame", "ok", "Sizing funnel: " + " · ".join(f"{k.upper()} {sizing[k]['value']} ({sizing[k].get('label') or ''}, {sizing[k].get('source') or ''})" for k in found_sz), sizing.get("note"))
@@ -822,12 +826,12 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 for d in dims:
                     tg = targets.get(d["key"]) or {}
                     if tg.get("status") == "found":
-                        await log(build_id, "frame", "ok", f"Found · {d['label']}: {len(tg['categories'])} categories from {tg.get('source') or 'the statistics on file'}",
+                        await log(build_id, "frame", "ok", f"Found · {d['label']}: {len(tg['categories'])} categories from {tg.get('source') or 'the material on file'} ({frame_mod.PROVENANCE_LABELS.get(tg.get('provenance') or '', 'published statistic')})",
                                   f"{tg.get('geography') or ''} {tg.get('year') or ''}".strip() + (" · " + tg["note"] if tg.get("note") else ""))
                     elif tg.get("status") == "proxy":
                         await log(build_id, "frame", "decision", f"Proxy · {d['label']} matched via {tg.get('proxy_attribute')}: {tg.get('source') or ''}", tg.get("note"))
                     else:
-                        await log(build_id, "frame", "warn", f"No published distribution for {d['label']} — your call: estimate, upload, use a proxy, or skip", tg.get("note"))
+                        await log(build_id, "frame", "warn", f"Nothing on file states the distribution of {d['label']} — your call: estimate (anchored to what is on file), upload, use a proxy, or skip", tg.get("note"))
                 frame_now = {"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or "", "sizing": sizing}
                 from app.services.population import equity as equity_mod
                 frame_now, eq_note = equity_mod.ensure_target(frame_now, equity_mod.level_for(bld.target_count))
@@ -1005,6 +1009,22 @@ async def answer_questions(build_id: str, answers: dict[str, str], skip: bool = 
     return bld
 
 
+async def _research_material(bld: PopulationBuild) -> frame_mod.ResearchMaterial:
+    """The frame's second pool (§7.9): on-topic research pages, the analyst's uploads (knowledge-graph chunks
+    tagged personal / youtube) and the Studio's own survey / profile text."""
+    from app.services.knowledge_graph.lightrag_service import get_lightrag, _load_kg
+    try:
+        web = await load_research_rows(bld.session_id)
+    except Exception:  # noqa: BLE001
+        web = []
+    try:
+        await get_lightrag(bld.session_id)
+        chunks = _load_kg(bld.session_id).get("chunks") or []
+    except Exception:  # noqa: BLE001
+        chunks = []
+    return frame_mod.ResearchMaterial(web, chunks, (bld.constraints or {}).get("doc_context") or "")
+
+
 async def _skip_open_gaps(build_id: str, why: str) -> Optional[PopulationBuild]:
     bld = await _load(build_id)
     if not bld or not bld.frame:
@@ -1045,9 +1065,17 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
         raise ValueError(f"unknown frame dimension {key!r}")
     targets = dict(fr.get("targets") or {})
     if action == "estimate":
-        tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "")
+        # The estimate is shown what is on file (published facts + the analyst's research and uploads) so it is
+        # anchored to this audience; none of it stated the distribution, or the target would already be found.
+        research = await _research_material(bld)
+        try:
+            facts_rows = await load_quant_facts(bld.session_id)
+        except Exception:  # noqa: BLE001
+            facts_rows = []
+        material = "\n".join(x for x in (frame_mod.material_text(facts_rows, 3000), research.for_dim(dim, 4000)) if x.strip())
+        tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "", material)
         if tg["status"] == "estimated":
-            await log(build_id, "frame", "decision", f"Estimated · {dim['label']} from the model's knowledge — labelled model_inference, lowers confidence", tg.get("note"))
+            await log(build_id, "frame", "decision", f"Estimated · {dim['label']} — labelled model_inference, lowers confidence" + (", anchored to what is on file" if material.strip() else "; nothing on file to anchor it"), tg.get("note"))
         else:
             await log(build_id, "frame", "warn", f"The model declined to estimate {dim['label']}", tg.get("note"))
     elif action == "upload":

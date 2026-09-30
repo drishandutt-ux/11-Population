@@ -638,6 +638,16 @@ async def load_quant_facts(session_id: str, limit: int = 40) -> list[Evidence]:
         return list(rows)
 
 
+async def load_research_rows(session_id: str, limit: int = 40) -> list[Evidence]:
+    """On-topic web pages read during the Ingest research run — the sampling frame's second pool (§7.9)."""
+    async with dbm.AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Evidence).where(Evidence.session_id == session_id, Evidence.source_class == "web", Evidence.excluded.is_(False), Evidence.on_topic.is_(True))
+            .order_by(Evidence.relevance.desc(), Evidence.created_at.desc()).limit(limit)
+        )).scalars().all()
+        return list(rows)
+
+
 def facts_for_prompt(rows: list[Evidence], max_chars: int = 3000) -> str:
     """Compact, cited fact list for the detect / plan / persona prompts."""
     lines: list[str] = []

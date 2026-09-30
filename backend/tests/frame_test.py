@@ -261,3 +261,71 @@ def test_summary_line_names_dimensions_by_label_not_key():
     assert "matched exactly on Age and life stage, Deprivation quintile" in line and "model-estimated: Age and life stage" in line
     assert "age_lifecycle" not in line
     assert fr.dimension_labels(None)(["household_tenure_type"]) == ["household tenure type"]
+
+
+# ── the second pool: research pages, uploads and the survey (§7.9) ────────────
+
+class _Web:
+    title = "Smart home ownership in the UK"; author = "ofcom.org.uk"; source_ref = "https://ofcom/tech"; text = "snippet"
+    full_text = ("Ofcom Technology Tracker 2025.\n\nBy age, ownership of a smart camera is 31% among 25-34 year olds, 24% among 35-54s and 9% among those aged 65+.\n\n"
+                 "The regulator also published a consultation on spectrum policy that week.")
+
+
+UPLOAD = ("[SOURCE personal | 02-market-facts.md]\n| Fact | Value | Source |\n|---|---|---|\n| Households in the UK | 28,400,000 | ONS Families and households, 2024 (test) |\n"
+          "| UK households with a child under three | 2,100,000 | ONS, 2024 (test) |\n| UK adults who would consider a home camera at £49 | 31% | Concept screener, March 2026 (test) |")
+SYNTH = "[SOURCE synthetic | model-generated research paper — a prior, NOT evidence]\nBy age, 40% are 25-34 and 60% are older (invented)."
+
+
+def test_research_material_reads_uploads_and_pages_but_not_synthetic():
+    rm = frame.ResearchMaterial([_Web()], [UPLOAD, SYNTH], "Respondents: 60% women, 40% men; mostly aged 28-45.")
+    assert rm and rm.pages == 1 and rm.uploads == {"02-market-facts.md", "audience survey / profile"}
+    assert "1 research page" in rm.summary() and "2 uploads" in rm.summary()
+    age = rm.for_dim(AGE)
+    assert "25-34 year olds" in age and "research page" in age
+    assert "invented" not in age                                    # synthetic chunks are a prior, never material
+    assert "spectrum policy" not in age                             # no number, no keyword → not a passage for age
+    gender = rm.for_dim(GENDER)
+    assert "60% women" in gender and "Studio upload" in gender
+    house = rm.for_dim({"key": "household", "label": "Household type", "attribute": "household", "kind": "demographic", "why": "baby monitoring appeals to parents"})
+    assert "child under three" in house and "uploaded · 02-market-facts.md" in house
+    sizing = rm.for_sizing("home camera")
+    assert "28,400,000" in sizing and "would consider a home camera" in sizing
+    assert not frame.ResearchMaterial([], [], "") and frame.ResearchMaterial().summary() == "nothing beyond the statistics on file"
+
+
+def test_derive_targets_reads_the_second_pool_and_keeps_its_provenance(monkeypatch):
+    seen = {}
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen["user"] = user
+        assert "PUBLISHED STATISTICS:\n(none)" in user and "02-market-facts" in user
+        return {"status": "found", "categories": [{"label": "With a child under 3", "share_pct": 7}, {"label": "Without", "share_pct": 93}],
+                "source": "02-market-facts.md — ONS 2024 (test)", "year": "2024", "geography": "UK", "proxy_attribute": "other", "provenance": "client_data", "note": "read from the uploaded table"}
+    monkeypatch.setattr(frame, "analyze", fake_analyze)
+    dim = {"key": "household", "label": "Household type", "attribute": "household", "kind": "demographic", "why": "parents of babies"}
+    rm = frame.ResearchMaterial([], [UPLOAD], "")
+    out = asyncio.run(frame.derive_targets("s", [dim], "UK", [], rm))   # no statistics pages at all — the upload alone fills it
+    assert out["household"]["status"] == "found" and out["household"]["provenance"] == "client_data"
+    assert frame.PROVENANCE_LABELS["client_data"] == "your upload"
+    nothing = asyncio.run(frame.derive_targets("s", [dim], "UK", [], frame.ResearchMaterial()))
+    assert nothing["household"]["status"] == "missing" and "no research page, upload or survey" in nothing["household"]["note"]
+
+
+def test_estimate_is_shown_the_material_and_sizing_reads_uploads(monkeypatch):
+    seen = {}
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen["user"] = user
+        if "allowed" in schema.get("properties", {}):
+            return {"allowed": True, "refusal_reason": "", "categories": [{"label": "18-34", "share_pct": 35, "age_min": 18, "age_max": 34}, {"label": "35+", "share_pct": 65, "age_min": 35, "age_max": 120}], "reasoning": "anchored on the screener's 28-45 skew", "confidence": 50}
+        return {"tam": {"value": "28,400,000", "label": "UK households", "source": "02-market-facts.md — ONS Families and households 2024 (test)", "year": "2024"},
+                "sam": {"value": "", "label": "", "source": "", "year": ""}, "som": {"value": "", "label": "", "source": "", "year": ""}, "note": "TAM from the upload"}
+    monkeypatch.setattr(frame, "analyze", fake_analyze)
+    rm = frame.ResearchMaterial([], [UPLOAD], "Respondents mostly aged 28-45.")
+    est = asyncio.run(frame.estimate_target("s", AGE, "UK", rm.for_dim(AGE)))
+    assert est["status"] == "estimated" and "MATERIAL ON FILE" in seen["user"] and "28-45" in seen["user"]
+    plain = asyncio.run(frame.estimate_target("s", AGE, "UK"))
+    assert plain["status"] == "estimated" and "MATERIAL ON FILE" not in seen["user"]
+    sz = asyncio.run(frame.extract_sizing("s", "UK", "home camera", [], rm))
+    assert sz["tam"]["value"] == "28,400,000" and "ANALYST'S RESEARCH AND UPLOADS" in seen["user"]
+    assert asyncio.run(frame.extract_sizing("s", "UK", "home camera", [], frame.ResearchMaterial()))["tam"] == {}

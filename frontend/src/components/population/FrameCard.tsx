@@ -175,6 +175,8 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                     {d.equity && <span className="chip chip-violet" title="Equity by default: every result is reported by deprivation level as well as the headline">equity · always on</span>}
                     {rep && rep.mode !== "unmatched" && <span className="chip chip-outline">{MODE_META[rep.mode]}</span>}
                     {t.status === "proxy" && <span className="text-[11px] text-sky-300/80">via {t.proxy_attribute}</span>}
+                    {(t.status === "found" || t.status === "proxy") && t.provenance === "client_data" && <span className="chip chip-warn" title="Read from a document, table or survey you uploaded — not a published statistic">from your upload</span>}
+                    {(t.status === "found" || t.status === "proxy") && t.provenance === "research_web" && <span className="chip chip-info" title="Read from a web page gathered by the Ingest research — not a statistics publisher">from a research page</span>}
                     {d.kind === "attitudinal" && <span className="text-[11px] text-muted-foreground/60">attitudinal</span>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{d.why}</p>
@@ -206,9 +208,9 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
               {/* the ladder */}
               {isGap && !readOnly && (
                 <div className="pl-6 space-y-2">
-                  <p className="text-xs text-red-200/80">No published distribution found for {frame.geography || "this place"}. Choose how to fill it:</p>
+                  <p className="text-xs text-red-200/80">Nothing on file states this distribution for {frame.geography || "this place"} — not the statistics gathered, your research pages, uploads or survey. Choose how to fill it:</p>
                   <div className="flex flex-wrap gap-1.5 items-center">
-                    <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "estimate" })} className="btn btn-xs btn-secondary" title="The model states a distribution from what it knows — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
+                    <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "estimate" })} className="btn btn-xs btn-secondary" title="The model states a distribution from what it knows, anchored to what is on file about this audience — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
                       {working === d.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Model estimate
                     </button>
                     <input ref={(el) => { fileRefs.current[d.key] = el; }} type="file" accept=".csv,.txt,.tsv" className="hidden" onChange={(e) => onFile(d.key, e.target.files?.[0] || null)} />
@@ -225,7 +227,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                         <button disabled={busy || !proxyPick[d.key]} onClick={() => act(d.key, { action: "proxy", proxy_of: proxyPick[d.key] })} className="btn btn-xs btn-secondary">Use</button>
                       </span>
                     )}
-                    <button disabled={busy} onClick={() => act(d.key, { action: "skip" })} className="btn btn-xs btn-ghost" title="Don't match on it; weight only where a later source appears">Skip</button>
+                    <button disabled={busy} onClick={() => act(d.key, { action: "skip" })} className="btn btn-xs btn-ghost" title="Don't match or weight on it; estimate or upload a distribution later to change that">Skip</button>
                   </div>
                 </div>
               )}
