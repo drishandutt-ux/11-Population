@@ -61,7 +61,7 @@ export default function HomePage() {
           <span className="text-base font-semibold text-foreground tracking-tight">11 Minds Population</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-muted-foreground">Multi-agent simulation</span>
+          <span className="text-xs text-muted-foreground">Synthetic population research</span>
           {authOn && user && (
             <div className="flex items-center gap-2 pl-4 border-l border-border/50">
               {me?.is_admin && (
@@ -93,16 +93,16 @@ export default function HomePage() {
         <div className="flex-1 flex flex-col px-12 py-8 border-r border-border/40 overflow-hidden">
           <div className="shrink-0">
             <p className="text-[10px] text-primary uppercase tracking-widest mb-4 font-semibold">
-              Multi-Agent Simulation Platform
+              Synthetic population research
             </p>
             <h1 className="text-4xl font-semibold text-foreground leading-tight mb-4">
               Simulate how real people<br />
               <span className="text-primary">think, react, and decide</span>
             </h1>
             <p className="text-muted-foreground text-sm leading-relaxed max-w-md mb-7">
-              Spawn a diverse population of AI agents with distinct backgrounds, biases, and expertise.
-              Feed them any context — watch them debate, challenge, and converge. Get a structured report
-              grounded in real simulated discourse.
+              Build a population of synthetic twins — real backgrounds, biases and expertise, drawn from evidence.
+              Give them your question, watch them debate, test what would move them, and get a report in which
+              every figure is counted from their answers, never typed.
             </p>
 
             {/* Use-case grid */}
@@ -165,7 +165,7 @@ export default function HomePage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wide">Query / hypothesis</label>
+                <label className="block text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wide">The question to answer</label>
                 <textarea
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -237,7 +237,8 @@ export default function HomePage() {
                             <p className="text-[10px] text-primary/70 truncate mt-0.5">{s.is_mine ? "you" : s.owner_email}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Only the delete controls swallow the click; the rest of the row opens the session. */}
+                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => { if (isConfirming) e.stopPropagation(); }}>
                           {isConfirming ? (
                             <>
                               <span className="text-xs text-red-400 font-medium">Delete?</span>
@@ -270,7 +271,8 @@ export default function HomePage() {
                                 </span>
                               </div>
                               <button
-                                onClick={() => setConfirmDeleteId(s.id)}
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }}
+                                title="Delete this session"
                                 className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
                               >
                                 <Trash2 className="w-3 h-3" />

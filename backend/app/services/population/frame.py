@@ -437,13 +437,23 @@ def build_report(frame: dict, segments: list[dict], total: int, agents: Optional
     return report
 
 
+def dimension_labels(report: Optional[dict]):
+    """key → the dimension's reader label ("Age and life stage"), so no reader-facing text prints
+    `age_lifecycle`. Unknown keys read as words with the underscores removed."""
+    by_key = {d.get("key"): d.get("label") for d in ((report or {}).get("dimensions") or []) if d.get("key")}
+    def names(keys: list) -> list[str]:
+        return [str(by_key.get(k) or str(k).replace("_", " ")) for k in keys]
+    return names
+
+
 def summary_line(report: Optional[dict]) -> str:
     """One quotable sentence for the log and the final report."""
     if not report or report.get("level") == "none":
         return "No sampling frame: the population was not matched to published distributions."
-    exact = ", ".join(report.get("matched_exactly") or []) or "none"
-    weighted = ", ".join(report.get("weighted_only") or []) or "none"
-    est = report.get("estimated") or []
+    names = dimension_labels(report)
+    exact = ", ".join(names(report.get("matched_exactly") or [])) or "none"
+    weighted = ", ".join(names(report.get("weighted_only") or [])) or "none"
+    est = names(report.get("estimated") or [])
     ess = report.get("ess")
     parts = [f"Frame match {report['level']} (worst cell {report['worst_deviation_pts']} pts off)", f"matched exactly on {exact}", f"weighted on {weighted}"]
     if est:

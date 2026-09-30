@@ -62,6 +62,25 @@ function Bar({ cell, stage }: { cell: FrameReportCell; stage: "planned" | "achie
   );
 }
 
+/** Dimension keys → the labels a reader knows ("Age and life stage"), never `age_lifecycle`. */
+function names(report: { dimensions?: { key: string; label: string }[] }, keys: string[]): string[] {
+  const by = Object.fromEntries((report.dimensions || []).map((d) => [d.key, d.label]));
+  return keys.map((k) => by[k] || k.replace(/_/g, " "));
+}
+
+/** The frame in one sentence, in words: how well the twins match the place, on what, and what to be careful of. */
+function frameVerdict(report: any, geography?: string | null): string {
+  const where = geography ? ` ${geography}` : " the published distributions";
+  const level = report.level === "good" ? "matches" : report.level === "fair" ? "roughly matches" : "matches poorly";
+  const exact = names(report, report.matched_exactly || []);
+  const weighted = names(report, report.weighted_only || []);
+  const est = names(report, report.estimated || []);
+  const parts = [`This panel ${level}${where}` + (exact.length ? ` on ${exact.join(", ")}` : "") + (weighted.length ? `, corrected by weighting on ${weighted.join(", ")}` : "") + "."];
+  if (est.length) parts.push(`${est.length === 1 ? "One distribution is" : `${est.length} distributions are`} a model estimate, not published (${est.join(", ")}).`);
+  if (report.thin_cells?.length) parts.push(`${report.thin_cells.length} cell${report.thin_cells.length === 1 ? " has" : "s have"} too few twins to read on ${report.thin_cells.length === 1 ? "its" : "their"} own.`);
+  return parts.join(" ");
+}
+
 export default function FrameCard({ build, busy, readOnly, onAction, onEstimateAll }: Props) {
   const frame = build.frame!;
   const report = frame.report;
@@ -94,17 +113,22 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
       <div className="flex items-center gap-2 flex-wrap">
         <h3 className="text-[15px] font-semibold text-foreground tracking-tight">Sampling frame</h3>
         {report && report.level !== "none" && (
-          <span className={`chip ${LEVEL_CLS[report.level]}`}>
-            {report.stage === "achieved" ? "built" : "plan"} · {report.level} · worst cell {report.worst_deviation_pts} pts off
+          <span className={`chip ${LEVEL_CLS[report.level]}`} title={`The furthest any cell sits from its published share: ${report.worst_deviation_pts} percentage points. Good ≤ 10, fair ≤ 20, poor above.`}>
+            {report.stage === "achieved" ? "built" : "plan"} · {report.level} match
           </span>
         )}
         {report?.ess != null && report.n != null && (
-          <span className="chip" title="Effective sample size after weighting: how many real people this panel is honestly worth">
-            effective n {report.ess} of {report.n}
+          <span className="chip" title={`Effective sample: after weighting the twins to the published shares, this panel carries the information of about ${report.ess} twins, not ${report.n}. The further from ${report.n}, the more the weights are doing.`}>
+            worth ≈{report.ess} of {report.n} twins
           </span>
         )}
         <span className="ml-auto text-[11px] text-muted-foreground/70">{frame.geography || ""}</span>
       </div>
+      {report && report.level !== "none" && (
+        <p className="text-[12.5px] text-foreground/85 -mt-1 leading-snug">
+          {frameVerdict(report, frame.geography)}
+        </p>
+      )}
       <p className="hint -mt-1">
         The dimensions this population must be representative on, most important first. The top three are matched exactly; the rest are corrected by weighting. Every distribution says where it came from.
       </p>
@@ -224,12 +248,12 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
         <div className="border-t hairline pt-3 space-y-1.5 text-xs">
           <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
             <Check className="w-3 h-3 text-emerald-400" />
-            <span>Matched exactly: <span className="text-foreground/85">{report.matched_exactly.join(", ") || "none"}</span></span>
-            <span>· weighted: <span className="text-foreground/85">{report.weighted_only.join(", ") || "none"}</span></span>
-            {report.unmatched.length > 0 && <span>· not matched: <span className="text-foreground/85">{report.unmatched.join(", ")}</span></span>}
+            <span>Matched exactly: <span className="text-foreground/85">{names(report, report.matched_exactly).join(", ") || "none"}</span></span>
+            <span>· weighted: <span className="text-foreground/85">{names(report, report.weighted_only).join(", ") || "none"}</span></span>
+            {report.unmatched.length > 0 && <span>· not matched: <span className="text-foreground/85">{names(report, report.unmatched).join(", ")}</span></span>}
           </div>
           {report.estimated.length > 0 && (
-            <div className="flex items-start gap-2 text-amber-300/90"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Model-estimated distributions: {report.estimated.join(", ")}. The report will say so, and confidence is lower for it.</div>
+            <div className="flex items-start gap-2 text-amber-300/90"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Model-estimated distributions: {names(report, report.estimated).join(", ")}. The report will say so, and confidence is lower for it.</div>
           )}
           {report.thin_cells.length > 0 && (
             <div className="flex items-start gap-2 text-amber-300/90"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Not safe to cut by (too few agents): {report.thin_cells.join("; ")}</div>

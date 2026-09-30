@@ -15,7 +15,21 @@ interface Props {
   onStop: () => Promise<void>;
   onAddSubQuestion: (text: string) => Promise<void>;
   onToggleExclude: (item: EvidenceItem) => Promise<void>;
+  /** Opens the Lab tab, so a recommended tool is one click away. */
+  onOpenLab?: () => void;
 }
+
+/** The recommender's tool keys → where that lives in this app. Keys with no tool yet say so. */
+const TOOL_HOME: Record<string, { label: string; where: string }> = {
+  debate: { label: "Debate", where: "start it from the Twins tab; it runs in the Debate tab" },
+  sentiment_stance: { label: "Verdict poll", where: "runs on its own when the report is generated; the Barriers tool in the Lab reads why" },
+  purchase_intent: { label: "Purchase intent", where: "in the Lab" },
+  price_sensitivity: { label: "Purchase intent (walk-away price)", where: "in the Lab" },
+  budget_allocation: { label: "Survey", where: "in the Lab — build the allocation as a question" },
+  ab_experiment: { label: "A/B test", where: "in the Lab" },
+  conjoint: { label: "Survey", where: "in the Lab — the closest fit; a full conjoint is not built yet" },
+  maxdiff: { label: "Survey", where: "in the Lab — rank the items as a question" },
+};
 
 /** Model-produced fields can arrive in the wrong shape (a string where a list was asked for).
  *  Never let that crash the panel. */
@@ -105,7 +119,9 @@ function ItemCard({ item, onToggleExclude }: { item: EvidenceItem; onToggleExclu
   );
 }
 
-export default function ResearchPanel({ sessionId, state, items, onStart, onStop, onAddSubQuestion, onToggleExclude }: Props) {
+export default function ResearchPanel({ sessionId, state, items, onStart, onStop, onAddSubQuestion, onToggleExclude, onOpenLab }: Props) {
+  // The queries, judge notes and budget are the working, not the result: folded by default.
+  const [showWorking, setShowWorking] = useState(false);
   const run: ResearchRun | null = state?.run ?? null;
   const queries = state?.queries ?? [];
   const [subq, setSubq] = useState("");
@@ -162,7 +178,7 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
         <Search className="w-6 h-6 text-primary mx-auto mb-2" />
         <p className="text-sm font-medium text-foreground mb-1">Research this question</p>
         <p className="text-xs text-muted-foreground/70 mb-4 max-w-md mx-auto">
-          Decomposes the query into sub-questions, searches the web and Reddit, reads the pages and threads, judges what is relevant, refines, and stops when coverage is good enough. Everything lands live below.
+          Breaks the question into sub-questions, searches the web and Reddit, reads what it finds, keeps what is relevant and stops when coverage is good enough. About 3–5 minutes; you can stop it early. Everything lands live below and becomes what the twins know.
         </p>
         <button onClick={() => act(onStart)} disabled={busy} className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm font-medium px-4 py-2 rounded-md inline-flex items-center gap-2">
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} Start research
@@ -191,6 +207,12 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
             )}
           </div>
           {run.note && (!active || run.status === "stopping" || run.status === "finalising") && <p className="text-[10px] text-muted-foreground/70 mb-2">{run.note}</p>}
+          {/* The result in one line, before any of the working. */}
+          <p className="text-[12px] text-foreground/85 mb-2">
+            {active ? <>Reading the web{counts.social.read ? " and Reddit" : ""}… </> : null}
+            <span className="font-medium">{counts.web.on + counts.social.on} useful page{counts.web.on + counts.social.on === 1 ? "" : "s"}</span> found of {counts.web.read + counts.social.read} read · <span className="font-medium">{counts.graph}</span> now part of what the twins know
+            {subqs.length ? <> · {covered.size} of {subqs.length} sub-questions covered</> : null}
+          </p>
 
           {/* Sub-question checklist */}
           {run.frame ? (
@@ -199,7 +221,7 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
               {subqs.map((q) => (
                 <div key={q.id} className="flex items-start gap-2 text-[11px]">
                   {covered.has(q.id) ? <CheckCircle2 className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" /> : <Circle className="w-3 h-3 text-muted-foreground/40 mt-0.5 shrink-0" />}
-                  <span className={covered.has(q.id) ? "text-foreground/80" : "text-muted-foreground/80"}>{q.text} <span className="text-[9px] text-muted-foreground/40">{q.kind}</span></span>
+                  <span className={covered.has(q.id) ? "text-foreground/80" : "text-muted-foreground/80"} title={q.kind ? `Looking for: ${q.kind}` : undefined}>{q.text}</span>
                 </div>
               ))}
               {lookalikes.length > 0 && <p className="text-[10px] text-muted-foreground/50 mt-1.5">Excluding look-alikes: {lookalikes.join(", ")}</p>}
@@ -215,6 +237,12 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
           </form>
         </div>
 
+        {/* How it searched: the queries, the judge's notes and the budget — folded, for whoever wants the working. */}
+        <button type="button" onClick={() => setShowWorking((v) => !v)} className="w-full flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground py-1">
+          {showWorking ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          How it searched <span className="text-muted-foreground/50">· {queries.length} quer{queries.length === 1 ? "y" : "ies"}, {verdicts.length} judge note{verdicts.length === 1 ? "" : "s"}, budget</span>
+        </button>
+        {showWorking && (<>
         {/* Queries */}
         <div className="rounded-lg border border-border/60 p-4">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5">Queries {run.plan?.rationale ? <span className="normal-case text-muted-foreground/50">· {run.plan.rationale}</span> : null}</p>
@@ -247,6 +275,7 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
             ))}
           </div>
         </div>
+        </>)}
       </div>
 
       {/* ── Right: evidence feed ────────────────────────────────────────── */}
@@ -256,8 +285,8 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
             {[
               ["Web", `${counts.web.on}/${counts.web.read}`, "on-topic / read"],
               ["Reddit", `${counts.social.on}/${counts.social.read}`, `${counts.comments} comments`],
-              ["In graph", String(counts.graph), "items ingested"],
-              ["Stance", stance ? `${stance.f}/${stance.a}/${stance.m}` : "–", "for / against / mixed"],
+              ["Known to the twins", String(counts.graph), "items kept"],
+              ["Stance in the sources", stance && (stance.f || stance.a || stance.m) ? `${stance.f}/${stance.a}/${stance.m}` : "–", "for / against / mixed"],
             ].map(([l, v, d]) => (
               <div key={l} className="bg-muted/30 rounded p-2">
                 <div className="text-[9px] uppercase tracking-wide text-muted-foreground/60">{l}</div>
@@ -308,20 +337,27 @@ export default function ResearchPanel({ sessionId, state, items, onStart, onStop
         )}
         {recs.length > 0 && (
           <div className="rounded-lg border border-border/60 p-4">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-2 flex items-center gap-1"><FlaskConical className="w-3 h-3" /> Recommended tools</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-2 flex items-center gap-1"><FlaskConical className="w-3 h-3" /> What to run next, from the evidence</p>
             <div className="space-y-2">
-              {recs.map((r: any, k: number) => (
+              {recs.map((r: any, k: number) => {
+                const home = TOOL_HOME[String(r.tool || "")];
+                return (
                 <div key={k} className="flex items-start gap-2 text-[11px]">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded border border-primary/40 text-primary shrink-0 mt-0.5">{Math.round(asNum(r.confidence) * 100)}%</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border border-primary/40 text-primary shrink-0 mt-0.5" title="How strongly the evidence points at this tool">{Math.round(asNum(r.confidence) * 100)}%</span>
                   <div className="min-w-0">
-                    <span className="font-medium text-foreground/90">{String(r.label || r.tool || "")}</span>
+                    <span className="font-medium text-foreground/90">{home?.label || String(r.label || r.tool || "")}</span>
+                    {home && <span className="text-muted-foreground/60"> · {home.where}</span>}
                     <span className="text-muted-foreground/75"> — {String(r.reason || "")}</span>
                     {r.spec_summary && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{String(r.spec_summary)}{asStrList(r.variants).length ? ` · Variants: ${asStrList(r.variants).join(" vs ")}` : ""}{asStrList(r.price_anchors).length ? ` · Prices: ${asStrList(r.price_anchors).join(", ")}` : ""}</p>}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
-            <p className="text-[10px] text-muted-foreground/50 mt-2">Tools open in the Tools menu (next phase). Nothing is run automatically.</p>
+            <div className="flex items-center gap-2 mt-2">
+              <p className="text-[10px] text-muted-foreground/50">Nothing runs on its own. Build the population first, run the debate, then open the Lab.</p>
+              {onOpenLab && <button type="button" onClick={onOpenLab} className="ml-auto text-[10px] px-2 py-0.5 rounded border border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex items-center gap-1"><FlaskConical className="w-2.5 h-2.5" /> Open the Lab</button>}
+            </div>
           </div>
         )}
       </div>

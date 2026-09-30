@@ -81,6 +81,11 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   const [pastOpen, setPastOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Opening a past run is for reading it; the form (and anything it proposes on mount) waits until a new run is asked for.
+  const [showForm, setShowForm] = useState(true);
+  // The question's own dials are useful filters and there can be a dozen: folded under "more".
+  const [moreFilters, setMoreFilters] = useState(false);
+  const [showRunDetails, setShowRunDetails] = useState(false);
   const selectedId = useRef<string | null>(null);
   selectedId.current = selected?.id || null;
   // Read through a ref so the completion effects below run once per completion tick, never
@@ -113,6 +118,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     setInstrumentKey(inst.key);
     setValues(initialValues(inst, { session_query: sessionQuery }));
     setSelected(null);
+    setShowForm(true);
     setError(null);
   }
 
@@ -231,6 +237,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   async function select(p: Probe) {
     setInstrumentKey(p.instrument);
     setSelected(p);
+    setShowForm(false);
     const full = await api.lab.probe(sessionId, p.id).catch(() => null);
     if (full) setSelected(full);
   }
@@ -375,18 +382,47 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
           <p className="text-[11px] text-muted-foreground mt-0.5">{instrument.description}</p>
         </div>
 
+        {/* A past run on screen: read it; the inputs wait until a new run is asked for. */}
+        {selected && !showForm ? (
+          <div className="rounded-lg border border-border/60 bg-card/30 p-3 space-y-2">
+            <p className="text-[11px] text-muted-foreground">You are reading a past run{selected.created_at ? ` from ${ago(selected.created_at)}` : ""}. Its inputs and filters are fixed.</p>
+            <button type="button" onClick={() => { setValues(initialValues(instrument, { session_query: sessionQuery })); setShowForm(true); }}
+              className="btn btn-sm btn-secondary w-full">
+              <Play className="w-3.5 h-3.5" /> New run with this tool
+            </button>
+          </div>
+        ) : (<>
         {/* The tool's own inputs, from its own declaration (or its own builder). */}
         <Form
           instrument={instrument}
           values={values}
           onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
           sessionId={sessionId}
+          context={{ pastOutcomes: probes.filter((p) => p.instrument === instrument.key && !p.experiment_id).map((p) => { const st = (p.aggregates as any)?.stages; return Array.isArray(st) && st.length ? String(st[st.length - 1]?.label || "") : ""; }).filter(Boolean) }}
         />
 
         <div>
-          <label className="text-xs text-muted-foreground block mb-1.5">Who answers</label>
+          <label className="text-xs text-muted-foreground block mb-1.5">Who answers <span className="text-muted-foreground/50">· everyone unless you narrow it</span></label>
           <div className="space-y-2">
-            {[...SEGMENT_FILTERS, ...dynamicFilters(dynamicDials)].map((f) => (
+            {SEGMENT_FILTERS.map((f) => (
+              <select
+                key={f.key}
+                value={filters[f.key] || ""}
+                onChange={(e) => setFilters((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs"
+              >
+                <option value="">{f.label}: everyone</option>
+                {f.options.map((o) => <option key={o} value={o}>{f.label}: {o}</option>)}
+              </select>
+            ))}
+            {dynamicDials.length > 0 && (
+              <button type="button" onClick={() => setMoreFilters((v) => !v)} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                {moreFilters ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                {moreFilters ? "Fewer filters" : `More filters · ${dynamicDials.length} traits this question turns on`}
+                {Object.entries(filters).some(([k, v]) => v && k.startsWith("dyn:")) && <span className="text-primary">· in use</span>}
+              </button>
+            )}
+            {moreFilters && dynamicFilters(dynamicDials).map((f) => (
               <select
                 key={f.key}
                 value={filters[f.key] || ""}
@@ -444,6 +480,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         {!agents.length && (
           <p className="text-[11px] text-muted-foreground">Spawn a population first — the Lab measures the agents in this session.</p>
         )}
+        </>)}
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 min-h-0">
@@ -557,8 +594,13 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
                 <Page instrument={instrument} probe={selected} dynamicDials={dynamicDials} agentsById={agentsById} />
                 <p className="text-[10px] text-muted-foreground/70">
                   {selected.answer_count} answered
-                  {selected.failed_count ? `, ${selected.failed_count} failed and are excluded from every number above` : ""} ·
-                  model {selected.model} · seed {selected.seed} · schema {selected.schema_id}
+                  {selected.failed_count ? `, ${selected.failed_count} failed and are excluded from every number above` : ""}
+                  {" · "}
+                  <button type="button" onClick={() => setShowRunDetails((v) => !v)} className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                    title="The model, the random seed and the answer format this run used — enough to reproduce it exactly">
+                    {showRunDetails ? "hide run details" : "run details"}
+                  </button>
+                  {showRunDetails && <span> · model {selected.model} · seed {selected.seed} · answer format {selected.schema_id}</span>}
                 </p>
                 {selected.aggregates.weighted && selected.aggregates.weighted.weighted !== null && (
                   <p className="text-[11px] text-foreground/85 bg-muted/30 border border-border/60 rounded-lg px-3 py-2">

@@ -28,6 +28,8 @@ interface Props {
   onClearReport?: () => void;
   /** Opens the Lab tab — the coverage line offers the tools that were not run. */
   onGoToLab?: () => void;
+  /** Earlier Ask-Report questions and answers from the session's history, so a reload keeps the conversation. */
+  initialMessages?: Message[];
 }
 
 /** Only while no report exists: once there is one, the questions come from its records (`structure.follow_ups`). */
@@ -85,6 +87,7 @@ export default function ReportChat({
   onMakeReport,
   onClearReport,
   onGoToLab,
+  initialMessages,
 }: Props) {
   const [mode, setMode] = useState<Mode>("report");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -135,8 +138,10 @@ export default function ReportChat({
   ITEMS_BY_ID = Object.fromEntries(ledger.items.map((i) => [i.id, i]));
   // A source chip that was clicked: the statistic or document behind a quoted figure.
   const [openSource, setOpenSource] = useState<{ fact?: SourceFact; item?: SourceItem; x: number; y: number } | null>(null);
-  const [reportMessages, setReportMessages] = useState<Message[]>([]);
+  const [reportMessages, setReportMessages] = useState<Message[]>(initialMessages || []);
   const [agentMessages, setAgentMessages] = useState<Message[]>([]);
+  // The history arrives after the first render; seed the chat once, never over a conversation in progress.
+  useEffect(() => { if (initialMessages?.length) setReportMessages((prev) => (prev.length ? prev : initialMessages)); }, [initialMessages]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);

@@ -98,11 +98,11 @@ export default function DialsPanel({ constraints, onChange, count, onCount, mode
           onChange={onMode}
           disabled={disabled}
           options={[
-            { value: "fast", label: "Fast", title: "Haiku writes the personas" },
-            { value: "pro", label: "Pro", title: "Sonnet · richer, slower, pricier" },
+            { value: "fast", label: "Fast", title: "Quick personas from the smaller model — about a minute for 50 twins" },
+            { value: "pro", label: "Pro", title: "Richer personas from the larger model — a few minutes, and costlier" },
           ]}
         />
-        <p className="hint -mt-1">{mode === "pro" ? "Pro: Sonnet writes richer personas — slower and pricier." : "Fast: Haiku writes the personas."}</p>
+        <p className="hint -mt-1">{mode === "pro" ? "Pro: richer personas from the larger model — a few minutes for 50 twins, and costlier." : "Fast: quick personas — about a minute for 50 twins."}</p>
       </Section>
 
       <Divider />

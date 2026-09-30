@@ -261,7 +261,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
         <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{view.n} twin{view.n === 1 ? "" : "s"}{filtered ? " in this cut" : ""}</span>
         <button type="button" onClick={() => setRuleBook({})} title="The calibration rules a lever can be simulated against (brief L4-02)"
           className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground border border-border/60 rounded-lg px-2 py-1">
-          <BookOpen className="w-3 h-3" /> Rule book <span className="opacity-60">{rules.filter((r) => r.status === "reviewed").length}/{rules.length}</span>
+          <BookOpen className="w-3 h-3" /> Rule book <span className="opacity-60">{rules.length ? `${rules.filter((r) => r.status === "reviewed").length} signed of ${rules.length}` : "empty"}</span>
         </button>
       </div>
       {ruleBook && <RuleBook sessionId={sessionId} initialLever={ruleBook.lever} draft={ruleBook.draft} context={{ journey_probe_id: probe.id, candidate_id: ruleBook.candidate_id }} onClose={() => setRuleBook(null)} onChanged={setRules} />}
@@ -391,7 +391,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
                               {b.removals.length > 0 && <div className="pl-6 text-[10px] text-muted-foreground/70">removed by: {b.removals.join(" · ")}</div>}
                               <div className="pl-6 text-[10px]" title={b.reach_reason || ""}>
                                 <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${REACH_COLOR[b.reach || "unscored"]}`} />
-                                <span className={b.reach === "partner" ? "text-emerald-300/85" : "text-muted-foreground/70"}>{REACH_LABEL[b.reach || "unscored"]}</span>
+                                <span className={b.reach === "partner" ? "text-emerald-300/85" : "text-muted-foreground/70"} title={!b.reach || b.reach === "unscored" ? "Who could remove this barrier was not classified for this run (the classification step did not complete). Run the journey again to score it; nothing is guessed in the meantime." : b.reach_reason || undefined}>{REACH_LABEL[b.reach || "unscored"]}</span>
                                 {b.lever && <span className="text-foreground/80"> · lever: {b.lever}</span>}
                                 {b.actor && <span className="text-muted-foreground/70"> · who: {b.actor}</span>}
                               </div>
@@ -608,7 +608,7 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
       </div>
 
       <p className="text-[10px] text-muted-foreground/60">
-        Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts multiply a published or client-supplied denominator by the simulated share and are no more real than the share. Movability classes each barrier by who could reach the removal the twins asked for; the report may not judge it on its own. Simulating a lever (L7-04) is the next step.
+        Every number here is counted from the twins&apos; own placements; barriers are their words coded into shared labels after the run. The report may only name candidate outcomes from this list, in this order. Headcounts multiply a published or client-supplied denominator by the simulated share and are no more real than the share. Movability classes each barrier by who could reach the removal the twins asked for; the report may not judge it on its own. To see what an intervention would shift, click a candidate and simulate a lever against a signed rule.
       </p>
     </div>
   );

@@ -25,6 +25,9 @@ class ArchetypeResponse(BaseModel):
 
 @router.get("", response_model=list[ArchetypeResponse])
 async def list_archetypes(user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The caller's own library (dev mode, with auth off, stores ownerless rows and sees them all).
+    A test mould saved from a scratch session stays in the library until removed — the Studio
+    offers the removal beside the list, so it never has to sit inside a real plan."""
     q = select(Archetype).order_by(Archetype.created_at.desc())
     if not user.is_dev:
         q = q.where(Archetype.user_id == user.id)

@@ -11,6 +11,8 @@ interface Props {
   readOnly?: boolean;
   /** The analyst's archetypes (Build your own agent → "use as an archetype"); a segment cast from one takes its rules, the model writes texture only. */
   archetypes?: Archetype[];
+  /** Removes a mould from the library — a test one saved from a scratch session should not sit in every later plan. */
+  onRemoveArchetype?: (id: string) => Promise<void>;
 }
 
 /** One hue per segment, shared by the share bar and the card's rule so the eye links them. */
@@ -34,19 +36,29 @@ function toLabel(s: string) { return s.replace(/_/g, " "); }
 function ArchetypePicker({ seg, archetypes, busy, readOnly, onPick }: { seg: PopulationSegment; archetypes: Archetype[]; busy: boolean; readOnly?: boolean; onPick: (id: string) => void }) {
   const cast = !!seg.archetype_id;
   const known = archetypes.some((a) => a.id === seg.archetype_id);
+  const [picking, setPicking] = useState(false);
+  // Nothing to say → nothing shown: a segment the model writes on its own carries no chip, and the
+  // picker appears only when asked for. A cast segment keeps its chip (that is provenance).
+  if (!cast && (readOnly || archetypes.length === 0)) return null;
   return (
     <div className="flex items-center gap-2 flex-wrap text-[11px]">
-      <span className={`chip ${cast ? "chip-on" : ""}`}
-            title={cast ? "Every persona in this segment is cast from this archetype: its decision rules, temperament and dials are kept; the model writes only names, life stories and places" : "No archetype matches this segment — the model invents each persona's psychology"}>
-        <UserPlus className="w-3 h-3" /> {cast ? `cast from ${seg.archetype_name || "an archetype"}${known ? "" : " (deleted)"}` : "model invents"}
-      </span>
-      {!readOnly && archetypes.length > 0 && (
-        <select disabled={busy} value={known ? seg.archetype_id : ""} onChange={(e) => onPick(e.target.value)} className="field field-sm w-auto py-0.5 text-[11px]">
-          <option value="">model invents</option>
+      {cast && (
+        <span className="chip chip-on"
+              title="Every persona in this segment is cast from this archetype: its decision rules, temperament and dials are kept; the model writes only names, life stories and places">
+          <UserPlus className="w-3 h-3" /> cast from {seg.archetype_name || "an archetype"}{known ? "" : " (deleted)"}
+        </span>
+      )}
+      {!readOnly && archetypes.length > 0 && (picking || cast ? (
+        <select disabled={busy} value={known ? seg.archetype_id : ""} onChange={(e) => { onPick(e.target.value); setPicking(false); }} className="field field-sm w-auto py-0.5 text-[11px]"
+                title="Cast every persona in this segment from one of your hand-authored twins (Build your own agent → use as an archetype)">
+          <option value="">let the model write them</option>
           {archetypes.map((a) => <option key={a.id} value={a.id}>cast from {a.name} · {a.role}</option>)}
         </select>
-      )}
-      {!readOnly && archetypes.length === 0 && <span className="text-muted-foreground/50">no archetypes yet — author one in Build your own agent</span>}
+      ) : (
+        <button type="button" onClick={() => setPicking(true)} className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1" title="Cast this segment from one of your hand-authored twins">
+          <UserPlus className="w-3 h-3" /> cast from one of yours…
+        </button>
+      ))}
     </div>
   );
 }
@@ -200,7 +212,7 @@ function SegmentCard({ seg, color, onDecide, busy, readOnly, archetypes }: { seg
   );
 }
 
-export default function PlanReview({ build, onDecide, busyIds, readOnly, archetypes = [] }: Props) {
+export default function PlanReview({ build, onDecide, busyIds, readOnly, archetypes = [], onRemoveArchetype }: Props) {
   const plan = build.plan;
   if (!plan) return null;
   const segs = plan.segments || [];
@@ -236,7 +248,21 @@ export default function PlanReview({ build, onDecide, busyIds, readOnly, archety
           <span>direct <span className="text-foreground/80 tabular-nums">{total ? Math.round(100 * byStance.direct / total) : 0}%</span></span>
           <span>indirect <span className="text-foreground/80 tabular-nums">{total ? Math.round(100 * byStance.indirect / total) : 0}%</span></span>
           <span>neutral <span className="text-foreground/80 tabular-nums">{total ? Math.round(100 * byStance.neutral / total) : 0}%</span></span>
-          <span className={`chip ${castCount ? "chip-on" : ""}`} title="Segments cast from a hand-authored archetype keep its rules and dials; the rest are invented by the model">{castCount} of {kept.length} cast from archetypes</span>
+          <span className={`chip ${castCount ? "chip-on" : ""}`} title="Segments cast from a hand-authored archetype keep its rules and dials; the rest are written by the model">{castCount} of {kept.length} cast from archetypes</span>
+          {archetypes.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 flex-wrap text-muted-foreground/80">
+              <span title="Your moulds: hand-authored twins saved with 'use as an archetype'. Remove one here if it does not belong in this kind of plan.">moulds on file:</span>
+              {archetypes.map((a) => (
+                <span key={a.id} className="inline-flex items-center gap-0.5 rounded border border-border/50 px-1.5 py-px" title={`${a.name} · ${a.role}`}>
+                  <span className="truncate max-w-[140px]">{a.name}</span>
+                  {onRemoveArchetype && !readOnly && (
+                    <button type="button" onClick={() => { if (window.confirm(`Remove "${a.name}" from your archetype library? Segments already cast from it keep their twins.`)) void onRemoveArchetype(a.id); }}
+                      className="text-muted-foreground/50 hover:text-red-300" title="Remove from the library"><X className="w-2.5 h-2.5" /></button>
+                  )}
+                </span>
+              ))}
+            </span>
+          )}
           {plan.evidence_coverage && <span className="text-muted-foreground/70 basis-full">{plan.evidence_coverage}</span>}
         </div>
         {plan.assumptions?.length ? (

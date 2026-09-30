@@ -71,6 +71,22 @@ export default function SessionPage() {
   // A twin whose knowledge the analyst asked to inspect: opens the Graph tab on the Scoping view.
   const [graphFocus, setGraphFocus] = useState<{ view: "scoping"; agentId: string } | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  // The last report proper and the Ask-Report questions, so a reload does not lose them (they are on file).
+  const [reportChat, setReportChat] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  useEffect(() => {
+    api.report.history(id).then((rows: any) => {
+      const list: any[] = Array.isArray(rows) ? rows : [];
+      const proper = [...list].reverse().find((r) => r.structure);
+      if (proper && !reportContent) {
+        setReportContent(proper.answer);
+        setReportStructure(proper.structure || null);
+        api.records.list(id).then((r) => setReportRecords(r.records || [])).catch(() => {});
+      }
+      const asks = list.filter((r) => !r.structure && r.question && r.question !== "report");
+      if (asks.length) setReportChat(asks.flatMap((r) => [{ role: "user" as const, content: r.question }, { role: "assistant" as const, content: r.answer }]));
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // Agent opinion KPIs — generated once we have enough posts, refreshed on completion.
   // Seeded from persisted `agent.verdict` on load; retried with backoff on failure.
@@ -430,14 +446,26 @@ export default function SessionPage() {
     }
   }
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "ingest", label: "Ingest", icon: <Brain className="w-3.5 h-3.5" /> },
-    { key: "agents", label: agents.length > 0 ? `Agents (${agents.length})` : "Agents", icon: <Users className="w-3.5 h-3.5" /> },
-    { key: "simulation", label: posts.length > 0 ? `Thread (${posts.length})` : "Thread", icon: <MessageSquare className="w-3.5 h-3.5" /> },
-    { key: "lab", label: "Lab", icon: <Beaker className="w-3.5 h-3.5" /> },
-    { key: "kg", label: "Graph", icon: <Network className="w-3.5 h-3.5" /> },
-    { key: "report", label: "Report", icon: <FileText className="w-3.5 h-3.5" /> },
+  // The tabs are a sequence: sources → twins → debate → Lab → report, with "what they know" as a side view.
+  // Each step shows whether it is done, and the header says what comes next.
+  const hasSources = kgEntities.length > 0 || evidence.some((e) => !e.excluded) || (research?.run?.status === "complete");
+  const done: Record<Tab, boolean> = {
+    ingest: hasSources, agents: agents.length > 0, simulation: posts.length > 0, lab: false, kg: kgEntities.length > 0, report: !!reportContent,
+  };
+  const tabs: { key: Tab; label: string; icon: React.ReactNode; step?: number; title: string }[] = [
+    { key: "ingest", step: 1, label: "Sources", icon: <Brain className="w-3.5 h-3.5" />, title: "What the twins will know: research, pasted text, files" },
+    { key: "agents", step: 2, label: agents.length > 0 ? `Twins (${agents.length})` : "Twins", icon: <Users className="w-3.5 h-3.5" />, title: "The population: who they are and how they were built" },
+    { key: "simulation", step: 3, label: posts.length > 0 ? `Debate (${posts.length})` : "Debate", icon: <MessageSquare className="w-3.5 h-3.5" />, title: "The twins discuss the question in a live thread" },
+    { key: "lab", step: 4, label: "Lab", icon: <Beaker className="w-3.5 h-3.5" />, title: "Structured tests on the population: barriers, the journey, purchase intent, surveys, A/B" },
+    { key: "kg", label: "What they know", icon: <Network className="w-3.5 h-3.5" />, title: "Everything the twins were given, as a map — and what each twin could see" },
+    { key: "report", step: 5, label: "Report", icon: <FileText className="w-3.5 h-3.5" />, title: "The briefing, with every figure counted from the twins" },
   ];
+  const nextStep: { tab: Tab; text: string } | null =
+    !hasSources && agents.length === 0 ? { tab: "ingest", text: "Add sources or research the question" }
+    : agents.length === 0 ? { tab: "agents", text: "Build the population" }
+    : posts.length === 0 && session?.status !== "simulating" ? { tab: "agents", text: "Start the debate" }
+    : !reportContent && session?.status === "complete" ? { tab: "report", text: "Generate the report" }
+    : null;
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -461,13 +489,19 @@ export default function SessionPage() {
               onClick={() => setActiveTab(t.key)}
               data-on={activeTab === t.key}
               className="seg-item"
+              title={t.title}
             >
-              {t.icon}
+              {t.step ? <span className={`text-[9px] tabular-nums w-3.5 h-3.5 rounded-full inline-flex items-center justify-center border ${done[t.key] ? "border-emerald-400/60 text-emerald-300" : "border-border text-muted-foreground/70"}`}>{done[t.key] ? "✓" : t.step}</span> : t.icon}
               {t.label}
             </button>
           ))}
         </nav>
-        <div className="shrink-0 ml-auto">
+        <div className="shrink-0 ml-auto flex items-center gap-2">
+          {nextStep && activeTab !== nextStep.tab && (
+            <button type="button" onClick={() => setActiveTab(nextStep.tab)} className="btn btn-xs btn-ghost text-primary" title="The next step in the sequence">
+              Next: {nextStep.text} →
+            </button>
+          )}
           {session && (
             <SimulationControls sessionId={id} status={session.status} intensity={intensity} mode={simMode} onUpdate={refreshSession} />
           )}
@@ -482,6 +516,7 @@ export default function SessionPage() {
             session={session}
             onIngested={refreshSession}
             onGoToAgents={() => setActiveTab("agents")}
+            onGoToLab={() => setActiveTab("lab")}
             research={research}
             evidence={evidence}
             onResearchStart={async () => { await api.research.start(id); }}
@@ -560,6 +595,7 @@ export default function SessionPage() {
             onMakeReport={handleMakeReport}
             onClearReport={() => setReportContent(null)}
             onGoToLab={() => setActiveTab("lab")}
+            initialMessages={reportChat}
           />
         )}
         </ErrorBoundary>

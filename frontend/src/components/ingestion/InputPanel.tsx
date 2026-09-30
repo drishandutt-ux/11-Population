@@ -16,6 +16,8 @@ interface Props {
   session: Session;
   onIngested: () => void;
   onGoToAgents: () => void;
+  /** Opens the Lab — the research panel points its recommended tools there. */
+  onGoToLab?: () => void;
   research?: ResearchState | null;
   evidence?: EvidenceItem[];
   onResearchStart?: () => Promise<void>;
@@ -133,7 +135,7 @@ function PaperContent({ text }: { text: string }) {
 }
 
 export default function InputPanel({
-  session, onIngested, onGoToAgents,
+  session, onIngested, onGoToAgents, onGoToLab,
   research = null, evidence = [], onResearchStart, onResearchStop, onResearchSubQuestion, onEvidenceToggle,
 }: Props) {
   const [tab, setTab]                       = useState<IngestTab>("research");
@@ -333,7 +335,7 @@ export default function InputPanel({
           </div>
           <p className="text-sm text-foreground font-medium">{session.query}</p>
           <p className="text-xs text-muted-foreground/60 mt-1.5">
-            Ingest one or more sources — all are merged into the same knowledge graph before agents are spawned.
+            Give the twins what they should know: research the web, paste text, upload files or videos. Everything goes into one shared pool of knowledge before the population is built — about 3–5 minutes for research, seconds for pasted text.
           </p>
         </div>
 
@@ -365,6 +367,7 @@ export default function InputPanel({
                 sessionId={session.id}
                 state={research}
                 items={evidence}
+                onOpenLab={onGoToLab}
                 onStart={onResearchStart ?? (async () => {})}
                 onStop={onResearchStop ?? (async () => {})}
                 onAddSubQuestion={onResearchSubQuestion ?? (async () => {})}
@@ -780,14 +783,14 @@ export default function InputPanel({
               <>
                 {ingestedSources.length > 0 && (
                   <p className="text-[10px] text-muted-foreground/50 text-center">
-                    Add more sources above, or continue to spawn agents when you're ready.
+                    Add more sources above, or continue to build the population when you're ready.
                   </p>
                 )}
                 <button
                   onClick={onGoToAgents}
                   className="w-full bg-primary/15 hover:bg-primary/25 border border-primary/40 text-primary font-semibold py-2.5 rounded-md flex items-center justify-center gap-2 text-sm transition-colors"
                 >
-                  Continue to Agents
+                  Continue to the population
                   {ingestedSources.length > 0 && (
                     <span className="text-primary/60 font-normal">
                       · {ingestedSources.length} source{ingestedSources.length > 1 ? "s" : ""}

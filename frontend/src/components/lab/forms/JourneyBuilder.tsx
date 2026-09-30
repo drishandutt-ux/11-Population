@@ -12,7 +12,8 @@ import { InstrumentFormProps } from "./index";
 
 const CONTROL = "w-full bg-input border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground";
 
-export default function JourneyBuilder({ values, onChange, sessionId }: InstrumentFormProps) {
+export default function JourneyBuilder({ values, onChange, sessionId, context }: InstrumentFormProps) {
+  const pastOutcomes = (context?.pastOutcomes || []).filter(Boolean);
   const stages: JourneyStage[] = Array.isArray(values.stages) ? values.stages : [];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +68,11 @@ export default function JourneyBuilder({ values, onChange, sessionId }: Instrume
       </div>
       {busy && stages.length === 0 && <p className="text-[11px] text-muted-foreground/70">Reading the question, the evidence and the frame to propose the steps…</p>}
       {error && <p className="text-[11px] text-red-400">{error}</p>}
+      {stages.length > 0 && pastOutcomes.length > 0 && !pastOutcomes.some((o) => o.trim().toLowerCase() === String(stages[stages.length - 1]?.label || "").trim().toLowerCase()) && (
+        <p className="text-[10px] text-amber-300/85 leading-snug rounded-lg border border-amber-400/30 bg-amber-500/5 px-2 py-1.5">
+          Earlier runs of this tool ended at &ldquo;{pastOutcomes[0]}&rdquo;. A differently worded last step is a new journey: the report will show both, and Compare runs will not line them up. Keep the same steps to compare like with like.
+        </p>
+      )}
       {basis && (
         <p className="text-[10px] text-muted-foreground/70">
           Outcome: <span className="text-foreground/80">{basis.outcome}</span>

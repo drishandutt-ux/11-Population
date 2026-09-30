@@ -251,3 +251,13 @@ def test_frame_block_for_prompt_lists_categories_or_asks_for_labels():
     assert "place (Place): categories Blackpool (70%) | Oxford (30%)" in text
     assert "work_pattern (Work pattern): no published distribution" in text
     assert frame.frame_block_for_prompt(None) == ""
+
+
+def test_summary_line_names_dimensions_by_label_not_key():
+    from app.services.population import frame as fr
+    rep = {"level": "poor", "worst_deviation_pts": 37.5, "matched_exactly": ["age_lifecycle", "deprivation"], "weighted_only": [], "estimated": ["age_lifecycle"],
+           "ess": 21.3, "n": 40, "thin_cells": ["x"], "dimensions": [{"key": "age_lifecycle", "label": "Age and life stage"}, {"key": "deprivation", "label": "Deprivation quintile"}]}
+    line = fr.summary_line(rep)
+    assert "matched exactly on Age and life stage, Deprivation quintile" in line and "model-estimated: Age and life stage" in line
+    assert "age_lifecycle" not in line
+    assert fr.dimension_labels(None)(["household_tenure_type"]) == ["household tenure type"]

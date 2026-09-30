@@ -55,6 +55,13 @@ interface Props {
 }
 
 const STANCE_ORDER = ["direct", "indirect", "neutral"] as const;
+/** Plain words for the three stances, for the chip and its hover. */
+const STANCE_WORD: Record<string, string> = { direct: "affected directly", indirect: "affected indirectly", neutral: "observer" };
+const STANCE_HELP: Record<string, string> = {
+  direct: "Directly affected: the question is about people like this twin — they would use, buy, receive or be prescribed it.",
+  indirect: "Indirectly affected: this twin deals with the people the question is about — a clinician, a carer, a shopkeeper, a campaigner.",
+  neutral: "An observer: an analyst, a commentator or a policy voice with no personal stake.",
+};
 
 // ── Spawn ETA model ──────────────────────────────────────────────────────────
 // FAST samples the pre-built bank (near-instant). PRO curates each persona with the
@@ -209,19 +216,19 @@ function AgentCard({ agent, animate = false, dynamicDials = [], onShowKnowledge 
           </div>
           <p className="text-xs text-muted-foreground truncate">{agent.role}</p>
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+        <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0" title="Energy: how readily this twin speaks up in the debate (100% posts and replies often, 20% mostly listens)">
           <Zap className="w-3 h-3" />
           {Math.round(agent.energy * 100)}%
         </div>
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
-        <span className={`inline-flex text-xs px-1.5 py-0.5 rounded border ${stanceColor(agent.stance)}`}>
-          {agent.stance}
+        <span className={`inline-flex text-xs px-1.5 py-0.5 rounded border ${stanceColor(agent.stance)}`} title={STANCE_HELP[agent.stance] || "How this twin relates to the question"}>
+          {STANCE_WORD[agent.stance] || agent.stance}
         </span>
         {humanity > 0 && (
-          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border border-pink-500/30 text-pink-300 bg-pink-500/10">
-            <Heart className="w-2.5 h-2.5" /> {humanity}% human
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border border-pink-500/30 text-pink-300 bg-pink-500/10" title="Voice: how everyday this twin sounds against how expert. 100% is a fully everyday voice, 0% a fully expert one.">
+            <Heart className="w-2.5 h-2.5" /> {humanity}% everyday voice
           </span>
         )}
         {agent.segment && (
@@ -414,6 +421,11 @@ export default function AgentDirectory({
       a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.role.toLowerCase().includes(search.toLowerCase())
   );
+  const bySegment = filtered.some((a) => a.segment);
+  const groups: { key: string; title: string; stance?: string; group: Agent[] }[] = bySegment
+    ? [...Array.from(new Set(filtered.map((a) => a.segment || "Other"))).map((seg) => ({ key: seg, title: seg, group: filtered.filter((a) => (a.segment || "Other") === seg) }))]
+    : STANCE_ORDER.map((stance) => ({ key: stance, title: stance, stance, group: filtered.filter((a) => a.stance === stance) }));
+
 
   // "Loaded" = the session row is known and, if it says there are agents, the roster has arrived.
   const loaded = expectedAgentCount !== null && (expectedAgentCount === 0 || hasAgents);
@@ -584,14 +596,14 @@ export default function AgentDirectory({
                   <p className="text-[13px] text-muted-foreground">
                     {isPendingSimulation
                       ? "The simulation will start automatically once all content is processed."
-                      : `${agents.length} agents ready. Simulation will start automatically when content finishes ingesting.`}
+                      : `${agents.length} twins ready. The debate will start automatically when the sources finish loading.`}
                   </p>
                 </>
               ) : (
                 <>
-                  <h3 className="text-[15px] font-semibold text-foreground tracking-tight">{agents.length} agents ready to debate</h3>
+                  <h3 className="text-[15px] font-semibold text-foreground tracking-tight">{agents.length} twins ready to debate</h3>
                   <p className="text-[13px] text-muted-foreground mt-0.5">
-                    Start the simulation to watch them discuss your query in a live thread.
+                    Start the debate to watch them discuss your question in a live thread — about a minute at the lowest intensity, several at the highest.
                   </p>
                 </>
               )}
@@ -700,7 +712,7 @@ export default function AgentDirectory({
               </button>
               <button onClick={onGoToReport} className="flex items-center gap-2 text-sm bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 px-4 py-2 rounded-lg transition-all">
                 <MessageCircle className="w-3.5 h-3.5" />
-                Chat with Agents
+                Report &amp; talk to the twins
               </button>
             </div>
           </div>
@@ -713,7 +725,7 @@ export default function AgentDirectory({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search agents by name or role…"
+                placeholder="Search twins by name or role…"
                 className="flex-1 bg-muted border border-border rounded-xl px-4 py-2.5 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
               />
               <button
@@ -758,18 +770,18 @@ export default function AgentDirectory({
           )}
         </div>
 
-        {STANCE_ORDER.map((stance) => {
-          const group = filtered.filter((a) => a.stance === stance);
+        {/* Grouped by the population segment when the Studio built them (what a researcher recognises); by stance otherwise. */}
+        {groups.map(({ key, title, stance, group }) => {
           if (group.length === 0) return null;
           const CAP = 60;
           const shown = group.slice(0, CAP);
           return (
-            <div key={stance}>
+            <div key={key}>
               <h3 className="text-xs text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className={`inline-flex px-2 py-0.5 rounded border text-xs ${stanceColor(stance)}`}>
-                  {stance}
-                </span>
-                {group.length} agent{group.length !== 1 ? "s" : ""}
+                {stance
+                  ? <span className={`inline-flex px-2 py-0.5 rounded border text-xs ${stanceColor(stance)}`} title={STANCE_HELP[stance]}>{STANCE_WORD[stance] || stance}</span>
+                  : <span className="inline-flex px-2 py-0.5 rounded border text-xs normal-case tracking-normal border-primary/30 text-primary bg-primary/5">{title}</span>}
+                {group.length} twin{group.length !== 1 ? "s" : ""}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {shown.map((agent) => (
@@ -778,7 +790,7 @@ export default function AgentDirectory({
               </div>
               {group.length > CAP && (
                 <p className="text-[11px] text-muted-foreground/60 mt-3">
-                  +{(group.length - CAP).toLocaleString()} more {stance} agents{search ? " (refine your search to see specific agents)" : ""}
+                  +{(group.length - CAP).toLocaleString()} more twins{search ? " (refine your search to see specific twins)" : ""}
                 </p>
               )}
             </div>

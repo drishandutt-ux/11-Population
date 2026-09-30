@@ -110,6 +110,8 @@ async def run_record(session_id: str) -> dict:
     except Exception:  # noqa: BLE001
         pass
     rep = ((bld.frame or {}).get("report") if bld and bld.frame else None) or {}
+    from app.services.population.frame import dimension_labels
+    names = dimension_labels(rep)
     snapshot = None
     try:
         snapshot = await scoping.snapshot_of(session_id)
@@ -119,8 +121,9 @@ async def run_record(session_id: str) -> dict:
         "session_id": session_id, "question": sess.query if sess else "", "title": sess.title if sess else "",
         "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "population": {"n": int(n), "build_id": bld.id if bld else None, "mode": getattr(bld, "mode", None) if bld else None},
-        "frame": {"level": rep.get("level") or "none", "matched_exactly": rep.get("matched_exactly") or [], "weighted_only": rep.get("weighted_only") or [],
-                  "estimated": rep.get("estimated") or [], "ess": rep.get("ess"), "thin_cells": rep.get("thin_cells") or [], "geography": (bld.frame or {}).get("geography") if bld and bld.frame else None,
+        # Dimension names as a reader knows them ("Age and life stage"), never keys ("age_lifecycle").
+        "frame": {"level": rep.get("level") or "none", "matched_exactly": names(rep.get("matched_exactly") or []), "weighted_only": names(rep.get("weighted_only") or []),
+                  "estimated": names(rep.get("estimated") or []), "ess": rep.get("ess"), "thin_cells": rep.get("thin_cells") or [], "geography": (bld.frame or {}).get("geography") if bld and bld.frame else None,
                   "sizing": (bld.frame or {}).get("sizing") if bld and bld.frame else None},
         "evidence": {str(k): int(v) for k, v in ev_rows},
         "ingested_chunks": len(chunks or []),
