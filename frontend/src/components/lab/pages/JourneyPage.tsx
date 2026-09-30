@@ -12,7 +12,7 @@ import { DrewOn, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import RuleBook from "../RuleBook";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
-import { api, CalibrationRule, Commitment, Experiment, JourneyGrowth, LeverRefusal, LeverShift, MessagingResult, Probe, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
+import { api, CalibrationRule, Commitment, Experiment, JourneyGrowth, LeverRefusal, LeverShift, LeverWhyRow, MessagingResult, Probe, TargetingMenu, TargetingResult, TargetingRow } from "@/lib/api";
 import { InstrumentPageProps } from "./types";
 
 /** The 409 body of a refused lever run, from the API client's error text. */
@@ -752,9 +752,41 @@ function LeverRun({ run }: { run: Experiment }) {
       {lv.segments?.deprivation && (
         <div className="text-muted-foreground/80">by deprivation: {lv.segments.deprivation.map((r) => `${r.value} ${sign(r.lift)}${r.thin ? " (thin)" : ""}`).join(" · ")}</div>
       )}
+      {lv.why && (lv.why.through.length + lv.why.back.length + lv.why.still_stuck.length > 0) && (
+        <div className="pt-1.5 mt-1 border-t border-border/30 space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80" title="Each twin answered the journey in both arms. The ones that changed their placement at this step are grouped by what they say under the lever, with one sentence copied verbatim from a twin in each group. Those the lever did not reach are grouped by the barrier they still name.">
+            Why it moved · in their words{lv.why.coded ? "" : " · uncoded, one twin per line"}
+          </div>
+          <WhyGroup title={`Moved through (${lv.why.n.through})`} rows={lv.why.through} tone="text-emerald-300/90" />
+          <WhyGroup title={`Fell back (${lv.why.n.back})`} rows={lv.why.back} tone="text-red-300/90" />
+          <WhyGroup title={`Still stuck (${lv.why.n.still_stuck}) · what still stops them`} rows={lv.why.still_stuck} tone="text-muted-foreground" />
+        </div>
+      )}
+      {!lv.why && <p className="text-[10px] text-muted-foreground/60">Reading what the twins said about why they moved…</p>}
       <div className="text-[10px] text-muted-foreground/70">
         rule: {Object.entries(lv.rule.deltas || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ")} · {Object.keys(lv.rule.applies_to || {}).length ? Object.entries(lv.rule.applies_to).map(([k, v]) => `${k} = ${(v as string[]).join("/")}`).join("; ") : "everyone"} · {assumed ? "no evidence (assumption)" : `${lv.rule.evidence_count ?? ""} evidence line${lv.rule.evidence_count === 1 ? "" : "s"}`} · reviewed by {lv.rule.reviewed_by}
       </div>
+    </div>
+  );
+}
+
+
+/** One group of the why: the reasons (or remaining barriers) with their counts, and a twin's own
+ *  sentence for each, attributed. Nothing when the group is empty. */
+function WhyGroup({ title, rows, tone }: { title: string; rows: LeverWhyRow[]; tone: string }) {
+  if (!rows.length) return null;
+  return (
+    <div>
+      <div className={`text-[10px] font-semibold ${tone}`}>{title}</div>
+      <ul className="mt-0.5 space-y-0.5">
+        {rows.map((r, k) => (
+          <li key={k} className="text-[11px] leading-snug" title={r.twins.join(" · ")}>
+            <span className="text-foreground/90">{r.reason}</span>
+            <span className="text-muted-foreground tabular-nums"> ×{r.n}</span>
+            {r.quote && <span className="text-muted-foreground/90"> — <em>“{r.quote}”</em>{r.who ? ` — ${r.who}` : ""}</span>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

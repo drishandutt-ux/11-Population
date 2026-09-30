@@ -359,19 +359,33 @@ async def amend_journey(session_id: str, probe_id: str, body: AmendRequest, back
 
 
 @router.get("/sessions/{session_id}/journey/{probe_id}/amendments")
-async def list_journey_amendments(session_id: str, probe_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def list_journey_amendments(session_id: str, probe_id: str, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Every amended run counted against this journey run, newest first, with its growth when complete."""
     await get_owned_session(session_id, user, db)
     rows = (await db.execute(select(Probe).where(Probe.session_id == session_id, Probe.instrument == "journey").order_by(Probe.created_at.desc()))).scalars().all()
-    return {"runs": [_probe_payload(p) for p in rows if ((p.spec or {}).get("amendments") or {}).get("base_probe_id") == probe_id]}
+    runs = [p for p in rows if ((p.spec or {}).get("amendments") or {}).get("base_probe_id") == probe_id]
+    # An amended run counted before the why existed gets its twins' words coded in the background; the next poll shows them.
+    from app.services.measurement import levers
+    for p in runs:
+        am = (p.aggregates or {}).get("amended") or {}
+        if am.get("available") and "why" not in am and p.id not in levers._why_inflight:
+            background_tasks.add_task(levers.ensure_growth_why, p.id)
+    return {"runs": [_probe_payload(p) for p in runs]}
 
 
 @router.get("/sessions/{session_id}/levers")
-async def list_lever_runs(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Every lever run in the session, newest first, with its shift when complete."""
+async def list_lever_runs(session_id: str, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Every lever run in the session, newest first, with its shift when complete. A run counted
+    before the why existed gets its twins' words coded in the background; the next poll shows them."""
     await get_owned_session(session_id, user, db)
+    from app.services.measurement import levers
     rows = (await db.execute(select(Experiment).where(Experiment.session_id == session_id).order_by(Experiment.created_at.desc()))).scalars().all()
-    return {"runs": [_experiment_payload(e) for e in rows if (e.spec or {}).get("lever_run")]}
+    runs = [e for e in rows if (e.spec or {}).get("lever_run")]
+    for e in runs:
+        lv = (e.results or {}).get("lever") or {}
+        if lv.get("available") and "why" not in lv and e.id not in levers._why_inflight:
+            background_tasks.add_task(levers.ensure_why, e.id)
+    return {"runs": [_experiment_payload(e) for e in runs]}
 
 
 @router.get("/sessions/{session_id}/targeting/behaviours")

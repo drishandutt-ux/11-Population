@@ -277,3 +277,110 @@ def test_the_growth_is_counted_step_by_step_against_the_base_run_on_the_same_twi
     assert r["amended"]["available"] and len(r["amended"]["rules"]) == 2
     text, _ = rec.records_block([r])
     assert "AMENDED RUN" in text and "2 signed rule(s) in place" in text and "NO evidence, an assumption" in text and "growth of +25 points" in text
+
+
+# ── why it moved: the twins' own words behind the count ──────────────────────
+
+ST = jn.stages_of(SPEC)
+
+def _arms():
+    """Four twins at the candidate's step (k=0): one the lever moves through, one it pushes back,
+    one still stuck under the same barrier theme as a fifth, one through in both arms."""
+    def r(k, reached, progress, barrier="", theme="", reasoning="why", removal=""):
+        row = _row(k, reached, progress, barrier, theme, removal, 50)
+        row["answer"]["reasoning"] = reasoning
+        row["agent"] = {"name": f"N{k}", "role": "patient", "segment": "s1"}
+        return row
+    control = {
+        "a1": r(1, "step1", "no", "the 8am phone scramble", "GP access", "I gave up on the phone queue. Nobody rang me."),
+        "a2": r(2, "step1", "yes", reasoning="I would go along. It is on my way."),
+        "a3": r(3, "step1", "no", "cannot get a GP slot", "GP access", "No slot, no test."),
+        "a4": r(4, "step1", "no", "the urine sample bit", "sample collection", "I will not do the sample at work."),
+        "a5": r(5, "step2", "yes", reasoning="Already done it."),
+    }
+    lever = {
+        "a1": r(1, "step2", "yes", reasoning="The pharmacist rang me the week the script sat there. That call got me in. I trust them more now."),
+        "a2": r(2, "step1", "unlikely", "a stranger ringing about my prescription", "privacy", "A call out of the blue about my pills feels like being checked up on."),
+        "a3": r(3, "step1", "no", "cannot get a GP slot", "GP access", "No slot, no test."),
+        "a4": r(4, "step1", "no", "the urine sample bit", "sample collection", "Still not doing the sample at work."),
+        "a5": r(5, "step2", "yes", reasoning="Already done it."),
+    }
+    return control, lever
+
+
+def test_twin_moves_classes_every_twin_at_the_step_with_its_words_from_both_arms():
+    control, lever = _arms()
+    moves = lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=0)
+    by = {m["agent_id"]: m for m in moves}
+    assert by["a1"]["move"] == lv.MOVE_THROUGH and by["a2"]["move"] == lv.MOVE_BACK
+    assert by["a3"]["move"] == lv.STILL_STUCK and by["a4"]["move"] == lv.STILL_STUCK and by["a5"]["move"] == lv.ALREADY_THROUGH
+    # The words travel with the twin, labelled by stage, and the counts agree with the shift's movement.
+    assert by["a1"]["then"]["barrier"] == "the 8am phone scramble" and by["a1"]["now"]["reached"] == ST[1]["label"]
+    assert by["a1"]["name"] == "N1" and by["a1"]["role"] == "patient"
+    assert sum(m["move"] == lv.MOVE_THROUGH for m in moves) == 1 and sum(m["move"] == lv.MOVE_BACK for m in moves) == 1
+
+
+def test_reasons_uncoded_gives_each_mover_its_own_words_and_groups_the_still_stuck_by_theme():
+    control, lever = _arms()
+    why = lv.reasons_uncoded(lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=0))
+    assert why["n"] == {"through": 1, "back": 1, "still_stuck": 2, "already_through": 1} and why["coded"] is False
+    # A mover speaks for itself: the first sentence of what it says under the lever, attributed.
+    assert why["through"][0]["quote"] == "The pharmacist rang me the week the script sat there." and why["through"][0]["who"] == "N1, patient"
+    # Falling back, the barrier it names now is the reason.
+    assert why["back"][0]["reason"] == "a stranger ringing about my prescription"
+    # Still stuck: the coded barrier themes, each with one twin's own words.
+    assert [(r["reason"], r["n"]) for r in why["still_stuck"]] == [("GP access", 1), ("sample collection", 1)]
+    assert why["sentence"].startswith("Why, in their words: 1 moved through — “") and "1 fell back" in why["sentence"] and "2 still stuck, mostly “GP access” (1)" in why["sentence"]
+
+
+def test_coded_reasons_keep_only_verbatim_quotes_and_count_every_twin_once():
+    control, lever = _arms()
+    moves = lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=0)
+    through = [m for m in moves if m["move"] == lv.MOVE_THROUGH]
+    # A paraphrased quote is replaced by the twin's own first sentence; a twin listed twice counts once.
+    coded = lv._coded_group([{"reason": "someone rang them before the script lapsed", "twins": ["T1", "T1"], "quote_twin": "T1", "quote": "The pharmacist phoned me"}], through)
+    assert coded == [{"reason": "someone rang them before the script lapsed", "n": 1, "twins": ["N1, patient"],
+                      "quote": "The pharmacist rang me the week the script sat there.", "who": "N1, patient"}]
+    # A verbatim sentence survives as written; a twin the coder left out becomes its own reason.
+    coded = lv._coded_group([{"reason": "the call got them in", "twins": [], "quote_twin": "T1", "quote": "That call got me in."}], through)
+    assert coded[0]["quote"] == "The pharmacist rang me the week the script sat there." and coded[0]["n"] == 1
+
+
+def test_why_moved_falls_back_to_the_uncoded_form_when_the_coder_fails(monkeypatch):
+    control, lever = _arms()
+    moves = lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=0)
+
+    async def boom(*a, **k):
+        raise RuntimeError("no model")
+    import app.services.evidence.llm as llm
+    monkeypatch.setattr(llm, "analyze", boom)
+    why = asyncio.run(lv.why_moved(moves, session_id="s"))
+    assert why["coded"] is False and why["n"]["through"] == 1 and why["through"][0]["who"] == "N1, patient"
+
+
+def test_the_lever_record_carries_the_why():
+    control, lever = _arms()
+    why = lv.reasons_uncoded(lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=0))
+    e = SimpleNamespace(id="e1", name="Lever: x", model="m", seed=1, created_at=None, results={"lever": {
+        "available": True, "candidate_id": "c1", "from": {"label": "A"}, "to": {"label": "B"}, "conversion": {"then": 0.5, "now": 0.75, "lift": 0.25, "low": 0.1, "high": 0.4, "n": 4, "significant": True},
+        "movement": {"up": 1, "down": 1, "unchanged": 2, "n": 4}, "end": {}, "segments": {}, "rule": RULE, "sentence": "s. " + why["sentence"], "why": why}})
+    rec_ = rec.record_from_lever(e)
+    assert rec_["lever"]["why"]["n"]["through"] == 1 and "Why, in their words" in rec_["sentence"]
+
+
+def test_twin_moves_over_the_whole_journey_reads_how_far_each_twin_gets():
+    control, lever = _arms()
+    control["a5"]["answer"]["reached"] = lever["a5"]["answer"]["reached"] = ST[-1]["key"]
+    # a5 is at the end in both runs; a1 gets further (step1 → step2); a2 stays at step1 (its progress changed, not its placement).
+    moves = {m["agent_id"]: m["move"] for m in lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=None)}
+    assert moves == {"a1": lv.MOVE_THROUGH, "a2": lv.STILL_STUCK, "a3": lv.STILL_STUCK, "a4": lv.STILL_STUCK, "a5": lv.ALREADY_THROUGH}
+    # A twin that now stops earlier is 'back' — the amended run's 'moved backward'.
+    lever["a5"]["answer"]["reached"] = "step1"
+    lever["a5"]["answer"]["progress"] = "no"
+    lever["a5"]["answer"]["barrier"] = "the call felt like being checked up on"
+    lever["a5"]["answer"]["reasoning"] = "I stopped answering. It felt like being checked up on."
+    moves = lv.twin_moves(control_rows=control, lever_rows=lever, stages=ST, k=None)
+    back = [m for m in moves if m["move"] == lv.MOVE_BACK]
+    assert [m["agent_id"] for m in back] == ["a5"]
+    why = lv.reasons_uncoded(moves)
+    assert why["n"]["back"] == 1 and why["back"][0]["reason"] == "the call felt like being checked up on" and why["back"][0]["quote"] == "I stopped answering."

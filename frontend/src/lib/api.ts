@@ -617,7 +617,12 @@ export type LeverShift = { available: boolean; reason?: string; candidate_id: st
   people?: { moved: number; low: number; high: number; stuck_then: number | null; stuck_now: number; basis: string };
   rule: { rule_id: string; lever: string; description: string; applies_to: Record<string, string[]>; deltas: Record<string, number>; bound: number; reviewed_by: string; reviewed_at: string | null;
     basis_class?: "evidence_anchored" | "assumption"; evidence_count?: number };
-  assumed?: boolean; covered: number; journey_probe_id: string; sentence: string };
+  assumed?: boolean; covered: number; journey_probe_id: string; sentence: string;
+  /** Why it moved, in the twins' own words: the movers coded into reasons with a verbatim quote each, and those still stuck by the barrier they still name. */
+  why?: LeverWhy };
+export type LeverWhyRow = { reason: string; n: number; twins: string[]; quote: string; who: string };
+export type LeverWhy = { n: { through: number; back: number; still_stuck: number; already_through: number }; coded: boolean;
+  through: LeverWhyRow[]; back: LeverWhyRow[]; still_stuck: LeverWhyRow[]; sentence: string };
 export type LeverRefusal = { refused: true; lever: string; reason: string; drafts: string[]; missing: boolean };
 /** The growth of a journey refreshed with the simulation amendments — every signed rule in place — counted step by step against the base run on the same twins. */
 export type JourneyGrowth = { available: boolean; reason?: string; n: number; base_probe_id?: string; assumed: boolean; covered: number;
@@ -628,7 +633,9 @@ export type JourneyGrowth = { available: boolean; reason?: string; n: number; ba
   transitions: { id: string; step: number; from: { key: string; label: string }; to: { key: string; label: string }; then: number | null; now: number | null; lift: number; low: number; high: number; n: number;
     significant: boolean; stuck_then: number | null; stuck_now: number | null; up: number; down: number }[];
   end: { label: string; then: number; now: number; lift: number; low: number; high: number; n: number; significant: boolean; people_then?: number | null; people_now?: number | null; people_moved?: number | null };
-  movement: { up: number; down: number; unchanged: number; n: number }; sentence: string };
+  movement: { up: number; down: number; unchanged: number; n: number }; sentence: string;
+  /** Why it moved over the whole journey, in the twins' own words: who gets further and who stops earlier, coded into reasons with a verbatim quote each. */
+  why?: LeverWhy };
 /** What a behaviour-targeting run can rank (brief L7-05): the question-specific dials (ticked by default) and the fixed dial vocabulary. */
 export type TargetingMenu = { behaviours: { key: string; label: string; group: string; why: string; low: string; high: string; question_specific: boolean }[];
   fixed: Record<string, string[]>; points_default: number; points_max: number; max_behaviours: number };

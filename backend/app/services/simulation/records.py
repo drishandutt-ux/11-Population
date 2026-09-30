@@ -349,6 +349,7 @@ def record_from_lever(e: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "equity": equity_mod.equity_block([{"value": r["value"], "n": r["n"], "thin": r["thin"], "share": r["lift"], "low": r["low"], "high": r["high"]} for r in (lv.get("segments") or {}).get(equity_mod.KEY, [])], fmt="lift"),
         "lever": {"rule": rule, "candidate_id": lv.get("candidate_id"), "journey_probe_id": lv.get("journey_probe_id"), "covered": lv.get("covered"),
                   "movement": lv.get("movement"), "end": lv.get("end"), "people": lv.get("people"), "stuck": lv.get("stuck"),
+                  "why": lv.get("why"),   # the twins' own words behind the count: reasons + verbatim quotes
                   "basis_class": "assumption" if assumed else "evidence_anchored", "assumed": assumed},
         "refusals": None, "unanimity": None, "weighted": None,
         "provenance": {"model": model, "seed": int(getattr(e, "seed", 0) or 0), "design": "within", "arms": ["baseline", "lever"], "evidence_mix": evidence_mix or {},
