@@ -1,0 +1,6 @@
+**Phone call script (pharmacy technician):**
+"Hello [name], I'm calling from [practice]. Because of your [diabetes / blood pressure] we like
+to check your kidneys once a year, and it's been a while. It's a blood test and a small urine
+sample. I can book you a slot at the surgery, or at [chemist] on [street] on the way home, or
+there's a clinic in [place] on Saturday. Which is easiest?"
+
