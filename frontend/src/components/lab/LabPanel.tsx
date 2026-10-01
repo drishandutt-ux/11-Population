@@ -257,6 +257,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         completedAt={experimentCompletedAt}
         onClearLive={onClearLive}
         initial={initialExperiment}
+        past={experiments}
         dynamicDials={dynamicDials}
         onBack={() => { setExperimentOpen(false); setInitialExperiment(null); loadProbes(); }}
       />
@@ -365,6 +366,12 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
 
   const Page = pageFor(instrument.page || instrument.key);
   const Form = formFor(instrument.form);
+  // The runs made with this tool, newest first: listed inside the tool as well as in the Lab's
+  // past-runs list, so an analyst who opens Journey sees its journeys without going back out.
+  const toolRuns = probes
+    .filter((p) => !p.experiment_id && p.instrument === instrument.key)
+    .sort((x, y) => ((x.created_at || "") < (y.created_at || "") ? 1 : (x.created_at || "") > (y.created_at || "") ? -1 : 0));
+  const runTitle = (p: Probe) => ((p.spec as any)?.amendments ? "amended" : "");
 
   // ── One tool ──────────────────────────────────────────────────────────────
   return (
@@ -481,16 +488,76 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
           <p className="text-[11px] text-muted-foreground">Spawn a population first — the Lab measures the agents in this session.</p>
         )}
         </>)}
+
+        {toolRuns.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1.5">
+              <History className="w-3 h-3" /> Past runs with this tool <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{toolRuns.length}</span>
+            </div>
+            <div className="rounded-lg border border-border/60 divide-y divide-border/40 overflow-hidden">
+              {toolRuns.map((p) => {
+                const on = selected?.id === p.id;
+                const live = p.status === "queued" || p.status === "running";
+                return (
+                  <button key={p.id} type="button" onClick={() => select(p)} aria-current={on || undefined}
+                    className={`w-full text-left px-2.5 py-1.5 transition-colors ${on ? "bg-primary/10" : "hover:bg-muted/60"}`}>
+                    <span className="block text-[11px] text-foreground/90 truncate">
+                      {runTitle(p) && <span className="text-primary/80">{runTitle(p)} · </span>}
+                      {p.aggregates?.sentence || (live ? "Running…" : p.status === "failed" ? "Did not finish" : p.status === "stopped" ? "Stopped" : "No summary")}
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground tabular-nums truncate">
+                      {p.answer_count}/{p.agent_count}{p.created_at ? ` · ${ago(p.created_at)}` : ""}{STATUS_PILL[p.status] ? ` · ${p.status}` : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 min-h-0">
-        {!selected && (
+        {!selected && toolRuns.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground gap-2">
             <Beaker className="w-8 h-8 opacity-30" />
             <p className="text-sm">{instrument.question}</p>
             <p className="text-xs max-w-sm opacity-70">
               Each agent answers in character — from its own background, its dials and what it already argued in the thread.
             </p>
+          </div>
+        )}
+        {!selected && toolRuns.length > 0 && (
+          <div className="max-w-[1000px] space-y-4">
+            <div className="text-muted-foreground">
+              <p className="text-sm">{instrument.question}</p>
+              <p className="text-xs opacity-70 mt-1">Open a past run below, or set the inputs on the left and run it again.</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <History className="w-3.5 h-3.5" />
+                <span className="font-medium">Past {instrument.label.toLowerCase()} runs</span>
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{toolRuns.length}</span>
+              </div>
+              <div className="rounded-xl border border-border/60 divide-y divide-border/40 overflow-hidden">
+                {toolRuns.map((p) => (
+                  <PastRunRow
+                    key={p.id}
+                    icon={iconFor(p.instrument)}
+                    title={`${instrument.label}${runTitle(p) ? ` · ${runTitle(p)}` : ""}`}
+                    summary={p.aggregates?.sentence || ""}
+                    meta={`${p.answer_count}/${p.agent_count}`}
+                    when={ago(p.created_at || "")}
+                    status={p.status}
+                    confirming={confirming === p.id}
+                    deleting={deleting === p.id}
+                    onOpen={() => select(p)}
+                    onAskDelete={() => setConfirming(p.id)}
+                    onCancelDelete={() => setConfirming(null)}
+                    onDelete={() => remove({ kind: "probe", at: p.created_at || "", probe: p })}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

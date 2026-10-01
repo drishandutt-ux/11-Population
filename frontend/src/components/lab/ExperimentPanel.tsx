@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api, Agent, Experiment, ExperimentDesign, ExperimentEstimate, ExperimentRequest, Instrument, SimMode, DynamicDial } from "@/lib/api";
-import { AlertTriangle, ChevronLeft, Download, FlaskConical, Loader2, Play, Plus, RefreshCw, Square, X } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Download, FlaskConical, History, Loader2, Play, Plus, RefreshCw, Square, X } from "lucide-react";
 import { PairedDots, DotGrid, optionColor } from "./Charts";
 import InstrumentForm, { initialValues, toSpec } from "./InstrumentForm";
 import { SEGMENT_FILTERS, dynamicFilters } from "./filters";
@@ -30,6 +30,8 @@ interface Props {
   onClearLive: (probeId: string) => void;
   initial: Experiment | null;
   onBack: () => void;
+  /** Every experiment in the session (newest first), listed inside the tool so its past tests are to hand. */
+  past?: Experiment[];
   /** The question's own dials (brief L3-04): extra "who answers" filters and split headings. */
   dynamicDials?: DynamicDial[];
 }
@@ -44,7 +46,7 @@ const DESIGNS: { key: ExperimentDesign; label: string; help: string }[] = [
 ];
 
 export default function ExperimentPanel({
-  sessionId, sessionQuery, agents, instruments, liveAnswers, completedAt, onClearLive, initial, onBack,
+  sessionId, sessionQuery, agents, instruments, liveAnswers, completedAt, onClearLive, initial, onBack, past = [],
   dynamicDials = [],
 }: Props) {
   // Any tool that declares metrics, hidden or not: Ask left the picker when the survey arrived
@@ -121,6 +123,47 @@ export default function ExperimentPanel({
       for (const p of full.probes || []) clearLive.current(p.id);
     }).catch(() => undefined);
   }, [completedAt, sessionId]);
+
+  // The past tests, newest first; one run from this panel that the list has not caught up with yet is included.
+  const pastRuns = useMemo(() => {
+    const seen = new Set(past.map((e) => e.id));
+    const all = selected && !seen.has(selected.id) ? [selected, ...past] : past;
+    return [...all].sort((x, y) => ((x.created_at || "") < (y.created_at || "") ? 1 : (x.created_at || "") > (y.created_at || "") ? -1 : 0));
+  }, [past, selected]);
+  const ago = (iso: string) => {
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
+    return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  };
+  function openPast(e: Experiment) {
+    setSelected(e);
+    api.lab.experiment(sessionId, e.id).then(setSelected).catch(() => undefined);
+  }
+  const PastList = ({ compact }: { compact: boolean }) => (
+    <div className={`rounded-${compact ? "lg" : "xl"} border border-border/60 divide-y divide-border/40 overflow-hidden`}>
+      {pastRuns.map((e) => {
+        const on = selected?.id === e.id;
+        const live = e.status === "queued" || e.status === "running";
+        const inst = instruments.find((i) => i.key === e.instrument)?.label || e.instrument;
+        return (
+          <button key={e.id} type="button" onClick={() => openPast(e)} aria-current={on || undefined}
+            className={`w-full text-left ${compact ? "px-2.5 py-1.5" : "px-3 py-2"} transition-colors ${on ? "bg-primary/10" : "hover:bg-muted/60"}`}>
+            <span className="block text-[11px] text-foreground/90 truncate">
+              <span className="font-medium">{e.name || "A/B test"}</span>
+              {e.results?.verdict && <span className="text-muted-foreground"> · {e.results.verdict}</span>}
+              {!e.results?.verdict && live && <span className="text-muted-foreground"> · running…</span>}
+            </span>
+            <span className="block text-[10px] text-muted-foreground tabular-nums truncate">
+              {inst} · {e.variants.map((v) => v.label || v.key).join(" vs ")}{e.created_at ? ` · ${ago(e.created_at)}` : ""}{e.status !== "complete" ? ` · ${e.status}` : ""}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   function updateVariant(i: number, patch: Partial<VariantDraft>) {
     setVariants((prev) => prev.map((v, j) => (j === i ? { ...v, ...patch } : v)));
@@ -306,16 +349,41 @@ export default function ExperimentPanel({
         {!agents.length && (
           <p className="text-[11px] text-muted-foreground">Spawn a population first — the Lab measures the agents in this session.</p>
         )}
+
+        {pastRuns.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1.5">
+              <History className="w-3 h-3" /> Past A/B tests <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{pastRuns.length}</span>
+            </div>
+            <PastList compact />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 min-h-0">
-        {!selected && (
+        {!selected && pastRuns.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground gap-2">
             <FlaskConical className="w-8 h-8 opacity-30" />
             <p className="text-sm">{base?.question}</p>
             <p className="text-xs max-w-sm opacity-70">
               Each agent answers every variant separately, with no memory of what it said to the other — the lift is what changed.
             </p>
+          </div>
+        )}
+        {!selected && pastRuns.length > 0 && (
+          <div className="max-w-[1000px] space-y-4">
+            <div className="text-muted-foreground">
+              <p className="text-sm">{base?.question}</p>
+              <p className="text-xs opacity-70 mt-1">Open a past test below, or write the variants on the left and run a new one.</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <History className="w-3.5 h-3.5" />
+                <span className="font-medium">Past A/B tests</span>
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{pastRuns.length}</span>
+              </div>
+              <PastList compact={false} />
+            </div>
           </div>
         )}
 
