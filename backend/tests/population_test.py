@@ -734,6 +734,7 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
     (prod showed "Research is finishing" for an hour after the task had died)."""
     import asyncio as _a
     from app.models.evidence import ResearchRun
+    from app.models.measurement import Experiment, Probe
     from app.models.population import PopulationBuild
     from app.core.recovery import recover_interrupted
     client, Session, _ = api_client
@@ -745,11 +746,20 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
             db.add(ResearchRun(id="r2", session_id=sid, status="complete", question="q", sources=["web"]))
             db.add(PopulationBuild(id="b1", session_id=sid, status="spawning", plan={"segments": []}, log=[]))
             db.add(PopulationBuild(id="b2", session_id=sid, status="awaiting_review", plan={"segments": []}, log=[]))
+            # a Lab run killed mid-flight (an amended journey here) must not block the next one
+            db.add(Probe(id="p1", session_id=sid, instrument="journey", status="running", spec={"amendments": {"base_probe_id": "p0", "rules": []}}, agent_count=20, answer_count=7))
+            db.add(Probe(id="p0", session_id=sid, instrument="journey", status="complete", spec={}, aggregates={"n": 20}))
+            db.add(Experiment(id="e1", session_id=sid, instrument="verdict", status="running", variants=[], spec={}))
             await db.commit()
         return await recover_interrupted()
 
     counts = _a.new_event_loop().run_until_complete(seed())
-    assert counts == {"research_runs": 1, "population_builds": 1}
+    assert counts == {"research_runs": 1, "population_builds": 1, "probes": 1, "experiments": 1}
+    p1 = client.get(f"/api/v1/sessions/{sid}/probes/p1").json()
+    assert p1["status"] == "failed" and "server restart" in p1["error"] and p1["answer_count"] == 7
+    assert client.get(f"/api/v1/sessions/{sid}/probes/p0").json()["status"] == "complete"
+    am = client.get(f"/api/v1/sessions/{sid}/journey/p0/amendments").json()["runs"]
+    assert [r["status"] for r in am] == ["failed"]   # listed, honest, and no longer "running"
     st = client.get(f"/api/v1/sessions/{sid}/research").json()
     assert st["run"]["status"] in ("interrupted", "complete")
     b1 = client.get(f"/api/v1/sessions/{sid}/population/builds/b1").json()

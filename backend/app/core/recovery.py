@@ -15,15 +15,22 @@ from app.core import database as dbm
 
 RESEARCH_IN_FLIGHT = ("queued", "running", "stopping", "finalising")
 BUILD_IN_FLIGHT = ("queued", "detecting", "gathering", "clarifying", "planning", "spawning")
+# Lab runs (probes, their experiments) are in-process tasks too. One left "running" blocks the
+# Journey page's *Refresh with amendments* button for good — it will not start a second amended
+# run while one claims to be in flight (2026-10-01).
+LAB_IN_FLIGHT = ("queued", "running")
+LAB_INTERRUPTED = "Interrupted by a server restart (a redeploy). Answers already collected are kept; run it again."
 
 
 async def recover_interrupted() -> dict:
-    """Mark in-flight research runs `interrupted` and in-flight Studio builds `stopped`
-    (with a log line). Returns counts for the startup log."""
+    """Mark in-flight research runs `interrupted`, in-flight Studio builds `stopped` (with a
+    log line), and in-flight Lab probes and experiments `failed` with the reason. Returns counts
+    for the startup log."""
     from app.models.evidence import ResearchRun
+    from app.models.measurement import Experiment, Probe
     from app.models.population import PopulationBuild
 
-    counts = {"research_runs": 0, "population_builds": 0}
+    counts = {"research_runs": 0, "population_builds": 0, "probes": 0, "experiments": 0}
     now = datetime.utcnow()
     async with dbm.AsyncSessionLocal() as db:
         runs = (await db.execute(select(ResearchRun).where(ResearchRun.status.in_(RESEARCH_IN_FLIGHT)))).scalars().all()
@@ -43,5 +50,17 @@ async def recover_interrupted() -> dict:
             }]
             b.updated_at = now
             counts["population_builds"] += 1
+        probes = (await db.execute(select(Probe).where(Probe.status.in_(LAB_IN_FLIGHT)))).scalars().all()
+        for p in probes:
+            p.status = "failed"
+            p.error = LAB_INTERRUPTED
+            p.completed_at = now
+            counts["probes"] += 1
+        exps = (await db.execute(select(Experiment).where(Experiment.status.in_(LAB_IN_FLIGHT)))).scalars().all()
+        for e in exps:
+            e.status = "failed"
+            e.error = LAB_INTERRUPTED
+            e.completed_at = now
+            counts["experiments"] += 1
         await db.commit()
     return counts

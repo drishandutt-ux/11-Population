@@ -138,6 +138,12 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   const [showAmended, setShowAmended] = useState(true);
   const loadAm = () => (amendmentsOf ? Promise.resolve() : api.lab.journeyAmendments(sessionId, probe.id).then((r) => setAmends(r.runs)).catch(() => {}));
   const signedRules = rules.filter((r) => r.status === "reviewed");
+  const [stoppingAmend, setStoppingAmend] = useState(false);
+  // Release a run that is not moving (a redeploy killed it, say) so the next refresh can start; what it collected is kept.
+  const stopAmend = async (id: string) => {
+    setStoppingAmend(true);
+    try { await api.lab.stop(sessionId, id); await loadAm(); } catch (e: any) { setAmendError(e?.message || "Could not stop the run"); } finally { setStoppingAmend(false); }
+  };
   const refreshWithAmendments = async () => {
     setAmending(true); setAmendError("");
     try {
@@ -254,6 +260,8 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
   const funnelPeople = (key: string) => (a.funnel || []).find((f: any) => f.key === key);
   const amendRunning = amends.find((p) => p.status === "queued" || p.status === "running") || null;
   const amendLatest = amends.find((p) => p.status === "complete" && (p.aggregates as any)?.amended?.available) || null;
+  // The newest amended run did not finish (failed, or stopped by hand): say so, so a missing growth is not read as "nothing changed".
+  const amendUnfinished = !amendRunning && amends[0] && (amends[0].status === "failed" || amends[0].status === "stopped") ? amends[0] : null;
   const growth: JourneyGrowth | null = amendmentsOf ? ((a.amended as JourneyGrowth) || null) : ((amendLatest?.aggregates as any)?.amended as JourneyGrowth) || null;
   const growthFor = (key: string) => growth?.funnel.find((f) => f.key === key);
   const overlay = Boolean(growth?.available && showAmended && !filtered && !amendmentsOf);
@@ -296,7 +304,21 @@ export default function JourneyPage({ probe, dynamicDials = [], agentsById = {} 
             {amendRunning ? `Refreshing with amendments · ${amendRunning.answer_count}/${amendRunning.agent_count || a.n}` : "Refresh with amendments"}
           </button>
         )}
+        {!amendmentsOf && amendRunning && (
+          <button type="button" onClick={() => stopAmend(amendRunning.id)} disabled={stoppingAmend}
+            title="Stop this amended run. Use it when the count has not moved for a while — a redeploy can kill a run and leave it saying it is running. Answers already collected are kept; you can refresh again straight after."
+            className="text-[11px] text-muted-foreground hover:text-foreground underline disabled:opacity-50">
+            {stoppingAmend ? "stopping…" : "stop"}
+          </button>
+        )}
       </div>
+      {amendUnfinished && !amendError && (
+        <p className="text-[11px] text-yellow-300/80 -mt-2">
+          The last amended run ({new Date(amendUnfinished.created_at || "").toLocaleString()}) {amendUnfinished.status === "stopped" ? "was stopped" : "did not finish"}
+          {amendUnfinished.error ? `: ${amendUnfinished.error}` : "."}{" "}
+          {amendLatest ? "The growth shown below is from the last run that completed." : "No growth is shown until a run completes — press Refresh with amendments to run it again."}
+        </p>
+      )}
       {amendError && (
         <p className="text-[11px] text-yellow-300/80 -mt-2">
           {typeof amendError === "string" ? amendError : amendError.reason}

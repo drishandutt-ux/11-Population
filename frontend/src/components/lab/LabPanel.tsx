@@ -334,7 +334,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
                         icon={r.kind === "probe" ? iconFor(r.probe.instrument) : EXPERIMENT_ICON}
                         title={
                           r.kind === "probe"
-                            ? instruments.find((i) => i.key === r.probe.instrument)?.label || r.probe.instrument
+                            ? `${instruments.find((i) => i.key === r.probe.instrument)?.label || r.probe.instrument}${(r.probe.spec as any)?.amendments ? " · amended" : ""}`
                             : `A/B test${r.experiment.name ? ` · ${r.experiment.name}` : ""}`
                         }
                         summary={r.kind === "probe" ? r.probe.aggregates?.sentence || "" : r.experiment.results?.verdict || ""}
