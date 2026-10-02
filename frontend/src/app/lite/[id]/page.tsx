@@ -13,12 +13,12 @@ import TalkBox from "@/components/lite/TalkBox";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { LITE_DEFAULTS, proLinks } from "@/lib/lite";
+import { LITE_DEFAULTS, proLinks, classifyText, fromFile, ingestDropped, Dropped } from "@/lib/lite";
 import { api, Agent } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Beaker, Check, FileText, Loader2, MessageCircle, Paperclip, Play, Square, X } from "lucide-react";
+import { ArrowRight, Beaker, Check, FileText, Link2, Loader2, MessageCircle, Paperclip, Play, Plus, Square, X } from "lucide-react";
 
-type View = "flow" | "report" | "lab";
+type View = "flow" | "ask" | "people" | "report" | "lab";
 const SURVEY_CHAR_LIMIT = 8000;
 const TEXT_LIKE = /\.(txt|csv|tsv|md|json)$/i;
 
@@ -52,8 +52,11 @@ function LiteSession() {
     : s.buildActive || s.spawnProgress ? "progress"
     : s.agents.length > 0 ? "ready"
     : "people";
-  const step: LiteStep = view === "report" ? "report" : stage === "debate" ? "debate" : "people";
+  const step: LiteStep = view === "report" ? "report" : view === "ask" ? "ask" : view === "people" ? "people" : stage === "debate" ? "debate" : "people";
   const title = s.session?.title || "";
+  // The step rail is navigation: Ask (the question and what was added), People, the Conversation, the Report.
+  const goStep = (st: LiteStep) => setView(st === "ask" ? "ask" : st === "people" ? "people" : st === "report" ? "report" : "flow");
+  const shell = { title, onStep: goStep };
 
   if (s.notFound) {
     return (
@@ -70,7 +73,7 @@ function LiteSession() {
   // ── Lab (placeholder) ──
   if (view === "lab") {
     return (
-      <LiteShell title={title} step="debate" proHref={proLinks.lab(id)} backHref={`/lite/${id}`}>
+      <LiteShell {...shell} step="debate" proHref={proLinks.lab(id)} backHref={`/lite/${id}`}>
         <div className="max-w-xl mx-auto pt-16 px-6 animate-rise">
           <div className="lite-card p-8 text-center">
             <div className="w-12 h-12 rounded-2xl bg-foreground/5 inline-flex items-center justify-center"><Beaker className="w-5 h-5 text-foreground" /></div>
@@ -89,7 +92,7 @@ function LiteSession() {
   // ── Report ──
   if (view === "report" && s.session) {
     return (
-      <LiteShell title={title} step="report" proHref={proLinks.report(id)} backHref={`/lite/${id}`} layout="app"
+      <LiteShell {...shell} step="report" proHref={proLinks.report(id)} backHref={`/lite/${id}`} layout="app"
         right={<button type="button" onClick={() => setView("flow")} className="lite-pill"><MessageCircle className="w-3.5 h-3.5" /> Conversation</button>}>
         <div className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 pb-4">
           <div className="flex-1 min-h-0 lite-card overflow-hidden flex flex-col">
@@ -125,7 +128,39 @@ function LiteSession() {
             )}
           </div>
         </div>
-        <TalkBox sessionId={id} agents={s.agents} opinions={s.opinions} open={talkOpen} agentId={talkAgent} onPick={setTalkAgent} onClose={() => setTalkOpen(false)} onOpen={() => setTalkOpen(true)} />
+        <TalkBox sessionId={id} agents={s.agents} opinions={s.opinions} open={talkOpen} agentId={talkAgent} onPick={setTalkAgent} onClose={() => setTalkOpen(false)} onOpen={() => setTalkOpen(true)} launcher={false} />
+      </LiteShell>
+    );
+  }
+
+  // ── Ask: the question, and more material for the people ──
+  if (view === "ask" && s.session) {
+    return (
+      <LiteShell {...shell} step="ask" proHref={proLinks.sources(id)}>
+        <AskView sessionId={id} question={s.session.query} ingesting={status === "ingesting"} hasPeople={s.agents.length > 0} onNext={() => setView(s.agents.length ? "flow" : "people")} />
+      </LiteShell>
+    );
+  }
+
+  // ── People: who was asked (or getting them ready, or the form) ──
+  if (view === "people") {
+    if (stage === "progress") {
+      return (
+        <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}>
+          <Progress buildStatus={s.build?.status || "queued"} spawn={s.spawnProgress} agentsSoFar={s.agents.length} error={s.build?.error || s.spawnError} sessionId={id} onRetry={() => router.refresh()} />
+        </LiteShell>
+      );
+    }
+    if (s.agents.length > 0) {
+      return (
+        <LiteShell {...shell} step="people" proHref={proLinks.people(id)}>
+          <ReadyCard agents={s.agents} hasDebate={stage === "debate"} sessionId={id} onStart={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} onGo={() => setView("flow")} onTalk={(a) => { setView("flow"); talkTo(a); }} />
+        </LiteShell>
+      );
+    }
+    return (
+      <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}>
+        <PeopleForm sessionId={id} question={s.session?.query || ""} researching={!!s.research?.run && ["queued", "running", "stopping", "finalising"].includes(s.research.run.status)} ingesting={status === "ingesting"} onRun={s.runSimulation} />
       </LiteShell>
     );
   }
@@ -134,7 +169,7 @@ function LiteSession() {
   if (stage === "debate" && s.session) {
     const n = s.posts.filter((p) => p.content && p.type !== "like").length;
     return (
-      <LiteShell title={title} step="debate" proHref={proLinks.debate(id)} layout="app">
+      <LiteShell {...shell} step="debate" proHref={proLinks.debate(id)} layout="app">
         <div className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 pb-4">
           <Detail href={proLinks.debate(id)} className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0 lite-card overflow-hidden flex flex-col">
@@ -185,7 +220,7 @@ function LiteSession() {
   // ── Getting ready ──
   if (stage === "progress") {
     return (
-      <LiteShell title={title} step="people" proHref={proLinks.studio(id)}>
+      <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}>
         <Progress buildStatus={s.build?.status || "queued"} spawn={s.spawnProgress} agentsSoFar={s.agents.length} error={s.build?.error || s.spawnError} sessionId={id} onRetry={() => router.refresh()} />
       </LiteShell>
     );
@@ -194,29 +229,15 @@ function LiteSession() {
   // ── People exist, nobody started the conversation ──
   if (stage === "ready") {
     return (
-      <LiteShell title={title} step="people" proHref={proLinks.people(id)}>
-        <div className="max-w-xl mx-auto pt-16 px-6 animate-rise">
-          <Detail href={proLinks.people(id)}>
-            <div className="lite-card p-8 text-center">
-              <div className="flex justify-center -space-x-2 mb-5">
-                {s.agents.slice(0, 7).map((a) => (
-                  <div key={a.id} className="w-9 h-9 rounded-full border-2 border-card flex items-center justify-center text-[12px] font-bold text-white" style={{ backgroundColor: a.avatar_color }}>{a.name.charAt(0)}</div>
-                ))}
-                {s.agents.length > 7 && <div className="w-9 h-9 rounded-full border-2 border-card bg-foreground/5 flex items-center justify-center text-[11px] font-semibold">+{s.agents.length - 7}</div>}
-              </div>
-              <h1 className="text-[24px] font-semibold tracking-tight">{s.agents.length} people are ready</h1>
-              <p className="lite-lead mt-2">They&apos;ve read your material. Start the conversation and watch it unfold.</p>
-              <button type="button" onClick={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} className="lite-btn mt-6"><Play className="w-4 h-4" /> Start the conversation</button>
-            </div>
-          </Detail>
-        </div>
+      <LiteShell {...shell} step="people" proHref={proLinks.people(id)}>
+        <ReadyCard agents={s.agents} hasDebate={false} sessionId={id} onStart={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} onGo={() => setView("flow")} onTalk={(a) => { setView("flow"); talkTo(a); }} />
       </LiteShell>
     );
   }
 
   // ── Who should we ask? ──
   return (
-    <LiteShell title={title} step="people" proHref={proLinks.studio(id)}>
+    <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}>
       <PeopleForm sessionId={id} question={s.session?.query || ""} researching={!!s.research?.run && ["queued", "running", "stopping", "finalising"].includes(s.research.run.status)} ingesting={status === "ingesting"} onRun={s.runSimulation} />
     </LiteShell>
   );
@@ -358,6 +379,110 @@ function Progress({ buildStatus, spawn, agentsSoFar, error, sessionId, onRetry }
           )}
         </div>
       </Detail>
+    </div>
+  );
+}
+
+// ── The people who were asked ──────────────────────────────────────────────────
+
+function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { agents: Agent[]; hasDebate: boolean; sessionId: string; onStart: () => void; onGo: () => void; onTalk: (a: Agent) => void }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? agents : agents.slice(0, 12);
+  return (
+    <div className="max-w-2xl mx-auto pt-12 px-6 pb-24 animate-rise">
+      <Detail href={proLinks.people(sessionId)}>
+        <div className="lite-card p-7 sm:p-8">
+          <div className="text-center">
+            <div className="flex justify-center -space-x-2 mb-5">
+              {agents.slice(0, 7).map((a) => (
+                <div key={a.id} className="w-9 h-9 rounded-full border-2 border-card flex items-center justify-center text-[12px] font-bold text-white" style={{ backgroundColor: a.avatar_color }}>{a.name.charAt(0)}</div>
+              ))}
+              {agents.length > 7 && <div className="w-9 h-9 rounded-full border-2 border-card bg-foreground/5 flex items-center justify-center text-[11px] font-semibold">+{agents.length - 7}</div>}
+            </div>
+            <h1 className="text-[24px] font-semibold tracking-tight">{agents.length} people{hasDebate ? " were asked" : " are ready"}</h1>
+            <p className="lite-lead mt-2">{hasDebate ? "Each one answered as themselves. Click a name to talk to them." : "They've read your material. Start the conversation and watch it unfold."}</p>
+            {hasDebate ? (
+              <button type="button" onClick={onGo} className="lite-btn mt-6"><MessageCircle className="w-4 h-4" /> Go to the conversation</button>
+            ) : (
+              <button type="button" onClick={onStart} className="lite-btn mt-6"><Play className="w-4 h-4" /> Start the conversation</button>
+            )}
+          </div>
+          <div className="mt-7 border-t border-border pt-5">
+            <div className="grid sm:grid-cols-2 gap-1.5">
+              {shown.map((a) => (
+                <button key={a.id} type="button" onClick={() => onTalk(a)} className="text-left flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-foreground/5 transition-colors" title={`Talk to ${a.name}`}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ backgroundColor: a.avatar_color }}>{a.name.charAt(0)}</div>
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-medium text-foreground truncate">{a.name} <span className="text-muted-foreground font-normal">· {a.age}</span></p>
+                    <p className="text-[12px] text-muted-foreground truncate">{a.verdict || a.role}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {agents.length > 12 && (
+              <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-3 text-[12.5px] text-muted-foreground hover:text-foreground">{showAll ? "Show fewer" : `Show all ${agents.length}`}</button>
+            )}
+          </div>
+        </div>
+      </Detail>
+    </div>
+  );
+}
+
+// ── Ask: the question, and more material ───────────────────────────────────────
+
+function AskView({ sessionId, question, ingesting, hasPeople, onNext }: { sessionId: string; question: string; ingesting: boolean; hasPeople: boolean; onNext: () => void }) {
+  const [addText, setAddText] = useState("");
+  const [added, setAdded] = useState<{ item: Dropped; state: "adding" | "done" | "failed" }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function add(item: Dropped) {
+    setAdded((p) => [...p, { item, state: "adding" }]);
+    try { await ingestDropped(sessionId, item); setAdded((p) => p.map((x) => (x.item.id === item.id ? { ...x, state: "done" } : x))); }
+    catch { setAdded((p) => p.map((x) => (x.item.id === item.id ? { ...x, state: "failed" } : x))); }
+  }
+  function addFromText() { const d = classifyText(addText); if (d) { add(d); setAddText(""); } }
+
+  return (
+    <div className="max-w-2xl mx-auto pt-10 sm:pt-14 px-5 sm:px-6 pb-24">
+      <p className="text-[13px] text-muted-foreground animate-rise">Your question</p>
+      <Detail href={proLinks.sources(sessionId)}>
+        <h1 className="lite-h1 mt-2 animate-rise" style={{ animationDelay: "60ms" }}>{question}</h1>
+      </Detail>
+      {ingesting && (
+        <p className="mt-3 inline-flex items-center gap-2 text-[12.5px] text-muted-foreground animate-fade-in"><span className="lite-dots flex gap-1"><span /><span /><span /></span> Reading what you added…</p>
+      )}
+
+      <div className="lite-card p-5 sm:p-6 mt-8 animate-rise" style={{ animationDelay: "120ms" }}>
+        <p className="lite-label">Add more material</p>
+        <p className="lite-help mt-0.5">A file, a web page, a YouTube video or some text. Everything you add is read and remembered{hasPeople ? " — the people know it from now on" : ""}.</p>
+        {added.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {added.map(({ item, state }) => (
+              <span key={item.id} className={cn("lite-pill max-w-full", state === "failed" && "text-red-700")}>
+                {state === "adding" ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : state === "done" ? <Check className="w-3.5 h-3.5 text-primary" /> : <X className="w-3.5 h-3.5" />}
+                <span className="truncate max-w-[220px]">{item.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-2 rounded-2xl border border-border bg-background px-3 h-11 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+            <Link2 className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input value={addText} onChange={(e) => setAddText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFromText(); } }}
+              onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t && t.length > 300) { e.preventDefault(); const d = classifyText(t); if (d) add(d); } }}
+              placeholder="Paste a link or some text, then press Enter" className="lite-input text-[14px]" />
+            {addText.trim() && <button type="button" onClick={addFromText} className="w-7 h-7 rounded-full bg-foreground text-background inline-flex items-center justify-center shrink-0" title="Add"><Plus className="w-4 h-4" /></button>}
+          </div>
+          <button type="button" onClick={() => fileRef.current?.click()} className="lite-btn-soft h-11 px-4 shrink-0" title="Add a file"><Paperclip className="w-4 h-4" /> <span className="hidden sm:inline">File</span></button>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { for (const f of Array.from(e.target.files || [])) add(fromFile(f)); e.currentTarget.value = ""; }} />
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <button type="button" onClick={onNext} className="lite-btn-soft">{hasPeople ? "Go to the conversation" : "Who should we ask?"} <ArrowRight className="w-4 h-4" /></button>
+      </div>
     </div>
   );
 }

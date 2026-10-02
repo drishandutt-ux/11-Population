@@ -24,13 +24,15 @@ type Props = {
   step?: LiteStep;
   /** The pro page for this screen. */
   proHref?: string;
+  /** When given, the steps are buttons the reader can move between. */
+  onStep?: (step: LiteStep) => void;
   right?: React.ReactNode;
   /** `page` scrolls as a document; `app` fills the viewport (for the live conversation). */
   layout?: "page" | "app";
   children: React.ReactNode;
 };
 
-export default function LiteShell({ title, backHref = "/", step, proHref, right, layout = "page", children }: Props) {
+export default function LiteShell({ title, backHref = "/", step, proHref, onStep, right, layout = "page", children }: Props) {
   useLiteRoot();
   const router = useRouter();
   const idx = step ? STEPS.findIndex((s) => s.key === step) : -1;
@@ -43,13 +45,17 @@ export default function LiteShell({ title, backHref = "/", step, proHref, right,
         <span className="text-[14px] font-medium text-foreground truncate max-w-[36vw]">{title || ""}</span>
         {step && (
           <nav className="mx-auto hidden sm:flex items-center gap-1.5" aria-label="Where you are">
-            {STEPS.map((s, i) => (
-              <span key={s.key} className={cn("inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 h-7 rounded-full transition-colors",
-                i === idx ? "bg-foreground text-background" : i < idx ? "text-foreground/70" : "text-muted-foreground/60")}>
-                <span className={cn("w-1.5 h-1.5 rounded-full", i === idx ? "bg-background" : i < idx ? "bg-primary" : "bg-muted-foreground/40")} />
-                {s.label}
-              </span>
-            ))}
+            {STEPS.map((s, i) => {
+              const cls = cn("inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 h-7 rounded-full transition-colors",
+                i === idx ? "bg-foreground text-background" : i < idx ? "text-foreground/70" : "text-muted-foreground/60",
+                onStep && i !== idx && "hover:bg-foreground/5 hover:text-foreground");
+              const dot = <span className={cn("w-1.5 h-1.5 rounded-full", i === idx ? "bg-background" : i < idx ? "bg-primary" : "bg-muted-foreground/40")} />;
+              return onStep ? (
+                <button key={s.key} type="button" onClick={() => onStep(s.key)} className={cls} title={`Go to ${s.label}`}>{dot}{s.label}</button>
+              ) : (
+                <span key={s.key} className={cls}>{dot}{s.label}</span>
+              );
+            })}
           </nav>
         )}
         <div className={cn("flex items-center gap-2", !step && "ml-auto")}>
