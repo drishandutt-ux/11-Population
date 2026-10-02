@@ -237,24 +237,12 @@ def _mentions(text: str, words: tuple[str, ...]) -> bool:
 
 
 def default_sources(geography: str) -> list[str]:
-    """Which sources to tick by default for a geography — a detected geography, a research
-    region, or the question itself (UK regions and cities count as UK). Whole-word matching, so
-    'uk' inside another word does not fire."""
-    g = (geography or "").lower()
-    if _mentions(g, _UK_WORDS):
-        keys = list(_UK_DEFAULT)
-        if _mentions(g, ("scotland", "scottish", "glasgow", "edinburgh")):
-            keys.append("scot_census")
-        if _mentions(g, ("northern ireland", "belfast")):
-            keys.append("nisra")
-        if _mentions(g, ("london",)):
-            keys.append("london")
-        return keys
-    if _mentions(g, _US_WORDS):
-        return ["census", "pew", "gallup", "oecd"]
-    if _mentions(g, _EU_WORDS):
-        return ["eurostat", "oecd", "owid", "pew"]
-    return ["oecd", "worldbank", "owid", "pew"]
+    """Which sources are ticked by default: every publisher in the catalogue, whatever the
+    geography (Drishan, 2026-10-02: all of them, in the simple view and the Studio alike). The
+    planner still names the publishers each fact target is routed to, and `route_sources` orders
+    them by automation fit, so an unrelated publisher costs nothing until it is actually the best
+    route for a target. `geography` is kept for the signature; it no longer narrows the list."""
+    return [src["key"] for src in QUANT_SOURCES]
 
 
 def route_sources(wanted: Optional[list[str]], keys: list[str], dimension: str = "") -> list[str]:

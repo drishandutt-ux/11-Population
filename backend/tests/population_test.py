@@ -147,18 +147,14 @@ def test_quant_chunk_and_prompt_carry_the_source():
     assert "QUANTITATIVE FACTS" in txt and "(ONS)" in txt and "most are men" in txt
 
 
-def test_default_sources_follow_geography():
-    uk = sources.default_sources("United Kingdom")
-    assert {"ons", "nomis", "govuk", "fca", "ofcom", "moreincommon", "opinium"} <= set(uk)
-    assert "statista" not in uk and "yougov" not in uk  # opt-in: teasers hide the number / headline without crossbreaks
-    assert "scot_census" in sources.default_sources("Scotland") and "nisra" in sources.default_sources("Northern Ireland") and "london" in sources.default_sources("London, UK")
-    assert "census" in sources.default_sources("United States")
-    assert "statista" not in sources.default_sources("") and "oecd" in sources.default_sources("")
-    # the question itself is a usable hint: UK regions and cities count as UK, whole words only
-    assert "ons" in sources.default_sources("Would parents in the North West pay £12 a month for a kids' bike subscription?")
-    assert "ons" in sources.default_sources("Manchester commuters and the tram")
-    assert "ons" not in sources.default_sources("Milwaukee brewers in Bukhara")  # 'uk' inside words must not fire
-
+def test_default_sources_are_every_publisher():
+    """All publishers are ticked by default (simple view and Studio), whatever the geography."""
+    every = [src["key"] for src in sources.QUANT_SOURCES]
+    assert sources.default_sources("United Kingdom") == every
+    assert sources.default_sources("Milwaukee brewers in Bukhara") == every
+    assert sources.default_sources("") == every
+    for k in ("ons", "nomis", "govuk", "nisra", "scot_census", "london", "census", "oecd", "eurostat", "worldbank", "owid", "pew", "gallup", "statista"):
+        assert k in every
 
 def test_catalogue_entries_are_complete_and_unique():
     keys = [s["key"] for s in sources.QUANT_SOURCES]
