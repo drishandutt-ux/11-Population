@@ -4,6 +4,7 @@ import { Agent, Post } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import { ThumbsUp, Flame, MessageCircle } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+import PersonaAvatar from "@/components/PersonaAvatar";
 
 interface Props {
   post: Post;
@@ -27,12 +28,11 @@ export default function PostCard({ post, agent, replies, agentsMap, depth = 0, o
       <div className="flex gap-3 group/post">
         {/* Left column: avatar + connector line */}
         <div className="flex flex-col items-center shrink-0" style={{ width: 24 }}>
-          <div
-            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-            style={{ backgroundColor: accentColor }}
-          >
-            {agent?.name?.charAt(0) || "?"}
-          </div>
+          {agent ? (
+            <PersonaAvatar agent={agent} size={24} className="shrink-0" />
+          ) : (
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ backgroundColor: accentColor }}>?</div>
+          )}
           {hasReplies && (
             <div
               className="w-px flex-1 mt-1.5"

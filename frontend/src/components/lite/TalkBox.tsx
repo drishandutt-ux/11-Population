@@ -10,6 +10,7 @@ import { firstSentence, proLinks, stanceWords } from "@/lib/lite";
 import { DetailLink } from "./Detail";
 import { cn } from "@/lib/utils";
 import { ArrowUp, ChevronDown, Loader2, MessageCircle, X } from "lucide-react";
+import PersonaAvatar from "@/components/PersonaAvatar";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -155,11 +156,7 @@ export default function TalkBox({ sessionId, agents, opinions, open, agentId, on
 }
 
 export function Avatar({ agent, size = 28 }: { agent: Agent; size?: number }) {
-  return (
-    <div className="rounded-full flex items-center justify-center font-bold text-white shrink-0" style={{ width: size, height: size, fontSize: Math.max(10, size * 0.38), backgroundColor: agent.avatar_color || "#6366f1" }}>
-      {agent.name.charAt(0)}
-    </div>
-  );
+  return <PersonaAvatar agent={agent} size={size} className="shrink-0" />;
 }
 
 /** The person's name; hovering it shows who they are, with a way into their full page. The card

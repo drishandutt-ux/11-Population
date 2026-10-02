@@ -11,13 +11,14 @@ import LiteShell, { LiteStep } from "@/components/lite/LiteShell";
 import Detail, { DetailLink } from "@/components/lite/Detail";
 import TalkBox from "@/components/lite/TalkBox";
 import ConjureGrid from "@/components/lite/ConjureGrid";
+import PersonaAvatar from "@/components/PersonaAvatar";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { LITE_DEFAULTS, proLinks, classifyText, fromFile, ingestDropped, Dropped } from "@/lib/lite";
-import { api, Agent } from "@/lib/api";
+import { api, Agent, ResearchState } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Beaker, Check, FileText, Link2, Loader2, MessageCircle, Paperclip, Play, Plus, Square, X } from "lucide-react";
+import { ArrowRight, Beaker, Check, FileText, Link2, Loader2, MessageCircle, Paperclip, Play, Plus, Search, Square, X } from "lucide-react";
 
 type View = "flow" | "ask" | "people" | "report" | "lab";
 const SURVEY_CHAR_LIMIT = 8000;
@@ -138,7 +139,7 @@ function LiteSession() {
   if (view === "ask" && s.session) {
     return (
       <LiteShell {...shell} step="ask" proHref={proLinks.sources(id)}>
-        <AskView sessionId={id} question={s.session.query} ingesting={status === "ingesting"} hasPeople={s.agents.length > 0} onNext={() => setView(s.agents.length ? "flow" : "people")} />
+        <AskView sessionId={id} question={s.session.query} ingesting={status === "ingesting"} hasPeople={s.agents.length > 0} research={s.research} onResearch={async () => { await api.research.start(id); await s.loadResearch(); }} onNext={() => setView(s.agents.length ? "flow" : "people")} />
       </LiteShell>
     );
   }
@@ -397,7 +398,7 @@ function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { ag
           <div className="text-center">
             <div className="flex justify-center -space-x-2 mb-5">
               {agents.slice(0, 7).map((a) => (
-                <div key={a.id} className="w-9 h-9 rounded-full border-2 border-card flex items-center justify-center text-[12px] font-bold text-white" style={{ backgroundColor: a.avatar_color }}>{a.name.charAt(0)}</div>
+                <span key={a.id} className="w-9 h-9 rounded-full border-2 border-card overflow-hidden inline-flex"><PersonaAvatar agent={a} size={32} /></span>
               ))}
               {agents.length > 7 && <div className="w-9 h-9 rounded-full border-2 border-card bg-foreground/5 flex items-center justify-center text-[11px] font-semibold">+{agents.length - 7}</div>}
             </div>
@@ -413,7 +414,7 @@ function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { ag
             <div className="grid sm:grid-cols-2 gap-1.5">
               {shown.map((a) => (
                 <button key={a.id} type="button" onClick={() => onTalk(a)} className="text-left flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-foreground/5 transition-colors" title={`Talk to ${a.name}`}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ backgroundColor: a.avatar_color }}>{a.name.charAt(0)}</div>
+                  <PersonaAvatar agent={a} size={32} className="shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[13.5px] font-medium text-foreground truncate">{a.name} <span className="text-muted-foreground font-normal">· {a.age}</span></p>
                     <p className="text-[12px] text-muted-foreground truncate">{a.verdict || a.role}</p>
@@ -433,8 +434,13 @@ function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { ag
 
 // ── Ask: the question, and more material ───────────────────────────────────────
 
-function AskView({ sessionId, question, ingesting, hasPeople, onNext }: { sessionId: string; question: string; ingesting: boolean; hasPeople: boolean; onNext: () => void }) {
+function AskView({ sessionId, question, ingesting, hasPeople, research, onResearch, onNext }: { sessionId: string; question: string; ingesting: boolean; hasPeople: boolean; research: ResearchState | null; onResearch: () => Promise<void>; onNext: () => void }) {
   const [addText, setAddText] = useState("");
+  const [starting, setStarting] = useState(false);
+  const run = research?.run || null;
+  const researching = !!run && ["queued", "running", "stopping", "finalising"].includes(run.status);
+  const researched = !!run && run.status === "complete";
+  const pages = Object.values(research?.counts || {}).reduce((n, c) => n + (c?.on_topic || 0), 0);
   const [added, setAdded] = useState<{ item: Dropped; state: "adding" | "done" | "failed" }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -455,7 +461,28 @@ function AskView({ sessionId, question, ingesting, hasPeople, onNext }: { sessio
         <p className="mt-3 inline-flex items-center gap-2 text-[12.5px] text-muted-foreground animate-fade-in"><span className="lite-dots flex gap-1"><span /><span /><span /></span> Reading what you added…</p>
       )}
 
-      <div className="lite-card p-5 sm:p-6 mt-8 animate-rise" style={{ animationDelay: "120ms" }}>
+      <Detail href={proLinks.sources(sessionId)}>
+        <div className="lite-card p-5 sm:p-6 mt-8 animate-rise flex items-center gap-4 flex-wrap" style={{ animationDelay: "90ms" }}>
+          <div className="min-w-0 flex-1">
+            <p className="lite-label">Research the web</p>
+            <p className="lite-help mt-0.5">
+              {researching ? "Looking up what people are saying online about your question. 3–5 minutes, in the background."
+                : researched ? `Done — ${pages} useful page${pages === 1 ? "" : "s"} found and given to the people.`
+                : run ? `Stopped early — ${pages} useful page${pages === 1 ? "" : "s"} kept. Run it again to continue.`
+                : "Looks up what people are saying online about your question and gives it to the people. 3–5 minutes."}
+            </p>
+          </div>
+          {researching ? (
+            <span className="lite-pill"><span className="lite-dots flex gap-1"><span /><span /><span /></span> Researching</span>
+          ) : (
+            <button type="button" disabled={starting} onClick={async () => { setStarting(true); try { await onResearch(); } catch (e: any) { alert(e?.message || "Could not start research"); } finally { setStarting(false); } }} className="lite-btn-soft lite-btn-sm">
+              {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {researched || run ? "Research again" : "Start research"}
+            </button>
+          )}
+        </div>
+      </Detail>
+
+      <div className="lite-card p-5 sm:p-6 mt-4 animate-rise" style={{ animationDelay: "120ms" }}>
         <p className="lite-label">Add more material</p>
         <p className="lite-help mt-0.5">A file, a web page, a YouTube video or some text. Everything you add is read and remembered{hasPeople ? " — the people know it from now on" : ""}.</p>
         {added.length > 0 && (

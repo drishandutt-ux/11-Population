@@ -252,7 +252,7 @@ export function useLiteSession(id: string) {
     session, notFound, agents, agentsMap, posts, build, buildActive, research, spawnProgress, spawnError,
     opinions, opinionsStatus, opinionsError, loadOpinions,
     reportContent, reportRecords, reportStructure, reportChat, isGeneratingReport, reportError,
-    runSimulation, startDebate, stopDebate, makeReport, refresh,
+    runSimulation, startDebate, stopDebate, makeReport, refresh, loadResearch,
     clearReport: () => setReportContent(null),
   };
 }

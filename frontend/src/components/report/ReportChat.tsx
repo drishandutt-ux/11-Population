@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import PersonaAvatar from "@/components/PersonaAvatar";
 import { api, Agent, OutcomeRecord, Post, ReportStructure, SourceFact, SourceItem, ProvenanceClass, EquityBlock, EquityCell, ReportDelta } from "@/lib/api";
 import {
   FileText, Send, Loader2, Bot, User,
@@ -467,12 +468,7 @@ function TwinTrace({
         style={{ left: Math.max(12, left), top: Math.max(12, top) }}
       >
         <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-3 border-b border-border/50">
-          <span
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-            style={{ backgroundColor: agent.avatar_color }}
-          >
-            {agent.name.charAt(0)}
-          </span>
+          <PersonaAvatar agent={agent} size={28} shape="rounded" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-foreground leading-tight">{agent.name}</span>
@@ -613,12 +609,7 @@ function ChatPanel({
                         onClick={() => { setSelectedAgent(a); setDropdownOpen(false); }}
                         className={`w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-muted transition-colors ${selectedAgent?.id === a.id ? "bg-primary/5" : ""}`}
                       >
-                        <span
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
-                          style={{ backgroundColor: a.avatar_color }}
-                        >
-                          {a.name.charAt(0)}
-                        </span>
+                        <PersonaAvatar agent={a} size={28} shape="rounded" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-foreground text-xs">{a.name}</span>

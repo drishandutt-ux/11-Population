@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import PersonaAvatar from "@/components/PersonaAvatar";
 import { useRouter } from "next/navigation";
 import { Agent, AgentDials, AgentPreset, DynamicDial, SimMode, api } from "@/lib/api";
 import PopulationStudio from "@/components/population/PopulationStudio";
@@ -192,12 +193,7 @@ function AgentCard({ agent, animate = false, dynamicDials = [], onShowKnowledge 
       }`}
     >
       <div className="flex items-start gap-3 mb-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0"
-          style={{ backgroundColor: agent.avatar_color }}
-        >
-          {agent.name.charAt(0)}
-        </div>
+        <PersonaAvatar agent={agent} size={40} shape="rounded" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <span className="font-semibold text-foreground text-sm">{agent.name}</span>

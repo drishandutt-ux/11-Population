@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
 import { autoTitle, classifyText, Dropped, friendlyStatus, fromFile, ingestDropped, proLinks } from "@/lib/lite";
 import Detail from "./Detail";
+import { Switch } from "@/components/population/controls";
 import { cn } from "@/lib/utils";
 import { useLiteRoot } from "@/lib/lite";
 import { ArrowRight, ArrowUpRight, FileText, Link2, Loader2, LogOut, Paperclip, Plus, Type, X, Youtube } from "lucide-react";
@@ -31,6 +32,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [showAll, setShowAll] = useState(false);
+  const [research, setResearch] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { api.sessions.list("mine").then((s) => setSessions(s as Session[])).catch(() => {}); }, []);
@@ -52,7 +54,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
     setError(null);
     setCreating("Starting…");
     try {
-      const s = (await api.sessions.create((title || autoTitle(question)).trim(), question.trim(), { auto_research: true })) as Session;
+      const s = (await api.sessions.create((title || autoTitle(question)).trim(), question.trim(), { auto_research: research })) as Session;
       for (let i = 0; i < items.length; i++) {
         setCreating(`Adding ${i + 1} of ${items.length}…`);
         try { await ingestDropped(s.id, items[i]); } catch (err) { console.error("ingest failed", err); }
@@ -154,6 +156,14 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
                 <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.currentTarget.value = ""; }} />
               </div>
             </div>
+
+            <label className="mt-4 flex items-start gap-3 cursor-pointer select-none">
+              <span className="pt-0.5"><Switch on={research} onChange={setResearch} label="Research the web for me" /></span>
+              <span className="min-w-0">
+                <span className="lite-label block">Research the web for me</span>
+                <span className="lite-help block mt-0.5">Looks up what people are saying online about your question and gives it to the people. Takes 3–5 minutes in the background; switch it off if you only want them to read what you add.</span>
+              </span>
+            </label>
 
             <div className="mt-5 flex items-center gap-4 flex-wrap">
               <button type="submit" disabled={!question.trim() || !!creating} className="lite-btn">

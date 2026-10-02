@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, Agent } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
 import { ArrowLeft, Send, Loader2, Zap } from "lucide-react";
+import PersonaAvatar from "@/components/PersonaAvatar";
 
 interface Message {
   role: "user" | "assistant";
@@ -53,12 +54,7 @@ export default function AgentChatPage() {
         </button>
         {agent && (
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
-              style={{ backgroundColor: agent.avatar_color }}
-            >
-              {agent.name.charAt(0)}
-            </div>
+            <PersonaAvatar agent={agent} size={40} shape="rounded" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">{agent.name}</span>
@@ -135,12 +131,7 @@ export default function AgentChatPage() {
 
           {loading && (
             <div className="flex gap-3">
-              <div
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0"
-                style={{ backgroundColor: agent?.avatar_color || "#6366f1" }}
-              >
-                {agent?.name.charAt(0) || "A"}
-              </div>
+              {agent ? <PersonaAvatar agent={agent} size={32} shape="rounded" /> : <div className="w-8 h-8 rounded-xl bg-muted shrink-0" />}
               <div className="glass rounded-2xl rounded-tl-sm px-4 py-3">
                 <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
               </div>

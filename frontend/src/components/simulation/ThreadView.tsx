@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Agent, Post } from "@/lib/api";
 import PostCard from "./PostCard";
+import PersonaAvatar from "@/components/PersonaAvatar";
 import { stanceColor } from "@/lib/utils";
 import { MessageSquare, FileText, Loader2, Clock, ArrowDown, RefreshCw, AlertCircle, MessageCircle } from "lucide-react";
 
@@ -251,12 +252,7 @@ export default function ThreadView({
                   >
                     {/* Agent header */}
                     <div className="flex items-center gap-2 mb-1.5">
-                      <div
-                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                        style={{ backgroundColor: agent.avatar_color || "#6366f1" }}
-                      >
-                        {agent.name.charAt(0)}
-                      </div>
+                      <PersonaAvatar agent={agent} size={20} className="shrink-0" />
                       <span className="text-[11px] font-semibold text-foreground/90 truncate flex-1 leading-none">
                         {agent.name}
                       </span>
