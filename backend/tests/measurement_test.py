@@ -163,6 +163,19 @@ def test_probe_prompt_keeps_the_persona_and_drops_the_reddit_instruction():
     assert "HOW YOU ANSWER THIS" in probe
 
 
+def test_chat_prompt_is_a_conversation_with_the_person_not_a_panellist():
+    """The 1:1 chat: nothing off-topic, no assistant voice, the dials set the tone, knowledge bounds the answer."""
+    a = _agent()
+    chat = _build_system_prompt(a, task="chat")
+    assert "Dana Okoro" in chat and "district nurse" in chat
+    assert "Nothing is off-topic" in chat and "never say something is outside your scope" in chat
+    assert "not an assistant" in chat and "WHAT YOU ACTUALLY KNOW" in chat
+    assert "Reddit" not in chat and "HOW YOU ANSWER THIS" not in chat
+    assert "psychological make-up" in chat                      # the dials decide the tone
+    gut = _build_system_prompt(_agent(humanity=85), task="chat")
+    assert "short, raw, from the gut" in gut and "short, raw, from the gut" not in chat
+
+
 def test_humanity_band_changes_how_the_agent_answers():
     gut = _build_system_prompt(_agent(humanity=85), task="probe")
     considered = _build_system_prompt(_agent(humanity=0), task="probe")
