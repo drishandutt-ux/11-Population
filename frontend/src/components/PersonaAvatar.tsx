@@ -42,13 +42,27 @@ function tint(hex: string, t: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
+// Fallback when the record carries no gender (rosters spawned before the Studio wrote demographics):
+// common first names, so Nia and Esme get a feminine cut and Omar and Levi a masculine one. A name
+// on neither list draws from both pools. Nothing else is inferred from a name.
+const FEM_NAMES = new Set(("amelia olivia isla ava mia isabella sophia grace lily freya emily poppy ella ivy evie florence charlotte sienna rosie willow phoebe harper daisy alice elsie matilda sofia maya hannah emma lucy zoe chloe ruby jessica sarah laura kate katie rachel rebecca anna amy claire louise helen julie karen susan linda margaret patricia mary jane janet carol joan dorothy elizabeth beth bethany leah naomi esther ruth miriam maria rosa talia nia esme priya anjali deepa kavita neha pooja aisha fatima zara layla amina mariam yasmin noor sana hana yuki mei ling ying xiu hui fen aiko sakura ngozi chioma adaeze amara zainab halima ada ana lucia carmen elena ines marta sara eva lea nina olga irina natasha katya svetlana anya tanya ingrid astrid freja sigrid greta heidi sophie camille margot chantal celine agnes bridget siobhan niamh aoife ciara roisin orla megan ffion seren bronwen gwen nicola denise tracey sharon donna michelle kim kerry vicky victoria gemma stacey jade courtney chelsea shannon lauren paige molly erin keira skye lola nancy ellie lottie imogen martha").split(" "));
+const MASC_NAMES = new Set(("oliver george harry noah jack jacob leo oscar charlie muhammad mohammed ahmed ali omar hassan hussein ibrahim yusuf musa khalid tariq bilal arjun rahul rohan vikram sanjay rajesh amit anil ravi dev aarav ishaan li wei chen jun hao ming kenji hiro taro emeka chukwu kofi kwame tunde femi segun thomas james william alexander henry arthur freddie archie theo logan ethan lucas mason alfie isaac finley joshua samuel daniel david michael matthew mark luke john paul peter andrew simon stephen steven richard robert rob bob tom tim jim joe ben benjamin adam aaron nathan jonathan chris christopher craig gary gareth darren dean lee neil ian colin keith kevin martin graham gordon stuart barry terry tony anthony frank fred bill billy ron ronald ken kenneth ray raymond derek dennis norman roger alan allan brian bruce carl clive dave douglas eric gerald howard ivan jeff jeffrey ryan scott sean shane wayne jason jamie liam connor callum kyle kieran cameron declan dylan owen rhys evan gwyn dafydd viktor ivan dmitri sergei andrei nikolai pavel boris lars erik sven bjorn hans klaus jurgen stefan marco luca matteo giovanni carlos javier pablo diego miguel pedro joao luis jose levi cole noah elijah caleb hunter jackson mateo felix hugo max leon louis jules pierre antoine").split(" "));
+
+function genderFromName(name: string): "f" | "m" | "" {
+  const first = (name || "").trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
+  if (!first) return "";
+  if (FEM_NAMES.has(first)) return "f";
+  if (MASC_NAMES.has(first)) return "m";
+  return "";
+}
+
 const HARD_HAT = /\b(builder|construction|electrician|plumber|scaffold|site manager|labourer|laborer|roofer|bricklayer|civil engineer|surveyor|foreman|groundwork)/i;
 const TOQUE = /\b(chef|cook|baker|pastry|kitchen|caterer)\b/i;
 
 /** The look a twin's record implies. */
 export function lookFor(agent: Pick<Agent, "id" | "name" | "age" | "role" | "avatar_color"> & { demographics?: { gender?: string } | null }): Look {
   const r = rng(hash(agent.id || agent.name || "x"));
-  const g = (agent.demographics?.gender || "").toLowerCase();
+  const g = (agent.demographics?.gender || "").toLowerCase() || genderFromName(agent.name);
   const fem = g.startsWith("f") || g.startsWith("w");
   const masc = g.startsWith("m");
   const age = Number(agent.age) || 40;
