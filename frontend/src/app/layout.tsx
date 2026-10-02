@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider, RequireAuth } from "@/lib/auth";
+import SimpleViewPill from "@/components/lite/SimpleViewPill";
 
 export const metadata: Metadata = {
   title: "11 Minds Population",
@@ -12,7 +13,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen bg-background">
         <AuthProvider>
-          <RequireAuth>{children}</RequireAuth>
+          <RequireAuth>
+            {children}
+            <SimpleViewPill />
+          </RequireAuth>
         </AuthProvider>
       </body>
     </html>
