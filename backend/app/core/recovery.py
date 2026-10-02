@@ -39,7 +39,12 @@ async def recover_interrupted() -> dict:
             r.note = "Interrupted by a server restart. What was gathered is kept; press Run again to continue."
             r.finished_at = now
             counts["research_runs"] += 1
-        builds = (await db.execute(select(PopulationBuild).where(PopulationBuild.status.in_(BUILD_IN_FLIGHT)))).scalars().all()
+        builds = list((await db.execute(select(PopulationBuild).where(PopulationBuild.status.in_(BUILD_IN_FLIGHT)))).scalars().all())
+        # A simple-view build (auto_run) waiting for its automatic approval lost that task too:
+        # nobody will ever approve it, so it is stopped like the rest and the simple view offers
+        # to run again. A plan waiting for a person in the pro Studio is left as it is.
+        waiting = (await db.execute(select(PopulationBuild).where(PopulationBuild.status == "awaiting_review"))).scalars().all()
+        builds += [b for b in waiting if isinstance((b.constraints or {}).get("auto_run"), dict)]
         for b in builds:
             was = b.status
             b.status = "stopped"

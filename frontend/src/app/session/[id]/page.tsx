@@ -502,6 +502,9 @@ export default function SessionPage() {
               Next: {nextStep.text} →
             </button>
           )}
+          <button type="button" onClick={() => router.push(`/lite/${id}`)} className="btn btn-xs btn-ghost" title="The simple view of this session: one step at a time, fewer controls">
+            Simple view
+          </button>
           {session && (
             <SimulationControls sessionId={id} status={session.status} intensity={intensity} mode={simMode} onUpdate={refreshSession} />
           )}

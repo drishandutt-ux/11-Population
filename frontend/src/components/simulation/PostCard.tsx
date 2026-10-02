@@ -2,7 +2,7 @@
 
 import { Agent, Post } from "@/lib/api";
 import { stanceColor } from "@/lib/utils";
-import { ThumbsUp, Flame } from "lucide-react";
+import { ThumbsUp, Flame, MessageCircle } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 interface Props {
@@ -11,9 +11,11 @@ interface Props {
   replies: Post[];
   agentsMap: Record<string, Agent>;
   depth?: number;
+  /** Simple view: "talk to this person" beside the name (absent in the pro portal). */
+  onTalk?: (agent: Agent) => void;
 }
 
-export default function PostCard({ post, agent, replies, agentsMap, depth = 0 }: Props) {
+export default function PostCard({ post, agent, replies, agentsMap, depth = 0, onTalk }: Props) {
   if (post.type === "like" || !post.content) return null;
 
   const isDebate = post.type === "debate";
@@ -22,7 +24,7 @@ export default function PostCard({ post, agent, replies, agentsMap, depth = 0 }:
 
   return (
     <div className={depth === 0 ? "mt-4" : "mt-2"}>
-      <div className="flex gap-3">
+      <div className="flex gap-3 group/post">
         {/* Left column: avatar + connector line */}
         <div className="flex flex-col items-center shrink-0" style={{ width: 24 }}>
           <div
@@ -57,6 +59,16 @@ export default function PostCard({ post, agent, replies, agentsMap, depth = 0 }:
               </span>
             )}
             <ConfidenceBadge validation={agent?.validation} />
+            {onTalk && agent && (
+              <button
+                type="button"
+                onClick={() => onTalk(agent)}
+                title={`Talk to ${agent.name}`}
+                className="opacity-0 group-hover/post:opacity-100 focus:opacity-100 inline-flex items-center gap-1 text-[10px] px-1.5 h-5 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+              >
+                <MessageCircle className="w-3 h-3" /> Talk
+              </button>
+            )}
             {isDebate && (
               <span className="flex items-center gap-0.5 text-[10px] text-red-400/80">
                 <Flame className="w-2.5 h-2.5" />
@@ -91,6 +103,7 @@ export default function PostCard({ post, agent, replies, agentsMap, depth = 0 }:
               replies={[]}
               agentsMap={agentsMap}
               depth={depth + 1}
+              onTalk={onTalk}
             />
           ))}
         </div>

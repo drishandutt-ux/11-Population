@@ -378,3 +378,125 @@
 @media print {
   .no-print { display: none !important; }
 }
+
+/* ── Simple view (Lite) ───────────────────────────────────────────────────────
+   A light, airy skin for the wrapper pages under /lite and the simple landing. It only
+   redefines the design tokens, so every shared component (the debate thread, the report)
+   re-skins itself; the pro pages stay dark and untouched. */
+.lite {
+  --background: 40 20% 99%;
+  --foreground: 228 16% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 228 16% 12%;
+  --border: 228 12% 90%;
+  --input: 228 12% 95%;
+  --ring: 170 60% 38%;
+  --primary: 170 62% 36%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 228 14% 96%;
+  --muted-foreground: 225 8% 46%;
+  --accent: 228 12% 94%;
+  --accent-foreground: 228 16% 12%;
+  color-scheme: light;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+/* The document itself goes light while a simple page is mounted (overscroll, scrollbars, gaps). */
+html.lite-root, html.lite-root body { background: hsl(40 20% 99%); color-scheme: light; }
+.lite ::selection { background: hsl(var(--primary) / 0.18); }
+.lite .seg-item[data-on="true"] { box-shadow: 0 1px 2px rgba(20, 24, 40, 0.08), 0 0 0 1px hsl(var(--border)); }
+.lite .chip-ok { @apply text-emerald-700 bg-emerald-500/10; }
+.lite .chip-warn { @apply text-amber-700 bg-amber-500/10; }
+.lite .chip-bad { @apply text-red-700 bg-red-500/10; }
+.lite .chip-info { @apply text-sky-700 bg-sky-500/10; }
+.lite .chip-violet { @apply text-violet-700 bg-violet-500/10; }
+.lite .btn-danger { @apply text-red-600; }
+.lite .text-emerald-300 { color: rgb(4 120 87); }
+.lite .text-amber-300 { color: rgb(180 83 9); }
+.lite .text-red-300, .lite .text-red-400 { color: rgb(185 28 28); }
+.lite .text-sky-300 { color: rgb(3 105 161); }
+.lite .text-blue-300 { color: rgb(29 78 216); }
+.lite .text-purple-300 { color: rgb(126 34 206); }
+.lite .text-slate-300 { color: rgb(71 85 105); }
+.lite .text-violet-300 { color: rgb(109 40 217); }
+.lite select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7080' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+
+/* Soft colour wash behind the simple pages — barely there, never behind text blocks. */
+.lite-bg {
+  background-image:
+    radial-gradient(60rem 30rem at 15% -10%, hsl(170 70% 70% / 0.22), transparent 60%),
+    radial-gradient(50rem 28rem at 90% 0%, hsl(210 90% 75% / 0.18), transparent 60%),
+    radial-gradient(40rem 24rem at 60% 110%, hsl(330 80% 80% / 0.14), transparent 60%);
+}
+
+/* Type */
+.lite-h1 { @apply text-[2rem] sm:text-[2.6rem] font-semibold tracking-[-0.03em] leading-[1.08] text-foreground; }
+.lite-lead { @apply text-[15px] sm:text-base leading-relaxed text-muted-foreground; }
+.lite-label { @apply text-[13px] font-medium text-foreground; }
+.lite-help { @apply text-[12.5px] leading-relaxed text-muted-foreground; }
+
+/* Surfaces */
+.lite-card {
+  @apply rounded-[1.4rem] bg-card;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 2px rgba(20, 24, 40, 0.04), 0 12px 40px -24px rgba(20, 24, 40, 0.18);
+}
+.lite-float {
+  @apply rounded-[1.4rem] bg-card;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 6px rgba(20, 24, 40, 0.06), 0 24px 60px -24px rgba(20, 24, 40, 0.28);
+}
+
+/* Controls */
+.lite-btn {
+  @apply inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full text-[15px] font-semibold select-none transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.lite-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -12px rgba(20, 24, 40, 0.45); }
+.lite-btn:active { transform: none; }
+.lite-btn-soft {
+  @apply inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full text-[15px] font-semibold select-none transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 text-foreground;
+  background: hsl(var(--foreground) / 0.06);
+}
+.lite-btn-soft:hover { background: hsl(var(--foreground) / 0.1); }
+.lite-btn-sm { @apply h-9 px-4 text-[13px]; }
+.lite-input {
+  @apply w-full bg-transparent border-0 p-0 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0 resize-none;
+}
+.lite-field {
+  @apply w-full rounded-2xl px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/25 resize-none;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+}
+.lite-field:focus { border-color: hsl(var(--primary) / 0.5); }
+.lite-pill {
+  @apply inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium text-foreground;
+  background: hsl(var(--foreground) / 0.05);
+  border: 1px solid hsl(var(--border));
+}
+
+/* "See in detail": a small pill that appears when the element is hovered or focused. */
+.detail-pill {
+  @apply absolute z-20 inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-medium text-foreground/80 opacity-0 pointer-events-none transition-all duration-150 whitespace-nowrap;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 8px rgba(20, 24, 40, 0.08);
+  transform: translateY(2px);
+}
+.group:hover > .detail-pill,
+.group:focus-within > .detail-pill,
+.detail-pill:focus-visible {
+  @apply opacity-100 pointer-events-auto;
+  transform: none;
+}
+.detail-pill:hover { color: hsl(var(--primary)); border-color: hsl(var(--primary) / 0.4); }
+
+/* Chat-like waiting dots */
+.lite-dots span { @apply inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/50; animation: lite-dot 1.2s infinite ease-in-out; }
+.lite-dots span:nth-child(2) { animation-delay: 0.15s; }
+.lite-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes lite-dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+
+.animate-rise { animation: lite-rise 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes lite-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

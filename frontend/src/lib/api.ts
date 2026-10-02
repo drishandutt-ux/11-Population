@@ -89,6 +89,12 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ url }),
       }),
+    /** A web page handed over directly (simple view): read and ingested as it is, never filtered. */
+    url: (sessionId: string, url: string) =>
+      request(`/sessions/${sessionId}/ingest/url`, {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      }),
     document: (sessionId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
@@ -1207,6 +1213,8 @@ export type PopulationConstraints = {
   profile_query?: string;
   doc_context?: string;
   skip_questions?: boolean;
+  /** Simple view: approve the plan as proposed and start the debate as soon as the roster is written. */
+  auto_run?: { intensity: number; mode: SimMode };
   /** Dials the detect stage set from the research (dial → the evidence it rests on). */
   derived_from_research?: Record<string, string>;
 };

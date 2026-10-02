@@ -22,6 +22,10 @@ class YouTubeIngestRequest(BaseModel):
     url: str
 
 
+class UrlIngestRequest(BaseModel):
+    url: str
+
+
 async def _set_status(db: AsyncSession, session_id: str, status: SessionStatus):
     result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
     session = result.scalar_one_or_none()
@@ -39,6 +43,8 @@ def _provenance_tag(source: str) -> str:
         return "[SOURCE youtube | user-supplied video]"
     if source == "text input":
         return "[SOURCE personal | pasted text]"
+    if source.startswith("http://") or source.startswith("https://"):
+        return f"[SOURCE web | user-supplied page {source}]"
     return f"[SOURCE personal | {source}]"
 
 
@@ -139,6 +145,38 @@ async def ingest_youtube(
 
     background_tasks.add_task(_ingest_yt)
     return {"status": "ingesting", "url": body.url, "session_id": session_id}
+
+
+@router.post("/{session_id}/ingest/url")
+async def ingest_url(
+    session_id: str,
+    body: UrlIngestRequest,
+    background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """A web page the user hands over directly (the Lite view's "add anything" box). It is read
+    with the same fetcher the research loop uses and ingested into the knowledge graph as it is —
+    never judged for relevance, never filtered out — because the user chose it."""
+    session = await get_owned_session(session_id, user, db)
+    url = body.url.strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Not a web address")
+    session.status = SessionStatus.INGESTING
+    await db.commit()
+
+    async def _ingest_page():
+        from app.services.evidence.fetch_page import fetch_page
+        try:
+            page = await fetch_page(url, query="")
+            text = f"{page.title}\n{url}\n\n{page.markdown}" if page.title else f"{url}\n\n{page.markdown}"
+        except Exception as e:  # noqa: BLE001
+            print(f"[ingest_url] Fetch failed for {url}: {e}")
+            text = f"Web page: {url}\n\n(The page could not be read — agents will discuss based on the address and the other sources.)"
+        await _ingest_chunks(session_id, text, url)
+
+    background_tasks.add_task(_ingest_page)
+    return {"status": "ingesting", "url": url, "session_id": session_id}
 
 
 @router.post("/{session_id}/ingest/llm-search/generate")

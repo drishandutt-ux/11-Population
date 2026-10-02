@@ -963,6 +963,12 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     # (facets, dynamic dials, every segment, what was cast) must already be there to read.
     await _save(build_id, status="awaiting_review")
     await refresh_frame_report(build_id)
+    # Lite view (auto run): nobody is going to read the review, so the plan is approved as it
+    # stands. Scheduled rather than awaited: the stage task that called us pops itself from
+    # `_tasks` in its finally, and approve registers the spawn task under the same key.
+    if _auto_run(bld.constraints):
+        await log(build_id, "plan", "decision", "Plan approved automatically (simple view) — building the population as proposed")
+        asyncio.create_task(_auto_approve(build_id))
 
 
 async def _validate_population(build_id: str, session_id: str) -> None:
@@ -1231,6 +1237,59 @@ async def replan(build_id: str, constraints: Optional[dict] = None, count: Optio
     return bld
 
 
+def _auto_run(constraints: Optional[dict]) -> Optional[dict]:
+    """The Lite view's hands-off switch: `constraints.auto_run = {intensity, mode}` means approve
+    the plan as proposed and start the debate the moment the roster is written. Anything else
+    (absent, false, malformed) is the Studio's normal human-in-the-loop flow."""
+    a = (constraints or {}).get("auto_run")
+    if not isinstance(a, dict):
+        return None
+    try:
+        intensity = max(1, min(20, int(a.get("intensity") or 2)))
+    except (TypeError, ValueError):
+        intensity = 2
+    return {"intensity": intensity, "mode": "pro" if a.get("mode") == "pro" else "fast"}
+
+
+async def _auto_approve(build_id: str) -> None:
+    await asyncio.sleep(0.3)   # let the planning task finish its finally block first
+    bld = await _load(build_id)
+    if not bld or bld.status != "awaiting_review" or _stopped(build_id):
+        return
+    try:
+        await approve(build_id)
+    except Exception as e:  # noqa: BLE001
+        await log(build_id, "spawn", "error", f"Automatic approval failed: {type(e).__name__}: {str(e)[:160]}")
+
+
+async def _auto_start_debate(session_id: str, auto: dict) -> None:
+    """Start the simulation the way POST /simulate/start does, once ingestion (if any) has
+    finished. Gives up quietly after ten minutes of waiting or if the session is already running."""
+    from app.services.simulation.orchestrator import run_simulation
+    for _ in range(120):
+        async with dbm.AsyncSessionLocal() as db:
+            sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
+            if not sess:
+                return
+            if sess.status in (SessionStatus.SIMULATING, SessionStatus.PAUSED):
+                return
+            if sess.status != SessionStatus.INGESTING:
+                n = len((await db.execute(select(SpawnedAgent.id).where(SpawnedAgent.session_id == session_id))).scalars().all())
+                if n == 0:
+                    return
+                sess.status = SessionStatus.SIMULATING
+                await db.commit()
+                break
+        await asyncio.sleep(5)
+    else:
+        return
+    try:
+        await run_simulation(session_id, auto["intensity"], auto["mode"])
+    except Exception as e:  # noqa: BLE001
+        traceback.print_exc()
+        print(f"[builder] auto-start debate failed for {session_id}: {type(e).__name__}: {e}")
+
+
 async def approve(build_id: str, *, count: Optional[int] = None, mode: Optional[str] = None) -> Optional[PopulationBuild]:
     """The analyst approved the plan: wipe the session's agents and build the roster from the
     non-rejected segments. Rejected segments whose replacement never arrived are skipped."""
@@ -1374,6 +1433,10 @@ async def _spawn(build_id: str):
             await log(build_id, "frame", "ok" if rep.get("level") in ("good", "none") else "warn", "Representativeness: " + frame_mod.summary_line(rep),
                       ("Cells not safe to cut by: " + "; ".join(rep["thin_cells"])) if rep.get("thin_cells") else None)
         await _save(build_id, **fields)
+        auto = _auto_run(bld.constraints)
+        if auto and not stopped_early and total > 0:
+            await log(build_id, "spawn", "decision", f"Starting the debate automatically (simple view): {'Sonnet' if auto['mode'] == 'pro' else 'Haiku'}, intensity {auto['intensity']}")
+            asyncio.create_task(_auto_start_debate(session_id, auto))
         # Behavioural validation (brief L3-05) runs on its own, after the build: every twin is
         # put through the battery and carries a confidence score wherever it speaks. It must
         # never hold up the build or break it, so it is a detached task with its own logging.

@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
 import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useUiMode } from "@/lib/lite";
+import LiteHome, { ModeSwitch } from "@/components/lite/LiteHome";
 
 export default function HomePage() {
   const router = useRouter();
+  // Simple ⇄ Pro is remembered per browser; until it is read, paint nothing rather than the wrong view.
+  const [uiMode, setUiMode] = useUiMode();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [title, setTitle] = useState("");
   const [query, setQuery] = useState("");
@@ -52,6 +56,17 @@ export default function HomePage() {
     }
   }
 
+  if (uiMode === null) return <div className="h-screen bg-background" />;
+  if (uiMode === "simple") {
+    return (
+      <LiteHome
+        userEmail={authOn && user ? user.email : null}
+        onSignOut={authOn ? () => { signOut().then(() => router.replace("/login")); } : undefined}
+        onSwitchToPro={() => setUiMode("pro")}
+      />
+    );
+  }
+
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
 
@@ -61,6 +76,7 @@ export default function HomePage() {
           <span className="text-base font-semibold text-foreground tracking-tight">11 Minds Population</span>
         </div>
         <div className="flex items-center gap-4">
+          <ModeSwitch mode="pro" onSimple={() => setUiMode("simple")} />
           <span className="text-xs text-muted-foreground">Synthetic population research</span>
           {authOn && user && (
             <div className="flex items-center gap-2 pl-4 border-l border-border/50">

@@ -746,6 +746,8 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
             db.add(ResearchRun(id="r2", session_id=sid, status="complete", question="q", sources=["web"]))
             db.add(PopulationBuild(id="b1", session_id=sid, status="spawning", plan={"segments": []}, log=[]))
             db.add(PopulationBuild(id="b2", session_id=sid, status="awaiting_review", plan={"segments": []}, log=[]))
+            # a simple-view build (auto_run) waiting for its automatic approval lost that task too
+            db.add(PopulationBuild(id="b3", session_id=sid, status="awaiting_review", plan={"segments": []}, log=[], constraints={"auto_run": {"intensity": 2, "mode": "fast"}}))
             # a Lab run killed mid-flight (an amended journey here) must not block the next one
             db.add(Probe(id="p1", session_id=sid, instrument="journey", status="running", spec={"amendments": {"base_probe_id": "p0", "rules": []}}, agent_count=20, answer_count=7))
             db.add(Probe(id="p0", session_id=sid, instrument="journey", status="complete", spec={}, aggregates={"n": 20}))
@@ -754,7 +756,7 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
         return await recover_interrupted()
 
     counts = _a.new_event_loop().run_until_complete(seed())
-    assert counts == {"research_runs": 1, "population_builds": 1, "probes": 1, "experiments": 1}
+    assert counts == {"research_runs": 1, "population_builds": 2, "probes": 1, "experiments": 1}
     p1 = client.get(f"/api/v1/sessions/{sid}/probes/p1").json()
     assert p1["status"] == "failed" and "server restart" in p1["error"] and p1["answer_count"] == 7
     assert client.get(f"/api/v1/sessions/{sid}/probes/p0").json()["status"] == "complete"
@@ -765,6 +767,7 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
     b1 = client.get(f"/api/v1/sessions/{sid}/population/builds/b1").json()
     assert b1["status"] == "stopped" and b1["log"][-1]["message"] == "Interrupted by a server restart" and "approved" in b1["log"][-1]["detail"]
     assert client.get(f"/api/v1/sessions/{sid}/population/builds/b2").json()["status"] == "awaiting_review"
+    assert client.get(f"/api/v1/sessions/{sid}/population/builds/b3").json()["status"] == "stopped"   # nobody would ever approve it
     # a stopped build with a plan can still be approved
     assert client.post(f"/api/v1/sessions/{sid}/population/builds/b1/approve", json={}).status_code == 400  # empty plan → nothing to build, but not a 409
 
@@ -809,3 +812,22 @@ def test_voice_dial_shapes_voice_not_composition():
     agent_factory.apply_voice(d, 0)
     assert d[0]["humanity"] == 0 and d[0]["dials"]["sentiment"]["anger"] == 5 and d[0]["dials"]["trust"]["authority"] == 10
     agent_factory.apply_voice([{"humanity": "x", "dials": None}], 0)                 # never raises
+
+
+def test_auto_run_switch_parses_only_a_dict():
+    """The simple view's hands-off switch: approve the plan and start the debate on its own."""
+    from app.services.population.builder import _auto_run
+    assert _auto_run(None) is None
+    assert _auto_run({"auto_run": True}) is None
+    assert _auto_run({"auto_run": {}}) == {"intensity": 2, "mode": "fast"}
+    assert _auto_run({"auto_run": {"intensity": "99", "mode": "pro"}}) == {"intensity": 20, "mode": "pro"}
+    assert _auto_run({"auto_run": {"intensity": "x", "mode": "odd"}}) == {"intensity": 2, "mode": "fast"}
+
+
+def test_ingest_url_is_tagged_as_a_user_page_and_refuses_non_urls(api_client):
+    from app.api.v1.ingestion import _provenance_tag
+    assert _provenance_tag("https://example.org/a") == "[SOURCE web | user-supplied page https://example.org/a]"
+    assert _provenance_tag("notes.txt") == "[SOURCE personal | notes.txt]"
+    client, _, _ = api_client
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
+    assert client.post(f"/api/v1/sessions/{sid}/ingest/url", json={"url": "just words"}).status_code == 400

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Agent, Post } from "@/lib/api";
 import PostCard from "./PostCard";
 import { stanceColor } from "@/lib/utils";
-import { MessageSquare, FileText, Loader2, Clock, ArrowDown, RefreshCw, AlertCircle } from "lucide-react";
+import { MessageSquare, FileText, Loader2, Clock, ArrowDown, RefreshCw, AlertCircle, MessageCircle } from "lucide-react";
 
 interface Props {
   posts: Post[];
@@ -17,6 +17,8 @@ interface Props {
   opinionsStatus?: "idle" | "loading" | "done" | "error";
   opinionsError?: string | null;
   onRefreshOpinions?: () => void;
+  /** Simple view: a "talk to this person" action on every persona (absent in the pro portal). */
+  onTalk?: (agent: Agent) => void;
 }
 
 /** First ~110 chars of an agent's first post — the fallback when no verdict exists. */
@@ -38,6 +40,7 @@ export default function ThreadView({
   opinionsStatus = "idle",
   opinionsError = null,
   onRefreshOpinions,
+  onTalk,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -174,6 +177,7 @@ export default function ThreadView({
                     agent={agentsMap[post.agent_id]}
                     replies={repliesFor(post.id)}
                     agentsMap={agentsMap}
+                    onTalk={onTalk}
                   />
                 </div>
               ))}
@@ -259,6 +263,18 @@ export default function ThreadView({
                       <span className={`text-[9px] px-1 py-0.5 rounded border leading-none shrink-0 ${stanceColor(agent.stance)}`}>
                         {agent.stance}
                       </span>
+                      {onTalk && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); onTalk(agent); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onTalk(agent); } }}
+                          title={`Talk to ${agent.name}`}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center justify-center w-5 h-5 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0"
+                        >
+                          <MessageCircle className="w-3 h-3" />
+                        </span>
+                      )}
                     </div>
 
                     {/* Verdict → live "summarising…" → first-post excerpt fallback → "forming" */}
