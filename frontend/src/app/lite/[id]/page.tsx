@@ -10,6 +10,7 @@ import { useLiteSession } from "@/components/lite/useLiteSession";
 import LiteShell, { LiteStep } from "@/components/lite/LiteShell";
 import Detail, { DetailLink } from "@/components/lite/Detail";
 import TalkBox from "@/components/lite/TalkBox";
+import ConjureGrid from "@/components/lite/ConjureGrid";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -344,9 +345,10 @@ function Progress({ buildStatus, spawn, agentsSoFar, error, sessionId, onRetry }
   const mins = Math.floor((Date.now() - started.current) / 60000);
 
   return (
-    <div className="max-w-xl mx-auto pt-16 px-6 animate-rise">
+    <div className="max-w-2xl mx-auto pt-10 sm:pt-14 px-6 pb-16 animate-rise">
       <Detail href={proLinks.studio(sessionId)}>
         <div className="lite-card p-7 sm:p-8">
+          {!failed && <ConjureGrid className="mb-7" />}
           <h1 className="text-[24px] font-semibold tracking-tight">{failed ? "Something stopped" : "Getting everyone ready"}</h1>
           <p className="lite-lead mt-1.5">{failed ? "The people could not be created this time." : `Usually a few minutes. You can leave this page and come back.${mins >= 1 ? ` Running for ${mins} min.` : ""}`}</p>
           <ol className="mt-6 space-y-4">

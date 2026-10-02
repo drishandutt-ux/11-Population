@@ -500,3 +500,26 @@ html.lite-root, html.lite-root body { background: hsl(40 20% 99%); color-scheme:
 
 .animate-rise { animation: lite-rise 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes lite-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* People being conjured (simple view, getting-ready card) */
+.conjure-pop { animation: conjure-pop 560ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+@keyframes conjure-pop {
+  0% { opacity: 0; transform: scale(0.35) translateY(6px); filter: blur(4px); }
+  60% { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+.conjure-ring {
+  position: absolute; inset: -2px; border-radius: 999px; pointer-events: none;
+  border: 2px solid hsl(var(--primary) / 0.6);
+  animation: conjure-ring 700ms ease-out both;
+}
+@keyframes conjure-ring {
+  0% { opacity: 0.9; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+.conjure-label { animation: conjure-label 500ms ease-out 180ms both; }
+@keyframes conjure-label { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .conjure-pop, .conjure-ring, .conjure-label { animation: none; }
+  .conjure-ring { display: none; }
+}
