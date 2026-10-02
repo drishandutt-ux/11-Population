@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord, ReportStructure } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
-import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker } from "lucide-react";
+import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker, Sparkles } from "lucide-react";
+import { setUiMode } from "@/lib/lite";
 import InputPanel from "@/components/ingestion/InputPanel";
 import ThreadView from "@/components/simulation/ThreadView";
 import SimulationControls from "@/components/simulation/SimulationControls";
@@ -497,6 +498,14 @@ export default function SessionPage() {
           ))}
         </nav>
         <div className="shrink-0 ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { setUiMode("simple"); router.push(`/lite/${id}${activeTab === "report" ? "?view=report" : activeTab === "lab" ? "?view=lab" : ""}`); }}
+            className="btn btn-xs btn-accent"
+            title="Back to the simple view of this session: one step at a time, only what matters"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Simple view
+          </button>
           {nextStep && activeTab !== nextStep.tab && (
             <button type="button" onClick={() => setActiveTab(nextStep.tab)} className="btn btn-xs btn-ghost text-primary" title="The next step in the sequence">
               Next: {nextStep.text} →

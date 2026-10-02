@@ -1,7 +1,8 @@
 "use client";
 
 /** The way back to the simple view from anywhere in the full portal: one pill, bottom-left,
- *  on every pro page. It returns to the same session's simple screen (the report view when the
+ *  on every pro page without a header button of its own (the Studio, the agent pages, the
+ *  Agent Builder, the client report, admin). It returns to the same session's simple screen (the report view when the
  *  pro Report tab is open), or to the simple home, and remembers the choice. */
 
 import { usePathname, useRouter } from "next/navigation";
@@ -13,6 +14,8 @@ export default function SimpleViewPill() {
   const router = useRouter();
   // Not on the simple pages themselves, not on the login gate, not on the landing (it has the switch).
   if (pathname.startsWith("/lite") || pathname.startsWith("/login") || pathname === "/") return null;
+  // The session workspace carries the button in its header; the pill covers every other pro page.
+  if (/^\/session\/[^/]+\/?$/.test(pathname)) return null;
 
   function go() {
     setUiMode("simple");
