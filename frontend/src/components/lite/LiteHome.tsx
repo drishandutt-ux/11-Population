@@ -89,7 +89,9 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
       </header>
 
       <main className="flex-1 px-5 sm:px-8 pb-24">
-        <div className="max-w-2xl mx-auto pt-10 sm:pt-16">
+        <div className="max-w-6xl mx-auto pt-6 sm:pt-10 grid gap-6 xl:gap-12 xl:grid-cols-[minmax(0,42rem)_minmax(0,1fr)] items-start">
+          <Cover />
+          <div className="min-w-0 xl:col-start-1 xl:row-start-1 xl:pt-6">
           <h1 className="lite-h1 animate-rise">What do you want to find out?</h1>
           <p className="lite-lead mt-3 max-w-xl animate-rise" style={{ animationDelay: "60ms" }}>
             Ask a question. We&apos;ll gather what&apos;s out there, create people who match your audience, let them talk it through, and write you the answer.
@@ -204,8 +206,73 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
               </div>
             </section>
           )}
+          </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+/** The cover: a short looping film of three of the people (`/minds-people.mp4`). The film is drawn
+ *  frame by frame onto a canvas and its white ground keyed out pixel by pixel, so the people stand
+ *  on the page itself rather than in a box (a CSS blend mode is not honoured on video everywhere).
+ *  Purely decorative; sits above the headline, or beside the question box on a wide screen, and
+ *  shows only its first frame when the reader prefers reduced motion. */
+function Cover() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c) return;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    const W = 720, H = 405;
+    c.width = W; c.height = H;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    let stopped = false;
+    const draw = () => {
+      if (v.readyState < 2) return;
+      ctx.drawImage(v, 0, 0, W, H);
+      const img = ctx.getImageData(0, 0, W, H);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const m = Math.min(d[i], d[i + 1], d[i + 2]);           // whiteness: how close to the ground
+        if (m >= 250) d[i + 3] = 0;                              // the ground: gone
+        else if (m >= 240) d[i + 3] = ((250 - m) * 25.5) | 0;   // a soft step on the outlines
+      }
+      ctx.putImageData(img, 0, 0);
+    };
+    const anyV = v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+    const loop = () => {
+      if (stopped) return;
+      draw();
+      if (anyV.requestVideoFrameCallback) anyV.requestVideoFrameCallback(loop); else requestAnimationFrame(loop);
+    };
+    const onReady = () => {
+      if (still) { v.pause(); draw(); return; }
+      v.play().catch(() => {});
+      loop();
+    };
+    v.addEventListener("loadeddata", onReady);
+    if (v.readyState >= 2) onReady();
+    return () => { stopped = true; v.removeEventListener("loadeddata", onReady); };
+  }, []);
+  return (
+    <div className="xl:col-start-2 xl:row-start-1 xl:self-start xl:sticky xl:top-10 animate-rise" aria-hidden>
+      <div className="relative aspect-video w-full max-w-lg xl:max-w-none">
+        <video
+          ref={videoRef}
+          src="/minds-people.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="absolute w-px h-px opacity-0 pointer-events-none"
+        />
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      </div>
     </div>
   );
 }
