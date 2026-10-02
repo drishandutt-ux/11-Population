@@ -179,7 +179,7 @@ export function PersonaName({ agent, sessionId, verdict, className }: { agent: A
     <span className={cn("relative inline-block max-w-full", className)} onMouseEnter={enter} onMouseLeave={leave}>
       <span ref={nameRef} tabIndex={0} onFocus={enter} onBlur={leave} className="text-[14px] font-semibold text-foreground truncate cursor-help border-b border-dotted border-muted-foreground/40 focus:outline-none">{agent.name}</span>
       {pos && typeof document !== "undefined" && createPortal(
-        <div className="lite fixed w-72 lite-float bg-card p-4 z-[100]" style={{ left: pos.left, top: pos.top }} onMouseEnter={enter} onMouseLeave={leave}>
+        <div className="lite fixed w-72 lite-float bg-card p-4 z-[100] overflow-hidden" style={{ left: pos.left, top: pos.top }} onMouseEnter={enter} onMouseLeave={leave}>
           <div className="flex items-center gap-3">
             <Avatar agent={agent} size={40} />
             <div className="min-w-0">
@@ -189,7 +189,7 @@ export function PersonaName({ agent, sessionId, verdict, className }: { agent: A
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <span className="chip">{stanceWords(agent.stance)}</span>
-            {agent.segment && <span className="chip">{agent.segment}</span>}
+            {agent.segment && <span className="chip max-w-full min-w-0" title={agent.segment}><span className="truncate">{agent.segment}</span></span>}
           </div>
           {verdict && <p className="mt-3 text-[13px] text-foreground leading-relaxed">“{verdict}”</p>}
           {agent.background && <p className="mt-2 text-[12.5px] text-muted-foreground leading-relaxed">{firstSentence(agent.background, 180)}</p>}
