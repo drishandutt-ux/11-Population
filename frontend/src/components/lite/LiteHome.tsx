@@ -89,7 +89,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
       </header>
 
       <main className="flex-1 px-5 sm:px-8 pb-24">
-        <div className="max-w-6xl mx-auto pt-6 sm:pt-10 grid gap-6 xl:gap-12 xl:grid-cols-[minmax(0,42rem)_minmax(0,1fr)] items-start">
+        <div className="max-w-6xl xl:max-w-7xl 2xl:max-w-[96rem] mx-auto pt-6 sm:pt-10 grid gap-6 xl:gap-x-16 2xl:gap-x-20 xl:gap-y-14 xl:grid-cols-[minmax(0,42rem)_minmax(0,1fr)] xl:grid-rows-[auto_auto] items-start">
           <Cover />
           <div className="min-w-0 xl:col-start-1 xl:row-start-1 xl:pt-6">
           <h1 className="lite-h1 animate-rise">What do you want to find out?</h1>
@@ -175,9 +175,10 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
             </div>
             {error && <p className="mt-3 text-[13px] text-red-700 bg-red-500/10 rounded-xl px-3.5 py-2.5">{error}</p>}
           </form>
+          </div>
 
           {sessions.length > 0 && (
-            <section className="mt-14 animate-rise" style={{ animationDelay: "180ms" }}>
+            <section className="min-w-0 mt-14 xl:mt-0 xl:col-start-1 xl:row-start-2 animate-rise" style={{ animationDelay: "180ms" }}>
               <div className="flex items-baseline justify-between">
                 <h2 className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider">Your questions</h2>
                 {sessions.length > 6 && (
@@ -206,7 +207,6 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
               </div>
             </section>
           )}
-          </div>
         </div>
       </main>
     </div>
@@ -216,8 +216,9 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
 /** The cover: a short looping film of three of the people (`/minds-people.mp4`). The film is drawn
  *  frame by frame onto a canvas and its white ground keyed out pixel by pixel, so the people stand
  *  on the page itself rather than in a box (a CSS blend mode is not honoured on video everywhere).
- *  Purely decorative; sits above the headline, or beside the question box on a wide screen, and
- *  shows only its first frame when the reader prefers reduced motion. */
+ *  Purely decorative; sits above the headline, or on a wide screen fills the right-hand column and
+ *  is centred on the question block (headline to Start) beside it, the list of questions running on
+ *  below. Shows only its first frame when the reader prefers reduced motion. */
 function Cover() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -227,7 +228,7 @@ function Cover() {
     if (!v || !c) return;
     const ctx = c.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
-    const W = 720, H = 405;
+    const W = 1280, H = 720;                                   // the film's own size, so it stays sharp when drawn large
     c.width = W; c.height = H;
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let stopped = false;
@@ -259,7 +260,7 @@ function Cover() {
     return () => { stopped = true; v.removeEventListener("loadeddata", onReady); };
   }, []);
   return (
-    <div className="xl:col-start-2 xl:row-start-1 xl:self-start xl:sticky xl:top-10 animate-rise" aria-hidden>
+    <div className="xl:col-start-2 xl:row-start-1 xl:self-center animate-rise" aria-hidden>
       <div className="relative aspect-video w-full max-w-lg xl:max-w-none">
         <video
           ref={videoRef}
