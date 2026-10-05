@@ -83,7 +83,7 @@ export default function HowMade({ sessionId, question, build, agents, research }
     const by = { direct: 0, indirect: 0, neutral: 0 } as Record<string, number>;
     for (const a of agents) by[a.stance] = (by[a.stance] || 0) + 1;
     return (
-      <section className="max-w-2xl mx-auto px-6 pb-24 animate-rise" style={{ animationDelay: "90ms" }}>
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-24 animate-rise" style={{ animationDelay: "90ms" }}>
         <h2 className="text-[18px] font-semibold tracking-tight">How these people were made</h2>
         <Detail href={proLinks.people(sessionId)}>
           <div className="lite-card p-5 sm:p-6 mt-3">
@@ -141,7 +141,7 @@ export default function HowMade({ sessionId, question, build, agents, research }
   };
 
   return (
-    <section className="max-w-2xl mx-auto px-6 pb-24 animate-rise" style={{ animationDelay: "90ms" }}>
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-24 animate-rise" style={{ animationDelay: "90ms" }}>
       <h2 className="text-[18px] font-semibold tracking-tight">How these people were made</h2>
       <p className="lite-lead mt-1">{introText}</p>
 
@@ -155,30 +155,38 @@ export default function HowMade({ sessionId, question, build, agents, research }
         <Tile value={typeof det?.confidence === "number" ? `${Math.round(det.confidence)}%` : "—"} label="sure who they are" dim={typeof det?.confidence !== "number"} />
       </div>
 
-      <div className="mt-3 space-y-3">
-        {/* 1 · What went in */}
-        <Detail href={proLinks.sources(sessionId)}>
-          <div className="lite-card p-5 sm:p-6">
+      <div className="mt-3 grid gap-3 lg:grid-cols-2 items-stretch">
+        {/* 1 · What went in — the full width */}
+        <Detail href={proLinks.sources(sessionId)} className="lg:col-span-2">
+          <div className="lite-card p-5 sm:p-6 h-full">
             <Head title="What went in" />
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2 max-w-3xl">
               <Ingredient icon={<FileText className="w-4 h-4" />} label="Your question" value="read" on />
               <Ingredient icon={<User className="w-4 h-4" />} label="Description" value={profile ? `${profile.split(/\s+/).length} words` : "none"} on={!!profile} />
               <Ingredient icon={<Paperclip className="w-4 h-4" />} label="Survey" value={survey ? `${surveyWords.toLocaleString()} words` : "none"} on={!!survey} />
               <Ingredient icon={<Globe className="w-4 h-4" />} label="Online" value={researchUsed ? `${pages} page${pages === 1 ? "" : "s"}` : run && pages > 0 ? "after the plan" : "not used"} on={researchUsed} />
               <Ingredient icon={<Search className="w-4 h-4" />} label="Statistics" value={publishers.length ? `${publishers.length} publishers` : "off"} on={publishers.length > 0} />
             </div>
-            {profile && <Clamp className="mt-3" label="Your description" text={profile} />}
-            {publishers.length > 0 && (
-              <p className="lite-help mt-3">Searched {list(publishers, publishers.length)}.{dims.length ? ` ${matched ? `Figures were found for ${matched} of the ${dims.length} things the people should match.` : `None of the ${dims.length} things the people should match had a published figure.`}` : ""}</p>
-            )}
-            {run && pages > 0 && !researchUsed && <p className="lite-help mt-2">The web research finished after the people were planned; they have since been given the {pages} page{pages === 1 ? "" : "s"} it found.</p>}
+            <div className="mt-4 grid gap-x-6 gap-y-3 md:grid-cols-2">
+              {profile && <Clamp label="Your description" text={profile} />}
+              {publishers.length > 0 && (
+                <div>
+                  <p className="text-[11.5px] uppercase tracking-wide text-muted-foreground">Statistics searched</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {publishers.map((pub) => <span key={pub} className="rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[11.5px] text-foreground/80">{pub}</span>)}
+                  </div>
+                  {dims.length > 0 && <p className="lite-help mt-2">{matched ? `Figures were found for ${matched} of the ${dims.length} things the people should match.` : `None of the ${dims.length} things the people should match had a published figure.`}</p>}
+                </div>
+              )}
+              {run && pages > 0 && !researchUsed && <p className="lite-help md:col-span-2">The web research finished after the people were planned; they have since been given the {pages} page{pages === 1 ? "" : "s"} it found.</p>}
+            </div>
           </div>
         </Detail>
 
         {/* 2 · Who they stand for */}
         {det && (
           <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6">
+            <div className="lite-card p-5 sm:p-6 h-full">
               <div className="flex gap-5">
                 <div className="min-w-0 flex-1">
                   <Head title="Who they stand for" />
@@ -203,7 +211,7 @@ export default function HowMade({ sessionId, question, build, agents, research }
 
         {/* 3 · The groups */}
         <Detail href={studioHref}>
-          <div className="lite-card p-5 sm:p-6">
+          <div className="lite-card p-5 sm:p-6 h-full">
             <Head title={`The ${segments.length} group${segments.length === 1 ? "" : "s"}`} />
             {plan.rationale && <p className="lite-help mt-1.5">{plan.rationale}</p>}
             <Groups segments={segments} countFor={countFor} />
@@ -213,7 +221,7 @@ export default function HowMade({ sessionId, question, build, agents, research }
         {/* 4 · Matched to published figures (heat grid) */}
         {dims.length > 0 && (
           <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6">
+            <div className="lite-card p-5 sm:p-6 h-full">
               <Head title="Matched to published figures" />
               <p className="lite-help mt-1.5">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.</p>
               <div className="mt-3 space-y-2">
@@ -228,7 +236,7 @@ export default function HowMade({ sessionId, question, build, agents, research }
                   const colour = st === "matched" ? GOOD : st === "assumed" ? WARN : NONE;
                   const src = t && st !== "none" ? [t.source, t.year].filter(Boolean).join(", ") : "";
                   return (
-                    <div key={d.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:grid-cols-[180px_minmax(0,1fr)] gap-x-3 items-center">
+                    <div key={d.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:grid-cols-[170px_minmax(0,1fr)] gap-x-3 items-center">
                       <div className="min-w-0">
                         <p className="text-[13px] font-medium text-foreground truncate" title={d.why}>{d.label}</p>
                         <p className="text-[11.5px] text-muted-foreground inline-flex items-center gap-1 truncate max-w-full" title={src || t?.note || ""}>
@@ -271,7 +279,7 @@ export default function HowMade({ sessionId, question, build, agents, research }
         {/* 5 · What was assumed */}
         {(assumed.length > 0 || gaps.length > 0) && (
           <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6">
+            <div className="lite-card p-5 sm:p-6 h-full">
               <Head title="What had to be assumed" />
               {plan.evidence_coverage && <p className="lite-help mt-1.5">{plan.evidence_coverage}</p>}
               {assumed.length > 0 && (
@@ -298,11 +306,13 @@ export default function HowMade({ sessionId, question, build, agents, research }
 
         {/* 6 · How they talk */}
         {plan.voice && (
-          <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6">
-              <Head title="How they talk" />
-              <Scale value={plan.voice.value} left="Like experts" right="Like ordinary people" />
-              {plan.voice.reason && <p className="mt-3 text-[13.5px] leading-relaxed text-foreground/85">{plan.voice.reason}</p>}
+          <Detail href={studioHref} className="lg:col-span-2">
+            <div className="lite-card p-5 sm:p-6 h-full md:flex md:items-start md:gap-8">
+              <div className="md:w-72 shrink-0">
+                <Head title="How they talk" />
+                <Scale value={plan.voice.value} left="Like experts" right="Like ordinary people" />
+              </div>
+              {plan.voice.reason && <p className="mt-3 md:mt-6 text-[13.5px] leading-relaxed text-foreground/85">{plan.voice.reason}</p>}
             </div>
           </Detail>
         )}

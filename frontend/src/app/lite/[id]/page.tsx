@@ -400,9 +400,9 @@ function Progress({ buildStatus, spawn, agentsSoFar, error, sessionId, onRetry }
 
 function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { agents: Agent[]; hasDebate: boolean; sessionId: string; onStart: () => void; onGo: () => void; onTalk: (a: Agent) => void }) {
   const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? agents : agents.slice(0, 12);
+  const shown = showAll ? agents : agents.slice(0, 16);
   return (
-    <div className="max-w-2xl mx-auto pt-12 px-6 pb-8 animate-rise">
+    <div className="max-w-6xl mx-auto pt-12 px-4 sm:px-6 pb-8 animate-rise">
       <Detail href={proLinks.people(sessionId)}>
         <div className="lite-card p-7 sm:p-8">
           <div className="text-center">
@@ -421,7 +421,7 @@ function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { ag
             )}
           </div>
           <div className="mt-7 border-t border-border pt-5">
-            <div className="grid sm:grid-cols-2 gap-1.5">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
               {shown.map((a) => (
                 <button key={a.id} type="button" onClick={() => onTalk(a)} className="text-left flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-foreground/5 transition-colors" title={`Talk to ${a.name}`}>
                   <PersonaAvatar agent={a} size={32} className="shrink-0" />
@@ -432,7 +432,7 @@ function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { ag
                 </button>
               ))}
             </div>
-            {agents.length > 12 && (
+            {agents.length > 16 && (
               <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-3 text-[12.5px] text-muted-foreground hover:text-foreground">{showAll ? "Show fewer" : `Show all ${agents.length}`}</button>
             )}
           </div>
