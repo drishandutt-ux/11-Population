@@ -11,6 +11,7 @@ import LiteShell, { LiteStep } from "@/components/lite/LiteShell";
 import Detail, { DetailLink } from "@/components/lite/Detail";
 import TalkBox from "@/components/lite/TalkBox";
 import ConjureGrid from "@/components/lite/ConjureGrid";
+import HowMade from "@/components/lite/HowMade";
 import PersonaAvatar from "@/components/PersonaAvatar";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
@@ -97,6 +98,13 @@ function LiteSession() {
       <LiteShell {...shell} step="report" proHref={proLinks.report(id)} backHref={`/lite/${id}`} layout="app"
         right={<button type="button" onClick={() => setView("flow")} className="lite-pill"><MessageCircle className="w-3.5 h-3.5" /> Conversation</button>}>
         <div className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 pb-4">
+          {/* The question the report answers, always in view above it. */}
+          <Detail href={proLinks.sources(id)} at="inline" className="mb-3 shrink-0">
+            <div className="flex items-baseline gap-3 pr-28">
+              <span className="text-[12px] uppercase tracking-wide text-muted-foreground shrink-0">Your question</span>
+              <p className="text-[15px] sm:text-[16px] font-medium text-foreground leading-snug line-clamp-2" title={s.session.query}>{s.session.query}</p>
+            </div>
+          </Detail>
           <div className="flex-1 min-h-0 lite-card overflow-hidden flex flex-col">
             {s.reportError && (
               <p className="m-4 mb-0 text-[13px] text-red-700 bg-red-500/10 rounded-xl px-3.5 py-2.5">{s.reportError}</p>
@@ -157,6 +165,7 @@ function LiteSession() {
       return (
         <LiteShell {...shell} step="people" proHref={proLinks.people(id)}>
           <ReadyCard agents={s.agents} hasDebate={stage === "debate"} sessionId={id} onStart={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} onGo={() => setView("flow")} onTalk={(a) => { setView("flow"); talkTo(a); }} />
+          <HowMade sessionId={id} question={s.session?.query || ""} build={s.build} agents={s.agents} research={s.research} />
         </LiteShell>
       );
     }
@@ -233,6 +242,7 @@ function LiteSession() {
     return (
       <LiteShell {...shell} step="people" proHref={proLinks.people(id)}>
         <ReadyCard agents={s.agents} hasDebate={false} sessionId={id} onStart={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} onGo={() => setView("flow")} onTalk={(a) => { setView("flow"); talkTo(a); }} />
+        <HowMade sessionId={id} question={s.session?.query || ""} build={s.build} agents={s.agents} research={s.research} />
       </LiteShell>
     );
   }
@@ -392,7 +402,7 @@ function ReadyCard({ agents, hasDebate, sessionId, onStart, onGo, onTalk }: { ag
   const [showAll, setShowAll] = useState(false);
   const shown = showAll ? agents : agents.slice(0, 12);
   return (
-    <div className="max-w-2xl mx-auto pt-12 px-6 pb-24 animate-rise">
+    <div className="max-w-2xl mx-auto pt-12 px-6 pb-8 animate-rise">
       <Detail href={proLinks.people(sessionId)}>
         <div className="lite-card p-7 sm:p-8">
           <div className="text-center">
