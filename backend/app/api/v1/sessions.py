@@ -101,6 +101,17 @@ async def get_kg(session_id: str, user: AuthUser = Depends(get_current_user), db
     return get_kg_data(session_id)
 
 
+@router.get("/{session_id}/kg/sources")
+async def get_kg_sources(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """What the graph was fed, by material: `{sources: [{kind, name, ref, chunks}], chunks, entities, relations}`.
+    `kind` is one of file, text, video, page (a page the reader added), research (a page the
+    research read), social, statistics, synthetic, other."""
+    from app.services.knowledge_graph.lightrag_service import get_lightrag, kg_sources
+    await get_owned_session(session_id, user, db)
+    await get_lightrag(session_id)
+    return kg_sources(session_id)
+
+
 @router.get("/{session_id}/kg/entity/{entity_name}")
 async def get_kg_entity(session_id: str, entity_name: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from app.services.knowledge_graph.lightrag_service import get_entity_details, get_lightrag

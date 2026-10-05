@@ -195,6 +195,8 @@ export const api = {
     list: (sessionId: string) => request<FigureLedger>(`/sessions/${sessionId}/figures`),
   },
   kg: {
+    /** What the graph was fed, by material — the simple view's flow diagram reads it. */
+    sources: (sessionId: string) => request<KgSources>(`/sessions/${sessionId}/kg/sources`),
     ontology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology`),
     buildOntology: (sessionId: string) => request<OntologyState>(`/sessions/${sessionId}/kg/ontology/build`, { method: "POST" }),
   },
@@ -386,6 +388,10 @@ export type ResearchRun = {
   frame: any | null; plan: any | null; verdicts: any[]; covered: string[]; budget: Record<string, number>;
   brief: any | null; recommendations: any[] | null; note?: string | null; started_at?: string | null; finished_at?: string | null;
 };
+
+/** One material the knowledge graph was fed, with the chunks it left on file. */
+export type KgSource = { kind: "file" | "text" | "video" | "page" | "research" | "social" | "statistics" | "synthetic" | "other"; name: string; ref: string; chunks: number };
+export type KgSources = { sources: KgSource[]; chunks: number; entities: number; relations: number };
 
 export type ResearchState = { run: ResearchRun | null; queries: ResearchQuery[]; counts: Record<string, { read: number; on_topic: number }>; in_graph?: number };
 

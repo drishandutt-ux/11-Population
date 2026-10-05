@@ -9,6 +9,7 @@ Storage moved from per-session `kg.json` files (lost on every Railway redeploy) 
     (`get_kg_context_string`, `get_kg_data`, `get_entity_details`) must warm it first.
   * `insert_chunks(...)` / `_save_kg` — async: update the cache and persist to the DB.
 """
+import re
 import os
 import json
 import asyncio
@@ -215,6 +216,52 @@ def get_kg_data(session_id: str) -> dict:
         "entities": kg.get("entities", []),
         "relations": kg.get("relations", []),
     }
+
+
+_SOURCE_HEADER_RE = re.compile(r"^\[SOURCE\s+([a-z]+)(?:\s+([a-z]+))?\s*\|([^\]]*)\]", re.I)
+
+
+def kg_sources(session_id: str) -> dict:
+    """What the graph was fed, by where it came from — read off the `[SOURCE …]` header every
+    chunk carries. Each row is one material (a file, a pasted text, a video, a page the reader
+    added, a page the research read, a statistics page) with the number of chunks it left on
+    file; `kind` names the shape in the reader's words. Counts cover the chunks the graph keeps
+    (the most recent ~200), so a long-lived session may under-count its oldest material."""
+    kg = _load_kg(session_id)
+    chunks = kg.get("chunks") or []
+    rows: dict[tuple, dict] = {}
+    for c in chunks:
+        m = _SOURCE_HEADER_RE.match(c or "")
+        klass = (m.group(1) or "").lower() if m else "other"
+        sub = (m.group(2) or "").lower() if m else ""
+        parts = [x.strip() for x in (m.group(3) if m else "").split("|")]
+        detail = parts[0] if parts else ""
+        ref = parts[1] if len(parts) > 1 else ""
+        if klass == "personal" and detail == "pasted text":
+            kind, name = "text", "Pasted text"
+        elif klass == "personal":
+            kind, name = "file", detail or "A file"
+        elif klass == "youtube":
+            kind, name = "video", "YouTube video"
+        elif klass == "web" and detail.startswith("user-supplied page"):
+            kind, name = "page", detail[len("user-supplied page"):].strip() or "A web page"
+        elif klass == "web":
+            kind, name = "research", detail or ref or "A page found online"
+        elif klass == "social":
+            kind, name = "social", (f"r/{detail}" if sub == "reddit" and detail else detail or "A social post")
+        elif klass == "quant":
+            kind, name = "statistics", detail or "A statistics page"
+        elif klass == "synthetic":
+            kind, name = "synthetic", "Model-written notes"
+        else:
+            kind, name = "other", detail or "Untagged material"
+        key = (kind, name, ref)
+        row = rows.get(key)
+        if row is None:
+            row = rows[key] = {"kind": kind, "name": name[:200], "ref": ref[:400], "chunks": 0}
+        row["chunks"] += 1
+    items = sorted(rows.values(), key=lambda r: -r["chunks"])
+    return {"sources": items, "chunks": len(chunks), "entities": len(kg.get("entities") or []), "relations": len(kg.get("relations") or [])}
 
 
 def get_entity_details(session_id: str, entity_name: str) -> dict:

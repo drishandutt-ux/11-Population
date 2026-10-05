@@ -6,12 +6,13 @@
  *  they talk as a meter. Nothing here is computed afresh: it is the build's own record (detected
  *  population, plan, frame, log) drawn rather than listed. */
 
-import { useEffect, useMemo, useState } from "react";
-import { api, Agent, FrameReportDim, FrameTarget, PopulationBuild, PopulationSegment, QuantSource, ResearchState } from "@/lib/api";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { api, Agent, EvidenceItem, FrameReportDim, FrameTarget, KgSource, KgSources, PopulationBuild, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState } from "@/lib/api";
 import Detail, { DetailLink } from "@/components/lite/Detail";
 import { proLinks, stanceWords } from "@/lib/lite";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, BookOpen, Check, ChevronDown, FileText, Globe, Minus, Paperclip, Search, Sparkles, User } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, ChevronDown, Circle, FileText, Globe, Layers, Loader2, MessageSquare, Minus, Paperclip, ScrollText, Search, Sparkles, User, Users } from "lucide-react";
 
 type Props = {
   sessionId: string;
@@ -19,6 +20,9 @@ type Props = {
   build: PopulationBuild | null;
   agents: Agent[];
   research: ResearchState | null;
+  /** Posts in the conversation so far, and whether a report has been written — the flow's last two nodes. */
+  posts?: number;
+  hasReport?: boolean;
 };
 
 // Categorical palette (validated order; a 9th group folds into "Other").
@@ -65,7 +69,7 @@ function standingWord(s: Standing, t?: FrameTarget): string {
   return "Published figure";
 }
 
-export default function HowMade({ sessionId, question, build, agents, research }: Props) {
+export default function HowMade({ sessionId, question, build, agents, research, posts = 0, hasReport = false }: Props) {
   const [labels, setLabels] = useState<Record<string, string>>(PUBLISHER_FALLBACK);
   useEffect(() => {
     api.population.sources().then((r) => {
@@ -74,6 +78,16 @@ export default function HowMade({ sessionId, question, build, agents, research }
       setLabels(m);
     }).catch(() => {});
   }, []);
+  // What the graph was fed and which statistics pages carry figures: the flow's "added" and
+  // "statistics" nodes. Read again whenever the build moves, so a page left open keeps up.
+  const [kgSources, setKgSources] = useState<KgSources | null>(null);
+  const [factPages, setFactPages] = useState<number | null>(null);
+  const buildKey = `${build?.id || ""}:${build?.status || ""}:${agents.length}`;
+  useEffect(() => {
+    api.kg.sources(sessionId).then(setKgSources).catch(() => {});
+    api.population.facts(sessionId).then((rows) => setFactPages((rows as EvidenceItem[]).filter((e) => (e.structured?.facts || []).length > 0).length)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, buildKey]);
 
   const n = agents.length;
   const studioHref = proLinks.studio(sessionId);
@@ -159,15 +173,26 @@ export default function HowMade({ sessionId, question, build, agents, research }
         {/* 1 · What went in — the full width */}
         <Detail href={proLinks.sources(sessionId)} className="lg:col-span-2">
           <div className="lite-card p-5 sm:p-6 h-full">
-            <Head title="What went in" />
-            <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2 max-w-3xl">
-              <Ingredient icon={<FileText className="w-4 h-4" />} label="Your question" value="read" on />
-              <Ingredient icon={<User className="w-4 h-4" />} label="Description" value={profile ? `${profile.split(/\s+/).length} words` : "none"} on={!!profile} />
-              <Ingredient icon={<Paperclip className="w-4 h-4" />} label="Survey" value={survey ? `${surveyWords.toLocaleString()} words` : "none"} on={!!survey} />
-              <Ingredient icon={<Globe className="w-4 h-4" />} label="Online" value={researchUsed ? `${pages} page${pages === 1 ? "" : "s"}` : run && pages > 0 ? "after the plan" : "not used"} on={researchUsed} />
-              <Ingredient icon={<Search className="w-4 h-4" />} label="Statistics" value={publishers.length ? `${publishers.length} publishers` : "off"} on={publishers.length > 0} />
-            </div>
-            <div className="mt-4 grid gap-x-6 gap-y-3 md:grid-cols-2">
+            <Head title="Where these people came from" />
+            <p className="lite-help mt-1">What went in on the left, what the engine did with it in the middle, what came out on the right. Every box opens the page where it is analysed in full.</p>
+            <Flow
+              sessionId={sessionId}
+              n={n}
+              groups={segments.length}
+              profileWords={profile ? profile.split(/\s+/).length : 0}
+              surveyWords={surveyWords}
+              added={(kgSources?.sources || []).filter((k) => k.kind === "file" || k.kind === "text" || k.kind === "video" || k.kind === "page")}
+              research={{ ran: !!run, pages, used: researchUsed, late: !!run && pages > 0 && !researchUsed, bySource: research?.counts || {} }}
+              statistics={{ publishers: publishers.length, pages: factPages, dims: dims.length, matched }}
+              detected={det ? { who: det.target_population, where: det.geography, confidence: typeof det.confidence === "number" ? det.confidence : null } : null}
+              assumptions={assumed.length}
+              log={log}
+              status={build.status}
+              segmentsForBar={segments.map((sg) => ({ id: sg.id, name: sg.name, share: sg.share_pct }))}
+              posts={posts}
+              hasReport={hasReport}
+            />
+            <div className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2">
               {profile && <Clamp label="Your description" text={profile} />}
               {publishers.length > 0 && (
                 <div>
@@ -323,6 +348,279 @@ export default function HowMade({ sessionId, question, build, agents, research }
   );
 }
 
+// ── The flow: what went in → the engine → what came out ──────────────────────────
+
+type FlowProps = {
+  sessionId: string;
+  n: number;
+  groups: number;
+  profileWords: number;
+  surveyWords: number;
+  added: KgSource[];
+  research: { ran: boolean; pages: number; used: boolean; late: boolean; bySource: Record<string, { read: number; on_topic: number }> };
+  statistics: { publishers: number; pages: number | null; dims: number; matched: number };
+  detected: { who: string; where: string; confidence: number | null } | null;
+  assumptions: number;
+  log: PopulationLogEntry[];
+  status: PopulationBuild["status"];
+  segmentsForBar: { id: string; name: string; share: number }[];
+  posts: number;
+  hasReport: boolean;
+};
+
+type EdgeState = "used" | "late" | "off";
+type StepState = "done" | "warn" | "running" | "skipped" | "error";
+
+const EDGE_STYLE: Record<EdgeState, { stroke: string; dash?: string; opacity: number; width: number }> = {
+  used: { stroke: "currentColor", opacity: 0.35, width: 1.5 },
+  late: { stroke: WARN, dash: "5 4", opacity: 0.9, width: 1.5 },
+  off: { stroke: "currentColor", dash: "2 4", opacity: 0.18, width: 1 },
+};
+
+function kindWord(k: KgSource["kind"]): string {
+  switch (k) {
+    case "file": return "file";
+    case "text": return "pasted text";
+    case "video": return "video";
+    case "page": return "web page";
+    default: return "item";
+  }
+}
+function plural(n: number, one: string, many = `${one}s`): string { return `${n.toLocaleString()} ${n === 1 ? one : many}`; }
+
+/** The build as a picture: source boxes on the left feed the engine's steps in the middle, which
+ *  feed the people, the conversation and the report on the right. Every figure is read from the
+ *  record of the build, the research run, the knowledge graph and the session, so the picture
+ *  changes with the data — a source that was not used is drawn faint with a dotted line, research
+ *  that landed after the plan runs straight to the writing step in amber, a step still running
+ *  spins. The connectors are drawn in an SVG over the boxes from their measured positions, so
+ *  they follow any width; on a narrow screen the three columns stack and the lines give way to
+ *  arrows between them. */
+function Flow(p: FlowProps) {
+  const uid = useId().replace(/:/g, "");
+  const wrap = useRef<HTMLDivElement>(null);
+  const nodes = useRef<Record<string, HTMLElement | null>>({});
+  const [paths, setPaths] = useState<{ d: string; state: EdgeState; key: string }[]>([]);
+  const [wide, setWide] = useState(false);
+
+  // ── The record, read into the picture ──
+  const ok = (stage: string) => p.log.some((e) => e.stage === stage && e.level === "ok");
+  const any = (stage: string) => p.log.some((e) => e.stage === stage);
+  const errAt = (stage: string) => p.log.some((e) => e.stage === stage && e.level === "error");
+  const scoped = (() => { for (const e of p.log) { const m = /Knowledge scoped: (\d+) units/.exec(e.message || ""); if (m) return Number(m[1]); } return null; })();
+  const running = (stages: string[]) => stages.includes(p.status);
+  const stepState = (stage: string, run: string[], present: boolean, warn = false): StepState =>
+    errAt(stage) ? "error" : running(run) ? "running" : !present ? "skipped" : warn ? "warn" : "done";
+
+  const addedChunks = p.added.reduce((k, a) => k + a.chunks, 0);
+  const researchState: EdgeState = p.research.used ? "used" : p.research.late ? "late" : "off";
+  const statsOn = p.statistics.publishers > 0;
+  const steps: { key: string; label: string; figure: string; state: StepState; detail: string }[] = [
+    {
+      key: "understand", label: "Understand who to ask",
+      figure: p.detected ? [p.detected.who, p.detected.confidence != null ? `${Math.round(p.detected.confidence)}% sure` : ""].filter(Boolean).join(" · ") : "not yet",
+      state: stepState("detect", ["queued", "detecting"], !!p.detected, p.detected?.confidence != null && p.detected.confidence < 60),
+      detail: "Reads the question, your description and survey, what was added and what the research found, and decides who the population is.",
+    },
+    {
+      key: "gather", label: "Gather published figures",
+      figure: statsOn ? (p.statistics.dims ? `${p.statistics.matched} of ${p.statistics.dims} matched` : `${plural(p.statistics.publishers, "publisher")} searched`) : "not used",
+      state: stepState("gather", ["gathering", "clarifying"], statsOn && (any("gather") || any("frame")), statsOn && p.statistics.dims > 0 && p.statistics.matched === 0),
+      detail: "Searches the ticked publishers for base rates about these people and matches the mix to the published shares.",
+    },
+    {
+      key: "plan", label: "Plan the groups",
+      figure: `${plural(p.groups, "group")}${p.assumptions ? ` · ${plural(p.assumptions, "assumption")}` : ""}`,
+      state: stepState("plan", ["planning", "awaiting_review"], p.groups > 0, p.assumptions > 0),
+      detail: "Composes the population as a set of real slices, each sized by evidence where it exists and by general knowledge where it does not.",
+    },
+    {
+      key: "write", label: "Write the people",
+      figure: `${plural(p.n, "person", "people")}${scoped != null ? ` · ${plural(scoped, "piece")} of knowledge` : ""}`,
+      state: stepState("spawn", ["spawning"], p.n > 0),
+      detail: scoped != null ? `Each person is written from what their group can reach: ${scoped} tagged pieces of knowledge from everything on file.` : "Each person is written from the plan and the shared summary of everything on file.",
+    },
+  ];
+  if (any("validate")) steps.push({ key: "check", label: "Check they behave", figure: ok("validate") ? "checked" : "checking", state: stepState("validate", [], ok("validate")), detail: "Each person is tested for knowledge, register, refusal and stability." });
+
+  const sources: { key: string; icon: React.ReactNode; label: string; figure: string; state: EdgeState; to: string; href: string; detail: string }[] = [
+    { key: "question", icon: <FileText className="w-4 h-4" />, label: "Your question", figure: "read first", state: "used", to: "understand", href: proLinks.session(p.sessionId), detail: "The question every step starts from." },
+    { key: "profile", icon: <User className="w-4 h-4" />, label: "Your description", figure: p.profileWords ? plural(p.profileWords, "word") : "none given", state: p.profileWords ? "used" : "off", to: "understand", href: proLinks.studio(p.sessionId), detail: "Who you said the people are." },
+    { key: "survey", icon: <Paperclip className="w-4 h-4" />, label: "Your survey", figure: p.surveyWords ? plural(p.surveyWords, "word") : "none given", state: p.surveyWords ? "used" : "off", to: "understand", href: proLinks.studio(p.sessionId), detail: "The survey or document uploaded with the people." },
+    {
+      key: "added", icon: <Layers className="w-4 h-4" />, label: "Things you added",
+      figure: p.added.length ? `${plural(p.added.length, "item")} · ${plural(addedChunks, "piece")} on file` : "nothing added",
+      state: p.added.length ? "used" : "off", to: "understand", href: proLinks.knowledge(p.sessionId),
+      detail: p.added.length ? p.added.slice(0, 6).map((a) => `${a.name} (${kindWord(a.kind)}, ${plural(a.chunks, "piece")})`).join("; ") : "Files, pasted text, videos and web pages dropped into Add anything.",
+    },
+    {
+      key: "research", icon: <Globe className="w-4 h-4" />, label: "Found online",
+      figure: p.research.ran ? (p.research.pages ? `${plural(p.research.pages, "page")}${p.research.late ? " · after the plan" : ""}` : "nothing yet") : "not run",
+      state: researchState, to: p.research.late ? "write" : "understand", href: proLinks.sources(p.sessionId),
+      detail: p.research.ran ? Object.entries(p.research.bySource).map(([k, v]) => `${k}: ${v.on_topic} on topic of ${v.read} read`).join("; ") || "The web research run." : "Research the web was switched off.",
+    },
+    {
+      key: "statistics", icon: <Search className="w-4 h-4" />, label: "Published statistics",
+      figure: statsOn ? `${plural(p.statistics.publishers, "publisher")}${p.statistics.pages ? ` · ${plural(p.statistics.pages, "page")} with figures` : ""}` : "switched off",
+      state: statsOn ? "used" : "off", to: "gather", href: proLinks.studio(p.sessionId),
+      detail: statsOn ? "Base rates searched for among the ticked publishers." : "No publishers were searched.",
+    },
+  ];
+
+  const outputs: { key: string; icon: React.ReactNode; label: string; figure: string; on: boolean; href: string }[] = [
+    { key: "people", icon: <Users className="w-4 h-4" />, label: "The people", figure: `${plural(p.n, "person", "people")} in ${plural(p.groups, "group")}`, on: p.n > 0, href: proLinks.people(p.sessionId) },
+    { key: "conversation", icon: <MessageSquare className="w-4 h-4" />, label: "The conversation", figure: p.posts ? plural(p.posts, "post") : "not started", on: p.posts > 0, href: proLinks.debate(p.sessionId) },
+    { key: "report", icon: <ScrollText className="w-4 h-4" />, label: "The report", figure: p.hasReport ? "written" : "not yet", on: p.hasReport, href: proLinks.report(p.sessionId) },
+  ];
+
+  // ── Connectors, measured from the boxes ──
+  const edgeSpec = useMemo(() => {
+    const list: { from: string; to: string; state: EdgeState; key: string; kind: "in" | "out" | "down" }[] = [];
+    for (const s of sources) list.push({ from: s.key, to: `step:${s.to}`, state: s.state, key: `in:${s.key}`, kind: "in" });
+    list.push({ from: "step:write", to: "people", state: p.n > 0 ? "used" : "off", key: "out:people", kind: "out" });
+    list.push({ from: "people", to: "conversation", state: p.posts > 0 ? "used" : "off", key: "down:conv", kind: "down" });
+    list.push({ from: "conversation", to: "report", state: p.hasReport ? "used" : "off", key: "down:report", kind: "down" });
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources.map((s) => `${s.key}:${s.state}:${s.to}`).join(","), p.n, p.posts, p.hasReport]);
+
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const measure = () => {
+      const isWide = window.matchMedia("(min-width: 768px)").matches;
+      setWide(isWide);
+      if (!isWide) { setPaths([]); return; }
+      const box = el.getBoundingClientRect();
+      const engine = nodes.current["engine"]?.getBoundingClientRect();
+      const rect = (k: string) => nodes.current[k]?.getBoundingClientRect();
+      const out: { d: string; state: EdgeState; key: string }[] = [];
+      for (const e of edgeSpec) {
+        const a = rect(e.from), b = rect(e.to);
+        if (!a || !b) continue;
+        let x1: number, y1: number, x2: number, y2: number;
+        if (e.kind === "in") {
+          x1 = a.right - box.left; y1 = a.top + a.height / 2 - box.top;
+          x2 = (engine ? engine.left : b.left) - box.left; y2 = b.top + b.height / 2 - box.top;
+        } else if (e.kind === "out") {
+          x1 = (engine ? engine.right : a.right) - box.left; y1 = a.top + a.height / 2 - box.top;
+          x2 = b.left - box.left; y2 = b.top + b.height / 2 - box.top;
+        } else {
+          x1 = a.left + a.width / 2 - box.left; y1 = a.bottom - box.top;
+          x2 = b.left + b.width / 2 - box.left; y2 = b.top - box.top;
+          out.push({ d: `M${x1},${y1} L${x2},${y2 - 1}`, state: e.state, key: e.key });
+          continue;
+        }
+        const dx = Math.max(24, (x2 - x1) / 2);
+        out.push({ d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2 - 1},${y2}`, state: e.state, key: e.key });
+      }
+      setPaths(out);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [edgeSpec, steps.length]);
+
+  const reg = (k: string) => (el: HTMLElement | null) => { nodes.current[k] = el; };
+  const total = p.segmentsForBar.reduce((k, s) => k + s.share, 0) || 100;
+
+  return (
+    <div ref={wrap} className="relative mt-4">
+      {wide && (
+        <svg className="absolute inset-0 w-full h-full pointer-events-none text-foreground" aria-hidden>
+          <defs>
+            {(["used", "late", "off"] as EdgeState[]).map((st) => (
+              <marker key={st} id={`${uid}-${st}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0.5 L7.5,4 L0,7.5 Z" fill={EDGE_STYLE[st].stroke} fillOpacity={EDGE_STYLE[st].opacity} />
+              </marker>
+            ))}
+          </defs>
+          {paths.map((pt) => (
+            <path key={pt.key} d={pt.d} fill="none" stroke={EDGE_STYLE[pt.state].stroke} strokeOpacity={EDGE_STYLE[pt.state].opacity} strokeWidth={EDGE_STYLE[pt.state].width} strokeDasharray={EDGE_STYLE[pt.state].dash} strokeLinecap="round" markerEnd={`url(#${uid}-${pt.state})`} />
+          ))}
+        </svg>
+      )}
+
+      <div className="grid gap-y-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)] md:gap-x-12 lg:gap-x-16 md:items-center">
+        {/* What went in */}
+        <div className="flex flex-col gap-2">
+          <p className="text-[11.5px] uppercase tracking-wide text-muted-foreground">What went in</p>
+          {sources.map((s) => (
+            <Link key={s.key} href={s.href} ref={reg(s.key) as any} title={`${s.label} · ${s.figure}. ${s.detail} Opens the page where it is analysed in full.`}
+              className={cn("group/node rounded-xl border px-3 py-2 flex items-center gap-2.5 transition-colors hover:border-primary/50",
+                s.state === "off" ? "border-dashed border-border/80 bg-transparent opacity-55" : s.state === "late" ? "border-amber-300 bg-amber-50/60" : "border-border bg-background")}>
+              <span className={cn("shrink-0", s.state === "off" ? "text-muted-foreground" : "text-foreground")}>{s.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-medium leading-tight text-foreground truncate">{s.label}</span>
+                <span className={cn("block text-[11.5px] leading-tight truncate tabular-nums", s.state === "late" ? "text-amber-700" : "text-muted-foreground")}>{s.figure}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <div className="md:hidden flex justify-center text-muted-foreground" aria-hidden><ChevronDown className="w-4 h-4" /></div>
+
+        {/* The engine */}
+        <div ref={reg("engine") as any} className="rounded-2xl border border-primary/25 bg-primary/[0.04] p-3 sm:p-4 relative">
+          <p className="text-[11.5px] uppercase tracking-wide text-primary">The engine · Population Studio</p>
+          <ol className="mt-2 space-y-1.5">
+            {steps.map((st, i) => (
+              <li key={st.key} ref={reg(`step:${st.key}`) as any} title={`${st.label}: ${st.figure}. ${st.detail}`}
+                className={cn("rounded-xl border bg-background px-3 py-2 flex items-center gap-2.5", st.state === "skipped" ? "border-dashed border-border/80 opacity-55" : "border-border")}>
+                <span className="w-5 h-5 rounded-full bg-foreground/[0.06] text-[11px] font-semibold tabular-nums flex items-center justify-center shrink-0">{i + 1}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-medium leading-tight text-foreground truncate">{st.label}</span>
+                  <span className="block text-[11.5px] leading-tight text-muted-foreground truncate tabular-nums">{st.figure}</span>
+                </span>
+                <StepMark state={st.state} />
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="md:hidden flex justify-center text-muted-foreground" aria-hidden><ChevronDown className="w-4 h-4" /></div>
+
+        {/* What came out */}
+        <div className="flex flex-col gap-4">
+          <p className="text-[11.5px] uppercase tracking-wide text-muted-foreground -mb-2">What came out</p>
+          {outputs.map((o) => (
+            <Link key={o.key} href={o.href} ref={reg(o.key) as any} title={`${o.label} · ${o.figure}. Opens the page where it is shown in full.`}
+              className={cn("rounded-xl border px-3 py-2 flex items-center gap-2.5 transition-colors hover:border-primary/50", o.on ? "border-border bg-background" : "border-dashed border-border/80 opacity-55")}>
+              <span className={cn("shrink-0", o.on ? "text-foreground" : "text-muted-foreground")}>{o.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-medium leading-tight text-foreground truncate">{o.label}</span>
+                <span className="block text-[11.5px] leading-tight text-muted-foreground truncate tabular-nums">{o.figure}</span>
+                {o.key === "people" && p.segmentsForBar.length > 0 && (
+                  <span className="mt-1.5 flex h-1.5 gap-[2px] rounded-full overflow-hidden" aria-hidden>
+                    {p.segmentsForBar.slice(0, 8).map((sg, i) => <span key={sg.id} style={{ width: `${(sg.share / total) * 100}%`, background: SERIES[i] }} title={`${sg.name} · ${Math.round(sg.share)}%`} />)}
+                    {p.segmentsForBar.length > 8 && <span style={{ width: `${(p.segmentsForBar.slice(8).reduce((k, sg) => k + sg.share, 0) / total) * 100}%`, background: OTHER }} />}
+                  </span>
+                )}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5"><span className="w-5 h-0 border-t-[1.5px] border-foreground/35" aria-hidden /> used in the plan</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-5 h-0 border-t-[1.5px] border-dashed" style={{ borderColor: WARN }} aria-hidden /> arrived after the plan, given to the people since</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-5 h-0 border-t border-dotted border-foreground/30" aria-hidden /> not used</span>
+      </div>
+    </div>
+  );
+}
+
+function StepMark({ state }: { state: StepState }) {
+  if (state === "running") return <span className="inline-flex items-center gap-1 text-[11px] text-primary shrink-0"><Loader2 className="w-3.5 h-3.5 animate-spin" /> running</span>;
+  if (state === "done") return <span className="inline-flex items-center gap-1 text-[11px] shrink-0" style={{ color: GOOD }}><Check className="w-3.5 h-3.5" /> done</span>;
+  if (state === "warn") return <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 shrink-0"><AlertTriangle className="w-3.5 h-3.5" /> with gaps</span>;
+  if (state === "error") return <span className="inline-flex items-center gap-1 text-[11px] text-red-700 shrink-0"><AlertTriangle className="w-3.5 h-3.5" /> failed</span>;
+  return <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0"><Circle className="w-3 h-3" /> skipped</span>;
+}
+
 // ── Pieces ─────────────────────────────────────────────────────────────────────
 
 function Head({ title }: { title: string }) {
@@ -334,16 +632,6 @@ function Tile({ value, label, dim, tone }: { value: string; label: string; dim?:
     <div className={cn("lite-card px-3 py-2.5 text-center", dim && "opacity-60")}>
       <p className={cn("text-[20px] font-semibold tracking-tight tabular-nums leading-none", tone === "good" ? "text-emerald-700" : tone === "warn" ? "text-amber-700" : "text-foreground")}>{value}</p>
       <p className="text-[11px] text-muted-foreground mt-1.5 leading-tight">{label}</p>
-    </div>
-  );
-}
-
-function Ingredient({ icon, label, value, on }: { icon: React.ReactNode; label: string; value: string; on: boolean }) {
-  return (
-    <div className={cn("rounded-xl border px-2.5 py-2.5 flex flex-col items-center text-center gap-1", on ? "border-border bg-background" : "border-dashed border-border/80 opacity-55")} title={`${label}: ${value}`}>
-      <span className={cn(on ? "text-foreground" : "text-muted-foreground")}>{icon}</span>
-      <p className="text-[12.5px] font-medium text-foreground leading-tight">{label}</p>
-      <p className="text-[11.5px] text-muted-foreground leading-tight">{value}</p>
     </div>
   );
 }
