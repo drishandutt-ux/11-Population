@@ -71,7 +71,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
   return (
     <div className="lite lite-bg min-h-screen text-foreground flex flex-col">
       <header className="h-14 px-4 sm:px-6 flex items-center gap-3">
-        <span className="text-[14px] font-semibold tracking-tight">11 Minds</span>
+        <span className="text-[14px] font-semibold tracking-tight">11 Minds Population</span>
         <span className="text-[12px] text-muted-foreground hidden sm:inline">Simple view</span>
         <div className="ml-auto flex items-center gap-2">
           <ModeSwitch mode="simple" onPro={onSwitchToPro} />
