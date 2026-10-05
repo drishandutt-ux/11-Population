@@ -28,6 +28,9 @@ export function useLiteSession(id: string) {
   const [agentsMap, setAgentsMap] = useState<Record<string, Agent>>({});
   const [posts, setPosts] = useState<Post[]>([]);
   const [build, setBuild] = useState<PopulationBuild | null>(null);
+  /** False until the latest build has been looked up once (or the lookup has given up): the page
+   *  must not show "Who should we ask?" over a build that is quietly running on the server. */
+  const [buildLoaded, setBuildLoaded] = useState(false);
   const [research, setResearch] = useState<ResearchState | null>(null);
   const [spawnProgress, setSpawnProgress] = useState<{ current: number; total: number } | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
@@ -70,8 +73,20 @@ export function useLiteSession(id: string) {
     }
   }, [id, applyAgents]);
 
-  const refreshBuild = useCallback(async () => {
-    try { const r = await api.population.latest(id); setBuild(r.build); } catch {}
+  const refreshBuild = useCallback(async (attempt = 0): Promise<PopulationBuild | null> => {
+    try {
+      const r = await api.population.latest(id);
+      setBuild(r.build);
+      setBuildLoaded(true);
+      return r.build;
+    } catch {
+      if (attempt < 3) {
+        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+        return refreshBuild(attempt + 1);
+      }
+      setBuildLoaded(true);
+      return null;
+    }
   }, [id]);
 
   const loadResearch = useCallback(async () => {
@@ -94,7 +109,9 @@ export function useLiteSession(id: string) {
       const asks = list.filter((r) => !r.structure && r.question && r.question !== "report");
       if (asks.length) setReportChat(asks.flatMap((r) => [{ role: "user" as const, content: r.question }, { role: "assistant" as const, content: r.answer }]));
     }).catch(() => {});
-    const t = setInterval(() => { refresh(); }, 8000);
+    // The build is polled with the rest: the socket carries its events, but a missed event or
+    // a page reopened mid-build must still find the right screen within a few seconds.
+    const t = setInterval(() => { refresh(); refreshBuild(); }, 8000);
     return () => clearInterval(t);
   }, [id, refresh, refreshBuild, loadResearch]);
 
@@ -206,6 +223,9 @@ export function useLiteSession(id: string) {
    *  plan as proposed, start the debate. The backend carries it through even if this tab closes. */
   async function runSimulation(profile: string, docContext: string) {
     setSpawnError(null);
+    // Never start a second build over one already running: look once more first.
+    const current = await refreshBuild();
+    if (buildInFlight(current)) return;
     const b = await api.population.start(id, {
       mode: LITE_DEFAULTS.mode,
       count: LITE_DEFAULTS.count,
@@ -249,7 +269,7 @@ export function useLiteSession(id: string) {
   const buildActive = buildInFlight(build);
 
   return {
-    session, notFound, agents, agentsMap, posts, build, buildActive, research, spawnProgress, spawnError,
+    session, notFound, agents, agentsMap, posts, build, buildLoaded, buildActive, research, spawnProgress, spawnError,
     opinions, opinionsStatus, opinionsError, loadOpinions,
     reportContent, reportRecords, reportStructure, reportChat, isGeneratingReport, reportError,
     runSimulation, startDebate, stopDebate, makeReport, refresh, loadResearch,

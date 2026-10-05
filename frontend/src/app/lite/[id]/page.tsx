@@ -50,10 +50,14 @@ function LiteSession() {
   const debating = status === "simulating" || status === "paused";
   const finished = status === "complete";
   const hasPosts = s.posts.length > 0;
-  const stage: "people" | "progress" | "ready" | "debate" =
+  // "checking": no roster yet and the latest build has not been looked up — the people form must
+  // not appear over a build that is running on the server (a reader who sees the form again
+  // assumes the build stopped and presses Run a second time).
+  const stage: "checking" | "people" | "progress" | "ready" | "debate" =
     hasPosts || debating || (finished && s.agents.length > 0) ? "debate"
     : s.buildActive || s.spawnProgress ? "progress"
     : s.agents.length > 0 ? "ready"
+    : !s.buildLoaded || !s.session ? "checking"
     : "people";
   const step: LiteStep = view === "report" ? "report" : view === "ask" ? "ask" : view === "people" ? "people" : stage === "debate" ? "debate" : "people";
   const title = s.session?.title || "";
@@ -154,10 +158,13 @@ function LiteSession() {
 
   // ── People: who was asked (or getting them ready, or the form) ──
   if (view === "people") {
+    if (stage === "checking") {
+      return <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}><Checking /></LiteShell>;
+    }
     if (stage === "progress") {
       return (
         <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}>
-          <Progress buildStatus={s.build?.status || "queued"} spawn={s.spawnProgress} agentsSoFar={s.agents.length} error={s.build?.error || s.spawnError} sessionId={id} onRetry={() => router.refresh()} />
+          <Progress buildStatus={s.build?.status || "queued"} startedAt={s.build?.created_at} spawn={s.spawnProgress} agentsSoFar={s.agents.length} error={s.build?.error || s.spawnError} sessionId={id} onRetry={() => router.refresh()} />
         </LiteShell>
       );
     }
@@ -228,11 +235,16 @@ function LiteSession() {
     );
   }
 
+  // ── Still finding out where this question is ──
+  if (stage === "checking") {
+    return <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}><Checking /></LiteShell>;
+  }
+
   // ── Getting ready ──
   if (stage === "progress") {
     return (
       <LiteShell {...shell} step="people" proHref={proLinks.studio(id)}>
-        <Progress buildStatus={s.build?.status || "queued"} spawn={s.spawnProgress} agentsSoFar={s.agents.length} error={s.build?.error || s.spawnError} sessionId={id} onRetry={() => router.refresh()} />
+        <Progress buildStatus={s.build?.status || "queued"} startedAt={s.build?.created_at} spawn={s.spawnProgress} agentsSoFar={s.agents.length} error={s.build?.error || s.spawnError} sessionId={id} onRetry={() => router.refresh()} />
       </LiteShell>
     );
   }
@@ -347,13 +359,25 @@ const STEPS = [
   { key: "talk", label: "Starting the conversation", help: "They read the question and begin to talk it through." },
 ];
 
-function Progress({ buildStatus, spawn, agentsSoFar, error, sessionId, onRetry }: { buildStatus: string; spawn: { current: number; total: number } | null; agentsSoFar: number; error?: string | null; sessionId: string; onRetry: () => void }) {
+/** A quiet screen for the second or two before the latest build is known. */
+function Checking() {
+  return (
+    <div className="max-w-2xl mx-auto pt-16 px-6 pb-16 animate-fade-in">
+      <p className="inline-flex items-center gap-2 text-[13.5px] text-muted-foreground"><span className="lite-dots flex gap-1"><span /><span /><span /></span> Checking where this question is…</p>
+    </div>
+  );
+}
+
+function Progress({ buildStatus, startedAt, spawn, agentsSoFar, error, sessionId, onRetry }: { buildStatus: string; startedAt?: string | null; spawn: { current: number; total: number } | null; agentsSoFar: number; error?: string | null; sessionId: string; onRetry: () => void }) {
   const current = buildStatus === "spawning" ? 1 : buildStatus === "complete" ? 2 : 0;
   const failed = buildStatus === "error" || buildStatus === "stopped" || !!error;
-  const started = useRef(Date.now());
+  // The clock runs from the build's own start on the server, so leaving and coming back shows
+  // the true elapsed time rather than restarting at zero.
+  const mounted = useRef(Date.now());
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  const mins = Math.floor((Date.now() - started.current) / 60000);
+  const startedMs = startedAt ? Date.parse(/Z$|[+-]\d\d:\d\d$/.test(startedAt) ? startedAt : startedAt + "Z") : NaN;
+  const mins = Math.max(0, Math.floor((Date.now() - (Number.isFinite(startedMs) ? startedMs : mounted.current)) / 60000));
 
   return (
     <div className="max-w-2xl mx-auto pt-10 sm:pt-14 px-6 pb-16 animate-rise">
@@ -361,7 +385,7 @@ function Progress({ buildStatus, spawn, agentsSoFar, error, sessionId, onRetry }
         <div className="lite-card p-7 sm:p-8">
           {!failed && <ConjureGrid className="mb-7" />}
           <h1 className="text-[24px] font-semibold tracking-tight">{failed ? "Something stopped" : "Getting everyone ready"}</h1>
-          <p className="lite-lead mt-1.5">{failed ? "The people could not be created this time." : `Usually a few minutes. You can leave this page and come back.${mins >= 1 ? ` Running for ${mins} min.` : ""}`}</p>
+          <p className="lite-lead mt-1.5">{failed ? "The people could not be created this time." : `Usually a few minutes. This runs on the server, so you can open other pages or close the tab and it carries on.${mins >= 1 ? ` Running for ${mins} min.` : ""}`}</p>
           <ol className="mt-6 space-y-4">
             {STEPS.map((st, i) => {
               const done = !failed && i < current;

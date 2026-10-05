@@ -623,6 +623,14 @@ async def start_build(session_id: str, *, mode: str, count: int, constraints: di
     """Create a build and run it in the background up to the point that needs the user."""
     async with dbm.AsyncSessionLocal() as db:
         old = (await db.execute(select(PopulationBuild).where(PopulationBuild.session_id == session_id, PopulationBuild.status.in_(list(ACTIVE))))).scalars().all()
+        # The simple view's hands-off build (auto_run) is idempotent: a second Run while one is
+        # already in flight — the page was reopened before it knew the build existed, a double
+        # click, two tabs — returns the running build instead of stopping it and starting over.
+        # The pro Studio keeps its deliberate "a new build supersedes the old one".
+        if _auto_run(constraints or {}) is not None:
+            for o in old:
+                if _auto_run(o.constraints or {}) is not None:
+                    return o
         for o in old:
             o.status = "stopped"
             _stop[o.id] = True

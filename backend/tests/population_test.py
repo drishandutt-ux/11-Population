@@ -827,3 +827,33 @@ def test_ingest_url_is_tagged_as_a_user_page_and_refuses_non_urls(api_client):
     client, _, _ = api_client
     sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
     assert client.post(f"/api/v1/sessions/{sid}/ingest/url", json={"url": "just words"}).status_code == 400
+
+
+def test_simple_view_start_is_idempotent_over_a_live_build(api_client, monkeypatch):
+    """The simple view's Run (auto_run) while an auto_run build is already in flight returns that
+    build instead of stopping it: a page reopened before it knew the build existed, a double
+    click or a second tab must not restart the work. The pro Studio's start still supersedes."""
+    import asyncio as _a
+    from app.models.population import PopulationBuild
+    from app.services.population import builder
+    client, Session, _ = api_client
+    sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
+    auto = {"auto_run": {"intensity": 2, "mode": "fast"}, "skip_questions": True}
+
+    async def noop(*_a, **_k):
+        return None
+    monkeypatch.setattr(builder, "_run_to_review", noop)
+
+    async def go():
+        async with Session() as db:
+            db.add(PopulationBuild(id="live", session_id=sid, status="gathering", constraints=dict(auto), sources={}, questions=[], log=[]))
+            await db.commit()
+        same = await builder.start_build(sid, mode="fast", count=40, constraints=dict(auto), sources={})
+        pro = await builder.start_build(sid, mode="fast", count=40, constraints={"profile_query": "x"}, sources={})
+        async with Session() as db:
+            live = await db.get(PopulationBuild, "live")
+            return same.id, pro.id, live.status
+
+    same_id, pro_id, live_status = _a.new_event_loop().run_until_complete(go())
+    assert same_id == "live"                 # the running simple-view build is handed back as it is
+    assert pro_id != "live" and live_status == "stopped"   # a deliberate pro start still supersedes
