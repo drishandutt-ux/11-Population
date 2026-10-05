@@ -1,4 +1,6 @@
+import asyncio
 import uuid
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -23,6 +25,9 @@ class ReportQueryResponse(BaseModel):
     sources: Optional[str] = None
     # The wired parts of the report proper (brief L6-02); None for Ask-Report follow-ups.
     structure: Optional[dict] = None
+    # When the row was written (naive UTC) — the simple view uses it to tell whether a report asked
+    # for before the page was left has landed since.
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -60,6 +65,46 @@ class GenerateReportRequest(BaseModel):
     mode: str = "fast"
 
 
+# The report proper in flight, per session. A second request while one is being written joins
+# it instead of writing a second report: the browser's call may have been cut off (a timeout, a
+# dropped connection) and retried while the first is still running, and the work is minutes long.
+_inflight: dict[str, asyncio.Task] = {}
+
+
+async def _write_report(session_id: str, query: str, mode: str, question: Optional[str]) -> dict:
+    """The report proper, on its own database session so it outlives the request that started it."""
+    from app.core.database import AsyncSessionLocal
+    from app.services.simulation import records as records_mod
+    from app.services.simulation.report_generator import generate_report as _generate
+
+    headline = None
+    try:
+        headline = await records_mod.ensure_headline(session_id, query, mode="pro" if mode == "pro" else "fast")
+    except Exception as e:  # noqa: BLE001
+        print(f"[report] headline record failed: {type(e).__name__}: {e}")
+    records = await records_mod.records_for_session(session_id)
+    async with AsyncSessionLocal() as db:
+        answer, sources, structure = await _generate(session_id, query, db, records, headline, request=question)
+        record = ReportQuery(id=str(uuid.uuid4()), session_id=session_id, question=question or "report", answer=answer,
+                             sources=sources, structure=structure)
+        db.add(record)
+        await db.commit()
+        await db.refresh(record)
+        return {"id": record.id, "question": record.question, "answer": record.answer, "sources": record.sources,
+                "records": records, "structure": structure}
+
+
+async def run_report(session_id: str, query: str, mode: str = "fast", question: Optional[str] = None) -> dict:
+    """Write the report proper, or join the one already being written for this session."""
+    task = _inflight.get(session_id)
+    if task is None or task.done():
+        task = asyncio.create_task(_write_report(session_id, query, mode, question))
+        _inflight[session_id] = task
+        task.add_done_callback(lambda t: _inflight.pop(session_id, None) if _inflight.get(session_id) is t else None)
+    # Shielded: a request that goes away (the browser gave up) must not cancel the shared write.
+    return await asyncio.shield(task)
+
+
 @router.post("/{session_id}/report/generate")
 async def generate_report(
     session_id: str,
@@ -72,25 +117,10 @@ async def generate_report(
     (reused while the roster is unchanged) — then every other record on file, then the
     narrative written around them with the computed parts (confidence band, evidence by class,
     positions and named dissent, the records' caveats) stored as `structure` beside the prose.
-    Returns the report row plus the records it was rendered from."""
-    from app.services.simulation import records as records_mod
-    from app.services.simulation.report_generator import generate_report as _generate
-
+    Returns the report row plus the records it was rendered from. One report is written at a
+    time per session: a second call while one is in flight returns the same report."""
     session = await get_owned_session(session_id, user, db)
-    headline = None
-    try:
-        headline = await records_mod.ensure_headline(session_id, session.query, mode="pro" if body.mode == "pro" else "fast")
-    except Exception as e:  # noqa: BLE001
-        print(f"[report] headline record failed: {type(e).__name__}: {e}")
-    records = await records_mod.records_for_session(session_id)
-    answer, sources, structure = await _generate(session_id, session.query, db, records, headline, request=body.question)
-    record = ReportQuery(id=str(uuid.uuid4()), session_id=session_id, question=body.question or "report", answer=answer,
-                         sources=sources, structure=structure)
-    db.add(record)
-    await db.commit()
-    await db.refresh(record)
-    return {"id": record.id, "question": record.question, "answer": record.answer, "sources": record.sources,
-            "records": records, "structure": structure}
+    return await run_report(session_id, session.query, body.mode, body.question)
 
 
 @router.get("/{session_id}/records")

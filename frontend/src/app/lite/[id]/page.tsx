@@ -113,6 +113,9 @@ function LiteSession() {
             {s.reportError && (
               <p className="m-4 mb-0 text-[13px] text-red-700 bg-red-500/10 rounded-xl px-3.5 py-2.5">{s.reportError}</p>
             )}
+            {s.reportNote && (
+              <p className="m-4 mb-0 inline-flex items-center gap-2 text-[13px] text-muted-foreground bg-foreground/[0.04] rounded-xl px-3.5 py-2.5"><span className="lite-dots flex gap-1"><span /><span /><span /></span> {s.reportNote}</p>
+            )}
             {!s.reportContent && !s.isGeneratingReport ? (
               <div className="flex-1 flex items-center justify-center p-8 text-center">
                 <div className="max-w-md animate-rise">

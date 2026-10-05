@@ -11,9 +11,9 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   return res;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit, timeoutMs = 120_000): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 120_000); // 2 min — LLM calls can be slow
+  const timer = setTimeout(() => controller.abort(), timeoutMs); // 2 min by default — LLM calls can be slow
   try {
     const auth = await authHeaders();
     const res = await fetch(`${BASE}/api/v1${path}`, {
@@ -172,7 +172,7 @@ export const api = {
       request<{ id: string; question: string; answer: string; sources: string | null; records: OutcomeRecord[]; structure: ReportStructure | null }>(`/sessions/${sessionId}/report/generate`, {
         method: "POST",
         body: JSON.stringify({}),
-      }),
+      }, 10 * 60_000), // the report proper may run a verdict probe over the whole roster first
     history: (sessionId: string) => request(`/sessions/${sessionId}/report/history`),
     /** The client-facing document (brief L6-06) with the synthetic-population statement (L6-07). */
     client: (sessionId: string) => request<ClientReport>(`/sessions/${sessionId}/report/client`),

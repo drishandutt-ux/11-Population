@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord, ReportStructure } from "@/lib/api";
+import { isCutOff, snapshotReportIds, waitForNewReport } from "@/lib/reportWait";
 import { getSessionWS } from "@/lib/websocket";
 import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker, Sparkles } from "lucide-react";
 import { setUiMode } from "@/lib/lite";
@@ -426,12 +427,25 @@ export default function SessionPage() {
   async function handleMakeReport() {
     setIsGeneratingReport(true);
     setActiveTab("report"); // switch immediately so user sees the generating state
+    const known = await snapshotReportIds(id);
     try {
       const result = await api.report.generate(id);
       setReportRecords(result.records || []);
       setReportStructure(result.structure || null);
       setReportContent(result.answer);
     } catch (e: any) {
+      if (isCutOff(e)) {
+        // The call was cut off, not refused: the server keeps writing and saves the report to
+        // the history when it is done — wait for it there rather than declaring a failure.
+        const got = await waitForNewReport(id, known);
+        if (got) {
+          setReportRecords(got.records);
+          setReportStructure(got.row.structure || null);
+          setReportContent(got.row.answer);
+          setIsGeneratingReport(false);
+          return;
+        }
+      }
       // Never fail silently — surface the reason in the report panel so the button
       // is never a no-op. A thrown 404 means the session was wiped (no persistence).
       console.error("Report generation failed:", e);

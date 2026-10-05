@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, Agent, OutcomeRecord, PopulationBuild, Post, ReportStructure, ResearchState, Session, WSEvent } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
 import { LITE_DEFAULTS } from "@/lib/lite";
+import { clearReportPending, isCutOff, markReportPending, reportPendingSince, serverTime, snapshotReportIds, waitForNewReport } from "@/lib/reportWait";
 
 export type OpinionsStatus = "idle" | "loading" | "done" | "error";
 export type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -47,6 +48,10 @@ export function useLiteSession(id: string) {
   const [reportChat, setReportChat] = useState<ChatMsg[]>([]);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  /** A calm line while the server is still writing after the call itself gave up. */
+  const [reportNote, setReportNote] = useState<string | null>(null);
+  const reportIds = useRef<Set<string>>(new Set());
+  const reportWait = useRef<{ stopped: boolean }>({ stopped: false });
 
   const applyAgents = useCallback((list: Agent[]) => {
     setAgents(list);
@@ -100,6 +105,7 @@ export function useLiteSession(id: string) {
     api.sessions.posts(id).then((p) => { const list = p as Post[]; if (list.length) setPosts(list); }).catch(() => {});
     api.report.history(id).then((rows: any) => {
       const list: any[] = Array.isArray(rows) ? rows : [];
+      reportIds.current = new Set(list.map((r) => r.id));
       const proper = [...list].reverse().find((r) => r.structure);
       if (proper) {
         setReportContent(proper.answer);
@@ -108,6 +114,29 @@ export function useLiteSession(id: string) {
       }
       const asks = list.filter((r) => !r.structure && r.question && r.question !== "report");
       if (asks.length) setReportChat(asks.flatMap((r) => [{ role: "user" as const, content: r.question }, { role: "assistant" as const, content: r.answer }]));
+      // A report was asked for a few minutes ago and the page was left: if nothing has landed
+      // since then, the server is most likely still writing it — wait for it rather than offering
+      // to start another.
+      const since = reportPendingSince(id);
+      // A report row without a readable time counts as landed — better to show what is there than to wait on it.
+      const landed = list.some((r) => r.structure && (serverTime(r.created_at) ?? Infinity) >= since! - 60_000);
+      if (since && !landed) {
+        setIsGeneratingReport(true);
+        setReportNote("Still writing the report. This can take several minutes — you can leave this page and come back.");
+        waitForNewReport(id, reportIds.current, { signal: reportWait.current }).then((got) => {
+          if (got) {
+            reportIds.current.add(got.row.id);
+            setReportRecords(got.records);
+            setReportStructure(got.row.structure || null);
+            setReportContent(got.row.answer);
+          }
+          clearReportPending(id);
+          setIsGeneratingReport(false);
+          setReportNote(null);
+        });
+      } else if (since) {
+        clearReportPending(id);
+      }
     }).catch(() => {});
     // The build is polled with the rest: the socket carries its events, but a missed event or
     // a page reopened mid-build must still find the right screen within a few seconds.
@@ -252,15 +281,41 @@ export function useLiteSession(id: string) {
   }
 
   async function makeReport() {
+    if (isGeneratingReport) return;
     setIsGeneratingReport(true);
     setReportError(null);
+    setReportNote(null);
+    // The ids on file before asking, so a report that lands after a cut-off call is recognisable.
+    const known = new Set([...reportIds.current, ...(await snapshotReportIds(id))]);
+    reportIds.current = known;
+    markReportPending(id);
     try {
       const result = await api.report.generate(id);
+      reportIds.current.add(result.id);
       setReportRecords(result.records || []);
       setReportStructure(result.structure || null);
       setReportContent(result.answer);
+      clearReportPending(id);
     } catch (e: any) {
-      setReportError(e?.message || "The report could not be written. Please try again.");
+      if (isCutOff(e)) {
+        // The call was cut off, not refused: the server keeps writing and saves the report when
+        // it is done. Wait for it in the history instead of failing.
+        setReportNote("The connection gave up before the report was finished, but the server is still writing it. Waiting for it — this can take several minutes, and you can leave this page.");
+        const got = await waitForNewReport(id, known, { signal: reportWait.current });
+        if (got) {
+          reportIds.current.add(got.row.id);
+          setReportRecords(got.records);
+          setReportStructure(got.row.structure || null);
+          setReportContent(got.row.answer);
+        } else {
+          setReportError("The report did not arrive. Please try again.");
+        }
+        setReportNote(null);
+        clearReportPending(id);
+      } else {
+        clearReportPending(id);
+        setReportError(e?.message || "The report could not be written. Please try again.");
+      }
     } finally {
       setIsGeneratingReport(false);
     }
@@ -271,7 +326,7 @@ export function useLiteSession(id: string) {
   return {
     session, notFound, agents, agentsMap, posts, build, buildLoaded, buildActive, research, spawnProgress, spawnError,
     opinions, opinionsStatus, opinionsError, loadOpinions,
-    reportContent, reportRecords, reportStructure, reportChat, isGeneratingReport, reportError,
+    reportContent, reportRecords, reportStructure, reportChat, isGeneratingReport, reportError, reportNote,
     runSimulation, startDebate, stopDebate, makeReport, refresh, loadResearch,
     clearReport: () => setReportContent(null),
   };
