@@ -419,6 +419,47 @@ html.lite-root, html.lite-root body { background: hsl(40 20% 99%); color-scheme:
 .lite .text-purple-300 { color: rgb(126 34 206); }
 .lite .text-slate-300 { color: rgb(71 85 105); }
 .lite .text-violet-300 { color: rgb(109 40 217); }
+
+/* The report (ReportChat) is the pro component as it is; its figures, chips and labels are tinted
+   for the dark portal (teal-300, yellow-400, sky-300 …) and wash out on the light page. Each of
+   those tints maps here to a light-page equivalent: teal becomes the simple view's own accent, the
+   rest step down to their 700 weights. Only the text and dot colours change — borders and the
+   faint background washes already read correctly on white. (2026-10-05) */
+.lite .text-teal-300, .lite .text-teal-400 { color: hsl(var(--primary)); }
+.lite .text-teal-300\/80 { color: hsl(var(--primary) / 0.85); }
+.lite .text-teal-300\/70 { color: hsl(var(--primary) / 0.75); }
+.lite .text-yellow-400, .lite .text-yellow-300, .lite .text-amber-400 { color: rgb(180 83 9); }
+.lite .text-yellow-300\/80, .lite .text-yellow-200\/90 { color: rgb(180 83 9 / 0.9); }
+.lite .text-yellow-300\/70, .lite .text-yellow-400\/60 { color: rgb(180 83 9 / 0.75); }
+.lite .text-emerald-400 { color: rgb(4 120 87); }
+.lite .text-emerald-300\/85 { color: rgb(4 120 87 / 0.9); }
+.lite .text-red-300\/85 { color: rgb(185 28 28 / 0.9); }
+.lite .text-sky-300\/80, .lite .text-sky-400 { color: rgb(3 105 161 / 0.9); }
+.lite .text-slate-400 { color: rgb(71 85 105); }
+.lite .text-zinc-400 { color: rgb(113 113 122); }
+.lite .text-indigo-300 { color: rgb(67 56 202); }
+.lite .text-pink-300 { color: rgb(190 24 93); }
+.lite .text-pink-300\/80 { color: rgb(190 24 93 / 0.9); }
+.lite .text-orange-300 { color: rgb(194 65 12); }
+.lite .text-purple-400 { color: rgb(126 34 206); }
+.lite .text-blue-400 { color: rgb(29 78 216); }
+.lite .decoration-zinc-500\/60 { text-decoration-color: rgb(113 113 122 / 0.6); }
+/* Evidence-class dots and the positions bar: the 400 tints are fine on white, the washes a touch
+   too faint — lift them so the bar and the chips still read as colour. */
+.lite .bg-teal-500\/5 { background-color: hsl(var(--primary) / 0.06); }
+.lite .bg-teal-500\/10 { background-color: hsl(var(--primary) / 0.1); }
+.lite .hover\:bg-teal-500\/10:hover { background-color: hsl(var(--primary) / 0.12); }
+.lite .hover\:bg-teal-500\/20:hover { background-color: hsl(var(--primary) / 0.18); }
+.lite .border-teal-500\/25 { border-color: hsl(var(--primary) / 0.3); }
+.lite .border-teal-500\/30, .lite .border-teal-500\/40 { border-color: hsl(var(--primary) / 0.45); }
+.lite .bg-teal-400, .lite .bg-teal-400\/70 { background-color: hsl(var(--primary)); }
+.lite .bg-yellow-500\/5 { background-color: rgb(217 119 6 / 0.07); }
+.lite .bg-yellow-500\/10 { background-color: rgb(217 119 6 / 0.12); }
+.lite .border-yellow-500\/20, .lite .border-yellow-500\/25, .lite .border-yellow-500\/30, .lite .border-amber-400\/30 { border-color: rgb(217 119 6 / 0.35); }
+.lite .bg-amber-500\/5 { background-color: rgb(217 119 6 / 0.07); }
+.lite .bg-emerald-400\/80, .lite .bg-emerald-400 { background-color: rgb(16 185 129); }
+.lite .bg-yellow-400\/70, .lite .bg-yellow-400 { background-color: rgb(234 179 8); }
+.lite .bg-red-400\/80, .lite .bg-red-400 { background-color: rgb(239 68 68); }
 .lite select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7080' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 
 /* Soft colour wash behind the simple pages — barely there, never behind text blocks. */
