@@ -175,7 +175,7 @@ function LiteSession() {
       return (
         <LiteShell {...shell} step="people" proHref={proLinks.people(id)}>
           <ReadyCard agents={s.agents} hasDebate={stage === "debate"} sessionId={id} onStart={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} onGo={() => setView("flow")} onTalk={(a) => { setView("flow"); talkTo(a); }} />
-          <HowMade sessionId={id} question={s.session?.query || ""} build={s.build} agents={s.agents} research={s.research} posts={s.posts.length} hasReport={!!s.reportContent} />
+          <HowMade sessionId={id} question={s.session?.query || ""} build={s.build} agents={s.agents} research={s.research} posts={s.posts.length} hasReport={!!s.reportContent} dials={s.session?.dynamic_dials} />
         </LiteShell>
       );
     }
@@ -257,7 +257,7 @@ function LiteSession() {
     return (
       <LiteShell {...shell} step="people" proHref={proLinks.people(id)}>
         <ReadyCard agents={s.agents} hasDebate={false} sessionId={id} onStart={() => s.startDebate().catch((e) => alert(e?.message || "Could not start"))} onGo={() => setView("flow")} onTalk={(a) => { setView("flow"); talkTo(a); }} />
-        <HowMade sessionId={id} question={s.session?.query || ""} build={s.build} agents={s.agents} research={s.research} posts={s.posts.length} hasReport={!!s.reportContent} />
+        <HowMade sessionId={id} question={s.session?.query || ""} build={s.build} agents={s.agents} research={s.research} posts={s.posts.length} hasReport={!!s.reportContent} dials={s.session?.dynamic_dials} />
       </LiteShell>
     );
   }

@@ -8,8 +8,9 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { api, Agent, EvidenceItem, FrameReportDim, FrameTarget, KgSource, KgSources, PopulationBuild, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState } from "@/lib/api";
+import { api, Agent, DynamicDial, EvidenceItem, FrameReportDim, FrameTarget, KgSource, KgSources, PopulationBuild, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState } from "@/lib/api";
 import Detail, { DetailLink } from "@/components/lite/Detail";
+import InputDialog, { InputKind } from "@/components/lite/InputDialog";
 import { proLinks, stanceWords } from "@/lib/lite";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, BookOpen, Check, ChevronDown, Circle, FileText, Globe, Layers, Loader2, MessageSquare, Minus, Paperclip, ScrollText, Search, Sparkles, User, Users } from "lucide-react";
@@ -23,6 +24,8 @@ type Props = {
   /** Posts in the conversation so far, and whether a report has been written — the flow's last two nodes. */
   posts?: number;
   hasReport?: boolean;
+  /** The question's own dials, shown in the "Your question" summary. */
+  dials?: DynamicDial[] | null;
 };
 
 // Categorical palette (validated order; a 9th group folds into "Other").
@@ -69,7 +72,7 @@ function standingWord(s: Standing, t?: FrameTarget): string {
   return "Published figure";
 }
 
-export default function HowMade({ sessionId, question, build, agents, research, posts = 0, hasReport = false }: Props) {
+export default function HowMade({ sessionId, question, build, agents, research, posts = 0, hasReport = false, dials = null }: Props) {
   const [labels, setLabels] = useState<Record<string, string>>(PUBLISHER_FALLBACK);
   useEffect(() => {
     api.population.sources().then((r) => {
@@ -81,16 +84,19 @@ export default function HowMade({ sessionId, question, build, agents, research, 
   // What the graph was fed and which statistics pages carry figures: the flow's "added" and
   // "statistics" nodes. Read again whenever the build moves, so a page left open keeps up.
   const [kgSources, setKgSources] = useState<KgSources | null>(null);
-  const [factPages, setFactPages] = useState<number | null>(null);
+  const [factRows, setFactRows] = useState<EvidenceItem[] | null>(null);
+  // Which input's summary dialog is open, if any.
+  const [openInput, setOpenInput] = useState<InputKind | null>(null);
   const buildKey = `${build?.id || ""}:${build?.status || ""}:${agents.length}`;
   useEffect(() => {
     api.kg.sources(sessionId).then(setKgSources).catch(() => {});
-    api.population.facts(sessionId).then((rows) => setFactPages((rows as EvidenceItem[]).filter((e) => (e.structured?.facts || []).length > 0).length)).catch(() => {});
+    api.population.facts(sessionId).then((rows) => setFactRows(rows as EvidenceItem[])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, buildKey]);
 
   const n = agents.length;
   const studioHref = proLinks.studio(sessionId);
+  const factPages = factRows ? factRows.filter((e) => (e.structured?.facts || []).length > 0).length : null;
 
   // ── A roster written without the Studio ──
   if (!build || !build.plan) {
@@ -174,7 +180,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
         <Detail href={proLinks.sources(sessionId)} className="lg:col-span-2">
           <div className="lite-card p-5 sm:p-6 h-full">
             <Head title="Where these people came from" />
-            <p className="lite-help mt-1">What went in on the left, what the engine did with it in the middle, what came out on the right. Every box opens the page where it is analysed in full.</p>
+            <p className="lite-help mt-1">What went in on the left, what the engine did with it in the middle, what came out on the right. Each input opens a summary of what it was and how it was used; the engine and what came out open the page where they are analysed in full.</p>
             <Flow
               sessionId={sessionId}
               n={n}
@@ -191,6 +197,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
               segmentsForBar={segments.map((sg) => ({ id: sg.id, name: sg.name, share: sg.share_pct }))}
               posts={posts}
               hasReport={hasReport}
+              onOpen={setOpenInput}
             />
             <div className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-2">
               {profile && <Clamp label="Your description" text={profile} />}
@@ -344,6 +351,9 @@ export default function HowMade({ sessionId, question, build, agents, research, 
       </div>
 
       <p className="lite-help mt-4">Everything above is read from the record of this build. <DetailLink href={studioHref} label="See the full plan and its log" /></p>
+
+      <InputDialog kind={openInput} onClose={() => setOpenInput(null)} sessionId={sessionId} question={question} dials={dials} build={build} research={research}
+        researchUsed={researchUsed} researchPages={pages} kgSources={kgSources} facts={factRows || []} publisherLabels={labels} />
     </section>
   );
 }
@@ -366,6 +376,8 @@ type FlowProps = {
   segmentsForBar: { id: string; name: string; share: number }[];
   posts: number;
   hasReport: boolean;
+  /** Opens the summary dialog for one of the inputs. */
+  onOpen: (k: InputKind) => void;
 };
 
 type EdgeState = "used" | "late" | "off";
@@ -443,26 +455,26 @@ function Flow(p: FlowProps) {
   ];
   if (any("validate")) steps.push({ key: "check", label: "Check they behave", figure: ok("validate") ? "checked" : "checking", state: stepState("validate", [], ok("validate")), detail: "Each person is tested for knowledge, register, refusal and stability." });
 
-  const sources: { key: string; icon: React.ReactNode; label: string; figure: string; state: EdgeState; to: string; href: string; detail: string }[] = [
-    { key: "question", icon: <FileText className="w-4 h-4" />, label: "Your question", figure: "read first", state: "used", to: "understand", href: proLinks.session(p.sessionId), detail: "The question every step starts from." },
-    { key: "profile", icon: <User className="w-4 h-4" />, label: "Your description", figure: p.profileWords ? plural(p.profileWords, "word") : "none given", state: p.profileWords ? "used" : "off", to: "understand", href: proLinks.studio(p.sessionId), detail: "Who you said the people are." },
-    { key: "survey", icon: <Paperclip className="w-4 h-4" />, label: "Your survey", figure: p.surveyWords ? plural(p.surveyWords, "word") : "none given", state: p.surveyWords ? "used" : "off", to: "understand", href: proLinks.studio(p.sessionId), detail: "The survey or document uploaded with the people." },
+  const sources: { key: InputKind; icon: React.ReactNode; label: string; figure: string; state: EdgeState; to: string; detail: string }[] = [
+    { key: "question", icon: <FileText className="w-4 h-4" />, label: "Your question", figure: "read first", state: "used", to: "understand", detail: "The question every step starts from." },
+    { key: "profile", icon: <User className="w-4 h-4" />, label: "Your description", figure: p.profileWords ? plural(p.profileWords, "word") : "none given", state: p.profileWords ? "used" : "off", to: "understand", detail: "Who you said the people are." },
+    { key: "survey", icon: <Paperclip className="w-4 h-4" />, label: "Your survey", figure: p.surveyWords ? plural(p.surveyWords, "word") : "none given", state: p.surveyWords ? "used" : "off", to: "understand", detail: "The survey or document uploaded with the people." },
     {
       key: "added", icon: <Layers className="w-4 h-4" />, label: "Things you added",
       figure: p.added.length ? `${plural(p.added.length, "item")} · ${plural(addedChunks, "piece")} on file` : "nothing added",
-      state: p.added.length ? "used" : "off", to: "understand", href: proLinks.knowledge(p.sessionId),
+      state: p.added.length ? "used" : "off", to: "understand",
       detail: p.added.length ? p.added.slice(0, 6).map((a) => `${a.name} (${kindWord(a.kind)}, ${plural(a.chunks, "piece")})`).join("; ") : "Files, pasted text, videos and web pages dropped into Add anything.",
     },
     {
       key: "research", icon: <Globe className="w-4 h-4" />, label: "Found online",
       figure: p.research.ran ? (p.research.pages ? `${plural(p.research.pages, "page")}${p.research.late ? " · after the plan" : ""}` : "nothing yet") : "not run",
-      state: researchState, to: p.research.late ? "write" : "understand", href: proLinks.sources(p.sessionId),
+      state: researchState, to: p.research.late ? "write" : "understand",
       detail: p.research.ran ? Object.entries(p.research.bySource).map(([k, v]) => `${k}: ${v.on_topic} on topic of ${v.read} read`).join("; ") || "The web research run." : "Research the web was switched off.",
     },
     {
       key: "statistics", icon: <Search className="w-4 h-4" />, label: "Published statistics",
       figure: statsOn ? `${plural(p.statistics.publishers, "publisher")}${p.statistics.pages ? ` · ${plural(p.statistics.pages, "page")} with figures` : ""}` : "switched off",
-      state: statsOn ? "used" : "off", to: "gather", href: proLinks.studio(p.sessionId),
+      state: statsOn ? "used" : "off", to: "gather",
       detail: statsOn ? "Base rates searched for among the ticked publishers." : "No publishers were searched.",
     },
   ];
@@ -548,15 +560,15 @@ function Flow(p: FlowProps) {
         <div className="flex flex-col gap-2">
           <p className="text-[11.5px] uppercase tracking-wide text-muted-foreground">What went in</p>
           {sources.map((s) => (
-            <Link key={s.key} href={s.href} ref={reg(s.key) as any} title={`${s.label} · ${s.figure}. ${s.detail} Opens the page where it is analysed in full.`}
-              className={cn("group/node rounded-xl border px-3 py-2 flex items-center gap-2.5 transition-colors hover:border-primary/50",
+            <button key={s.key} type="button" onClick={() => p.onOpen(s.key)} ref={reg(s.key) as any} title={`${s.label} · ${s.figure}. ${s.detail} Opens a summary of this input.`}
+              className={cn("group/node w-full text-left rounded-xl border px-3 py-2 flex items-center gap-2.5 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                 s.state === "off" ? "border-dashed border-border/80 bg-transparent opacity-55" : s.state === "late" ? "border-amber-300 bg-amber-50/60" : "border-border bg-background")}>
               <span className={cn("shrink-0", s.state === "off" ? "text-muted-foreground" : "text-foreground")}>{s.icon}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[12.5px] font-medium leading-tight text-foreground truncate">{s.label}</span>
                 <span className={cn("block text-[11.5px] leading-tight truncate tabular-nums", s.state === "late" ? "text-amber-700" : "text-muted-foreground")}>{s.figure}</span>
               </span>
-            </Link>
+            </button>
           ))}
         </div>
 
