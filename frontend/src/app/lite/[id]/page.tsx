@@ -12,6 +12,7 @@ import Detail, { DetailLink } from "@/components/lite/Detail";
 import TalkBox from "@/components/lite/TalkBox";
 import ConjureGrid from "@/components/lite/ConjureGrid";
 import HowMade from "@/components/lite/HowMade";
+import LiteForms from "@/components/lite/LiteForms";
 import PersonaAvatar from "@/components/PersonaAvatar";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
@@ -77,21 +78,13 @@ function LiteSession() {
     );
   }
 
-  // ── Lab (placeholder) ──
+  // ── Lab tools: Forms (2026-10-06) ──
   if (view === "lab") {
     return (
-      <LiteShell {...shell} step="debate" proHref={proLinks.lab(id)} backHref={`/lite/${id}`}>
-        <div className="max-w-xl mx-auto pt-16 px-6 animate-rise">
-          <div className="lite-card p-8 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-foreground/5 inline-flex items-center justify-center"><Beaker className="w-5 h-5 text-foreground" /></div>
-            <h1 className="text-[24px] font-semibold tracking-tight mt-4">Lab tools are on their way</h1>
-            <p className="lite-lead mt-2">Tests you can run on these people — what would move them, what they&apos;d pay, where they get stuck — are coming to the simple view.</p>
-            <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
-              <a href={proLinks.lab(id)} className="lite-btn">Open the Lab in the full portal <ArrowRight className="w-4 h-4" /></a>
-              <button type="button" onClick={() => setView("flow")} className="lite-btn-soft">Back</button>
-            </div>
-          </div>
-        </div>
+      <LiteShell {...shell} step="debate" proHref={proLinks.lab(id)} backHref={`/lite/${id}`} layout="app">
+        <ErrorBoundary label="Forms">
+          <LiteForms sessionId={id} agents={s.agents} onBack={() => setView("flow")} />
+        </ErrorBoundary>
       </LiteShell>
     );
   }

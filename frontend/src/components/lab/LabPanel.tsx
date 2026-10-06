@@ -16,12 +16,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, Agent, Experiment, Instrument, Probe, ProbeAnswerRow, ProbeRequest, SimMode, DynamicDial } from "@/lib/api";
 import {
   Beaker, Download, Loader2, Play, Square, AlertTriangle, RefreshCw, ChevronLeft, ChevronDown,
-  ChevronRight, History, Trash2, LucideIcon,
+  ChevronRight, History, Trash2, LucideIcon, Pencil,
 } from "lucide-react";
 import { DotGrid, dotColor, pct } from "./Charts";
 import ExperimentPanel from "./ExperimentPanel";
 import { initialValues, toSpec } from "./InstrumentForm";
-import { formFor } from "./forms";
+import { formFor, formLayout } from "./forms";
 import { SEGMENT_FILTERS, dynamicFilters } from "./filters";
 import { pageFor } from "./pages";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
@@ -372,42 +372,15 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     .filter((p) => !p.experiment_id && p.instrument === instrument.key)
     .sort((x, y) => ((x.created_at || "") < (y.created_at || "") ? 1 : (x.created_at || "") > (y.created_at || "") ? -1 : 0));
   const runTitle = (p: Probe) => ((p.spec as any)?.amendments ? "amended" : "");
+  const formContext = { pastOutcomes: probes.filter((p) => p.instrument === instrument.key && !p.experiment_id).map((p) => { const st = (p.aggregates as any)?.stages; return Array.isArray(st) && st.length ? String(st[st.length - 1]?.label || "") : ""; }).filter(Boolean) };
+  const backToTools = () => { setInstrumentKey(""); setSelected(null); };
+  // A builder may ask for the whole tab while a run is composed (`full`); the shell then hands
+  // it the run controls and the tool's past runs to place itself. Results always render here.
+  const layout = formLayout(instrument.form);
 
-  // ── One tool ──────────────────────────────────────────────────────────────
-  return (
-    <div className="h-full flex min-h-0">
-      <div className="w-[340px] shrink-0 border-r border-border/60 overflow-y-auto p-4 space-y-4">
-        <button
-          onClick={() => { setInstrumentKey(""); setSelected(null); }}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground -ml-1"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" /> All tools
-        </button>
-
-        <div>
-          <div className="text-sm font-medium">{instrument.label}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{instrument.description}</p>
-        </div>
-
-        {/* A past run on screen: read it; the inputs wait until a new run is asked for. */}
-        {selected && !showForm ? (
-          <div className="rounded-lg border border-border/60 bg-card/30 p-3 space-y-2">
-            <p className="text-[11px] text-muted-foreground">You are reading a past run{selected.created_at ? ` from ${ago(selected.created_at)}` : ""}. Its inputs and filters are fixed.</p>
-            <button type="button" onClick={() => { setValues(initialValues(instrument, { session_query: sessionQuery })); setShowForm(true); }}
-              className="btn btn-sm btn-secondary w-full">
-              <Play className="w-3.5 h-3.5" /> New run with this tool
-            </button>
-          </div>
-        ) : (<>
-        {/* The tool's own inputs, from its own declaration (or its own builder). */}
-        <Form
-          instrument={instrument}
-          values={values}
-          onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
-          sessionId={sessionId}
-          context={{ pastOutcomes: probes.filter((p) => p.instrument === instrument.key && !p.experiment_id).map((p) => { const st = (p.aggregates as any)?.stages; return Array.isArray(st) && st.length ? String(st[st.length - 1]?.label || "") : ""; }).filter(Boolean) }}
-        />
-
+  // The run controls — who answers, model, estimate, Run — are the same whichever layout.
+  const runControls = (
+    <>
         <div>
           <label className="text-xs text-muted-foreground block mb-1.5">Who answers <span className="text-muted-foreground/50">· everyone unless you narrow it</span></label>
           <div className="space-y-2">
@@ -487,9 +460,10 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         {!agents.length && (
           <p className="text-[11px] text-muted-foreground">Spawn a population first — the Lab measures the agents in this session.</p>
         )}
-        </>)}
+    </>
+  );
 
-        {toolRuns.length > 0 && (
+  const toolRunsList = toolRuns.length > 0 ? (
           <div>
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1.5">
               <History className="w-3 h-3" /> Past runs with this tool <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{toolRuns.length}</span>
@@ -513,7 +487,84 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
               })}
             </div>
           </div>
-        )}
+  ) : null;
+
+  if (layout === "full" && showForm && !selected) {
+    return (
+      <div className="h-full min-h-0">
+        <Form
+          instrument={instrument}
+          values={values}
+          onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
+          sessionId={sessionId}
+          context={formContext}
+          controls={runControls}
+          aside={toolRunsList}
+          onBack={backToTools}
+        />
+      </div>
+    );
+  }
+
+  // ── One tool ──────────────────────────────────────────────────────────────
+  return (
+    <div className="h-full flex min-h-0">
+      <div className="w-[340px] shrink-0 border-r border-border/60 overflow-y-auto p-4 space-y-4">
+        <button
+          onClick={backToTools}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground -ml-1"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" /> All tools
+        </button>
+
+        <div>
+          <div className="text-sm font-medium">{instrument.label}</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{instrument.description}</p>
+        </div>
+
+        {/* A run on screen: read it; the inputs wait until a new run is asked for. A full-width
+            builder never renders in this column, so its runs always show this box. */}
+        {selected && (!showForm || layout === "full") ? (
+          <div className="rounded-lg border border-border/60 bg-card/30 p-3 space-y-2">
+            <p className="text-[11px] text-muted-foreground">
+              {running ? "This run is in progress." : `You are reading a past run${selected.created_at ? ` from ${ago(selected.created_at)}` : ""}.`} Its inputs and filters are fixed.
+            </p>
+            {layout === "full" ? (
+              <>
+                <button type="button" className="btn btn-sm btn-secondary w-full"
+                  onClick={() => {
+                    const spec: Record<string, any> = selected.spec || {};
+                    const next = initialValues(instrument, { session_query: sessionQuery });
+                    for (const f of instrument.inputs) if (spec[f.key] !== undefined) next[f.key] = spec[f.key];
+                    setValues(next); setSelected(null); setShowForm(true);
+                  }}>
+                  <Pencil className="w-3.5 h-3.5" /> Edit this form &amp; run again
+                </button>
+                <button type="button" onClick={() => { setValues(initialValues(instrument, { session_query: sessionQuery })); setSelected(null); setShowForm(true); }}
+                  className="btn btn-sm btn-ghost w-full">
+                  <Play className="w-3.5 h-3.5" /> New form
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => { setValues(initialValues(instrument, { session_query: sessionQuery })); setShowForm(true); }}
+                className="btn btn-sm btn-secondary w-full">
+                <Play className="w-3.5 h-3.5" /> New run with this tool
+              </button>
+            )}
+          </div>
+        ) : (<>
+        {/* The tool's own inputs, from its own declaration (or its own builder). */}
+        <Form
+          instrument={instrument}
+          values={values}
+          onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
+          sessionId={sessionId}
+          context={formContext}
+        />
+        {runControls}
+        </>)}
+
+        {toolRunsList}
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 min-h-0">

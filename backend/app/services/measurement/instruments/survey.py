@@ -388,8 +388,8 @@ class SurveyInstrument(Instrument):
 
 INSTRUMENT = register(SurveyInstrument(
     key="survey",
-    label="Survey",
-    description="Build a form — choices, scales, yes/no, open text, grids — and every persona fills it in. Results per question, and every individual response.",
+    label="Forms",
+    description="A questionnaire every persona fills in. Upload one you have, have it written from what the session knows, or brainstorm it in chat. Results per question, and every individual response.",
     answer_schema=schema_for({"questions": [{"key": "q1", "type": "yesno", "text": "Example"}]}),
     question="Complete every question as yourself.",
     directive=DIRECTIVE,

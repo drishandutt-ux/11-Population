@@ -116,8 +116,12 @@ async def analyze(
     label: str = "research",
     model: Optional[str] = None,
     max_tokens: int = 2000,
+    messages: Optional[list[dict]] = None,
 ) -> dict:
-    """Ask Claude to fill `schema` (a JSON Schema object) for the given prompt. Returns the dict."""
+    """Ask Claude to fill `schema` (a JSON Schema object) for the given prompt. Returns the dict.
+
+    `messages` (optional) carries a whole conversation instead of the single `user` turn — the
+    brainstorm chat sends its history this way; the last message must be the user's."""
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     tool = {"name": "record", "description": "Record the analysis in the required structure.", "input_schema": schema}
@@ -134,7 +138,7 @@ async def analyze(
             system=system,
             tools=[tool],
             tool_choice={"type": "tool", "name": "record"},
-            messages=[{"role": "user", "content": user}],
+            messages=messages or [{"role": "user", "content": user}],
         )
         if getattr(resp, "stop_reason", None) != "max_tokens":
             break

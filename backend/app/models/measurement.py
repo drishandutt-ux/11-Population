@@ -129,3 +129,25 @@ class Commitment(Base):
     observed: Mapped[list] = mapped_column(JSON, default=list)           # [{value, low, high, source, date, entered_by, entered_at, note}]
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LabBrief(Base):
+    """The Lab's standing brief for a session (Forms, 2026-10-06): one structured read of
+    everything the session holds — the question, the evidence brief, the population plan and
+    frame, the knowledge graph, the debate, past Lab runs and the latest report — written once
+    by the model and kept here so the form writer and the brainstorm chat start every call
+    already knowing the session. One row per session; `fingerprint` is a hash of what the
+    brief was read from, so a session that has moved on reads as stale and is rebuilt."""
+    __tablename__ = "lab_briefs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), index=True, unique=True)
+    status: Mapped[str] = mapped_column(String(16), default="ready", index=True)   # building | ready | failed
+    fingerprint: Mapped[str] = mapped_column(String(64), default="")
+    inputs: Mapped[dict] = mapped_column(JSON, default=dict)             # what was on file when it was written (counts, ids)
+    brief: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    model: Mapped[str] = mapped_column(String(64), default="")
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    built_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

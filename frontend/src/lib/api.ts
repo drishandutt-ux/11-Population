@@ -253,6 +253,33 @@ export const api = {
       request<Commitment>(`/sessions/${sessionId}/commitments/${commitmentId}/observe`, { method: "POST", body: JSON.stringify(body) }),
     closeCommitment: (sessionId: string, commitmentId: string, body: { closed_by: string; note?: string }) =>
       request<Commitment>(`/sessions/${sessionId}/commitments/${commitmentId}/close`, { method: "POST", body: JSON.stringify(body) }),
+    // Forms (2026-10-06): the Lab brief and the three ways to a questionnaire — import, write-for-me, the brainstorm chat.
+    /** The stored Lab brief with `stale` (the session has moved on since it was written). */
+    brief: (sessionId: string) => request<LabBriefState>(`/sessions/${sessionId}/lab/brief`),
+    /** (Re)write the brief from everything on file; a current brief is returned as it is unless `force`. One strong-tier call. */
+    buildBrief: (sessionId: string, force = false) =>
+      request<LabBriefState>(`/sessions/${sessionId}/lab/brief`, { method: "POST", body: JSON.stringify({ mode: "pro", force }) }, 180_000),
+    /** Pasted questionnaire text → typed questions (the model, else a heuristic parse). */
+    formsImportText: (sessionId: string, text: string) =>
+      request<FormDraft>(`/sessions/${sessionId}/forms/import`, { method: "POST", body: JSON.stringify({ text, mode: "pro" }) }, 180_000),
+    /** An uploaded questionnaire (.pdf, .docx, .txt, .md, .csv …) → typed questions. */
+    formsImportFile: async (sessionId: string, file: File): Promise<FormDraft> => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await apiFetch(`/sessions/${sessionId}/forms/import/file`, { method: "POST", body: fd });
+      if (!res.ok) {
+        let detail = `Import failed (${res.status})`;
+        try { detail = (await res.json()).detail || detail; } catch { /* keep */ }
+        throw new Error(detail);
+      }
+      return res.json();
+    },
+    /** Write the form from the brief and a one-line goal; `existing` is extended rather than replaced. */
+    formsGenerate: (sessionId: string, body: { goal?: string; length?: "short" | "standard" | "deep"; existing?: FormDraftInput | null }) =>
+      request<FormDraft>(`/sessions/${sessionId}/forms/generate`, { method: "POST", body: JSON.stringify({ ...body, mode: "pro" }) }, 180_000),
+    /** One turn of the brainstorm: the history and the form on screen go up; the reply may carry a changed form. An empty history returns the opening line. */
+    formsChat: (sessionId: string, body: { messages: FormsChatMessage[]; form: FormDraftInput | null }) =>
+      request<FormsChatReply>(`/sessions/${sessionId}/forms/chat`, { method: "POST", body: JSON.stringify({ ...body, mode: "pro" }) }, 180_000),
     journeySuggest: (sessionId: string, question?: string) =>
       request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -1145,6 +1172,69 @@ export type SurveyTemplate = {
   description: string;
   title: string;
   questions: SurveyQuestion[];
+};
+
+// ── Forms (2026-10-06) ───────────────────────────────────────────────────────
+
+/** One open question the brief says a form should go after. */
+export type LabChallenge = { title: string; why: string; measure: string };
+
+/** The Lab brief: one structured read of everything the session holds, written once and
+ *  prepended to every form-writing and brainstorm call. */
+export type LabBrief = {
+  question?: string;
+  summary: string;
+  population: string;
+  what_we_know: string[];
+  tensions: string[];
+  challenges: LabChallenge[];
+  already_measured: string[];
+  vocabulary: string[];
+  gaps: string[];
+  /** Which stores spoke: population · debate · lab · report · evidence · studio · graph. */
+  sources?: string[];
+};
+
+export type LabBriefState = {
+  brief: LabBrief | null;
+  status: "none" | "building" | "ready" | "failed";
+  /** The session has moved on since the brief was written. */
+  stale: boolean;
+  built_at: string | null;
+  inputs: Record<string, any>;
+  fingerprint: string;
+  model: string;
+  error?: string | null;
+};
+
+/** A survey question as the form writer returns it: the instrument's fields plus `why`. */
+export type FormQuestion = SurveyQuestion & { why?: string };
+
+/** What the client sends: the form on screen. */
+export type FormDraftInput = { title?: string; intro?: string; questions: SurveyQuestion[] };
+
+/** What every forms call returns: a runnable form plus what the writer wants said about it. */
+export type FormDraft = {
+  title: string;
+  intro: string;
+  questions: FormQuestion[];
+  rationale?: string;
+  covers?: string[];
+  notes: string[];
+  /** The instrument's own validation of the result; empty when it can run. */
+  problems: string[];
+  grounded?: boolean;
+  filename?: string;
+};
+
+export type FormsChatMessage = { role: "user" | "assistant"; content: string };
+
+export type FormsChatReply = {
+  reply: string;
+  chips: string[];
+  form_changed: boolean;
+  form: FormDraft | null;
+  change_note: string;
 };
 
 export type SurveyBucket = Interval & { value: string; count: number };
