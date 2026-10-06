@@ -191,17 +191,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
       <h2 className="text-[18px] font-semibold tracking-tight">How these people were made</h2>
       <p className="lite-lead mt-1">{introText}</p>
 
-      {/* Highlights */}
-      <div className="mt-4 grid grid-cols-3 sm:grid-cols-6 gap-2">
-        <Tile value={String(n)} label="people" />
-        <Tile value={String(segments.length)} label={segments.length === 1 ? "group" : "groups"} />
-        <Tile value={researchUsed ? String(pages) : "—"} label="pages read online" dim={!researchUsed} />
-        <Tile value={publishers.length ? String(publishers.length) : "—"} label="publishers searched" dim={!publishers.length} />
-        <Tile value={dims.length ? `${matched}/${dims.length}` : "—"} label="figures matched" dim={!dims.length} tone={dims.length ? (matched === 0 ? "warn" : matched === dims.length ? "good" : undefined) : undefined} />
-        <Tile value={typeof det?.confidence === "number" ? `${Math.round(det.confidence)}%` : "—"} label="sure who they are" dim={typeof det?.confidence !== "number"} />
-      </div>
-
-      <div className="mt-3 grid gap-3 lg:grid-cols-2 items-start">
+      <div className="mt-4 grid gap-3 lg:grid-cols-2 items-start">
         {/* 1 · What went in — the full width */}
         <Detail href={proLinks.sources(sessionId)} className="lg:col-span-2">
           <div className="lite-card p-5 sm:p-6 h-full">
