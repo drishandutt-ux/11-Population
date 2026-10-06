@@ -45,7 +45,11 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
     setAddText("");
   }
   function addFiles(files: FileList | File[]) {
-    setItems((prev) => [...prev, ...Array.from(files).map(fromFile)]);
+    // Snapshot first: a FileList is live, and the hidden input is cleared right after this call,
+    // so reading it inside the state updater (which React runs later once anything is pending)
+    // found nothing — the File button added nothing once a text or link item was already listed.
+    const picked = Array.from(files).map(fromFile);
+    if (picked.length) setItems((prev) => [...prev, ...picked]);
   }
 
   async function start(e: React.FormEvent) {
