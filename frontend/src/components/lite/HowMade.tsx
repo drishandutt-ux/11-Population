@@ -160,6 +160,32 @@ export default function HowMade({ sessionId, question, build, agents, research, 
     return k || s.count || Math.round((s.share_pct / 100) * n);
   };
 
+  // One line per folded card, read from the same record — what the card says before it is opened.
+  const whoLine = det ? [det.target_population, typeof det.confidence === "number" ? `${Math.round(det.confidence)}% sure` : ""].filter(Boolean).join(" · ") : "";
+  const bySize = segments.slice().sort((a, b) => b.share_pct - a.share_pct);
+  const groupsLine = bySize.length
+    ? bySize.slice(0, 2).map((s) => `${s.name} ${Math.round(s.share_pct)}%`).join(" · ") + (bySize.length > 2 ? ` · ${bySize.length - 2} more` : "")
+    : "";
+  const matchedLabels = dims.filter((_, i) => standings[i] === "matched").map((d) => d.label);
+  const assumedLabels = dims.filter((_, i) => standings[i] === "assumed").map((d) => d.label);
+  const unmatchedCount = dims.length - matchedLabels.length - assumedLabels.length;
+  const matchLine = dims.length
+    ? [
+        matchedLabels.length ? `Matched on ${list(matchedLabels, 2)}` : "Nothing matched to a published figure",
+        assumedLabels.length ? `${assumedLabels.length} assumed` : "",
+        unmatchedCount ? `${unmatchedCount} with no figure` : "",
+        frame?.report?.level && frame.report.level !== "none" ? `overall ${frame.report.level}` : "",
+      ].filter(Boolean).join(" · ")
+    : "";
+  const coverage = /(\d{1,3})\s*%\s*evidence/i.exec(plan.evidence_coverage || "");
+  const assumedLine = [
+    coverage ? `${coverage[1]}% evidence` : "",
+    assumed.length ? `${assumed.length} assumption${assumed.length === 1 ? "" : "s"}` : "",
+    gaps.length ? `${gaps.length} thing${gaps.length === 1 ? "" : "s"} could not be found` : "",
+  ].filter(Boolean).join(" · ");
+  const voiceWord = plan.voice ? (plan.voice.value < 35 ? "Like experts" : plan.voice.value > 65 ? "Like ordinary people" : "Between experts and ordinary people") : "";
+  const voiceLine = plan.voice ? [voiceWord, (plan.voice.reason || "").split(/(?<=[.!?])\s/)[0]].filter(Boolean).join(" · ") : "";
+
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-24 animate-rise" style={{ animationDelay: "90ms" }}>
       <h2 className="text-[18px] font-semibold tracking-tight">How these people were made</h2>
@@ -175,7 +201,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
         <Tile value={typeof det?.confidence === "number" ? `${Math.round(det.confidence)}%` : "—"} label="sure who they are" dim={typeof det?.confidence !== "number"} />
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2 items-stretch">
+      <div className="mt-3 grid gap-3 lg:grid-cols-2 items-start">
         {/* 1 · What went in — the full width */}
         <Detail href={proLinks.sources(sessionId)} className="lg:col-span-2">
           <div className="lite-card p-5 sm:p-6 h-full">
@@ -218,11 +244,10 @@ export default function HowMade({ sessionId, question, build, agents, research, 
         {/* 2 · Who they stand for */}
         {det && (
           <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6 h-full">
+            <Fold title="Who they stand for" line={whoLine}>
               <div className="flex gap-5">
                 <div className="min-w-0 flex-1">
-                  <Head title="Who they stand for" />
-                  <p className="mt-3 text-[14px] leading-relaxed">{det.target_population}{det.geography ? <span className="text-muted-foreground"> · {det.geography}</span> : null}</p>
+                  <p className="text-[14px] leading-relaxed">{det.target_population}{det.geography ? <span className="text-muted-foreground"> · {det.geography}</span> : null}</p>
                   {det.demographic_signals?.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {det.demographic_signals.slice(0, 6).map((sg, i) => (
@@ -237,25 +262,23 @@ export default function HowMade({ sessionId, question, build, agents, research, 
                 {typeof det.confidence === "number" && <Ring pct={det.confidence} label="sure" />}
               </div>
               {typeof det.confidence === "number" && det.confidence < 60 && <p className="lite-help mt-3">Under 60% sure — treat the groups below as a best guess.</p>}
-            </div>
+            </Fold>
           </Detail>
         )}
 
         {/* 3 · The groups */}
         <Detail href={studioHref}>
-          <div className="lite-card p-5 sm:p-6 h-full">
-            <Head title={`The ${segments.length} group${segments.length === 1 ? "" : "s"}`} />
-            {plan.rationale && <p className="lite-help mt-1.5">{plan.rationale}</p>}
+          <Fold title={`The ${segments.length} group${segments.length === 1 ? "" : "s"}`} line={groupsLine}>
+            {plan.rationale && <p className="lite-help">{plan.rationale}</p>}
             <Groups segments={segments} countFor={countFor} />
-          </div>
+          </Fold>
         </Detail>
 
         {/* 4 · Matched to published figures (heat grid) */}
         {dims.length > 0 && (
           <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6 h-full">
-              <Head title="Matched to published figures" />
-              <p className="lite-help mt-1.5">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.</p>
+            <Fold title="Matched to published figures" line={matchLine}>
+              <p className="lite-help">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.</p>
               <div className="mt-3 space-y-2">
                 {dims.map((d, i) => {
                   const t = frame?.targets?.[d.key];
@@ -304,16 +327,15 @@ export default function HowMade({ sessionId, question, build, agents, research, 
                   {frame.report.level === "poor" && <p className="lite-help">The report&apos;s numbers are a rough guide, not a measurement.</p>}
                 </div>
               )}
-            </div>
+            </Fold>
           </Detail>
         )}
 
         {/* 5 · What was assumed */}
         {(assumed.length > 0 || gaps.length > 0) && (
           <Detail href={studioHref}>
-            <div className="lite-card p-5 sm:p-6 h-full">
-              <Head title="What had to be assumed" />
-              {plan.evidence_coverage && <p className="lite-help mt-1.5">{plan.evidence_coverage}</p>}
+            <Fold title="What had to be assumed" line={assumedLine}>
+              {plan.evidence_coverage && <p className="lite-help">{plan.evidence_coverage}</p>}
               {assumed.length > 0 && (
                 <ul className="mt-3 space-y-1.5">
                   {assumed.map((a, i) => (
@@ -332,20 +354,21 @@ export default function HowMade({ sessionId, question, build, agents, research, 
                   </div>
                 </div>
               )}
-            </div>
+            </Fold>
           </Detail>
         )}
 
         {/* 6 · How they talk */}
         {plan.voice && (
           <Detail href={studioHref} className="lg:col-span-2">
-            <div className="lite-card p-5 sm:p-6 h-full md:flex md:items-start md:gap-8">
-              <div className="md:w-72 shrink-0">
-                <Head title="How they talk" />
-                <Scale value={plan.voice.value} left="Like experts" right="Like ordinary people" />
+            <Fold title="How they talk" line={voiceLine}>
+              <div className="md:flex md:items-start md:gap-8">
+                <div className="md:w-72 shrink-0">
+                  <Scale value={plan.voice.value} left="Like experts" right="Like ordinary people" />
+                </div>
+                {plan.voice.reason && <p className="mt-3 md:mt-0 text-[13.5px] leading-relaxed text-foreground/85">{plan.voice.reason}</p>}
               </div>
-              {plan.voice.reason && <p className="mt-3 md:mt-6 text-[13.5px] leading-relaxed text-foreground/85">{plan.voice.reason}</p>}
-            </div>
+            </Fold>
           </Detail>
         )}
       </div>
@@ -637,6 +660,26 @@ function StepMark({ state }: { state: StepState }) {
 
 function Head({ title }: { title: string }) {
   return <p className="lite-label">{title}</p>;
+}
+
+/** A card folded to its heading and a one-line reading of what is inside; the chevron (or the
+ *  heading) opens it, and the line gives way to the content. Closed by default so the page reads
+ *  as a list of findings first. The right padding keeps the one-liner clear of the hover pill. */
+function Fold({ title, line, children }: { title: string; line?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="lite-card p-5 sm:p-6 h-full">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={id} className="w-full flex items-start gap-2.5 text-left pr-24 group/fold">
+        <ChevronDown className={cn("w-4 h-4 mt-0.5 shrink-0 text-muted-foreground transition-transform group-hover/fold:text-foreground", open ? "rotate-0" : "-rotate-90")} aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="lite-label block">{title}</span>
+          {line && !open && <span className="lite-help block truncate" title={line}>{line}</span>}
+        </span>
+      </button>
+      {open && <div id={id} className="mt-3 pl-[26px]">{children}</div>}
+    </div>
+  );
 }
 
 function Tile({ value, label, dim, tone }: { value: string; label: string; dim?: boolean; tone?: "good" | "warn" }) {
