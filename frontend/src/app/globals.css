@@ -516,6 +516,11 @@ html.lite-root, html.lite-root body { background: hsl(40 20% 99%); color-scheme:
   background: hsl(var(--foreground) / 0.05);
   border: 1px solid hsl(var(--border));
 }
+.lite-pill-quiet {
+  @apply inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 disabled:pointer-events-none;
+  background: hsl(var(--foreground) / 0.04);
+}
+.lite-pill-quiet:hover { background: hsl(var(--foreground) / 0.08); }
 
 /* "See in detail": a small pill that appears when the element is hovered or focused. */
 .detail-pill {

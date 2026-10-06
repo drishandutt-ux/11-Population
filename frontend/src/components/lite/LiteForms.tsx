@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, Agent, FormDraft, FormQuestion, Instrument, LabBriefState, Probe, ProbeAnswerRow, SurveyQuestion, SurveyQuestionType, SurveyTemplate } from "@/lib/api";
 import { LITE_DEFAULTS, proLinks } from "@/lib/lite";
 import { cn } from "@/lib/utils";
-import { ArrowRight, ArrowUp, BookOpen, Check, ChevronLeft, FileUp, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Star, Undo2, X } from "lucide-react";
+import { ArrowRight, ArrowUp, BookOpen, Check, ChevronLeft, FileUp, Loader2, MessageCircle, Plus, RefreshCw, Star, Undo2, X } from "lucide-react";
 import Detail from "./Detail";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import SurveyPage from "@/components/lab/pages/SurveyPage";
@@ -281,7 +281,7 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
     return (
       <div className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 pb-6">
         <div className="flex items-center gap-3 py-3 shrink-0 flex-wrap">
-          <button type="button" onClick={() => setStage("compose")} className="lite-pill"><ChevronLeft className="w-3.5 h-3.5" /> Change the questions</button>
+          <button type="button" onClick={() => setStage("compose")} className="lite-pill-quiet"><ChevronLeft className="w-3.5 h-3.5" /> Change the questions</button>
           <div className="min-w-0">
             <h1 className="text-[20px] font-semibold tracking-tight truncate">{(probe.spec as any)?.title || "What they said"}</h1>
             <p className="text-[12.5px] text-muted-foreground">{probe.answer_count} of {probe.agent_count} answered{probe.created_at ? ` · ${ago(probe.created_at)}` : ""}{probe.status !== "complete" ? ` · ${probe.status}` : ""}</p>
@@ -306,10 +306,10 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
     <div className="h-full flex flex-col min-h-0">
       <div className="px-5 pt-4 pb-2 flex items-center gap-2 shrink-0">
         <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-semibold flex items-center gap-2"><MessageCircle className="w-4 h-4 text-primary" /> Think it through with me</div>
+          <div className="text-[13.5px] font-semibold">Think it through</div>
           <button type="button" onClick={() => setBriefOpen((v) => !v)} className="text-[12px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 mt-0.5">
             {briefBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <BookOpen className="w-3 h-3" />}
-            {briefBusy ? "Reading everything in this question…" : brief?.brief ? `I've read this whole question${brief.stale ? " (a little while ago)" : ""} · what I know` : "Nothing read yet"}
+            {briefBusy ? "Reading everything in this question…" : brief?.brief ? `What I know${brief.stale ? " (a little while ago)" : ""}` : "Nothing read yet"}
           </button>
         </div>
         <button type="button" onClick={() => setChatOpen(false)} className="lg:hidden w-9 h-9 rounded-full inline-flex items-center justify-center text-muted-foreground hover:bg-foreground/5"><X className="w-4 h-4" /></button>
@@ -332,7 +332,7 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
             </div>
             {m.role === "assistant" && i === messages.length - 1 && m.chips && m.chips.length > 0 && !chatBusy && (
               <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {m.chips.map((c) => <button key={c} type="button" onClick={() => tapChip(c)} className="lite-pill hover:text-primary hover:border-primary/40 transition-colors">{c}</button>)}
+                {m.chips.slice(0, 3).map((c) => <button key={c} type="button" onClick={() => tapChip(c)} className="lite-pill-quiet">{c.replace(/^Draft: /i, "")}</button>)}
               </div>
             )}
           </div>
@@ -354,8 +354,8 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
     <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
       onDrop={(e) => { e.preventDefault(); setDragging(false); void importFile(e.dataTransfer.files?.[0]); }}
       onClick={() => fileRef.current?.click()} role="button" tabIndex={0}
-      className={cn("rounded-2xl border border-dashed px-4 py-6 text-center text-[13.5px] cursor-pointer transition-colors", dragging ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground")}>
-      {importBusy ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Reading it…</span> : <>Drop the file here, or click to choose<br /><span className="text-[12px] opacity-70">PDF, Word, text, CSV</span></>}
+      className={cn("rounded-2xl border border-dashed px-4 py-5 text-center text-[13px] cursor-pointer transition-colors", dragging ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground")}>
+      {importBusy ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Reading it…</span> : <>Drop a file here, or click to choose <span className="opacity-60">· PDF, Word, text, CSV</span></>}
       <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json" className="hidden" onChange={(e) => void importFile(e.target.files?.[0])} />
     </div>
   );
@@ -371,45 +371,43 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
   );
 
   const entry = (
-    <div className="animate-rise space-y-6">
+    <div className="animate-rise space-y-10 max-w-xl">
       <div>
-        <h1 className="text-[28px] sm:text-[32px] font-semibold tracking-tight">Ask these {n} people some questions</h1>
-        <p className="lite-lead mt-2 max-w-xl">Have the questions written for you, bring your own, or talk it through. Every person fills in the whole form, and you get the answers counted up.</p>
+        <h1 className="text-[26px] sm:text-[30px] font-semibold tracking-tight">Ask these {n} people some questions</h1>
+        <p className="lite-lead mt-2">Have them written for you, bring your own, or talk it through on the left. Everyone fills in the whole form and the answers come back counted.</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-        <div className="lite-card p-5 space-y-3">
-          <div className="text-[15px] font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Write the questions for me</div>
-          <p className="lite-help">{briefBusy ? "Reading everything in this question first…" : topChallenge ? <>The biggest open question I see is <span className="text-foreground font-medium">{topChallenge}</span>.</> : "From the question and everything added to it."}</p>
-          <input value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void write(goal); }} placeholder={topChallenge ? `What about? e.g. ${topChallenge}` : "What do you want to find out? (optional)"} className="lite-field text-[14px] py-2.5" />
-          {challenges.length > 1 && (
-            <div className="flex flex-wrap gap-1.5">{challenges.slice(0, 4).map((c) => <button key={c.title} type="button" onClick={() => void write(c.title)} disabled={writeBusy} className="lite-pill hover:text-primary hover:border-primary/40 transition-colors">{c.title}</button>)}</div>
-          )}
-          <button type="button" onClick={() => void write(goal)} disabled={writeBusy} className="lite-btn w-full">{writeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {writeBusy ? "Writing…" : "Write them for me"}</button>
+      <section className="space-y-3">
+        <div className="lite-field flex items-center gap-2 py-1.5 pl-4 pr-1.5">
+          <input value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void write(goal); }}
+            placeholder={briefBusy ? "Reading everything in this question…" : topChallenge ? `What about? e.g. ${topChallenge}` : "What do you want to find out?"} className="lite-input flex-1 text-[15px]" />
+          <button type="button" onClick={() => void write(goal)} disabled={writeBusy} className="lite-btn h-10 px-4 text-[14px] shrink-0">{writeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {writeBusy ? "Writing…" : "Write them for me"}</button>
         </div>
-        <div className="lite-card p-5 space-y-3">
-          <div className="text-[15px] font-semibold flex items-center gap-2"><FileUp className="w-4 h-4 text-primary" /> I already have questions</div>
-          <p className="lite-help">A questionnaire you have written, in any file — I will type it up here.</p>
-          {pasteOpen ? pastePanel : (<>{dropZone}<button type="button" onClick={() => setPasteOpen(true)} className="text-[13px] text-muted-foreground hover:text-foreground">or paste them in</button></>)}
-        </div>
-      </div>
+        {challenges.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">{challenges.slice(0, 3).map((c) => <button key={c.title} type="button" onClick={() => void write(c.title)} disabled={writeBusy} className="lite-pill-quiet">{c.title}</button>)}</div>
+        )}
+      </section>
+      <section className="space-y-2">
+        <div className="text-[13px] text-muted-foreground mb-3">Already have questions?</div>
+        {pasteOpen ? pastePanel : (<>{dropZone}<button type="button" onClick={() => setPasteOpen(true)} className="text-[13px] text-muted-foreground hover:text-foreground">or paste them in</button></>)}
+      </section>
       {templates.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
-          <span>Or start from a ready-made one:</span>
-          {templates.map((t) => <button key={t.key} type="button" onClick={() => applyTemplate(t)} title={t.description} className="lite-pill hover:text-primary hover:border-primary/40 transition-colors">{t.label}</button>)}
-        </div>
+        <section className="space-y-3">
+          <div className="text-[13px] text-muted-foreground">Or start from a ready-made one</div>
+          <div className="flex flex-wrap gap-1.5">{templates.map((t) => <button key={t.key} type="button" onClick={() => applyTemplate(t)} title={t.description} className="lite-pill-quiet">{t.label}</button>)}</div>
+        </section>
       )}
       {past.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[13px] font-medium">Earlier forms</div>
-          <div className="flex flex-wrap gap-2">
+        <section>
+          <div className="text-[13px] text-muted-foreground">Earlier forms</div>
+          <div className="divide-y divide-border">
             {past.slice(0, 6).map((p) => (
-              <button key={p.id} type="button" onClick={() => void openPast(p)} className="lite-card px-4 py-2.5 text-left hover:border-primary/40 transition-colors max-w-xs">
-                <div className="text-[13.5px] font-medium truncate">{(p.spec as any)?.title || "A few questions"}</div>
-                <div className="text-[12px] text-muted-foreground">{p.answer_count} answered · {ago(p.created_at || null)}</div>
+              <button key={p.id} type="button" onClick={() => void openPast(p)} className="w-full flex items-baseline gap-3 py-2.5 text-left group">
+                <span className="text-[14px] font-medium truncate flex-1 group-hover:text-primary transition-colors">{(p.spec as any)?.title || "A few questions"}</span>
+                <span className="text-[12px] text-muted-foreground shrink-0 tabular-nums">{p.answer_count} answered · {ago(p.created_at || null)}</span>
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
@@ -419,14 +417,14 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
       <div className="flex items-start gap-3 flex-wrap">
         <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Give it a name" className="lite-input text-[26px] sm:text-[30px] font-semibold tracking-tight flex-1 min-w-[12rem]" />
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => setPasteOpen((v) => !v)} className="lite-pill hover:text-primary"><FileUp className="w-3.5 h-3.5" /> Add from a file</button>
-          <button type="button" onClick={() => void write(goal || topChallenge)} disabled={writeBusy} className="lite-pill hover:text-primary">{writeBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} Rewrite for me</button>
+          <button type="button" onClick={() => setPasteOpen((v) => !v)} className="lite-pill-quiet">Add from a file</button>
+          <button type="button" onClick={() => void write(goal || topChallenge)} disabled={writeBusy} className="lite-pill-quiet">{writeBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Rewrite for me</button>
         </div>
       </div>
-      {pasteOpen && <div className="lite-card p-4 space-y-3">{dropZone}{pastePanel}</div>}
+      {pasteOpen && <div className="space-y-3">{dropZone}{pastePanel}</div>}
       <div className="space-y-3">
         {qs.map((q, i) => (
-          <div key={q.key} className={cn("lite-card p-4 sm:p-5 transition-shadow", flash.has(q.key) && "ring-2 ring-primary/40")}>
+          <div key={q.key} className={cn("lite-card shadow-none p-4 sm:p-5 transition-shadow", flash.has(q.key) && "ring-2 ring-primary/40")}>
             <div className="flex items-start gap-3">
               <span className="text-[13px] text-muted-foreground tabular-nums pt-2 w-5 shrink-0">{i + 1}.</span>
               <div className="min-w-0 flex-1 space-y-2.5">
@@ -495,10 +493,7 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
         <div className="hidden lg:block border-r border-border min-h-0">{chat}</div>
         <div className="min-h-0 overflow-y-auto">
           <div className="max-w-[880px] mx-auto px-4 sm:px-8 pt-6">
-            <div className="flex items-center gap-2 mb-4">
-              <button type="button" onClick={onBack} className="lite-pill"><ChevronLeft className="w-3.5 h-3.5" /> Back</button>
-              <span className="text-[12px] uppercase tracking-wide text-muted-foreground">Lab tools · Forms</span>
-            </div>
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground mb-6"><ChevronLeft className="w-3.5 h-3.5" /> Back</button>
             {toast && (
               <div className="mb-4 flex items-center gap-3 rounded-2xl bg-primary/10 px-4 py-2.5 text-[13px] animate-rise">
                 <Check className="w-4 h-4 text-primary shrink-0" /><span className="flex-1 truncate">{toast.text}</span>
