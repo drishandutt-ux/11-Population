@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import time
 import traceback
 import uuid
@@ -33,6 +34,7 @@ from app.models.evidence import Evidence, ResearchQuery, ResearchRun
 from .fetch_page import FetchedPage, fetch_page
 from .frame import build_frame, fallback_frame, frame_terms, freshness_of, stale_before, today_iso
 from .judge_social import judge_posts
+from .judge_page import PageVerdict, heuristic_page_verdict, judge_page
 from .judge_web import WebItem, WebVerdict, heuristic_verdict, judge_web
 from .judge_social import heuristic_judge
 from .plan import fallback_plan, plan_query
@@ -57,6 +59,10 @@ RESEARCH_MAX_SECONDS = int(os.environ.get("RESEARCH_MAX_SECONDS", 420))
 RESEARCH_HARD_CAP_SECONDS = int(os.environ.get("RESEARCH_HARD_CAP_SECONDS", max(600, RESEARCH_MAX_SECONDS * 2)))
 SEARCH_TIMEOUT = int(os.environ.get("RESEARCH_SEARCH_TIMEOUT", 90))
 KG_INGEST_CONCURRENCY = 4
+# Every fetched page is read whole by the page reader (judge_page.py); a query's pages are
+# judged side by side so the step costs one round-trip, not one per page.
+PAGE_JUDGE_CONCURRENCY = int(os.environ.get("PAGE_JUDGE_CONCURRENCY", 6))
+PAGE_JUDGE_TIMEOUT = int(os.environ.get("PAGE_JUDGE_TIMEOUT", 75))
 
 _tasks: dict[str, asyncio.Task] = {}
 _stop_flags: dict[str, bool] = {}
@@ -191,6 +197,7 @@ class _Ctx:
         self.covered: list[str] = list(run.covered or [])
         self.verdicts: list[dict] = list(run.verdicts or [])
         self.kg_sem = asyncio.Semaphore(KG_INGEST_CONCURRENCY)
+        self.page_sem = asyncio.Semaphore(PAGE_JUDGE_CONCURRENCY)
         self.kg_tasks: list[asyncio.Task] = []
         self.seen_refs: set[str] = set()
 
@@ -284,35 +291,43 @@ async def _score(ctx: _Ctx, updates: dict[str, dict]):
     ctx.budget["on_topic"] = sum(1 for u in updates.values() if u.get("on_topic")) + ctx.budget.get("on_topic", 0)
 
 
-def _kg_chunk_for(e: Evidence) -> Optional[str]:
-    """Provenance-tagged chunk for the knowledge graph. Header line = source class, title, ref, date."""
+def _kg_chunks_for(e: Evidence) -> list[str]:
+    """Provenance-tagged chunks for the knowledge graph. Header line = source class, title, ref, date.
+    Web pages contribute only the passages the page reader quoted (each widened by 200 chars and
+    merged: `structured.kg_snippets`), one chunk per window, so the graph holds the relevant
+    data and not the rest of the page. A page judged without snippets (reader unavailable)
+    falls back to its opening, as before the reader existed."""
+    from app.services.ingestion.text_processor import chunk_text
+
     if e.source_class == "web":
+        header = f"[SOURCE web | {e.title or e.author} | {e.source_ref} | {e.published_at or 'undated'}]"
+        snippets = [str(x) for x in ((e.structured or {}).get("kg_snippets") or []) if str(x).strip()]
+        if snippets:
+            return [f"{header}\n{c}" for w in snippets for c in chunk_text(w)]
         body = (e.full_text or e.text or "").strip()
         if not body:
-            return None
-        return f"[SOURCE web | {e.title or e.author} | {e.source_ref} | {e.published_at or 'undated'}]\n{body[:6000]}"
+            return []
+        return [f"{header}\n{c}" for c in chunk_text(body[:6000])[:3]] or [f"{header}\n{body[:6000]}"]
     if e.source_class == "social":
         s = e.structured or {}
         comments = s.get("public_comments") or []
         ctext = "\n".join(f"- ({c.get('likes', 0)} pts) {c.get('text', '')[:400]}" for c in comments[:8])
-        return (f"[SOURCE social reddit | {s.get('subreddit', '')} | {e.source_ref} | {e.published_at or 'undated'} | score {s.get('score', 0)}]\n"
-                f"{(e.full_text or e.text or '')[:3000]}" + (f"\n\nTop comments:\n{ctext}" if ctext else ""))
-    return None
+        header = f"[SOURCE social reddit | {s.get('subreddit', '')} | {e.source_ref} | {e.published_at or 'undated'} | score {s.get('score', 0)}]"
+        body = f"{(e.full_text or e.text or '')[:3000]}" + (f"\n\nTop comments:\n{ctext}" if ctext else "")
+        return [f"{header}\n{c}" for c in chunk_text(body)[:3]] or [f"{header}\n{body}"]
+    return []
 
 
 async def _ingest_to_graph(ctx: _Ctx, items: list[Evidence]):
     """Only on-topic evidence reaches the graph, tagged with provenance. Fire-and-forget, bounded."""
-    from app.services.ingestion.text_processor import chunk_text
     from app.services.knowledge_graph.lightrag_service import get_lightrag, insert_chunks
 
     async def one(e: Evidence):
         async with ctx.kg_sem:
             try:
-                text = _kg_chunk_for(e)
-                if not text:
+                chunks = _kg_chunks_for(e)
+                if not chunks:
                     return
-                header, _, body = text.partition("\n")
-                chunks = [f"{header}\n{c}" for c in chunk_text(body)[:3]] or [text]
                 rag = await get_lightrag(ctx.session_id)
                 new_e, new_r = await insert_chunks(rag, chunks)
                 async with dbm.AsyncSessionLocal() as db:
@@ -365,25 +380,57 @@ async def _web_loop(ctx: _Ctx):
 
                 await asyncio.gather(*[read(r) for r in fresh[:min(WEB_PAGES_PER_QUERY, budget_left)]])
                 ctx.budget["pages"] += len(pages)
+                # The page reader judges every result on its whole text (the full page when it
+                # was read, the search snippet otherwise) and quotes the relevant passages.
+                verdicts: dict[str, PageVerdict] = {}
+
+                async def judge(r: SearchResult):
+                    p = pages.get(r.url)
+                    text = p.markdown if p else r.snippet
+                    title = p.title if p and len(p.title) > 3 else r.title
+                    async with ctx.page_sem:
+                        if ctx.stopped():
+                            verdicts[r.url] = heuristic_page_verdict("Stopped before the page was judged.", len(text or ""))
+                            return
+                        try:
+                            verdicts[r.url] = await asyncio.wait_for(
+                                judge_page(ctx.question, today_iso(), ctx.frame, title, r.domain, r.url, (p.published_at if p else None) or r.published_at, text, session_id=ctx.session_id),
+                                timeout=PAGE_JUDGE_TIMEOUT)
+                        except Exception as e:  # noqa: BLE001
+                            from app.core.llm_errors import friendly_llm_error
+                            print(f"[research] page judge unavailable for {r.domain}: {type(e).__name__}: {e}")
+                            verdicts[r.url] = heuristic_page_verdict(f"Page reader unavailable ({friendly_llm_error(e).strip('⚠️ ')}); kept unread.", len(text or ""))
+
+                await asyncio.gather(*[judge(r) for r in fresh])
                 rows = []
                 for r in fresh:
                     p = pages.get(r.url)
+                    v = verdicts.get(r.url) or heuristic_page_verdict("Not judged.")
                     e = Evidence(
                         id=str(uuid.uuid4()), session_id=ctx.session_id, run_id=ctx.run_id, source_class="web", source_ref=r.url,
                         title=(p.title if p and len(p.title) > 3 else r.title), author=r.domain, published_at=(p.published_at if p else None) or r.published_at,
                         text=(p.markdown[:600] if p else r.snippet), full_text=(p.markdown if p else None),
                         structured={"kind": "web", "domain": r.domain, "provider": r.provider, "fetched": bool(p), "kind_detail": (p.kind if p else "snippet"), "image_url": (p.image_url if p else None),
-                                    "freshness": freshness_of((p.published_at if p else None) or r.published_at, ctx.frame)},
-                        trust_tier="medium", query=q, attempt=round_no,
+                                    "freshness": freshness_of((p.published_at if p else None) or r.published_at, ctx.frame),
+                                    "kg_snippets": v.snippets,
+                                    "judge": {"reason": v.reason, "read_chars": v.read_chars, "passages": len(v.quotes), "located": len(v.snippets), "failed": v.failed}},
+                        trust_tier="medium", query=q, attempt=round_no, on_topic=v.on_topic, relevance=v.relevance, sub_questions=list(v.covered),
                     )
                     rows.append(e)
                 saved = await _persist(ctx, rows)
+                on_topic_rows = [e for e in saved if e.on_topic]
+                ctx.budget["on_topic"] = ctx.budget.get("on_topic", 0) + len(on_topic_rows)
                 for e in saved:
                     idx = len(items)
                     id_by_index[idx] = e.id
-                    items.append(WebItem(title=e.title or "", domain=e.author or "", url=e.source_ref, snippet=(e.text or "")[:300], excerpt=(e.full_text or "")[:600] or None, published_at=e.published_at, index=idx))
+                    findings = " | ".join(re.sub(r"\s+", " ", w) for w in ((e.structured or {}).get("kg_snippets") or []))
+                    items.append(WebItem(title=e.title or "", domain=e.author or "", url=e.source_ref, snippet=(e.text or "")[:300], excerpt=(e.full_text or "")[:600] or None, published_at=e.published_at, index=idx,
+                                         on_topic=bool(e.on_topic), relevance=float(e.relevance or 0.0), reason=str(((e.structured or {}).get("judge") or {}).get("reason") or ""), findings=findings[:700]))
+                # Graph: on-topic pages go in now, snippets only, while the next query searches.
+                await _ingest_to_graph(ctx, on_topic_rows)
                 engine = results[0].provider if results else provider.name
-                await _update_query(ctx, row, status="done", engine=engine, results=len(fresh), read=len(pages), note=f"{len(fresh)} new results, {len(pages)} pages read ({engine}) in {int(time.time() - t0)}s")
+                await _update_query(ctx, row, status="done", engine=engine, results=len(fresh), read=len(pages), on_topic=len(on_topic_rows),
+                                    note=f"{len(fresh)} new results, {len(pages)} pages read in full, {len(on_topic_rows)} on-topic ({engine}) in {int(time.time() - t0)}s")
             except Exception as e:  # noqa: BLE001
                 await _update_query(ctx, row, status="error", note=str(e)[:300])
             await ctx.budget_event()
@@ -396,11 +443,8 @@ async def _web_loop(ctx: _Ctx):
         except Exception as e:  # noqa: BLE001
             from app.core.llm_errors import friendly_llm_error
             verdict = heuristic_verdict(items, f"Coverage judge unavailable ({friendly_llm_error(e).strip('⚠️ ')}); all results kept.")
-        useful = set(verdict.useful)
-        updates = {}
-        for idx, eid in id_by_index.items():
-            updates[eid] = {"on_topic": idx in useful, "relevance": 0.9 if idx in useful else 0.2, "sub_questions": verdict.covered if idx in useful else []}
-        await _score(ctx, updates)
+        # Relevance was settled per page by the page reader; the round judge only steers coverage.
+        useful = {it.index for it in items if it.on_topic}
         for ent in verdict.entities:
             if ent not in ctx.hints:
                 ctx.hints.append(ent)
@@ -410,10 +454,6 @@ async def _web_loop(ctx: _Ctx):
         ctx.verdicts.append({"source": "web", "round": round_no, "queries": tried[-len(queries):], "read": len(items), "on_topic": len(useful), "satisfied": verdict.satisfied, "missing": verdict.missing, "reason": verdict.reason, "at": _now().isoformat()})
         await ctx.save()
         await _emit(ctx.session_id, {"type": "research_verdict", "run_id": ctx.run_id, "source": "web", "round": round_no, "verdict": ctx.verdicts[-1], "covered": ctx.covered})
-        # Graph: useful items only
-        async with dbm.AsyncSessionLocal() as db:
-            useful_rows = (await db.execute(select(Evidence).where(Evidence.id.in_([id_by_index[i] for i in useful if i in id_by_index]), Evidence.in_graph.is_(False)))).scalars().all()
-        await _ingest_to_graph(ctx, list(useful_rows))
         if verdict.satisfied or not verdict.refined_queries or ctx.stopped():
             break
         queries = verdict.refined_queries[:3]

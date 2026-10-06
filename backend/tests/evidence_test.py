@@ -232,7 +232,15 @@ def _mock_pipeline(monkeypatch):
         return fp.FetchedPage(url=url, title="Future leasing: our evidence approach", markdown="The Crown Estate will require metocean and grid evidence. " * 20, chars=1000, truncated=False, status=200, kind="html", published_at="2026-08-01T00:00:00+00:00")
 
     async def fake_judge_web(question, today, tried, items, frame, session_id=None):
+        assert [it.on_topic for it in items] == [True, False], "the round judge sees the page reader's verdicts"
         return judge_web.WebVerdict(useful=[0], missing=[], satisfied=True, refined_queries=[], entities=["Crown Estate"], reason="Covered.", covered=["q1"])
+
+    async def fake_judge_page(question, today, frame, title, domain, url, published_at, text, session_id=None):
+        from app.services.evidence import judge_page as jp
+        if "metocean" in text:
+            quotes = ["The Crown Estate will require metocean and grid evidence."]
+            return jp.PageVerdict(on_topic=True, relevance=0.9, reason="Primary source.", covered=["q1"], quotes=quotes, snippets=jp.snippets_for(text, quotes), read_chars=len(text))
+        return jp.PageVerdict(on_topic=False, relevance=0.1, reason="Only a passing mention.", read_chars=len(text))
 
     async def fake_reddit(q):
         return [rd.ReadPost("p1", "Wind farm off Portland: the fishing fleet is furious", author="u/a", author_title="r/Dorset", published_at="2026-08-05T00:00:00+00:00", url="https://www.reddit.com/r/Dorset/comments/p1/x/", likes=40, comment_count=12, payload={"title": "Wind farm off Portland", "body": "", "kind": "text"}),
@@ -258,6 +266,7 @@ def _mock_pipeline(monkeypatch):
     monkeypatch.setattr(loop, "get_search_provider", lambda: prov.SearchProvider("brave_api", fake_search, composite=True))
     monkeypatch.setattr(loop, "fetch_page", fake_fetch)
     monkeypatch.setattr(loop, "judge_web", fake_judge_web)
+    monkeypatch.setattr(loop, "judge_page", fake_judge_page)
     monkeypatch.setattr(loop, "search_reddit", fake_reddit)
     monkeypatch.setattr(loop, "reddit_comments", fake_comments)
     monkeypatch.setattr(loop, "judge_posts", fake_judge_posts)
@@ -291,6 +300,11 @@ def test_research_loop_end_to_end(client, monkeypatch):
     assert len(ev) == 4
     web_on = [e for e in ev if e["source_class"] == "web" and e["on_topic"]]
     assert web_on[0]["title"] == "Future leasing: our evidence approach" and web_on[0]["structured"]["fetched"] is True
+    # The page reader's verdict is on the row: the quoted passage, widened and merged, is the graph payload
+    assert web_on[0]["relevance"] == 0.9 and web_on[0]["sub_questions"] == ["q1"] and web_on[0]["structured"]["judge"]["read_chars"] == 1160
+    assert len(web_on[0]["structured"]["kg_snippets"]) == 1 and web_on[0]["structured"]["kg_snippets"][0].startswith("The Crown Estate will require metocean")
+    web_off = [e for e in ev if e["source_class"] == "web" and not e["on_topic"]]
+    assert web_off[0]["structured"]["kg_snippets"] == [] and web_off[0]["structured"]["judge"]["reason"] == "Only a passing mention."
     social_on = [e for e in ev if e["source_class"] == "social" and e["on_topic"]]
     assert social_on[0]["structured"]["public_comments"][0]["likes"] == 30
     # Brief + recommendations
@@ -609,3 +623,49 @@ def test_fetch_page_falls_back_to_tavily_extract_before_the_browser(monkeypatch)
         return fp.FetchedPage(url=url, title="B", markdown="x" * 500, chars=500, truncated=False, status=200, kind="html")
     monkeypatch.setattr(fp, "fetch_with_browser", browser_ok)
     assert asyncio.run(fp.fetch_page("https://www.ons.gov.uk/x")).title == "B"
+
+
+# ── Page reader: locating quotes and widening them into graph snippets ───────
+
+def test_snippets_locate_widen_and_merge():
+    from app.services.evidence.judge_page import snippets_for, locate
+    text = ("Intro paragraph about housing in general. " * 10
+            + "The scheme offers a 2.5% deposit on new-build homes, with a 20% government equity loan. "
+            + "Filler sentence here. " * 30
+            + "Housebuilder shares rose by between 10% and 15% on the Monday morning. "
+            + "Closing remarks. " * 10)
+    # exact quote, widened 200 chars either side and snapped to words
+    out = snippets_for(text, ["The scheme offers a 2.5% deposit on new-build homes, with a 20% government equity loan."])
+    assert len(out) == 1 and "2.5% deposit" in out[0] and "Intro paragraph" in out[0] and len(out[0]) <= 86 + 2 * 200 + 40
+    assert not out[0].startswith(" ") and out[0].split()[0] in ("Intro", "paragraph", "about", "housing", "in", "general.")
+    # whitespace / punctuation drift and smart quotes still locate; a mangled tail falls back to the first eight words
+    assert locate(text, "“The scheme offers a 2.5% deposit on new-build\nhomes, with a 20% government equity loan”") is not None
+    assert locate(text, "Housebuilder shares rose by between 10% and 15% on the Monday evening, said the broker") is not None
+    # two quotes far apart stay two windows; two quotes within 200 chars merge into one
+    two = snippets_for(text, ["The scheme offers a 2.5% deposit on new-build homes, with a 20% government equity loan.", "Housebuilder shares rose by between 10% and 15% on the Monday morning."])
+    assert len(two) == 2 and "2.5% deposit" in two[0] and "Housebuilder shares" in two[1]
+    near = snippets_for(text, ["Intro paragraph about housing in general. Intro paragraph", "The scheme offers a 2.5% deposit on new-build homes"])
+    assert len(near) == 1
+    # a quote not in the page is kept as the model wrote it, after the located ones; short fragments and duplicates are dropped
+    out = snippets_for(text, ["Housebuilder shares rose by between 10% and 15% on the Monday morning.", "Something the model made up entirely about Budget day.", "2.5%", "housebuilder shares rose by between 10% and 15% on the monday morning."])
+    assert len(out) == 2 and out[1] == "Something the model made up entirely about Budget day."
+    assert snippets_for("", ["anything at all that is long enough"]) == ["anything at all that is long enough"]
+
+
+def test_graph_chunks_use_snippets_only_for_web_pages():
+    from app.services.evidence.loop import _kg_chunks_for
+    from app.models.evidence import Evidence
+    page = "x" * 6000
+    e = Evidence(source_class="web", source_ref="https://a.example/p", title="A page", published_at="2026-09-29", text=page[:600], full_text=page,
+                 structured={"kg_snippets": ["first relevant window", "second relevant window"]})
+    chunks = _kg_chunks_for(e)
+    assert [c.split("\n", 1)[1] for c in chunks] == ["first relevant window", "second relevant window"]
+    assert all(c.startswith("[SOURCE web | A page | https://a.example/p | 2026-09-29]") for c in chunks)
+    # no snippets (reader unavailable): the opening of the page, capped as before
+    e.structured = {"kg_snippets": [], "judge": {"failed": True}}
+    chunks = _kg_chunks_for(e)
+    assert 1 <= len(chunks) <= 3 and all("xxxx" in c for c in chunks)
+    # social rows are unchanged: body plus top comments
+    s = Evidence(source_class="social", source_ref="https://reddit.example/p", text="post body", full_text="post body", published_at="2026-09-29",
+                 structured={"subreddit": "r/Dorset", "score": 4, "public_comments": [{"likes": 3, "text": "a comment"}]})
+    assert "Top comments:\n- (3 pts) a comment" in _kg_chunks_for(s)[0]

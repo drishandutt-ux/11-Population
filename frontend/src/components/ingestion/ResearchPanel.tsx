@@ -90,12 +90,29 @@ function ItemCard({ item, onToggleExclude }: { item: EvidenceItem; onToggleExclu
         </span>
         {item.published_at && <span className="text-[10px] text-muted-foreground/50">{item.published_at.slice(0, 10)}</span>}
         {item.in_graph && <span className="text-[9px] text-emerald-400/80 border border-emerald-500/25 rounded px-1">in graph</span>}
-        <span className={`ml-auto text-[10px] tabular-nums ${item.on_topic ? "text-primary" : "text-muted-foreground/50"}`} title="relevance">
+        <span className={`ml-auto text-[10px] tabular-nums ${item.on_topic ? "text-primary" : "text-muted-foreground/50"}`} title={s.judge?.reason || "relevance"}>
           {item.on_topic ? "on-topic" : "off-topic"} · {Math.round((item.relevance || 0) * 100)}%
         </span>
       </div>
       <p className={`text-xs font-medium leading-snug ${muted ? "text-foreground/60" : "text-foreground/90"}`}>{item.title || item.source_ref}</p>
       <p className={`text-[11px] leading-snug mt-1 ${open ? "" : "line-clamp-3"} text-muted-foreground/75`}>{item.text}</p>
+      {!social && open && s.judge && (
+        <div className="mt-2 border-l border-border/40 pl-2 space-y-1">
+          <p className="text-[10px] text-muted-foreground/70 leading-snug">
+            <span className="text-foreground/60">Read in full</span>{typeof s.judge.read_chars === "number" ? ` · ${s.judge.read_chars.toLocaleString()} characters` : ""}
+            {s.judge.failed ? " · reader unavailable, page opening used" : ` · ${(s.kg_snippets || []).length} passage${(s.kg_snippets || []).length === 1 ? "" : "s"} kept`}
+            {s.judge.reason ? ` — ${s.judge.reason}` : ""}
+          </p>
+          {Array.isArray(s.kg_snippets) && s.kg_snippets.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[9px] uppercase tracking-wide text-emerald-400/70">What went into the graph</p>
+              {s.kg_snippets.map((t: string, k: number) => (
+                <p key={k} className="text-[10.5px] text-foreground/75 leading-snug whitespace-pre-line">{t}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {social && Array.isArray(s.public_comments) && s.public_comments.length > 0 && open && (
         <div className="mt-2 space-y-1 border-l border-border/40 pl-2">
           {s.public_comments.slice(0, 6).map((c: any, k: number) => (

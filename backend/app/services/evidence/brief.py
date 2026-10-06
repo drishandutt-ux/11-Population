@@ -52,7 +52,11 @@ def _render(rows: list[Evidence]) -> str:
     parts = []
     for e in rows:
         if e.source_class == "web":
-            parts.append(f"<web ref=\"{e.source_ref}\" domain=\"{e.author}\" date=\"{e.published_at or 'undated'}\">\n{e.title}\n{(e.full_text or e.text or '')[:1800]}\n</web>")
+            # The page reader's quoted passages (widened, merged) carry the page's relevant data;
+            # a page judged without them (reader unavailable) falls back to its opening.
+            snippets = [str(x) for x in ((e.structured or {}).get("kg_snippets") or []) if str(x).strip()]
+            body = "\n[…]\n".join(snippets) if snippets else (e.full_text or e.text or "")
+            parts.append(f"<web ref=\"{e.source_ref}\" domain=\"{e.author}\" date=\"{e.published_at or 'undated'}\">\n{e.title}\n{body[:2000]}\n</web>")
         elif e.source_class == "quant":
             st = e.structured or {}
             facts = "\n".join(f"  - {f.get('statistic')}: {f.get('value')} ({f.get('group')}, {f.get('geography')}, {f.get('year') or 'n.d.'})" for f in (st.get("facts") or [])[:8])
