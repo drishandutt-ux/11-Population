@@ -9,12 +9,13 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLiteRoot } from "@/lib/lite";
 
-export type LiteStep = "ask" | "people" | "debate" | "report";
+export type LiteStep = "ask" | "people" | "debate" | "report" | "tools";
 const STEPS: { key: LiteStep; label: string }[] = [
   { key: "ask", label: "Ask" },
   { key: "people", label: "People" },
   { key: "debate", label: "Conversation" },
   { key: "report", label: "Report" },
+  { key: "tools", label: "Tools" },
 ];
 
 type Props = {

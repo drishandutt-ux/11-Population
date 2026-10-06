@@ -60,10 +60,10 @@ function LiteSession() {
     : s.agents.length > 0 ? "ready"
     : !s.buildLoaded || !s.session ? "checking"
     : "people";
-  const step: LiteStep = view === "report" ? "report" : view === "ask" ? "ask" : view === "people" ? "people" : stage === "debate" ? "debate" : "people";
+  const step: LiteStep = view === "lab" ? "tools" : view === "report" ? "report" : view === "ask" ? "ask" : view === "people" ? "people" : stage === "debate" ? "debate" : "people";
   const title = s.session?.title || "";
-  // The step rail is navigation: Ask (the question and what was added), People, the Conversation, the Report.
-  const goStep = (st: LiteStep) => setView(st === "ask" ? "ask" : st === "people" ? "people" : st === "report" ? "report" : "flow");
+  // The step rail is navigation: Ask (the question and what was added), People, the Conversation, the Report, the Tools (Forms).
+  const goStep = (st: LiteStep) => setView(st === "ask" ? "ask" : st === "people" ? "people" : st === "report" ? "report" : st === "tools" ? "lab" : "flow");
   const shell = { title, onStep: goStep };
 
   if (s.notFound) {
@@ -81,7 +81,7 @@ function LiteSession() {
   // ── Lab tools: Forms (2026-10-06) ──
   if (view === "lab") {
     return (
-      <LiteShell {...shell} step="debate" proHref={proLinks.lab(id)} backHref={`/lite/${id}`} layout="app">
+      <LiteShell {...shell} step="tools" proHref={proLinks.lab(id)} backHref={`/lite/${id}`} layout="app">
         <ErrorBoundary label="Forms">
           <LiteForms sessionId={id} agents={s.agents} onBack={() => setView("flow")} />
         </ErrorBoundary>
