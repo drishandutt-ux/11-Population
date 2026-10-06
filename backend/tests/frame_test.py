@@ -329,3 +329,46 @@ def test_estimate_is_shown_the_material_and_sizing_reads_uploads(monkeypatch):
     sz = asyncio.run(frame.extract_sizing("s", "UK", "home camera", [], rm))
     assert sz["tam"]["value"] == "28,400,000" and "ANALYST'S RESEARCH AND UPLOADS" in seen["user"]
     assert asyncio.run(frame.extract_sizing("s", "UK", "home camera", [], frame.ResearchMaterial()))["tam"] == {}
+
+
+def test_matcher_reads_a_compound_label_through_its_attribute(monkeypatch):
+    """2026-10-06: for 'Age and household lifecycle stage' the matcher listed the Census age bands (summing to 89%,
+    the 65+ bands dropped) and reported the dimension missing because the label asked for two tables; the bands
+    were thrown away. A listed distribution with a source is found; a short sum is rescaled and said so."""
+    seen = {}
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen["user"] = user
+        return {"status": "missing", "categories": [{"label": "16-24", "share_pct": 25, "age_min": 16, "age_max": 24}, {"label": "25-44", "share_pct": 44, "age_min": 25, "age_max": 44},
+                                                     {"label": "45-64", "share_pct": 20, "age_min": 45, "age_max": 64}],
+                "source": "How life has changed in Manchester: Census 2021 (ONS)", "year": "2021", "geography": "Manchester", "proxy_attribute": "other",
+                "provenance": "official_statistic", "note": "age only; lifecycle stage not stated"}
+    monkeypatch.setattr(frame, "analyze", fake_analyze)
+    dim = {"key": "age_lifecycle", "label": "Age and household lifecycle stage", "attribute": "age", "kind": "demographic", "why": "retirees sustain use", "matchable": True, "proxy_attribute": "age"}
+
+    class E:
+        structured = {"facts": [{"statistic": "16-24", "value": "25%", "group": "residents", "geography": "Manchester", "year": "2021"}], "source_label": "ONS"}
+        author = "ONS"; excerpt = ""; source_ref = "u"; title = "t"
+    out = asyncio.run(frame.derive_targets("s", [dim], "Manchester", [E()]))["age_lifecycle"]
+    assert out["status"] == "found" and out["provenance"] == "official_statistic" and len(out["categories"]) == 3
+    assert "read as found" in out["note"] and "lifecycle stage not stated" in out["note"]
+    assert abs(sum(c["share_pct"] for c in out["categories"]) - 100) <= 1 and "summed to 89%" in out["note"]
+    assert "Why it matters (context only" in seen["user"] and "retirees sustain use" in seen["user"]
+    assert "ONE attribute" in frame.DIMS_SYSTEM and "read through its ATTRIBUTE" in frame.TARGET_SYSTEM and "EVERY category" in frame.TARGET_SYSTEM
+    # No source → still missing: a bare list is not a distribution read from the material.
+    assert frame.target_from_answer({"status": "missing", "categories": [{"label": "a", "share_pct": 50}, {"label": "b", "share_pct": 50}], "source": ""}, dim)["status"] == "missing"
+
+
+def test_matcher_is_told_the_named_proxy(monkeypatch):
+    seen = {}
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen["user"] = user
+        return {"status": "proxy", "categories": [{"label": "Owned", "share_pct": 55}, {"label": "Rented", "share_pct": 45}], "source": "ONS subnational tenure", "year": "2023",
+                "geography": "Manchester", "proxy_attribute": "tenure", "provenance": "official_statistic", "note": "tenure stands in"}
+    monkeypatch.setattr(frame, "analyze", fake_analyze)
+    dim = {"key": "price_tenure", "label": "Price sensitivity and housing tenure", "attribute": "attitude", "kind": "attitudinal", "why": "liner costs", "matchable": False, "proxy_attribute": "tenure"}
+    rm = frame.ResearchMaterial([], [UPLOAD], "")
+    out = asyncio.run(frame.derive_targets("s", [dim], "Manchester", [], rm))["price_tenure"]
+    assert "PUBLISHED PROXY named by the planner" in seen["user"] and seen["user"].count("tenure") >= 2
+    assert out["status"] == "proxy" and out["proxy_attribute"] == "tenure"

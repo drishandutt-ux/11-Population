@@ -932,3 +932,38 @@ def test_fact_extractor_reads_the_whole_page(monkeypatch):
     assert len(e.structured["facts"]) == 12 and e.on_topic and e.structured["answers_target"]
     chunk = sources.quant_chunk(e)
     assert "stat 11: 11%" in chunk, "every fact reaches the graph chunk"
+
+
+def test_triage_reader_and_refine_judge_against_the_target_not_the_question(monkeypatch):
+    """2026-10-06, Manchester caddy build: triage skipped every Census tenure and household table because 'none
+    contain data on attitudes toward food-waste caddy collection', the refine step then searched for environmental
+    attitudes, and a page of MSOA populations was marked as answering a 'by ward' target. The prompts now put the
+    fact target first and the question as context only."""
+    seen = {}
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen[kw.get("label")] = (system, user)
+        if kw.get("label") == "population_triage":
+            return {"picks": [0], "why": "kept the tenure table"}
+        if kw.get("label") == "population_refine":
+            return {"queries": [], "verdict": "no"}
+        return {}
+    monkeypatch.setattr(sources, "analyze", fake_analyze)
+    target = {"dimension": "housing", "fact": "households in Manchester by tenure", "why": "price sensitivity hinges on renting", "queries": []}
+    found = [({"label": "ONS"}, _Result("https://www.ons.gov.uk/tenure", "Subnational estimates of dwellings and households by tenure")),
+             ({"label": "ONS"}, _Result("https://www.ons.gov.uk/x", "Press release")),
+             ({"label": "ONS"}, _Result("https://www.ons.gov.uk/y", "Blog"))]
+
+    async def log(level, message, detail=None):
+        return None
+    loop = asyncio.new_event_loop()
+    picked = loop.run_until_complete(sources._triage("s1", "Why do households stop using the food-waste caddy?", target, found, 2, log))
+    assert [r.url for _, r in picked] == ["https://www.ons.gov.uk/tenure"]
+    system, user = seen["population_triage"]
+    assert user.index("FACT TARGET") < user.index("Context — the study's question, NOT what the page must be about")
+    assert "NOT against the research question" in system and "Never skip a page because it lacks the question's subject" in system
+    loop.run_until_complete(sources._refine("s1", "q", target, [{"query": "Housing tenure, Manchester", "sources": ["ons"], "read": []}], ["ons"], log))
+    system, user = seen["population_refine"]
+    assert "TO THE SAME FACT" in system and "not what to search for" in user
+    assert "wards are not MSOAs" in sources.FACTS_SYSTEM and "Judged against the TARGET" in sources.FACTS_SCHEMA["properties"]["relevance"]["description"]
+    assert "a 'by ward' target needs wards" in sources.FACTS_SCHEMA["properties"]["answers_target"]["description"]
