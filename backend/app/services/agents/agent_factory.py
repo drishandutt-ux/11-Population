@@ -58,7 +58,7 @@ _GEO_INSTRUCTIONS = """LOCATION INSTRUCTIONS — where a persona lives is a firs
 
 #: How many characters of an uploaded survey reach the prompt. The frontend trims to the same
 #: number and says so, so a large survey is never silently cut twice.
-SURVEY_CHAR_LIMIT = 8000
+SURVEY_CHAR_LIMIT = 40000   # shared with the browser (Pro Sources panel, simple view), which trims to it and says so
 
 
 def _mirror_block(count: int) -> str:

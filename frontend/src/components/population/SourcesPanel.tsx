@@ -6,7 +6,7 @@ import { Upload, X, FileText, Search, Loader2, ChevronDown, ExternalLink, Eye, E
 import { Section, SwitchRow } from "./controls";
 
 /** Matches SURVEY_CHAR_LIMIT in agent_factory.py. */
-const SURVEY_CHAR_LIMIT = 8000;
+const SURVEY_CHAR_LIMIT = 40000;
 
 interface Props {
   sessionQuery: string;

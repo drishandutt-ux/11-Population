@@ -284,8 +284,8 @@ FACTS_SCHEMA = obj({
         "geography": s("Country or region, exactly as the page states its coverage (UK / Great Britain / England and Wales / England)"),
         "year": s("Year or period the figure refers to, empty if not stated"),
         "quote": s("The sentence it came from, verbatim, under 30 words"),
-    }), "Up to 8 statistics from this page, the ones that answer the fact target first", 8),
-    "demographic_signals": arr(s(), "Distribution facts about the population (age bands, gender split, regional spread, income bands) as short sentences", 6),
+    }), "Every statistic on the page that describes this population, up to 24, the ones that answer the fact target first", 24),
+    "demographic_signals": arr(s(), "Distribution facts about the population (age bands, gender split, regional spread, income bands) as short sentences", 12),
     "summary": s("One line on what this page contributes to describing the population"),
 })
 
@@ -358,7 +358,7 @@ def quant_chunk(e: Evidence) -> Optional[str]:
     facts = st.get("facts") or []
     if not facts and not (e.full_text or e.text):
         return None
-    lines = [f"- {f.get('statistic')}: {f.get('value')} ({f.get('group')}, {f.get('geography')}{', ' + f['year'] if f.get('year') else ''})" for f in facts[:8]]
+    lines = [f"- {f.get('statistic')}: {f.get('value')} ({f.get('group')}, {f.get('geography')}{', ' + f['year'] if f.get('year') else ''})" for f in facts]
     body = "\n".join(lines) if lines else (e.full_text or e.text or "")[:2000]
     return f"[SOURCE quant | {st.get('source_label') or e.author} | {e.source_ref} | {e.published_at or 'undated'}]\n{e.title}\n{body}"
 
@@ -463,8 +463,10 @@ async def _read_and_extract(session_id: str, question: str, target: dict, src: d
     try:
         facts = await analyze(FACTS_SCHEMA, FACTS_SYSTEM,
                               f"Question: {question}\nFact target: {target.get('fact')} (dimension: {target.get('dimension')})\nPopulation and place: {geography or 'as the question states'}\n"
-                              f"Source: {src['label']} ({r.url}). {src.get('note') or ''}\nTitle: {title}\n\nPage text:\n{text[:9000]}",
-                              session_id=session_id, label="population_facts", max_tokens=1800)
+                              # The whole page (the fetcher caps it at 20,000 chars): statistics bulletins keep
+                              # their tables in the lower half, and relevance is judged on what the page says.
+                              f"Source: {src['label']} ({r.url}). {src.get('note') or ''}\nTitle: {title}\n\nPage text:\n{text}",
+                              session_id=session_id, label="population_facts", max_tokens=5000)
     except Exception as e:  # noqa: BLE001
         await log("warn", f"Fact extraction failed on {src['label']} page", str(e)[:160])
         facts = {"relevant": False, "answers_target": False, "relevance": 0, "facts": [], "demographic_signals": [], "summary": "extraction failed"}
@@ -636,15 +638,16 @@ async def load_research_rows(session_id: str, limit: int = 40) -> list[Evidence]
         return list(rows)
 
 
-def facts_for_prompt(rows: list[Evidence], max_chars: int = 3000) -> str:
-    """Compact, cited fact list for the detect / plan / persona prompts."""
+def facts_for_prompt(rows: list[Evidence], max_chars: int = 24000) -> str:
+    """Cited fact list for the detect / plan / persona prompts: every fact of every row (rows arrive
+    best-relevance first, so the budget — generous by default — drops the weakest pages last)."""
     lines: list[str] = []
     for e in rows:
         st = e.structured or {}
         label = st.get("source_label") or e.author
-        for f in (st.get("facts") or [])[:6]:
+        for f in (st.get("facts") or []):
             lines.append(f"- {f.get('statistic')}: {f.get('value')} — {f.get('group')}, {f.get('geography')}{', ' + f['year'] if f.get('year') else ''} ({label})")
-        for d in (st.get("demographic_signals") or [])[:3]:
+        for d in (st.get("demographic_signals") or []):
             lines.append(f"- {d} ({label})")
     if not lines:
         return ""

@@ -142,7 +142,7 @@ def targets_context(question: str, keys: list[str], *, constraints: Optional[dic
     if c.get("profile_query"):
         cfg.append(f"Audience profile (who the audience is, in the analyst's words): {c['profile_query']}")
     if c.get("doc_context"):
-        cfg.append("Uploaded survey / profile document — read it for who the respondents are (their places, ages, circumstances) and search for base rates about THOSE people; do not re-search what the document itself states:\n" + c["doc_context"][:2500])
+        cfg.append("Uploaded survey / profile document — read it for who the respondents are (their places, ages, circumstances) and search for base rates about THOSE people; do not re-search what the document itself states:\n" + c["doc_context"])
     parts.append("ANALYST'S CONFIGURATION (read first):\n" + "\n".join(x for x in cfg if x))
     d = detected or {}
     if d:
@@ -156,9 +156,9 @@ def targets_context(question: str, keys: list[str], *, constraints: Optional[dic
         det.append(f"Confidence that we know who this population is: {d.get('confidence')}%")
         parts.append("DETECTED FROM THE INPUTS:\n" + "\n".join(det))
     if facts_text:
-        parts.append(facts_text[:2000])
+        parts.append(facts_text)
     if brief_text:
-        parts.append(brief_text[:1500])
+        parts.append(brief_text)
     parts.append("PUBLISHERS TICKED (route queries only to these):\n" + catalogue_for_prompt(keys))
     return "\n\n".join(parts)
 
@@ -609,9 +609,10 @@ def _inputs_text(inp: dict, bld: PopulationBuild) -> str:
     if inp.get("facts"):
         parts.append(inp["facts"])
     if inp.get("kg"):
-        parts.append(inp["kg"][:1500])
+        parts.append(inp["kg"])
     if c.get("doc_context"):
-        parts.append("SURVEY / PROFILE DOCUMENT (uploaded by the analyst):\n" + c["doc_context"][:4000])
+        # The whole upload: detect names who the respondents are from it, and plan sizes the segments to them.
+        parts.append("SURVEY / PROFILE DOCUMENT (uploaded by the analyst):\n" + c["doc_context"])
     if bld.questions:
         parts.append("Clarifying questions and the analyst's answers:\n" + answers_summary(bld.questions))
     return "\n\n".join(parts)
@@ -1086,7 +1087,7 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
             facts_rows = await load_quant_facts(bld.session_id)
         except Exception:  # noqa: BLE001
             facts_rows = []
-        material = "\n".join(x for x in (frame_mod.material_text(facts_rows, 3000), research.for_dim(dim, 4000)) if x.strip())
+        material = "\n".join(x for x in (frame_mod.material_text(facts_rows, 8000), research.for_dim(dim, 4000)) if x.strip())
         tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "", material)
         if tg["status"] == "estimated":
             await log(build_id, "frame", "decision", f"Estimated · {dim['label']} — labelled model_inference, lowers confidence" + (", anchored to what is on file" if material.strip() else "; nothing on file to anchor it"), tg.get("note"))
@@ -1349,7 +1350,7 @@ async def _spawn(build_id: str):
         run = await latest_run(session_id)
         if run and run.brief:
             evidence_text = brief_for_prompt(run.brief, max_chars=2500)
-        facts = facts_for_prompt(await load_quant_facts(session_id), max_chars=1500)
+        facts = facts_for_prompt(await load_quant_facts(session_id), max_chars=6000)
         if facts:
             evidence_text = (evidence_text + "\n\n" + facts).strip()
 

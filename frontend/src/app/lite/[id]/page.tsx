@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, Beaker, Check, FileText, Link2, Loader2, MessageCircle, Paperclip, Play, Plus, Search, Square, X } from "lucide-react";
 
 type View = "flow" | "ask" | "people" | "report" | "lab";
-const SURVEY_CHAR_LIMIT = 8000;
+const SURVEY_CHAR_LIMIT = 40000;   // matches SURVEY_CHAR_LIMIT in agent_factory.py; the card says when a file was trimmed
 const TEXT_LIKE = /\.(txt|csv|tsv|md|json)$/i;
 
 export default function LiteSessionPage() {
@@ -274,7 +274,7 @@ function LiteSession() {
 
 function PeopleForm({ sessionId, question, researching, ingesting, onRun }: { sessionId: string; question: string; researching: boolean; ingesting: boolean; onRun: (profile: string, doc: string) => Promise<void> }) {
   const [profile, setProfile] = useState("");
-  const [doc, setDoc] = useState<{ name: string; text: string; asSource?: boolean } | null>(null);
+  const [doc, setDoc] = useState<{ name: string; text: string; asSource?: boolean; totalChars?: number; totalRows?: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
@@ -284,7 +284,8 @@ function PeopleForm({ sessionId, question, researching, ingesting, onRun }: { se
     setError(null);
     if (TEXT_LIKE.test(file.name) || file.type.startsWith("text/")) {
       const text = await file.text();
-      setDoc({ name: file.name, text: text.slice(0, SURVEY_CHAR_LIMIT) });
+      const rows = (s: string) => Math.max(0, s.split("\n").length - 1);
+      setDoc({ name: file.name, text: text.slice(0, SURVEY_CHAR_LIMIT), totalChars: text.length, totalRows: rows(text) });
     } else {
       // Not plain text (PDF, Word…): read it as a source instead, so nothing is lost.
       try { await api.ingest.document(sessionId, file); setDoc({ name: file.name, text: "", asSource: true }); }
@@ -326,6 +327,9 @@ function PeopleForm({ sessionId, question, researching, ingesting, onRun }: { se
                   <div className="min-w-0 flex-1">
                     <p className="text-[13.5px] font-medium truncate">{doc.name}</p>
                     <p className="text-[12px] text-muted-foreground">{doc.asSource ? "Read as a source — the people will know what's in it." : `${doc.text.length.toLocaleString()} characters will shape the people.`}</p>
+                    {!doc.asSource && (doc.totalChars || 0) > doc.text.length && (
+                      <p className="text-[12px] text-amber-700">Trimmed to the first {SURVEY_CHAR_LIMIT.toLocaleString()} characters — about {Math.max(0, doc.text.split("\n").length - 1).toLocaleString()} of {(doc.totalRows || 0).toLocaleString()} rows reach the people. Split a larger file, or add it as a source instead.</p>
+                    )}
                   </div>
                   <button type="button" onClick={() => setDoc(null)} className="text-muted-foreground hover:text-foreground" title="Remove"><X className="w-4 h-4" /></button>
                 </div>

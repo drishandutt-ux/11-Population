@@ -84,7 +84,7 @@ def test_mirror_block_overrides_the_stance_quota():
 def test_survey_limit_is_a_single_shared_number():
     """The frontend trims to this same number and says so, instead of the file being cut at
     12,000 in the browser and again at 8,000 on the server with nothing reported."""
-    assert SURVEY_CHAR_LIMIT == 8000
+    assert SURVEY_CHAR_LIMIT == 40000
 
 
 # ── the roster that prompted the fix ──────────────────────────────────────────

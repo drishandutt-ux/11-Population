@@ -633,14 +633,15 @@ def _clean_categories(cats: list) -> list[dict]:
     return out[:8]
 
 
-def material_text(facts_rows: list[Any], max_chars: int = 6000) -> str:
+def material_text(facts_rows: list[Any], max_chars: int = 16000) -> str:
+    """Every fact of every statistics page, best-relevance rows first, for the frame's calls."""
     parts = []
     for e in facts_rows:
         st = getattr(e, "structured", None) or {}
         label = st.get("source_label") or getattr(e, "author", "") or getattr(e, "title", "")
-        for f in (st.get("facts") or [])[:8]:
+        for f in (st.get("facts") or []):
             parts.append(f"- {f.get('statistic')}: {f.get('value')} — {f.get('group')}, {f.get('geography')}{', ' + str(f['year']) if f.get('year') else ''} ({label})")
-        for d in (st.get("demographic_signals") or [])[:4]:
+        for d in (st.get("demographic_signals") or []):
             parts.append(f"- {d} ({label})")
         excerpt = (getattr(e, "text", None) or getattr(e, "excerpt", "") or "")[:600]   # Evidence stores the excerpt as `text`
         if excerpt:

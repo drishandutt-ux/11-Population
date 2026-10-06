@@ -857,3 +857,78 @@ def test_simple_view_start_is_idempotent_over_a_live_build(api_client, monkeypat
     same_id, pro_id, live_status = _a.new_event_loop().run_until_complete(go())
     assert same_id == "live"                 # the running simple-view build is handed back as it is
     assert pro_id != "live" and live_status == "stopped"   # a deliberate pro start still supersedes
+
+
+# ── Nothing is read in part: the whole survey, the whole fact list, the whole page ─────────
+
+def test_detect_plan_and_target_planner_read_the_whole_survey_and_fact_list():
+    """Detect read the first 4,000 chars of the upload, the target planner 2,500, and the fact list was
+    cut at 3,000 chars with six facts per page — so who the respondents are and what was gathered were
+    judged on a slice. Now every stage sees all of it."""
+    from app.services.population import builder, sources
+    from app.models.population import PopulationBuild
+    survey = "respondent,age,town\n" + "\n".join(f"{n},{20 + n % 50},Town{n}" for n in range(1, 1500))     # ~25,000 chars
+    assert len(survey) > 20000 and survey.endswith("Town1499")
+    c = {"doc_context": survey, "profile_query": "parents in Bolton"}
+    tc = builder.targets_context("Would parents pay £12 a month?", ["ons"], constraints=c, detected={"geography": "Bolton"}, facts_text="F" * 5000, brief_text="B" * 4000)
+    assert "1499,69,Town1499" in tc and "F" * 5000 in tc and "B" * 4000 in tc
+    bld = PopulationBuild(id="b1", session_id="s1", status="detecting", constraints=c, target_count=10)
+    it = builder._inputs_text({"question": "q", "brief": "", "facts": "F" * 5000, "kg": "K" * 3000}, bld)
+    assert "1499,69,Town1499" in it and "K" * 3000 in it
+
+    class E:
+        author = "ONS"
+        structured = {"source_label": "ONS", "facts": [{"statistic": f"stat {k}", "value": f"{k}%", "group": "adults", "geography": "UK", "year": "2025"} for k in range(20)],
+                      "demographic_signals": [f"signal {k}" for k in range(8)]}
+    txt = sources.facts_for_prompt([E()])
+    assert "stat 19: 19%" in txt and "signal 7" in txt
+    from app.services.population import frame as fr
+    mt = fr.material_text([E()])
+    assert "stat 19: 19%" in mt and "signal 7" in mt
+
+
+def test_fact_extractor_reads_the_whole_page(monkeypatch):
+    """The extractor saw the first 9,000 chars of a page whose tables sit lower down; relevance and
+    'answers the target' were judged on that half. Now the whole fetched page goes in, every fact is kept
+    on the row and in the graph chunk."""
+    import asyncio
+    from app.services.population import sources
+    from app.services.evidence import fetch_page as fp
+    seen = {}
+    page_text = ("Intro. " * 1500) + "TABLE: 61% of adults in the North West own a bike. " + ("More. " * 500)   # ~14,000 chars
+    assert len(page_text) > 12000
+
+    async def fake_fetch(url, query=""):
+        return fp.FetchedPage(url=url, title="Walking and cycling statistics", markdown=page_text, chars=len(page_text), truncated=False, status=200, kind="html", published_at="2025-08-01")
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen["user"] = user
+        seen["max_facts"] = schema["properties"]["facts"].get("maxItems")
+        return {"relevant": True, "answers_target": True, "relevance": 90, "summary": "cycling by region",
+                "facts": [{"statistic": f"stat {k}", "value": f"{k}%", "group": "adults", "geography": "England", "year": "2024", "quote": "q"} for k in range(12)],
+                "demographic_signals": []}
+
+    class R:
+        url, domain, title, snippet, provider, published_at = "https://www.gov.uk/x", "gov.uk", "Walking and cycling", "", "brave_api", None
+
+    monkeypatch.setattr(sources, "fetch_page", fake_fetch)
+    monkeypatch.setattr(sources, "analyze", fake_analyze)
+    saved = {}
+
+    class _DB:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        def add(self, e): saved["e"] = e
+        async def commit(self): pass
+        async def refresh(self, e): pass
+    monkeypatch.setattr(sources.dbm, "AsyncSessionLocal", lambda: _DB())
+    async def _pub(*a, **k): pass
+    monkeypatch.setattr(sources, "publish", _pub)
+    monkeypatch.setattr(sources.asyncio, "create_task", lambda coro: coro.close())
+    async def _log(level, message, detail=None): pass
+    e = asyncio.run(sources._read_and_extract("s1", "Would parents pay?", {"fact": "share who cycle", "dimension": "behaviour"}, sources._BY_KEY["govuk"], R(), build_id="b1", geography="North West", log=_log))
+    assert "61% of adults in the North West own a bike" in seen["user"], "the extractor must see the lower half of the page"
+    assert seen["max_facts"] == 24
+    assert len(e.structured["facts"]) == 12 and e.on_topic and e.structured["answers_target"]
+    chunk = sources.quant_chunk(e)
+    assert "stat 11: 11%" in chunk, "every fact reaches the graph chunk"
