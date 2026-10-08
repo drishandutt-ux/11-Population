@@ -25,6 +25,11 @@ DIALS_SCHEMA = """{
 # Agents are generated in batches so a large population never exceeds the model's
 # output token limit (one giant call truncates the JSON → unterminated-string errors).
 _BATCH_SIZE = 10
+# Kit personas carry more per person (fixed facts, ~28 beliefs, life facts) and, with the
+# question's dynamic dials, ten of them overran the 12k output cap (prod run 4, 2026-10-08:
+# 6 of 7 batches cut off). Five per call leaves room; a card that still comes back missing
+# is asked for once more on its own batch.
+_KIT_BATCH_SIZE = 5
 
 _SYSTEM_PROMPT = """You are an expert behavioral psychologist and simulation designer. You create deeply realistic
 human personas for multi-agent debate simulations. Each agent gets a full psychological dial profile (112 values, all integers 0-10)
@@ -857,14 +862,22 @@ async def generate_agents_from_plan(
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] kit batch failed ({seg.get('name')}, {len(cards)}): {type(e).__name__}: {e}")
                 return []
-        return [kit_cast.enforce(kseg, card, d) for card, d in kit_cast.pair(cards, raw)]
+        out = [kit_cast.enforce(kseg, card, d) for card, d in kit_cast.pair(cards, raw)]
+        got = {d.get("slot") for d in raw if isinstance(d, dict)}
+        missing = [c for c in cards if c["slot"] not in got] if len(out) < len(cards) else []
+        if missing and not label.endswith(":retry"):
+            print(f"[agent_factory] kit batch returned {len(out)}/{len(cards)} ({seg.get('name')}) — retrying {len(missing)}")
+            done_slots = {c["slot"] for c, _ in kit_cast.pair(cards, raw)}
+            missing = [c for c in cards if c["slot"] not in done_slots]
+            out += await _kit_batch(seg, kseg, missing, taken + out, label + ":retry")
+        return out
 
     async def _kit_segment(seg: dict, kseg: dict) -> list[dict]:
         nonlocal done_total
         cards = list(seg.get("kit_cards") or [])
         count = len(cards)
         seg_dicts: list[dict] = []
-        batches = [cards[k:k + _BATCH_SIZE] for k in range(0, len(cards), _BATCH_SIZE)]
+        batches = [cards[k:k + _KIT_BATCH_SIZE] for k in range(0, len(cards), _KIT_BATCH_SIZE)]
 
         async def _note():
             async with progress_lock:

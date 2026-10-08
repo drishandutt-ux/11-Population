@@ -435,3 +435,39 @@ def test_survey_style_and_convictions_beside_the_questions():
     assert i < j and "I trust the NHS" in msg[i:j] and "I smoke." in msg[i:j] and "genuinely do not know" in msg[i:j] and "firmly" in msg[i:j]
     plain = SimpleNamespace(**{**agent.__dict__, "character": None})
     assert "WHO YOU ARE, AS YOU ANSWER" not in probe_svc._build_user_message(agent=plain, instrument=instruments.get("survey"), spec={"questions": [{"key": "q", "type": "yesno", "text": "Q?"}]}, query="t", kg_context="", said=[], decided=[])
+
+
+def test_kit_batches_are_small_and_missing_cards_are_retried(monkeypatch):
+    import asyncio
+    import re
+    from app.services.agents import agent_factory
+    kit = registry.load_kit("britains_choice_2020")
+    plan = registry.plan_from_kit(kit, 12)
+    calls = []
+
+    async def fake_rag(*a, **k):
+        return None
+
+    async def fake_query(*a, **k):
+        return "nothing"
+
+    async def fake_create(client, *, session_id=None, label="", **kw):
+        prompt = kw["messages"][0]["content"]
+        slots = [int(x) for x in re.findall(r"SLOT (\d+):", prompt)]
+        calls.append((label, len(slots)))
+        keep = slots if label.endswith(":retry") else slots[:-1]      # the first call drops its last persona (cut off)
+        out = [{"slot": k, "name": f"N{len(calls)}-{k}", "town": "Leeds", "role": "Clerk", "occupation": "clerk", "background": "b",
+                "humanity": 50, "dials": {}, "personality": ["p"], "debate_style": "d", "geo_behavior": "g", "correlation": "c"} for k in keep]
+
+        class R:
+            content = [type("T", (), {"text": json.dumps(out)})()]
+        return R()
+
+    monkeypatch.setattr(agent_factory, "get_lightrag", fake_rag)
+    monkeypatch.setattr(agent_factory, "query_rag", fake_query)
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", fake_create)
+    profiles = asyncio.new_event_loop().run_until_complete(
+        agent_factory.generate_agents_from_plan("s", "q", plan["segments"], {}, mode="fast"))
+    assert len(profiles) == 12                                            # nobody lost to a cut-off batch
+    assert max(n for lab, n in calls if not lab.endswith(":retry")) <= 5
+    assert any(lab.endswith(":retry") for lab, _ in calls)
