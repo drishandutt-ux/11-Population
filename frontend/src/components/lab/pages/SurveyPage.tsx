@@ -9,8 +9,9 @@ import { ProbeAnswerRow, SurveyQuestionResult } from "@/lib/api";
 import { CategoryBars, Donut, Histogram, OptionBars, SegmentTable, ShareBar, StackedRows, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import { InstrumentPageProps } from "./types";
+import RealPollScore, { useRealPollScore } from "./RealPollScore";
 
-type Tab = "summary" | "question" | "individual";
+type Tab = "summary" | "question" | "individual" | "real poll";
 type Filter = { q: string; value: string; row?: string } | null;
 
 function display(q: SurveyQuestionResult, v: any): string {
@@ -44,6 +45,8 @@ export default function SurveyPage({ probe, dynamicDials = []}: InstrumentPagePr
   const [agentId, setAgentId] = useState<string>("");
   const questions: SurveyQuestionResult[] = a?.questions || [];
   const byQ = useMemo(() => Object.fromEntries(questions.map((q) => [q.key, q])), [questions]);
+  // A run of a real poll's questionnaire (a benchmark) is scored against that poll.
+  const poll = useRealPollScore(probe.session_id, probe.id, probe.status === "complete");
   if (!a || !a.n) return null;
 
   const current = byQ[qKey] || questions[0];
@@ -60,7 +63,7 @@ export default function SurveyPage({ probe, dynamicDials = []}: InstrumentPagePr
           <p className="text-xs text-muted-foreground">{a.n} responses · {questions.length} questions</p>
         </div>
         <div className="flex rounded-lg border border-border/60 overflow-hidden text-xs shrink-0">
-          {(["summary", "question", "individual"] as Tab[]).map((t) => (
+          {((poll ? ["summary", "question", "individual", "real poll"] : ["summary", "question", "individual"]) as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)} className={`px-3 py-1.5 capitalize ${tab === t ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}>{t}</button>
           ))}
         </div>
@@ -115,6 +118,8 @@ export default function SurveyPage({ probe, dynamicDials = []}: InstrumentPagePr
             showRespondents onOpenAgent={openAgent} big />
         </div>
       )}
+
+      {tab === "real poll" && poll && <RealPollScore score={poll} />}
 
       {tab === "individual" && (
         <div className="grid grid-cols-[13rem_1fr] gap-4">

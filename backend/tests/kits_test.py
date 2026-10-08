@@ -337,3 +337,25 @@ def test_life_facts_drawn_by_age_and_sex():
     seg = kit["segments"][0]
     d = cast.enforce(seg, {**cards[0], "slot": 1}, {"name": "X"})
     assert d["character"]["life_facts"] == cards[0]["facts"] and "Facts of their life" in cast.card_line(cards[0])
+
+
+def test_likelihood_estimator_averages_stated_chances():
+    q = {"key": "q", "type": "single", "options": ["Tea", "Coffee"]}
+    resp = [{"segment": "Left", "weight": 1.0, "answer": {"q": "Tea", "_dist": {"q": {"o1": 70, "o2": 30}}}},
+            {"segment": "Left", "weight": 1.0, "answer": {"q": "Tea", "_dist": {"q": {"o1": 50, "o2": 50}}}}]
+    assert benchmark.simulated(q, resp, "All", estimator="draws")["shares"]["Tea"] == 1.0
+    assert abs(benchmark.simulated(q, resp, "All", estimator="likelihood")["shares"]["Tea"] - 0.6) < 1e-9
+    m = {"key": "m", "type": "multi", "options": ["a", "b", "c", "DK"], "exclusive": ["DK"], "max_choices": 1}
+    lk = benchmark._likelihoods(m, {"_dist": {"m": {"o1": 80, "o2": 80, "o3": 0, "o4": 20}}})
+    assert abs(lk["DK"] - 0.2) < 1e-9 and abs(lk["a"] + lk["b"] - 0.8) < 1e-9          # capped at one tick, DK stands alone
+    g = {"key": "g", "type": "grid", "rows": ["NHS"], "options": ["Lots", "Little"]}
+    assert benchmark._likelihoods(g, {"_dist": {"g": {"nhs": {"o1": 3, "o2": 1}}}})["NHS"]["Lots"] == 0.75
+    s = benchmark.score(_bench(), [{**r, "answer": {"q": "Tea", "_dist": {"q": {"o1": 60, "o2": 40}}}} for r in
+                                   [{"segment": "Left", "age": 40, "demographics": {}, "weight": 1.0}] * 6])
+    assert s["estimator"] == "likelihood" and s["headline"]["mae_pts"] == 0.0
+
+
+def test_benchmark_matched_from_the_form():
+    form = benchmark.load_form("mic_11london_june2023")
+    assert benchmark.match({"questions": form["questions"]}) == "mic_11london_june2023"
+    assert benchmark.match({"questions": [{"key": "q1_priorities"}]}) is None

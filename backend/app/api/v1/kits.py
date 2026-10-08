@@ -86,8 +86,22 @@ async def run_benchmark(session_id: str, benchmark_id: str, body: BenchmarkRunRe
                               background_tasks, user, db)
 
 
+@router.get("/sessions/{session_id}/probes/{probe_id}/benchmark")
+async def score_probe_auto(session_id: str, probe_id: str, min_n: int = 5, estimator: str = "auto",
+                           user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The scorecard against whichever real poll this run's form reproduces (404 when none)."""
+    await get_owned_session(session_id, user, db)
+    p = await db.get(Probe, probe_id)
+    if not p or p.session_id != session_id:
+        raise HTTPException(404, "Probe not found")
+    bid = bench_svc.match(p.spec or {})
+    if not bid:
+        raise HTTPException(404, "This run does not reproduce a real poll on file")
+    return await score_probe(session_id, probe_id, bid, min_n=min_n, estimator=estimator, user=user, db=db)
+
+
 @router.get("/sessions/{session_id}/probes/{probe_id}/benchmark/{benchmark_id}")
-async def score_probe(session_id: str, probe_id: str, benchmark_id: str, min_n: int = 5,
+async def score_probe(session_id: str, probe_id: str, benchmark_id: str, min_n: int = 5, estimator: str = "auto",
                       user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """The scorecard: a finished survey run against the real poll it reproduces."""
     await get_owned_session(session_id, user, db)
@@ -106,4 +120,9 @@ async def score_probe(session_id: str, probe_id: str, benchmark_id: str, min_n: 
                  for a, ag in rows if a.answer]
     if not responses:
         raise HTTPException(400, "This run has no answers yet.")
-    return bench_svc.score(bench, responses, min_n=max(1, min_n))
+    out = bench_svc.score(bench, responses, min_n=max(1, min_n), estimator=estimator if estimator in ("auto", "draws", "likelihood") else "auto")
+    out["probe_id"] = probe_id
+    out["benchmark_title"] = bench.get("title")
+    out["fieldwork"] = (bench.get("method") or {}).get("Fieldwork dates")
+    out["sample"] = (bench.get("method") or {}).get("Sample size")
+    return out

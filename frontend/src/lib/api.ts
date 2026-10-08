@@ -362,6 +362,9 @@ export const api = {
     /** A finished Forms run scored against a real poll: per question, per segment, per demographic cut. */
     benchmarkScore: (sessionId: string, probeId: string, benchmarkId: string) =>
       request<BenchmarkScore>(`/sessions/${sessionId}/probes/${probeId}/benchmark/${encodeURIComponent(benchmarkId)}`),
+    /** The scorecard against whichever real poll this Forms run reproduces (404 when none). */
+    benchmarkScoreAuto: (sessionId: string, probeId: string) =>
+      request<BenchmarkScore>(`/sessions/${sessionId}/probes/${probeId}/benchmark`),
   },
   presets: {
     list: () => request<AgentPreset[]>("/presets"),
@@ -1200,15 +1203,18 @@ export type BenchmarkSummary = { id: string; title?: string; fieldwork?: string;
 export type BenchmarkSummaryStats = {
   items: number; mae_pts: number; median_mae_pts: number; uniform_baseline_mae_pts: number | null;
   top_choice_agreement: number | null; mean_rank_corr: number | null; within_5_pts: number; national_baseline_mae_pts?: number | null;
+  respondents?: number;
 };
 
 export type BenchmarkScore = {
   benchmark: string; title?: string; respondents: number;
+  estimator?: "draws" | "likelihood"; benchmark_title?: string; fieldwork?: string; sample?: string;
   headline: BenchmarkSummaryStats;
   per_question: (BenchmarkSummaryStats & { question: string; number?: string; text: string; type: string })[];
   by_column: Record<string, BenchmarkSummaryStats>;
   segment_gradients: { question: string; option: string; real_spread_pts: number; corr: number | null; real: Record<string, number>; sim: Record<string, number> }[];
   units: { question: string; row?: string; mae_pts: number; options: { option: string; real_pct: number; sim_pct: number; diff_pts: number }[] }[];
+  segment_units?: Record<string, { question: string; row?: string; mae_pts: number }[]>;
 };
 
 export type SurveyTemplate = {
