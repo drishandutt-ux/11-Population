@@ -37,6 +37,10 @@ YOU ARE FILLING IN A SURVEY, NOT WRITING A POST.
 - Where the form offers "Don't know" (or "None of the above"), use it when that is honestly
   where you are — you have not heard of it, never thought about it, or could not say — as real
   respondents often do. Do not manufacture an opinion you would not have.
+- "Have you heard of / could you explain …" questions: answer as someone with your education,
+  job and life really would. Outside medicine, most people have never heard of rare conditions
+  or technical terms, and far fewer could explain them — only say you know what your life has
+  actually shown you.
 - Give YOUR answer, not the one that sounds kindest, most balanced or most sensible. If you are
   blunt, sceptical, uninterested or out of step with polite opinion, answer that way.
 - Open questions: answer in your own words, specifically — one or two sentences, in character.
@@ -80,6 +84,9 @@ def normalise(questions: Any) -> list[dict]:
             # Routing: asked only of those who gave `equals` to question `key` (e.g. "why not?"
             # only to those who said yes). Everyone else is out of this question's base.
             "show_if": _show_if(q.get("show_if")),
+            # Answer as likelihoods (see distribution_mode): per question, so it survives the
+            # Forms editor, which copies questions but not form-level settings.
+            "likelihood": bool(q.get("likelihood")),
         })
     return out
 
@@ -127,9 +134,46 @@ def row_key(q: dict, row: str, idx: int) -> str:
     return _slug(row, f"r{idx + 1}")
 
 
+def opt_key(idx: int) -> str:
+    return f"o{idx + 1}"
+
+
+def _likely(spec: dict, q: dict) -> bool:
+    return q["type"] in ("single", "multi", "yesno", "grid") and (q.get("likelihood") or str(spec.get("answer_mode") or "") == "distribution")
+
+
+def distribution_mode(spec: dict) -> bool:
+    """Answer as likelihoods (2026-10-08): instead of one pick per question the twin gives the
+    chance it would pick each option, and the answer it gives is drawn from that. A twin asked for
+    a single pick gives its most likely option every time — 97% "hunger and poverty" where real
+    people split 20/17/15… — so a population of them is far more unanimous than the public."""
+    return str(spec.get("answer_mode") or "") == "distribution" or any(q["likelihood"] for q in normalise(spec.get("questions")))
+
+
+def _dobj(props: dict, description: str) -> dict:
+    return {**obj(props), "description": description}
+
+
+def _dist_schema(q: dict) -> dict:
+    t, text = q["type"], q["text"]
+    if t == "multi":
+        cap = q["max_choices"]
+        return _dobj({opt_key(k): i(f"{o} — chance (0-100) that you would tick this one") for k, o in enumerate(q["options"])},
+                   f"{text} — for EACH option, the chance you would tick it (independent chances, not summing to 100)"
+                   + (f"; you can tick at most {cap}" if cap else "") + (f"; {' / '.join(q['exclusive'])} only on its own" if q["exclusive"] else ""))
+    if t == "grid":
+        return obj({row_key(q, r, k): _dobj({opt_key(j): i(f"{c} — chance (0-100)") for j, c in enumerate(q["columns"])}, f"{text} — {r}: chances summing to 100")
+                    for k, r in enumerate(q["rows"])})
+    opts = q["options"] if t == "single" else ["yes", "no"]
+    return _dobj({opt_key(k): i(f"{o} — chance (0-100)") for k, o in enumerate(opts)}, f"{text} — chances summing to 100")
+
+
 def schema_for(spec: dict) -> dict:
     props: dict[str, Any] = {"reasoning": s("2-3 sentences, in character: how you approached this form and what shaped your answers")}
     for q in normalise(spec.get("questions")):
+        if _likely(spec, q):
+            props[q["key"]] = _dist_schema(q)
+            continue
         t = q["type"]
         text = q["text"]
         if t == "single":
@@ -165,10 +209,12 @@ def question_for(spec: dict) -> str:
     title = str(spec.get("title") or "").strip()
     if title:
         lines.append(f"SURVEY: {title}")
+    if str(spec.get("context_before") or "").strip():
+        lines.append(str(spec["context_before"]).strip())
     for k, q in enumerate(normalise(spec.get("questions")), 1):
         t = q["type"]
         line = f"{k}. {q['text']}"
-        if q["show_if"]:
+        if q["show_if"] and not spec.get("_followup_stage"):
             src = next((n for n, x in enumerate(normalise(spec.get("questions")), 1) if x["key"] == q["show_if"]["key"]), None)
             line += f" (ONLY if you answered {' or '.join(chr(34) + e + chr(34) for e in q['show_if']['equals'])} to question {src or q['show_if']['key']}; otherwise leave it empty)"
         if t in ("single", "multi"):
@@ -187,8 +233,101 @@ def question_for(spec: dict) -> str:
         elif t == "grid":
             line += " [for each of: " + "; ".join(q["rows"]) + " — answer " + " / ".join(q["columns"]) + "]"
         lines.append(line)
+    if distribution_mode(spec):
+        lines.append(DISTRIBUTION_RULE)
     lines.append("Complete every question as yourself.")
     return "\n".join(lines)
+
+
+DISTRIBUTION_RULE = """HOW TO ANSWER: for every multiple-choice question and every row of a grid, do not just name one answer — give the CHANCE (0-100) that you would pick each option if you filled this in on an ordinary day, as yourself. Real people are rarely certain: spread your chances where you would genuinely waver (between "somewhat" and "strongly", between two priorities, between an answer and "Don't know"), and put almost all of it on one option only where you would never answer otherwise. "Don't know" gets the chance you would really tick it — for things you have never heard of or never thought about, that chance is high. Chances for one question or row add up to 100; for "tick all that apply / up to N" give each option its own chance of being ticked."""
+
+
+def _draw(weights: dict[str, float], rng) -> Optional[str]:
+    items = [(k, max(0.0, float(v or 0))) for k, v in weights.items()]
+    tot = sum(v for _, v in items)
+    if tot <= 0:
+        return None
+    x = rng.random() * tot
+    for k, v in items:
+        x -= v
+        if x <= 0:
+            return k
+    return items[-1][0]
+
+
+def realise(answer: dict, spec: dict, rng) -> dict:
+    """Turn a likelihood answer into the concrete answer the form would have recorded: one draw
+    per question and grid row (seeded), multi choices ticked by their own chances and capped.
+    The likelihoods are kept under `_dist` so the spread each twin gave stays inspectable."""
+    if not distribution_mode(spec):
+        return answer
+    out = dict(answer)
+    dists: dict[str, Any] = {}
+    for q in normalise(spec.get("questions")):
+        raw = answer.get(q["key"])
+        if not _likely(spec, q) or not isinstance(raw, dict):
+            continue
+        dists[q["key"]] = raw
+        if q["type"] == "grid":
+            g = {}
+            for k, r in enumerate(q["rows"]):
+                rk = row_key(q, r, k)
+                cell = raw.get(rk) if isinstance(raw.get(rk), dict) else {}
+                pick = _draw({c: cell.get(opt_key(j), 0) for j, c in enumerate(q["columns"])}, rng)
+                if pick is not None:
+                    g[rk] = pick
+            out[q["key"]] = g
+        elif q["type"] == "multi":
+            p = {o: max(0.0, min(100.0, float(raw.get(opt_key(k)) or 0))) / 100 for k, o in enumerate(q["options"])}
+            excl = [o for o in q["exclusive"] if o in p]
+            chosen: list[str] = []
+            for o in excl:                       # a stand-alone answer is drawn first, and stands alone
+                if rng.random() < p[o]:
+                    chosen = [o]
+                    break
+            if not chosen:
+                ticked = [o for o, pr in p.items() if o not in excl and rng.random() < pr]
+                cap = q["max_choices"] or len(ticked)
+                while len(ticked) > cap:         # over the cap: keep a weighted draw of them
+                    drop = _draw({o: 1 - p[o] + 1e-6 for o in ticked}, rng)
+                    ticked.remove(drop)
+                if not ticked and not q["show_if"]:
+                    ticked = [max((o for o in p if o not in excl), key=lambda o: p[o])]   # a respondent ticks something
+                chosen = ticked
+            out[q["key"]] = chosen
+        else:
+            opts = q["options"] if q["type"] == "single" else ["yes", "no"]
+            pick = _draw({o: raw.get(opt_key(k), 0) for k, o in enumerate(opts)}, rng)
+            if pick is not None:
+                out[q["key"]] = pick
+    out["_dist"] = dists
+    return out
+
+
+def stages(spec: dict) -> list[tuple[dict, Optional[dict]]]:
+    """Routing asked the way a real form asks it: the routed questions are held back and put
+    to the twin in a second call only when its first answers route it there — so "why didn't you
+    take it?" cannot pull "have you ever not taken medication?" towards yes (it did: 100% v 25%).
+    Returns [(stage spec, condition)], condition None for the first stage."""
+    qs = list(spec.get("questions") or [])
+    norm = normalise(qs)
+    routed = {q["key"] for q in norm if q["show_if"]}
+    if not routed:
+        return [(spec, None)]
+    first = {**spec, "questions": [q for q, n in zip(qs, norm) if n["key"] not in routed]}
+    out: list[tuple[dict, Optional[dict]]] = [(first, None)]
+    for q, nq in zip(qs, norm):
+        if nq["key"] in routed:
+            out.append(({**spec, "questions": [q], "_followup_stage": True}, nq))
+    return out
+
+
+def followup_context(spec: dict, cond_q: dict, answer: dict) -> str:
+    """The line a follow-up opens with: what the twin just answered to the question routing it."""
+    src = next((q for q in normalise(spec.get("questions")) if q["key"] == cond_q["show_if"]["key"]), None)
+    if not src:
+        return ""
+    return f"FOLLOW-UP: earlier in this survey you were asked \"{src['text']}\" and you answered \"{answer.get(src['key'])}\". One more question follows from that."
 
 
 # ── aggregation ───────────────────────────────────────────────────────────────
@@ -429,6 +568,15 @@ class SurveyInstrument(Instrument):
     def validate(self, spec: dict) -> list[str]:  # type: ignore[override]
         return validate(spec)
 
+    def stages(self, spec: dict):
+        return stages(spec)
+
+    def realise(self, answer: dict, spec: dict, rng) -> dict:
+        return realise(answer, spec, rng)
+
+    def followup_context(self, spec: dict, cond_q: dict, answer: dict) -> str:
+        return followup_context(spec, cond_q, answer)
+
 
 INSTRUMENT = register(SurveyInstrument(
     key="survey",
@@ -442,7 +590,7 @@ INSTRUMENT = register(SurveyInstrument(
     kpis=(Kpi("n", "Responses", "count", "How many personas completed the form."),),
     page="survey",
     form="survey",
-    max_tokens=4500,
+    max_tokens=7000,
     version=1,
     stimulus_key="intro",
     postprocess=postprocess,

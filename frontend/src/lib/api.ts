@@ -1177,6 +1177,8 @@ export type SurveyQuestion = {
   exclusive?: string[];
   /** Routing: asked only of those who gave one of `equals` to question `key`. */
   show_if?: { key: string; equals: string[] } | null;
+  /** Answer as likelihoods: the twin gives a chance per option and its answer is drawn from them. */
+  likelihood?: boolean;
 };
 
 /** A published segmentation the Studio can build from (backend/app/data/kits). */

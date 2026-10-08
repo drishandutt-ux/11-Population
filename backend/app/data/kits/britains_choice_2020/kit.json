@@ -178,6 +178,7 @@
    ]
   }
  ],
+ "person_facts": "population_health_gb/person_facts.json",
  "frame_defaults": {},
  "segments": [
   {
@@ -3203,6 +3204,7 @@
  ],
  "assumptions": [
   "No 2019 general-election vote mix is published per segment, so agents carry their 2016 EU referendum vote instead and the GE 2019 banner is not scored.",
+  "Each agent also draws personal health facts (long-term condition, prescribed medicine, unpaid caring, health literacy, recent anxiety/depression, smoking, obesity) at the published national rate for its age and sex (population_health_gb: Census 2021, HSE, APMS 2023/4, ONS 2025, Rowlands 2015), independently of its segment and of each other.",
   "Beliefs are drawn item by item at each segment's published share, linked by one latent 'how typical of the segment' score per person; the report does not publish how items co-occur within a person.",
   "Attitudes were measured in February–March 2020 (some items mid-pandemic); a June 2023 respondent may have moved since.",
   "The 2020 report has no segment-level measures of trust in vaccines, pharma, charities or health apps, nor of charity giving beyond Civic Pragmatists; those answers rest on each persona's psychology."

@@ -1,0 +1,647 @@
+{
+  "_meta": {
+    "compiled": "2026-10-08",
+    "purpose": "Realistic personal health facts for synthetic GB respondents. No data from More in Common's June 2023 poll for 11 London is used.",
+    "conventions": "Percentages, 1 d.p. where the source gives it. Age bands exactly as published. by_age = persons; by_age_sex given where the source splits by sex (census sources publish no persons column by age)."
+  },
+  "facts": [
+    {
+      "key": "long_term_condition",
+      "measure": "At least one longstanding illness or condition. HSE question (ONS harmonised, since 2012): 'Do you have any physical or mental health conditions or illnesses lasting or expected to last 12 months or more?'",
+      "geography": "England, adults aged 16+ living in private households",
+      "year": "2022",
+      "source": "NHS England, Health Survey for England 2022 Part 2: Adults' health (Excel tables)",
+      "url": "https://files.digital.nhs.uk/34/0BBE3A/HSE-2022-Adult-health-tables.xlsx",
+      "table": "Table 1: General health, longstanding illness and acute sickness, by survey year and sex (row 'At least one longstanding illness', column 2022)",
+      "by_age": null,
+      "by_sex": {
+        "male": 39.5,
+        "female": 43.0
+      },
+      "overall": 41.3,
+      "notes": "Report page: https://digital.nhs.uk/data-and-information/publications/statistical/health-survey-for-england/2022-part-2/adult-health ('In 2022, 41% of adults had at least one longstanding illness or condition'). HSE 2022 tables publish no age breakdown of longstanding illness; use census_any_condition / disabled_equality_act below for the age gradient. Most common condition groups 2022 (Table 2): musculoskeletal 14%, mental/behavioural/neurodevelopmental 11%, heart & circulatory 9%, diabetes/endocrine/metabolic 8%, respiratory 7%. Survey self-report gives a much higher figure than the census (41% v ~24% of all ages); the two measures are not interchangeable."
+    },
+    {
+      "key": "census_any_condition",
+      "measure": "Has a physical or mental health condition or illness lasting or expected to last 12 months or more (disabled limited a lot + limited a little + non-disabled with non-limiting condition). Census question: 'Do you have any physical or mental health conditions or illnesses lasting or expected to last 12 months or more?'",
+      "geography": "England, usual residents",
+      "year": "2021 (Census Day 21 March 2021)",
+      "source": "ONS, Disability by age, sex and deprivation, England and Wales: Census 2021 (released 8 February 2023)",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/disability/articles/disabilitybyagesexanddeprivationenglandandwales/census2021",
+      "table": "Figure 1 data download (https://www.ons.gov.uk/visualisations/dvc2232/fig1/datadownload.xlsx): Age-specific percentages of disability by age group and sex, England 2021",
+      "by_age": null,
+      "by_age_sex": {
+        "female": {
+          "Under 1": 2,
+          "1 to 4": 3.7,
+          "5 to 9": 6.5,
+          "10 to 14": 9.5,
+          "15 to 19": 16.6,
+          "20 to 24": 22.5,
+          "25 to 29": 21,
+          "30 to 34": 20.2,
+          "35 to 39": 21.1,
+          "40 to 44": 23.1,
+          "45 to 49": 26.7,
+          "50 to 54": 29.2,
+          "55 to 59": 31.8,
+          "60 to 64": 34.9,
+          "65 to 69": 36.6,
+          "70 to 74": 38.4,
+          "75 to 79": 43.6,
+          "80 to 84": 51.2,
+          "85 to 89": 60.2,
+          "90+": 68.6
+        },
+        "male": {
+          "Under 1": 2.4,
+          "1 to 4": 5.5,
+          "5 to 9": 11,
+          "10 to 14": 13.5,
+          "15 to 19": 14.1,
+          "20 to 24": 16,
+          "25 to 29": 15.8,
+          "30 to 34": 15.4,
+          "35 to 39": 16.3,
+          "40 to 44": 18.4,
+          "45 to 49": 21.9,
+          "50 to 54": 25.4,
+          "55 to 59": 29.2,
+          "60 to 64": 34.1,
+          "65 to 69": 37.6,
+          "70 to 74": 39.8,
+          "75 to 79": 44,
+          "80 to 84": 49.7,
+          "85 to 89": 56.9,
+          "90+": 63.6
+        }
+      },
+      "by_sex": null,
+      "overall": null,
+      "notes": "Derived as 100 minus the published 'Non-disabled; no condition' age-specific percentage. Published only by sex within age (no persons column). Census self-report of conditions is markedly lower than HSE's 41% longstanding illness; census was taken during COVID-19 restrictions and the 2021 question dropped the 'problems related to old age' prompt, which ONS says may have lowered older-age figures."
+    },
+    {
+      "key": "disabled_equality_act",
+      "measure": "Disabled under the Equality Act 2010 definition: has a long-term physical or mental health condition that reduces ability to carry out day-to-day activities a little or a lot ('Do any of your conditions or illnesses reduce your ability to carry out day-to-day activities?' = 'Yes, a lot' or 'Yes, a little')",
+      "geography": "England, usual residents",
+      "year": "2021",
+      "source": "ONS, Disability by age, sex and deprivation, England and Wales: Census 2021 (released 8 February 2023)",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/disability/articles/disabilitybyagesexanddeprivationenglandandwales/census2021",
+      "table": "Figure 1 data download (dvc2232/fig1/datadownload.xlsx); 'limited a lot' + 'limited a little' summed per age and sex",
+      "by_age": null,
+      "by_age_sex": {
+        "female": {
+          "Under 1": 1.0,
+          "1 to 4": 2.3,
+          "5 to 9": 4.4,
+          "10 to 14": 6.8,
+          "15 to 19": 12.2,
+          "20 to 24": 15.2,
+          "25 to 29": 13.2,
+          "30 to 34": 12.7,
+          "35 to 39": 13.6,
+          "40 to 44": 15.2,
+          "45 to 49": 18.1,
+          "50 to 54": 20.4,
+          "55 to 59": 22.7,
+          "60 to 64": 25.7,
+          "65 to 69": 27.2,
+          "70 to 74": 29.3,
+          "75 to 79": 35.8,
+          "80 to 84": 45.3,
+          "85 to 89": 56.2,
+          "90+": 66.5
+        },
+        "male": {
+          "Under 1": 1.2,
+          "1 to 4": 3.7,
+          "5 to 9": 8.4,
+          "10 to 14": 10.4,
+          "15 to 19": 10.4,
+          "20 to 24": 11.2,
+          "25 to 29": 10.4,
+          "30 to 34": 9.8,
+          "35 to 39": 10.3,
+          "40 to 44": 11.5,
+          "45 to 49": 13.7,
+          "50 to 54": 16.2,
+          "55 to 59": 19.0,
+          "60 to 64": 23.2,
+          "65 to 69": 26.0,
+          "70 to 74": 28.1,
+          "75 to 79": 33.7,
+          "80 to 84": 41.5,
+          "85 to 89": 50.7,
+          "90+": 59.9
+        }
+      },
+      "by_age_sex_limited_a_lot": {
+        "female": {
+          "Under 1": 0.4,
+          "1 to 4": 1,
+          "5 to 9": 1.7,
+          "10 to 14": 2.3,
+          "15 to 19": 3.7,
+          "20 to 24": 3.9,
+          "25 to 29": 3.6,
+          "30 to 34": 3.8,
+          "35 to 39": 4.5,
+          "40 to 44": 5.6,
+          "45 to 49": 7.3,
+          "50 to 54": 8.8,
+          "55 to 59": 10.3,
+          "60 to 64": 11.9,
+          "65 to 69": 11.8,
+          "70 to 74": 12.2,
+          "75 to 79": 16.2,
+          "80 to 84": 23.4,
+          "85 to 89": 33.5,
+          "90+": 47.1
+        },
+        "male": {
+          "Under 1": 0.4,
+          "1 to 4": 1.7,
+          "5 to 9": 3.8,
+          "10 to 14": 4.2,
+          "15 to 19": 4.1,
+          "20 to 24": 4,
+          "25 to 29": 3.7,
+          "30 to 34": 3.5,
+          "35 to 39": 3.8,
+          "40 to 44": 4.4,
+          "45 to 49": 5.5,
+          "50 to 54": 6.8,
+          "55 to 59": 8.2,
+          "60 to 64": 10.3,
+          "65 to 69": 10.9,
+          "70 to 74": 11.4,
+          "75 to 79": 14.7,
+          "80 to 84": 20.2,
+          "85 to 89": 28,
+          "90+": 38.3
+        }
+      },
+      "by_sex": {
+        "female": 18.7,
+        "male": 16.5
+      },
+      "overall": 17.7,
+      "notes": "Overall: 'In England, 18.7% of females and 16.5% of males were disabled'; 17.7% of people in England (Disability Topic Summary, as quoted in the article; age-standardised). Wales: 22.3% females, 19.8% males. Age-specific values are the sum of the two published 'limited' categories (rounding may make them differ by 0.1 from ONS text, e.g. ONS text gives females 20-24 as 15.1% vs 15.2% summed)."
+    },
+    {
+      "key": "prescribed_medicine_any",
+      "measure": "Took at least one prescribed medicine in the last week (excluding contraceptives and smoking-cessation products / nicotine replacement), recorded at the HSE nurse visit",
+      "geography": "England, adults aged 16+ in private households",
+      "year": "2015/16 (pooled HSE 2015 and 2016; published 13 December 2017)",
+      "source": "NHS Digital, Health Survey for England 2016: Prescribed medicines (Excel tables)",
+      "url": "https://files.digital.nhs.uk/excel/4/2/hse2016-pres-med.xlsx",
+      "table": "Table 1: Number of prescribed medicines taken in the last week, by age and sex",
+      "by_age": {
+        "16-24": 18.6,
+        "25-34": 23.1,
+        "35-44": 32.7,
+        "45-54": 47.8,
+        "55-64": 63.7,
+        "65-74": 80.2,
+        "75-84": 92.3,
+        "85+": 96.1
+      },
+      "by_age_sex": {
+        "male": {
+          "16-24": 16.1,
+          "25-34": 17.7,
+          "35-44": 28.0,
+          "45-54": 44.7,
+          "55-64": 63.8,
+          "65-74": 80.9,
+          "75-84": 92.7,
+          "85+": 98.5
+        },
+        "female": {
+          "16-24": 21.1,
+          "25-34": 28.4,
+          "35-44": 37.4,
+          "45-54": 50.8,
+          "55-64": 63.7,
+          "65-74": 79.5,
+          "75-84": 92.0,
+          "85+": 94.6
+        }
+      },
+      "by_sex": {
+        "male": 44.4,
+        "female": 50.7
+      },
+      "overall": 47.6,
+      "notes": "Report: https://files.digital.nhs.uk/pdf/3/c/hse2016-pres-med.pdf (Key findings: 'In 2015/16 48% of adults had taken at least one prescribed medicine ... increased with age from 19% of young adults aged 16 to 24 to more than 90% of those aged 75 and over'; '24% of adults were taking three or more medicines'). Data pool HSE 2015 and 2016. Base: aged 16+ with a nurse visit, private households (care homes excluded). Report rounds 16-24 'at least one' to 19%; table value 18.6%."
+    },
+    {
+      "key": "prescribed_medicine_3plus",
+      "measure": "Took three or more prescribed medicines in the last week (same definition)",
+      "geography": "England, adults aged 16+ in private households",
+      "year": "2015/16 (pooled HSE 2015 and 2016; published 13 December 2017)",
+      "source": "NHS Digital, Health Survey for England 2016: Prescribed medicines (Excel tables)",
+      "url": "https://files.digital.nhs.uk/excel/4/2/hse2016-pres-med.xlsx",
+      "table": "Table 1: Number of prescribed medicines taken in the last week, by age and sex",
+      "by_age": {
+        "16-24": 3.2,
+        "25-34": 4.7,
+        "35-44": 10.1,
+        "45-54": 19.6,
+        "55-64": 33.8,
+        "65-74": 53.8,
+        "75-84": 69.8,
+        "85+": 82.4
+      },
+      "by_age_sex": {
+        "male": {
+          "16-24": 2.0,
+          "25-34": 2.6,
+          "35-44": 9.2,
+          "45-54": 19.2,
+          "55-64": 36.7,
+          "65-74": 56.0,
+          "75-84": 72.6,
+          "85+": 86.5
+        },
+        "female": {
+          "16-24": 4.6,
+          "25-34": 6.9,
+          "35-44": 11.0,
+          "45-54": 20.0,
+          "55-64": 31.1,
+          "65-74": 51.9,
+          "75-84": 67.6,
+          "85+": 79.6
+        }
+      },
+      "by_sex": {
+        "male": 23.8,
+        "female": 25.1
+      },
+      "overall": 24.4,
+      "notes": "Report: https://files.digital.nhs.uk/pdf/3/c/hse2016-pres-med.pdf (Key findings: 'In 2015/16 48% of adults had taken at least one prescribed medicine ... increased with age from 19% of young adults aged 16 to 24 to more than 90% of those aged 75 and over'; '24% of adults were taking three or more medicines'). Data pool HSE 2015 and 2016. Base: aged 16+ with a nurse visit, private households (care homes excluded). Report rounds 16-24 'at least one' to 19%; table value 18.6%."
+    },
+    {
+      "key": "polypharmacy_5plus",
+      "measure": "Took five or more prescribed medicines in the last week (same definition)",
+      "geography": "England, adults aged 16+ in private households",
+      "year": "2015/16 (pooled HSE 2015 and 2016; published 13 December 2017)",
+      "source": "NHS Digital, Health Survey for England 2016: Prescribed medicines (Excel tables)",
+      "url": "https://files.digital.nhs.uk/excel/4/2/hse2016-pres-med.xlsx",
+      "table": "Table 1: Number of prescribed medicines taken in the last week, by age and sex",
+      "by_age": {
+        "16-24": 0.6,
+        "25-34": 1.5,
+        "35-44": 5.0,
+        "45-54": 9.2,
+        "55-64": 19.3,
+        "65-74": 31.6,
+        "75-84": 45.0,
+        "85+": 56.1
+      },
+      "by_age_sex": {
+        "male": {
+          "16-24": 0.2,
+          "25-34": 1.1,
+          "35-44": 5.2,
+          "45-54": 9.3,
+          "55-64": 21.8,
+          "65-74": 33.5,
+          "75-84": 45.3,
+          "85+": 59.8
+        },
+        "female": {
+          "16-24": 1.1,
+          "25-34": 1.9,
+          "35-44": 4.9,
+          "45-54": 9.1,
+          "55-64": 16.9,
+          "65-74": 29.9,
+          "75-84": 44.7,
+          "85+": 53.5
+        }
+      },
+      "by_sex": {
+        "male": 13.8,
+        "female": 13.8
+      },
+      "overall": 13.8,
+      "notes": "Report: https://files.digital.nhs.uk/pdf/3/c/hse2016-pres-med.pdf (Key findings: 'In 2015/16 48% of adults had taken at least one prescribed medicine ... increased with age from 19% of young adults aged 16 to 24 to more than 90% of those aged 75 and over'; '24% of adults were taking three or more medicines'). Data pool HSE 2015 and 2016. Base: aged 16+ with a nurse visit, private households (care homes excluded). Report rounds 16-24 'at least one' to 19%; table value 18.6%. 5+ derived by summing Table 1 rows '5','6','7','8 or more' (report text confirms: 'from 9% of those aged 45 to 54 to 56% of those aged 85 and over')."
+    },
+    {
+      "key": "medication_non_adherence",
+      "measure": "'It is thought that between a third and a half of all medicines prescribed for long-term conditions are not taken as recommended.'",
+      "geography": "UK (NICE guideline for England; evidence-based estimate, not a survey of people)",
+      "year": "2009 (guideline published 28 January 2009)",
+      "source": "NICE, Medicines adherence: involving patients in decisions about prescribed medicines and supporting adherence (CG76), Introduction",
+      "url": "https://www.nice.org.uk/guidance/cg76/chapter/Introduction",
+      "table": "Introduction, first sentence",
+      "by_age": null,
+      "by_sex": null,
+      "overall_range": [
+        33.3,
+        50.0
+      ],
+      "overall": null,
+      "notes": "This is a share of MEDICINES (prescriptions), not of PEOPLE. No official or peer-reviewed nationally representative UK survey of the share of adults who have ever skipped/stopped a prescribed medicine was found; only commercial polls (e.g. ComRes for Omnicell 2015: 21% missed a daily dose, 12% did not finish a course) which were not opened/verified and are not official or peer-reviewed, so are excluded."
+    },
+    {
+      "key": "unpaid_carer",
+      "measure": "Provides unpaid care. Census question: 'Do you look after, or give any help or support to, anyone because they have long-term physical or mental health conditions or illnesses, or problems related to old age?' (excluding anything done as part of paid employment)",
+      "geography": "England, usual residents aged 5+",
+      "year": "2021",
+      "source": "ONS, Unpaid care by age, sex and deprivation, England and Wales: Census 2021 (released 13 February 2023)",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/socialcare/articles/unpaidcarebyagesexanddeprivationenglandandwales/census2021",
+      "table": "Figure 1 data download (https://www.ons.gov.uk/visualisations/dvc2234/fig1/datadownload.xlsx): Age-specific percentages of unpaid carers by age group, sex and number of unpaid care hours provided per week, England, 2021",
+      "by_age": null,
+      "by_age_sex": {
+        "female": {
+          "5 to 17": 1.6,
+          "18 to 24": 5.0,
+          "25 to 29": 6.2,
+          "30 to 34": 8.1,
+          "35 to 39": 10.0,
+          "40 to 44": 12.0,
+          "45 to 49": 14.7,
+          "50 to 54": 17.4,
+          "55 to 59": 19.9,
+          "60 to 64": 18.7,
+          "65 to 69": 14.1,
+          "70 to 74": 11.0,
+          "75 to 79": 10.3,
+          "80 to 84": 8.9,
+          "85 to 89": 6.4,
+          "90 and over": 2.8
+        },
+        "male": {
+          "18 to 24": 4.2,
+          "25 to 29": 4.6,
+          "30 to 34": 5.2,
+          "35 to 39": 6.1,
+          "40 to 44": 7.4,
+          "45 to 49": 9.3,
+          "5 to 17": 1.2,
+          "50 to 54": 11.3,
+          "55 to 59": 12.8,
+          "60 to 64": 13.0,
+          "65 to 69": 11.2,
+          "70 to 74": 9.8,
+          "75 to 79": 10.0,
+          "80 to 84": 11.3,
+          "85 to 89": 11.8,
+          "90 and over": 9.4
+        }
+      },
+      "by_sex": {
+        "female": 10.3,
+        "male": 7.6
+      },
+      "overall": 8.9,
+      "notes": "Age-specific values = sum of the five published weekly-hours bands (9h or less; 10-19; 20-34; 35-49; 50+) per age and sex; they reproduce ONS text peaks (females 55-59 19.9%, males 60-64 13.0%). Overall 8.9% is the age-standardised % of usual residents aged 5+ in England (Wales 10.5%). Hours split per age is available in the same file if needed (e.g. 50+ hours rises to ~5% of women 65+)."
+    },
+    {
+      "key": "health_literacy",
+      "measure": "Below the competency threshold needed to understand and use commonly used English health information materials: (a) text (literacy) only; (b) text + numeracy",
+      "geography": "England, adults aged 16-65",
+      "year": "Skills data: 2011 Skills for Life Survey (fieldwork May 2010 - Feb 2011); paper published 2015",
+      "source": "Rowlands G, Protheroe J, Winkley J, Richardson M, Seed PT, Rudd R. A mismatch between population health literacy and the complexity of health information: an observational study. British Journal of General Practice 2015;65(635):e379-e386. doi:10.3399/bjgp15X685285",
+      "url": "https://bjgp.org/content/65/635/e379",
+      "table": "Results / Abstract; Table 2 'Literacy competency descriptive analyses'",
+      "by_age": {
+        "16-44": 41.1,
+        "45-65": 46.9
+      },
+      "by_sex": {
+        "female": 41.0,
+        "male": 45.0
+      },
+      "overall": 43.0,
+      "overall_text_plus_numeracy": 61.0,
+      "notes": "Abstract: '2515/5795 participants (43%) were below the text-only threshold, while 2905/4767 (61%) were below the text + numeracy threshold.' by_age and by_sex are TEXT-ONLY. by_age computed from Table 2 counts (16-44: 1439/3500; 45-65: 1074/2292) because the printed percentages in that table (57% and 43%) do not match their own counts; the paper's text says older people (45-65) had higher odds of being below threshold, consistent with the counts. No age split published for text + numeracy. Survey excluded adults over 65."
+    },
+    {
+      "key": "rare_disease_prevalence",
+      "measure": "'1 in 17 people being affected by a rare disease at some point in their lifetime' ('In the UK this amounts to over 3.5 million people'); rare disease = 'a condition which affects less than 1 in 2,000 people'",
+      "geography": "UK",
+      "year": "2021 (published 9 January 2021)",
+      "source": "Department of Health and Social Care, The UK Rare Diseases Framework",
+      "url": "https://www.gov.uk/government/publications/uk-rare-diseases-framework/the-uk-rare-diseases-framework",
+      "table": "Introduction",
+      "by_age": null,
+      "by_sex": null,
+      "overall": 5.9,
+      "notes": "overall = 1/17 as a percentage (lifetime). This is prevalence, not public awareness; no official or peer-reviewed survey of UK public awareness of rare diseases was found (see not_found)."
+    },
+    {
+      "key": "clinical_trial_participation",
+      "measure": "'Only 14% of people have ever taken part in a clinical trial, despite 85% saying they want to help the NHS find better treatments'",
+      "geography": "UK adults (survey of 2,000)",
+      "year": "2018 (press release dated 25 May 2018)",
+      "source": "NIHR press release 'Public urged to take part in clinical research to find new NHS treatments' (NIHR CLAHRC/ARC West archive)",
+      "url": "https://arcwestarchive.org.uk/?p=5608",
+      "table": "Press release text",
+      "by_age": null,
+      "by_sex": null,
+      "overall": 14.0,
+      "overall_willing_to_help": 85.0,
+      "notes": "WEAK SOURCE: an NIHR (official body) press release reporting a commissioned poll; pollster, fieldwork dates and question wording are not stated, and it is not peer-reviewed. Use as indicative only."
+    },
+    {
+      "key": "common_mental_health_condition",
+      "measure": "Any common mental health condition (CMHC) in the past week, identified by the Clinical Interview Schedule - Revised (CIS-R): generalised anxiety disorder, depression, phobias, OCD, panic disorder, or CMHC not otherwise specified",
+      "geography": "England, adults aged 16+ living in private households",
+      "year": "2023/4 (publication page dated 27 Nov 2025)",
+      "source": "NHS England, Adult Psychiatric Morbidity Survey: Survey of Mental Health and Wellbeing, England, 2023/4 - Chapter 1: Common mental health conditions",
+      "url": "https://digital.nhs.uk/data-and-information/publications/statistical/adult-psychiatric-morbidity-survey/survey-of-mental-health-and-wellbeing-england-2023-24/common-mental-health-conditions",
+      "table": "Key findings / chapter text; chart 'Prevalence of common mental health conditions (CMHCs) in past week, by gender (Base: All adults)'",
+      "by_age": {
+        "16-24": 25.8,
+        "75+": 10.2,
+        "16-64": 22.6
+      },
+      "by_sex": {
+        "male": 15.4,
+        "female": 24.2
+      },
+      "overall": 20.2,
+      "notes": "Only these age bands are stated numerically for 'any CMHC' (Figure 1.8 by age is published as an image only, so other bands are not transcribed). 16-64 by sex: men 17.3%, women 27.8%. For a full age gradient use cisr_12plus below (closely related measure). Specific conditions by age and sex (GAD, depression etc.) are in the chapter chart downloads."
+    },
+    {
+      "key": "cisr_12plus",
+      "measure": "CIS-R score of 12 or more (CMHC symptoms 'of a level likely to benefit from acknowledgement and possible intervention'); 18+ = severe symptoms",
+      "geography": "England, adults aged 16+ in private households",
+      "year": "2023/4",
+      "source": "NHS England, APMS 2023/4, Chapter 1: Common mental health conditions",
+      "url": "https://digital.nhs.uk/data-and-information/publications/statistical/adult-psychiatric-morbidity-survey/survey-of-mental-health-and-wellbeing-england-2023-24/common-mental-health-conditions",
+      "table": "Chart data 'CIS-R score of 12-17 and 18 or more, by age (Base: All adults)'",
+      "by_age": {
+        "16-24": 22.8,
+        "25-34": 20.9,
+        "35-44": 20.1,
+        "45-54": 20.6,
+        "55-64": 18,
+        "65-74": 12.7,
+        "75+": 9.4
+      },
+      "by_age_severe_18plus": {
+        "16-24": 14.2,
+        "25-34": 11.8,
+        "35-44": 11.2,
+        "45-54": 11.4,
+        "55-64": 10.0,
+        "65-74": 5.4,
+        "75+": 3.8
+      },
+      "by_sex": {
+        "male": 14.0,
+        "female": 21.8
+      },
+      "overall": 18.3,
+      "notes": "by_age = published 12-17 share + published 18+ share (disjoint categories). Text confirms 22.8% of 16-24s and 9.4% of 75+. Severe (18+): overall 10.0%, men 7.5%, women 11.9%."
+    },
+    {
+      "key": "ghq12_probable_mental_ill_health",
+      "measure": "GHQ-12 score of 4 or more ('indicating probable psychological disturbance or mental ill health')",
+      "geography": "England, adults aged 16+ in private households",
+      "year": "2022",
+      "source": "NHS England, Health Survey for England 2022 Part 2: Adults' health (Excel tables)",
+      "url": "https://files.digital.nhs.uk/34/0BBE3A/HSE-2022-Adult-health-tables.xlsx",
+      "table": "Table 3: Prevalence of mental ill health according to GHQ-12, by age and sex",
+      "by_age": {
+        "16-24": 21.1,
+        "25-34": 18.0,
+        "35-44": 19.8,
+        "45-54": 20.1,
+        "55-64": 20.3,
+        "65-74": 14.1,
+        "75+": 14.4
+      },
+      "by_age_sex": {
+        "male": {
+          "16-24": 14.3,
+          "25-34": 16.0,
+          "35-44": 19.0,
+          "45-54": 17.7,
+          "55-64": 16.9,
+          "65-74": 9.3,
+          "75+": 13.9
+        },
+        "female": {
+          "16-24": 28.3,
+          "25-34": 19.8,
+          "35-44": 20.6,
+          "45-54": 22.4,
+          "55-64": 23.5,
+          "65-74": 18.5,
+          "75+": 14.9
+        }
+      },
+      "by_sex": {
+        "male": 15.7,
+        "female": 21.2
+      },
+      "overall": 18.5,
+      "notes": "Alternative self-completion screening measure to APMS; values are from the table as published (1 d.p.)."
+    },
+    {
+      "key": "current_smoker",
+      "measure": "Current cigarette smoker: 'Have you ever smoked cigarettes regularly?' -> 'Do you smoke cigarettes at all nowadays?' = yes (Annual Population Survey)",
+      "geography": "UK, adults aged 18+ (by-age figures UK; England overall 9.5%)",
+      "year": "2025 (released 6 October 2026)",
+      "source": "ONS, Adult smoking habits in the UK: 2025",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/healthandlifeexpectancies/bulletins/adultsmokinghabitsingreatbritain/2025",
+      "table": "Figure 3 data download (https://www.ons.gov.uk/visualisations/dvc3642/fig03/datadownload.xlsx): Percentage who were current smokers, all persons by age group, UK, 2011 to 2025",
+      "by_age": {
+        "18-24": 7.2,
+        "25-34": 10.2,
+        "35-44": 10.4,
+        "45-54": 12.4,
+        "55-64": 11.2,
+        "65+": 7.2
+      },
+      "by_sex": {
+        "male": 11.3,
+        "female": 8.2
+      },
+      "overall": 9.8,
+      "notes": "UK overall 9.8%; England 9.5%, Wales 11.1%, Scotland 11.4%, NI 9.9%. Wording of the two APS questions taken from the 2024 edition of the same bulletin. E-cigarette use (OPN, GB, 16+, 2025): 9.9% daily or occasional, highest at 25-34 (16.4%)."
+    },
+    {
+      "key": "obesity",
+      "measure": "Obese: measured BMI of 30 kg/m2 or more (includes morbidly obese, BMI 40+)",
+      "geography": "England, adults aged 16+ with valid height and weight measurements",
+      "year": "2022",
+      "source": "NHS England, Health Survey for England 2022 Part 2: Overweight and obesity (Excel tables)",
+      "url": "https://files.digital.nhs.uk/B2/7AACB5/HSE-2022-Overweight-and-obesity-tables.xlsx",
+      "table": "Table 4: Adults' body mass index (BMI), overweight and obesity prevalence, by age and sex (row '% Obese')",
+      "by_age": {
+        "16-24": 13.9,
+        "25-34": 24.1,
+        "35-44": 32.1,
+        "45-54": 33.0,
+        "55-64": 35.5,
+        "65-74": 34.9,
+        "75+": 26.5
+      },
+      "by_age_sex": {
+        "male": {
+          "16-24": 10.9,
+          "25-34": 21.9,
+          "35-44": 31.5,
+          "45-54": 32.5,
+          "55-64": 36.2,
+          "65-74": 36.2,
+          "75+": 26.4
+        },
+        "female": {
+          "16-24": 17.1,
+          "25-34": 26.4,
+          "35-44": 32.7,
+          "45-54": 33.5,
+          "55-64": 34.9,
+          "65-74": 33.6,
+          "75+": 26.6
+        }
+      },
+      "by_sex": {
+        "male": 28.1,
+        "female": 29.6
+      },
+      "overall": 28.9,
+      "overweight_incl_obese_by_age": {
+        "16-24": 36.8,
+        "25-34": 57.3,
+        "35-44": 68.0,
+        "45-54": 68.3,
+        "55-64": 74.8,
+        "65-74": 73.4,
+        "75+": 66.8
+      },
+      "overweight_incl_obese_overall": 63.9,
+      "notes": "Report text rounds to '29% of adults were living with obesity, and 64% were overweight or living with obesity'."
+    }
+  ],
+  "not_found": [
+    {
+      "key": "long_term_condition_by_age_gpps",
+      "why": "GP Patient Survey age cross-tabs are only available through its JavaScript analysis tool / national report, which could not be opened from here; HSE 2022 publishes longstanding illness by sex only. Census 2021 any-condition and disability by age (above) used instead."
+    },
+    {
+      "key": "medication_non_adherence_people_survey",
+      "why": "No official (ONS/NHS) or peer-reviewed nationally representative UK survey of the share of adults who have skipped/stopped prescribed medicine was found; only vendor-commissioned polls (ComRes/Omnicell 2015; Ask Your Pharmacist 2013 among medicine users), not verified or used."
+    },
+    {
+      "key": "rare_disease_awareness",
+      "why": "No official or peer-reviewed survey of UK public awareness/knowledge of rare diseases found. Only commercial polls surfaced in search (OnePoll undated; GOSH 2019 online poll: 9% confident naming a childhood rare disease; BIA/YouGov 2021 on access) - none opened at a primary official source, so excluded."
+    },
+    {
+      "key": "clinical_trial_awareness",
+      "why": "No HRA/NIHR survey of awareness of clinical trials with published method was found; the only participation figure is the weak 2018 NIHR press-release poll recorded above."
+    },
+    {
+      "key": "common_mental_health_condition_full_age_bands",
+      "why": "APMS 2023/4 'any CMHC' by age (Figure 1.8) is published only as an image; only 16-24, 75+ and 16-64 are stated in text. Not transcribed from the image to avoid estimating."
+    }
+  ]
+}

@@ -22,7 +22,8 @@
       "max_choices": 3,
       "exclusive": [
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q2_top_priority",
@@ -40,7 +41,8 @@
         "Improving emergency services (e.g., A&E)",
         "Increasing the availability of GP appointments",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q3_talked_about",
@@ -64,7 +66,8 @@
         "About the right amount",
         "Too little",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q4_trust",
@@ -85,7 +88,8 @@
         "Not very much",
         "Not at all",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q5_long_term_condition",
@@ -96,7 +100,8 @@
         "No",
         "Don't know",
         "Prefer not to say"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q6_health_app",
@@ -111,7 +116,8 @@
         "Health-related articles",
         "Quality of life monitors (e.g. sleep quality or exercise)",
         "None of the above"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q7a_trust_support",
@@ -135,7 +141,8 @@
         "Not very much",
         "Not at all",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q7b_trust_advice",
@@ -159,7 +166,8 @@
         "Not very much",
         "Not at all",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q8_trials_familiar",
@@ -170,7 +178,8 @@
         "I have heard of it but could not explain what it means",
         "I have not heard of it",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q9_trials_statements",
@@ -184,7 +193,8 @@
         "It’s important that a diverse population is included in any clinical trial",
         "I never hear about them"
       ],
-      "max_choices": 3
+      "max_choices": 3,
+      "likelihood": true
     },
     {
       "key": "q10_free_nhs",
@@ -208,7 +218,8 @@
         "Yes",
         "No",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q11_skipped_meds",
@@ -218,7 +229,8 @@
         "Yes",
         "No",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q12_why_skipped",
@@ -248,7 +260,8 @@
         "equals": [
           "Yes"
         ]
-      }
+      },
+      "likelihood": true
     },
     {
       "key": "q13_conditions_heard",
@@ -267,7 +280,8 @@
         "I have heard of it but could not explain what it means",
         "I have not heard of it",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q14_where_heard",
@@ -299,7 +313,8 @@
         "UK government",
         "Charities",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q16_giving_next_year",
@@ -310,7 +325,8 @@
         "I will give the same amount",
         "I will give less",
         "Don’t know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q17_charity_love",
@@ -320,7 +336,8 @@
         "Yes",
         "No",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q18_why_love",
@@ -349,7 +366,8 @@
         "Mass movement of people (human migration)",
         "Wars and conflict",
         "Don't know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q20_africa_health",
@@ -368,7 +386,8 @@
         "Malnutrition",
         "Don't know"
       ],
-      "max_choices": 3
+      "max_choices": 3,
+      "likelihood": true
     },
     {
       "key": "q21_compromise",
@@ -378,7 +397,8 @@
         "People I agree with need to stick to their beliefs and fight",
         "The people I agree with need to be willing to listen to others and compromise",
         "Don’t know"
-      ]
+      ],
+      "likelihood": true
     },
     {
       "key": "q22_polarisation",
@@ -398,7 +418,8 @@
         "Neither agree nor disagree",
         "Somewhat disagree",
         "Strongly disagree"
-      ]
+      ],
+      "likelihood": true
     }
   ]
 }

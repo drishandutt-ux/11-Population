@@ -1,0 +1,254 @@
+{
+ "population": "Great Britain / England adults",
+ "person_facts": [
+  {
+   "key": "census_any_condition",
+   "yes": "I have a long-term physical or mental health condition or illness.",
+   "no": "I don't have any long-term health condition.",
+   "age_limited": false,
+   "by_age": null,
+   "by_age_sex": {
+    "female": {
+     "Under 1": 2,
+     "1 to 4": 3.7,
+     "5 to 9": 6.5,
+     "10 to 14": 9.5,
+     "15 to 19": 16.6,
+     "20 to 24": 22.5,
+     "25 to 29": 21,
+     "30 to 34": 20.2,
+     "35 to 39": 21.1,
+     "40 to 44": 23.1,
+     "45 to 49": 26.7,
+     "50 to 54": 29.2,
+     "55 to 59": 31.8,
+     "60 to 64": 34.9,
+     "65 to 69": 36.6,
+     "70 to 74": 38.4,
+     "75 to 79": 43.6,
+     "80 to 84": 51.2,
+     "85 to 89": 60.2,
+     "90+": 68.6
+    },
+    "male": {
+     "Under 1": 2.4,
+     "1 to 4": 5.5,
+     "5 to 9": 11,
+     "10 to 14": 13.5,
+     "15 to 19": 14.1,
+     "20 to 24": 16,
+     "25 to 29": 15.8,
+     "30 to 34": 15.4,
+     "35 to 39": 16.3,
+     "40 to 44": 18.4,
+     "45 to 49": 21.9,
+     "50 to 54": 25.4,
+     "55 to 59": 29.2,
+     "60 to 64": 34.1,
+     "65 to 69": 37.6,
+     "70 to 74": 39.8,
+     "75 to 79": 44,
+     "80 to 84": 49.7,
+     "85 to 89": 56.9,
+     "90+": 63.6
+    }
+   },
+   "overall": null,
+   "measure": "Has a physical or mental health condition or illness lasting or expected to last 12 months or more (disabled limited a lot + limited a little + non-disabled with non-limiting condition). Census question: 'Do you have any physical or mental health conditions or illnesses lasting or expected to last 12 months or more?'",
+   "source": "ONS, Disability by age, sex and deprivation, England and Wales: Census 2021 (released 8 February 2023) (2021 (Census Day 21 March 2021))",
+   "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/disability/articles/disabilitybyagesexanddeprivationenglandandwales/census2021",
+   "table": "Figure 1 data download (https://www.ons.gov.uk/visualisations/dvc2232/fig1/datadownload.xlsx): Age-specific percentages of disability by age group and sex, England 2021"
+  },
+  {
+   "key": "prescribed_medicine_any",
+   "yes": "I take prescribed medicine regularly.",
+   "no": "I'm not on any regular prescribed medicine.",
+   "age_limited": false,
+   "by_age": {
+    "16-24": 18.6,
+    "25-34": 23.1,
+    "35-44": 32.7,
+    "45-54": 47.8,
+    "55-64": 63.7,
+    "65-74": 80.2,
+    "75-84": 92.3,
+    "85+": 96.1
+   },
+   "by_age_sex": {
+    "male": {
+     "16-24": 16.1,
+     "25-34": 17.7,
+     "35-44": 28.0,
+     "45-54": 44.7,
+     "55-64": 63.8,
+     "65-74": 80.9,
+     "75-84": 92.7,
+     "85+": 98.5
+    },
+    "female": {
+     "16-24": 21.1,
+     "25-34": 28.4,
+     "35-44": 37.4,
+     "45-54": 50.8,
+     "55-64": 63.7,
+     "65-74": 79.5,
+     "75-84": 92.0,
+     "85+": 94.6
+    }
+   },
+   "overall": 47.6,
+   "measure": "Took at least one prescribed medicine in the last week (excluding contraceptives and smoking-cessation products / nicotine replacement), recorded at the HSE nurse visit",
+   "source": "NHS Digital, Health Survey for England 2016: Prescribed medicines (Excel tables) (2015/16 (pooled HSE 2015 and 2016; published 13 December 2017))",
+   "url": "https://files.digital.nhs.uk/excel/4/2/hse2016-pres-med.xlsx",
+   "table": "Table 1: Number of prescribed medicines taken in the last week, by age and sex"
+  },
+  {
+   "key": "unpaid_carer",
+   "yes": "I provide unpaid care for a family member, friend or neighbour.",
+   "no": null,
+   "age_limited": false,
+   "by_age": null,
+   "by_age_sex": {
+    "female": {
+     "5 to 17": 1.6,
+     "18 to 24": 5.0,
+     "25 to 29": 6.2,
+     "30 to 34": 8.1,
+     "35 to 39": 10.0,
+     "40 to 44": 12.0,
+     "45 to 49": 14.7,
+     "50 to 54": 17.4,
+     "55 to 59": 19.9,
+     "60 to 64": 18.7,
+     "65 to 69": 14.1,
+     "70 to 74": 11.0,
+     "75 to 79": 10.3,
+     "80 to 84": 8.9,
+     "85 to 89": 6.4,
+     "90 and over": 2.8
+    },
+    "male": {
+     "18 to 24": 4.2,
+     "25 to 29": 4.6,
+     "30 to 34": 5.2,
+     "35 to 39": 6.1,
+     "40 to 44": 7.4,
+     "45 to 49": 9.3,
+     "5 to 17": 1.2,
+     "50 to 54": 11.3,
+     "55 to 59": 12.8,
+     "60 to 64": 13.0,
+     "65 to 69": 11.2,
+     "70 to 74": 9.8,
+     "75 to 79": 10.0,
+     "80 to 84": 11.3,
+     "85 to 89": 11.8,
+     "90 and over": 9.4
+    }
+   },
+   "overall": 8.9,
+   "measure": "Provides unpaid care. Census question: 'Do you look after, or give any help or support to, anyone because they have long-term physical or mental health conditions or illnesses, or problems related to old age?' (excluding anything done as part of paid employment)",
+   "source": "ONS, Unpaid care by age, sex and deprivation, England and Wales: Census 2021 (released 13 February 2023) (2021)",
+   "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/socialcare/articles/unpaidcarebyagesexanddeprivationenglandandwales/census2021",
+   "table": "Figure 1 data download (https://www.ons.gov.uk/visualisations/dvc2234/fig1/datadownload.xlsx): Age-specific percentages of unpaid carers by age group, sex and number of unpaid care hours provided per week, England, 2021"
+  },
+  {
+   "key": "health_literacy",
+   "yes": "I often find written health information — leaflets, letters, dosage instructions — hard to make sense of.",
+   "no": null,
+   "age_limited": true,
+   "by_age": {
+    "16-44": 41.1,
+    "45-65": 46.9
+   },
+   "by_age_sex": null,
+   "overall": 43.0,
+   "measure": "Below the competency threshold needed to understand and use commonly used English health information materials: (a) text (literacy) only; (b) text + numeracy",
+   "source": "Rowlands G, Protheroe J, Winkley J, Richardson M, Seed PT, Rudd R. A mismatch between population health literacy and the complexity of health information: an observational study. British Journal of General Practice 2015;65(635):e379-e386. doi:10.3399/bjgp15X685285 (Skills data: 2011 Skills for Life Survey (fieldwork May 2010 - Feb 2011); paper published 2015)",
+   "url": "https://bjgp.org/content/65/635/e379",
+   "table": "Results / Abstract; Table 2 'Literacy competency descriptive analyses'"
+  },
+  {
+   "key": "cisr_12plus",
+   "yes": "I've been living with symptoms of anxiety or depression lately.",
+   "no": null,
+   "age_limited": false,
+   "by_age": {
+    "16-24": 22.8,
+    "25-34": 20.9,
+    "35-44": 20.1,
+    "45-54": 20.6,
+    "55-64": 18,
+    "65-74": 12.7,
+    "75+": 9.4
+   },
+   "by_age_sex": null,
+   "overall": 18.3,
+   "measure": "CIS-R score of 12 or more (CMHC symptoms 'of a level likely to benefit from acknowledgement and possible intervention'); 18+ = severe symptoms",
+   "source": "NHS England, APMS 2023/4, Chapter 1: Common mental health conditions (2023/4)",
+   "url": "https://digital.nhs.uk/data-and-information/publications/statistical/adult-psychiatric-morbidity-survey/survey-of-mental-health-and-wellbeing-england-2023-24/common-mental-health-conditions",
+   "table": "Chart data 'CIS-R score of 12-17 and 18 or more, by age (Base: All adults)'"
+  },
+  {
+   "key": "current_smoker",
+   "yes": "I smoke.",
+   "no": null,
+   "age_limited": false,
+   "by_age": {
+    "18-24": 7.2,
+    "25-34": 10.2,
+    "35-44": 10.4,
+    "45-54": 12.4,
+    "55-64": 11.2,
+    "65+": 7.2
+   },
+   "by_age_sex": null,
+   "overall": 9.8,
+   "measure": "Current cigarette smoker: 'Have you ever smoked cigarettes regularly?' -> 'Do you smoke cigarettes at all nowadays?' = yes (Annual Population Survey)",
+   "source": "ONS, Adult smoking habits in the UK: 2025 (2025 (released 6 October 2026))",
+   "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/healthandlifeexpectancies/bulletins/adultsmokinghabitsingreatbritain/2025",
+   "table": "Figure 3 data download (https://www.ons.gov.uk/visualisations/dvc3642/fig03/datadownload.xlsx): Percentage who were current smokers, all persons by age group, UK, 2011 to 2025"
+  },
+  {
+   "key": "obesity",
+   "yes": "I'm living with obesity (BMI 30 or more).",
+   "no": null,
+   "age_limited": false,
+   "by_age": {
+    "16-24": 13.9,
+    "25-34": 24.1,
+    "35-44": 32.1,
+    "45-54": 33.0,
+    "55-64": 35.5,
+    "65-74": 34.9,
+    "75+": 26.5
+   },
+   "by_age_sex": {
+    "male": {
+     "16-24": 10.9,
+     "25-34": 21.9,
+     "35-44": 31.5,
+     "45-54": 32.5,
+     "55-64": 36.2,
+     "65-74": 36.2,
+     "75+": 26.4
+    },
+    "female": {
+     "16-24": 17.1,
+     "25-34": 26.4,
+     "35-44": 32.7,
+     "45-54": 33.5,
+     "55-64": 34.9,
+     "65-74": 33.6,
+     "75+": 26.6
+    }
+   },
+   "overall": 28.9,
+   "measure": "Obese: measured BMI of 30 kg/m2 or more (includes morbidly obese, BMI 40+)",
+   "source": "NHS England, Health Survey for England 2022 Part 2: Overweight and obesity (Excel tables) (2022)",
+   "url": "https://files.digital.nhs.uk/B2/7AACB5/HSE-2022-Overweight-and-obesity-tables.xlsx",
+   "table": "Table 4: Adults' body mass index (BMI), overweight and obesity prevalence, by age and sex (row '% Obese')"
+  }
+ ],
+ "note": "Drawn per agent at the published rate for its age (and sex where published); independent of each other."
+}

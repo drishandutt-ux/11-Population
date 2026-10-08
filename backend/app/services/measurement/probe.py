@@ -373,33 +373,55 @@ async def answer_one(
         system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE + (SOURCES_RULE if served else "")
     finally:
         agent.dials = original_dials
-    user = _build_user_message(
-        agent=agent, instrument=instrument, spec=spec, query=query,
-        kg_context=kg_context, said=said, decided=decided,
-    )
-
-    schema = with_dont_know(instrument.schema_for(spec))
-    if served:
-        schema = with_sources(schema)
-    try:
-        answer = await analyze(
-            schema, system, user,
-            session_id=session_id, label=f"probe:{instrument.key}",
-            model=model, max_tokens=instrument.max_tokens,
+    async def _ask(st_spec: dict, label_suffix: str = "") -> Optional[dict]:
+        user = _build_user_message(
+            agent=agent, instrument=instrument, spec=st_spec, query=query,
+            kg_context=kg_context, said=said, decided=decided,
         )
-    except LlmTruncated:
-        # Short schemas rarely truncate; when they do, one retry with more room is enough.
+        schema = with_dont_know(instrument.schema_for(st_spec))
+        if served:
+            schema = with_sources(schema)
+        label = f"probe:{instrument.key}{label_suffix}"
         try:
-            answer = await analyze(
-                schema, system, user,
-                session_id=session_id, label=f"probe:{instrument.key}:retry",
-                model=model, max_tokens=instrument.max_tokens * 2,
-            )
-        except (LlmError, Exception) as e:  # noqa: BLE001
-            print(f"[probe] {agent.id} failed after retry: {type(e).__name__}: {e}")
+            return await analyze(schema, system, user, session_id=session_id, label=label, model=model, max_tokens=instrument.max_tokens)
+        except LlmTruncated:
+            # Short schemas rarely truncate; when they do, one retry with more room is enough.
+            try:
+                return await analyze(schema, system, user, session_id=session_id, label=f"{label}:retry", model=model, max_tokens=instrument.max_tokens * 2)
+            except (LlmError, Exception) as e:  # noqa: BLE001
+                print(f"[probe] {agent.id} failed after retry: {type(e).__name__}: {e}")
+                return None
+        except Exception as e:  # noqa: BLE001
+            print(f"[probe] {agent.id} failed: {type(e).__name__}: {e}")
             return None
-    except Exception as e:  # noqa: BLE001
-        print(f"[probe] {agent.id} failed: {type(e).__name__}: {e}")
+
+    # An instrument may ask in stages (the survey's routed follow-ups go in a second call, only to
+    # the twins whose first answers route them there) and may realise a likelihood answer into a
+    # concrete one (seeded per twin, so a re-run draws the same answers).
+    plan = instrument.stages(spec) if hasattr(instrument, "stages") else [(spec, None)]
+    rng = random.Random(f"{spec.get('seed', 0)}:{agent.id}")
+    answer: Optional[dict] = None
+    for n_stage, (st_spec, cond_q) in enumerate(plan):
+        if cond_q is not None:
+            from app.services.measurement.instruments.survey import asked
+            if not answer or not asked(cond_q, answer):
+                continue
+            st_spec = {**st_spec, "context_before": instrument.followup_context(spec, cond_q, answer)}
+        part = await _ask(st_spec, "" if cond_q is None else ":followup")
+        if part is None:
+            if cond_q is None:
+                return None
+            continue
+        if hasattr(instrument, "realise"):
+            part = instrument.realise(part, st_spec, rng)
+        if answer is None:
+            answer = part
+        else:
+            dist = {**(answer.get("_dist") or {}), **(part.get("_dist") or {})}
+            answer = {**answer, **{k: v for k, v in part.items() if k not in ("reasoning", "_dist") and not k.startswith("can_") and k not in (CAN_ANSWER, WHY_NOT)}}
+            if dist:
+                answer["_dist"] = dist
+    if answer is None:
         return None
 
     latency_ms = int((time.monotonic() - started) * 1000)

@@ -38,7 +38,9 @@ def card_line(c: dict) -> str:
         if c.get(k) not in (None, ""):
             facts.append(f"{_FACT_LABELS[k]}: {c[k]}")
     beliefs = "\n".join(f"    - {b}" for b in c.get("beliefs") or [])
+    life = "; ".join(c.get("facts") or [])
     return (f"SLOT {c['slot']}: " + "; ".join(facts) + f"\n  How firmly: {_strength(float(c.get('typicality') or 0.5))}"
+            + (f"\n  Facts of their life (build the background around these): {life}" if life else "")
             + (f"\n  What this person believes (their own mix — keep every one):\n{beliefs}" if beliefs else ""))
 
 
@@ -150,6 +152,8 @@ def enforce(kseg: dict, card: dict, d: dict) -> dict:
     d["humanity"] = max(lo, min(hi, h))
     ch = {k: str(v).strip() for k, v in (kseg.get("character") or {}).items() if str(v or "").strip()}
     ch["beliefs"] = list(card.get("beliefs") or [])
+    if card.get("facts"):
+        ch["life_facts"] = list(card["facts"])
     ch["kit"] = {"segment": kseg["name"], "segment_id": kseg["id"], "typicality": card.get("typicality"),
                  "facts": {k: card[k] for k in ("ethnicity", "ge2019", "eu2016", "settlement", "class", "tenure", "religion", "work") if card.get(k)}}
     d["character"] = ch

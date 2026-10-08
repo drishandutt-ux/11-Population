@@ -13,6 +13,7 @@ os.environ["ANTHROPIC_API_KEY"] = "test-key"
 
 from app.services.kits import benchmark, cast, crosstab, registry  # noqa: E402
 from app.services.measurement.instruments.survey import aggregate, normalise, question_for, schema_for, validate  # noqa: E402
+from tests.measurement_test import api_client  # noqa: E402,F401
 
 GROUP = ["", "", "Gender", "", "Segment", ""]
 LABELS = ["Q", "All", "Male", "Female", "Left", "Right"]
@@ -250,3 +251,89 @@ def test_frame_report_counts_the_drawn_cards():
     plan = registry.plan_from_kit(kit, 200)
     rep = F.build_report(registry.frame_from_kit(kit), plan["segments"], 200)
     assert F.summary_line(rep).startswith("Frame match good")      # not "poor — 89 pts off" from the segment summaries
+
+
+# ── likelihood answers and staged routing (run 2) ─────────────────────────────
+
+LIKELY_FORM = {"title": "T", "seed": 7, "questions": [
+    {"key": "ever", "type": "single", "text": "Ever skipped?", "options": ["Yes", "No", "Don't know"], "likelihood": True},
+    {"key": "why", "type": "multi", "text": "Why?", "options": ["forgot", "side effects", "None of the above"], "exclusive": ["None of the above"],
+     "show_if": {"key": "ever", "equals": ["Yes"]}, "likelihood": True},
+    {"key": "pick", "type": "multi", "text": "Top 2", "options": ["a", "b", "c", "d"], "max_choices": 2, "likelihood": True},
+    {"key": "trust", "type": "grid", "text": "Trust", "rows": ["NHS"], "columns": ["Lots", "Little"], "likelihood": True},
+]}
+
+
+def test_likelihood_schema_and_stages():
+    from app.services.measurement.instruments import survey as sv
+    first, follow = sv.stages(LIKELY_FORM)
+    assert [q["key"] for q in first[0]["questions"]] == ["ever", "pick", "trust"] and first[1] is None
+    assert [q["key"] for q in follow[0]["questions"]] == ["why"] and follow[1]["key"] == "why"
+    props = sv.schema_for(first[0])["properties"]
+    assert set(props["ever"]["properties"]) == {"o1", "o2", "o3"} and set(props["trust"]["properties"]["nhs"]["properties"]) == {"o1", "o2"}
+    assert "CHANCE" in sv.question_for(first[0]) and "ONLY if" not in sv.question_for(follow[0] | {"_followup_stage": True})
+
+
+def test_realise_draws_from_the_likelihoods():
+    import random as _r
+    from app.services.measurement.instruments import survey as sv
+    raw = {"reasoning": "r", "ever": {"o1": 25, "o2": 70, "o3": 5}, "pick": {"o1": 90, "o2": 80, "o3": 70, "o4": 0},
+           "trust": {"nhs": {"o1": 100, "o2": 0}}}
+    picks = [sv.realise(raw, LIKELY_FORM, _r.Random(k)) for k in range(2000)]
+    yes = sum(1 for p in picks if p["ever"] == "Yes") / len(picks)
+    assert 0.21 < yes < 0.29                                         # drawn near its 25% chance, not always the mode
+    assert all(len(p["pick"]) <= 2 and len(set(p["pick"])) == len(p["pick"]) and "d" not in p["pick"] for p in picks)
+    assert all(p["trust"] == {"nhs": "Lots"} for p in picks) and picks[0]["_dist"]["ever"]["o2"] == 70
+    excl = sv.realise({"why": {"o1": 0, "o2": 0, "o3": 100}}, {"questions": [LIKELY_FORM["questions"][1]]}, _r.Random(1))
+    assert excl["why"] == ["None of the above"]
+
+
+def test_probe_asks_followups_only_when_routed(api_client, monkeypatch):
+    import asyncio
+    from tests.measurement_test import _agent
+    client, Session = api_client
+    calls = []
+
+    async def fake_analyze(schema, system, user, **kw):
+        props = schema["properties"]
+        calls.append(sorted(k for k in props if k in ("ever", "why", "pick", "trust")))
+        if "why" in props:
+            assert "FOLLOW-UP" in user and 'you answered "Yes"' in user
+            return {"reasoning": "f", "why": {"o1": 100, "o2": 0, "o3": 0}}
+        yes = "Agent0" in system
+        return {"reasoning": "r", "ever": {"o1": 100 if yes else 0, "o2": 0 if yes else 100, "o3": 0},
+                "pick": {"o1": 100, "o2": 0, "o3": 0, "o4": 0}, "trust": {"nhs": {"o1": 60, "o2": 40}}}
+    monkeypatch.setattr("app.services.measurement.probe.analyze", fake_analyze)
+    sid = client.post("/api/v1/sessions", json={"title": "T", "query": "q", "auto_research": False}).json()["id"]
+
+    async def seed():
+        async with Session() as db:
+            for k in range(3):
+                db.add(_agent(session_id=sid, name=f"Agent{k}"))
+            await db.commit()
+    asyncio.run(seed())
+    r = client.post(f"/api/v1/sessions/{sid}/probes", json={"instrument": "survey", "spec": LIKELY_FORM})
+    assert r.status_code == 200, r.text
+    got = client.get(f"/api/v1/sessions/{sid}/probes/{r.json()['id']}").json()
+    assert got["status"] == "complete"
+    assert sum(1 for c in calls if c == ["why"]) == 1 and len(calls) == 4      # three first stages, one follow-up
+    by = {a["answer"]["ever"]: a["answer"] for a in got["answers"]}
+    assert by["Yes"]["why"] == ["forgot"] and "why" not in by["No"]
+    q = {x["key"]: x for x in got["aggregates"]["questions"]}
+    assert q["why"]["n"] == 1
+
+
+def test_life_facts_drawn_by_age_and_sex():
+    import random as _r
+    assert registry._band_bounds("20 to 24") == (20, 24) and registry._band_bounds("90 and over")[0] == 90 and registry._band_bounds("75+")[0] == 75
+    pf = {"yes": "Y", "no": "N", "by_age_sex": {"female": {"16-24": 0, "25-34": 100}}, "by_age": {"16-44": 50}, "overall": 50}
+    assert registry._draw_fact(pf, {"age": 30, "gender": "female"}, _r.Random(1)) == "Y"
+    assert registry._draw_fact(pf, {"age": 20, "gender": "female"}, _r.Random(1)) == "N"
+    limited = {"yes": "Y", "no": None, "by_age": {"16-65": 100}, "overall": 100, "age_limited": True}
+    assert registry._draw_fact(limited, {"age": 80}, _r.Random(1)) is None          # not drawn outside the published ages
+    kit = registry.load_kit("britains_choice_2020")
+    cards = [c for s in registry.plan_from_kit(kit, 60)["segments"] for c in s["kit_cards"]]
+    assert all(c.get("facts") for c in cards)
+    seg = kit["segments"][0]
+    d = cast.enforce(seg, {**cards[0], "slot": 1}, {"name": "X"})
+    assert d["character"]["life_facts"] == cards[0]["facts"] and "Facts of their life" in cast.card_line(cards[0])

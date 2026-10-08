@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 from typing import Any, Optional
 
 KITS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "kits")
@@ -120,6 +121,7 @@ def draw_cards(kit: dict, seg: dict, n: int, *, seed: int = 0) -> list[dict]:
             if text:
                 beliefs[j].append(text)
     cards = []
+    person_facts = load_person_facts(kit.get("person_facts"))
     for j in range(n):
         c: dict[str, Any] = {"slot": j + 1}
         for key, col in columns.items():
@@ -129,8 +131,68 @@ def draw_cards(kit: dict, seg: dict, n: int, *, seed: int = 0) -> list[dict]:
             c["age"] = _age_in(c["age_band"], rng)
         c["beliefs"] = beliefs[j]
         c["typicality"] = round(latent[j], 2)
+        facts = [f for f in (_draw_fact(pf, c, rng) for pf in person_facts) if f]
+        if facts:
+            c["facts"] = facts
         cards.append(c)
     return cards
+
+
+# ── personal facts at national rates (by age, published statistics) ──────────
+
+def load_person_facts(ref: Any) -> list[dict]:
+    """A kit names a facts file (app/data/kits/<id>/<file>.json) — published national rates by
+    age for things a person simply is or does (has a long-term condition, takes prescribed
+    medicine, cares for someone…). Each agent draws its own at its age's rate."""
+    if not ref:
+        return []
+    path = os.path.join(KITS_DIR, str(ref))
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return list((json.load(f) or {}).get("person_facts") or [])
+
+
+def _band_bounds(band: str) -> Optional[tuple[int, int]]:
+    """'25-34', '25 to 34', '75+', '90 and over', 'Under 1' → (lo, hi)."""
+    b = str(band).replace("–", "-").strip().lower()
+    m = re.match(r"^(\d+)\s*(?:-|to)\s*(\d+)", b)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = re.match(r"^(\d+)\s*(?:\+|and over|or over)", b)
+    if m:
+        return int(m.group(1)), 130
+    m = re.match(r"^under\s*(\d+)", b)
+    if m:
+        return 0, int(m.group(1)) - 1
+    return None
+
+
+def _band_pct(by_age: dict, age: Any) -> Optional[float]:
+    try:
+        a = int(age)
+    except (TypeError, ValueError):
+        return None
+    hits = []
+    for band, pct in (by_age or {}).items():
+        bb = _band_bounds(band)
+        if bb and bb[0] <= a <= bb[1] and pct is not None:
+            hits.append((bb[1] - bb[0], float(pct)))
+    return min(hits)[1] if hits else None          # the narrowest band that holds the age
+
+
+def _draw_fact(pf: dict, card: dict, rng: random.Random) -> Optional[str]:
+    pct = None
+    sex = str(card.get("gender") or "").lower()
+    if isinstance(pf.get("by_age_sex"), dict) and sex in pf["by_age_sex"]:
+        pct = _band_pct(pf["by_age_sex"][sex], card.get("age"))
+    if pct is None:
+        pct = _band_pct(pf.get("by_age") or {}, card.get("age"))
+    if pct is None and not pf.get("age_limited"):
+        pct = pf.get("overall")
+    if pct is None:
+        return None
+    return pf.get("yes") if rng.random() < float(pct) / 100.0 else pf.get("no")
 
 
 # ── kit → plan and frame ──────────────────────────────────────────────────────

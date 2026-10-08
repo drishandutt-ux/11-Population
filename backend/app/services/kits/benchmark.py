@@ -40,6 +40,8 @@ def build(xlsx_path: str, qmap: list[dict], meta: dict) -> tuple[dict, dict]:
     sheets = {s["sheet"]: s for s in parsed["sheets"]}
     questions, form_qs = [], []
     for q in qmap:
+        if meta.get("likelihood") and q.get("type") != "text":
+            q = {**q, "likelihood": True}
         if q.get("type") == "text":
             sh = sheets.get(q.get("sheet") or "")
             questions.append({**_public(q), "verbatims": (sh or {}).get("verbatims") or []})
@@ -97,7 +99,7 @@ def _form_q(q: dict, *, options: list[str], rows: list[str], columns: list[str])
         out["options"] = options
     if rows:
         out["rows"], out["columns"] = rows, columns
-    for k in ("max_choices", "exclusive", "show_if"):
+    for k in ("max_choices", "exclusive", "show_if", "likelihood"):
         if q.get(k):
             out[k] = q[k]
     return out

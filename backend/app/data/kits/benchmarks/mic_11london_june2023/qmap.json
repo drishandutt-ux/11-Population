@@ -7,6 +7,7 @@
     "segmentation": "Britain's Choice (2020) seven segments",
     "kit": "britains_choice_2020",
     "form_title": "Health, charities and society",
+    "likelihood": true,
     "form_intro": "A short survey about health, the NHS, charities and how people in Britain get on. There are no right or wrong answers; answer as yourself.",
     "notes": [
       "Q7 was a split sample in the real survey: half were asked about 'support', half about 'advice' (weighted N about 1,015 / 1,003). The simulated form asks every agent both; each is scored against its own half.",

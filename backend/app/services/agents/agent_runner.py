@@ -336,6 +336,9 @@ def _character_block(agent: SpawnedAgent) -> str:
     beliefs = [str(b).strip() for b in (ch.get("beliefs") or []) if str(b or "").strip()] if isinstance(ch.get("beliefs"), list) else []
     if beliefs:
         parts.append("WHAT YOU BELIEVE:\n" + "\n".join(f"- {b}" for b in beliefs))
+    life = [str(b).strip() for b in (ch.get("life_facts") or []) if str(b or "").strip()] if isinstance(ch.get("life_facts"), list) else []
+    if life:
+        parts.append("FACTS OF YOUR LIFE:\n" + "\n".join(f"- {b}" for b in life))
     if not parts:
         return ""
     return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"
