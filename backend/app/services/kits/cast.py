@@ -21,6 +21,13 @@ _GENERATION_OF = [("Gen Z (18-24)", 18, 24), ("Millennials (25-40)", 25, 40), ("
                   ("Baby Boomers (56-74)", 56, 74), ("Silent Gen (75+)", 75, 120)]
 
 
+SURVEY_STYLE = {
+    "high": "On national issues you have not followed, you often genuinely do not know — and you say so. 'Don't know', 'Neither agree nor disagree' and 'None of these' are often your honest answer, and you do not invent opinions to look informed.",
+    "medium": "On things outside your own life you are often unsure; you pick 'Don't know' or the middle option when that is honest, and take a side when you have one.",
+    "low": "You follow the news and usually have a view, so you take a side more often than most — though you still say 'Don't know' about things you have never come across.",
+}
+
+
 def _generation(age: int) -> Optional[str]:
     for label, lo, hi in _GENERATION_OF:
         if lo <= age <= hi:
@@ -154,6 +161,11 @@ def enforce(kseg: dict, card: dict, d: dict) -> dict:
     ch["beliefs"] = list(card.get("beliefs") or [])
     if card.get("facts"):
         ch["life_facts"] = list(card["facts"])
+    if card.get("survey_style"):
+        ch["survey_style"] = SURVEY_STYLE[card["survey_style"]]
+    if kseg.get("tagline"):
+        ch["outlook"] = kseg["tagline"]
+    ch["typicality"] = card.get("typicality")
     ch["kit"] = {"segment": kseg["name"], "segment_id": kseg["id"], "typicality": card.get("typicality"),
                  "facts": {k: card[k] for k in ("ethnicity", "ge2019", "eu2016", "settlement", "class", "tenure", "religion", "work") if card.get(k)}}
     d["character"] = ch

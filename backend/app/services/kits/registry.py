@@ -134,8 +134,27 @@ def draw_cards(kit: dict, seg: dict, n: int, *, seed: int = 0) -> list[dict]:
         facts = [f for f in (_draw_fact(pf, c, rng) for pf in person_facts) if f]
         if facts:
             c["facts"] = facts
+        style = survey_style((seg.get("engagement") or {}).get("level"), c.get("education"))
+        if style:
+            c["survey_style"] = style
         cards.append(c)
     return cards
+
+
+def survey_style(engagement: Optional[str], education: Optional[str]) -> Optional[str]:
+    """How readily this person opts out of a question (low / medium / high): their segment's news
+    engagement, moved one step by their own education. People who follow public affairs less and
+    left education earlier give 'don't know', the middle option and 'none of these' more often."""
+    if not engagement:
+        return None
+    order = ["low", "medium", "high"]           # opt-out tendency
+    level = {"high": 0, "medium": 1, "low": 2}.get(engagement, 1)
+    edu = str(education or "").lower()
+    if "gcse" in edu or "no degree" in edu:
+        level += 1
+    elif "degree" in edu and "no degree" not in edu:
+        level -= 1
+    return order[max(0, min(2, level))]
 
 
 # ── personal facts at national rates (by age, published statistics) ──────────

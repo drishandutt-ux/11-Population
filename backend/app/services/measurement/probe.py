@@ -22,7 +22,7 @@ import random
 import time
 import traceback
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from sqlalchemy import or_, select
 
@@ -244,8 +244,40 @@ def _build_user_message(
         from app.services.measurement import messaging as msg_mod
         blocks.append(msg_mod.message_block(message))
 
+    anchor = _convictions_block(agent) if instrument.key == "survey" else ""
+    if anchor:
+        blocks.append(anchor)
     blocks.append("THE QUESTION: " + instrument.question_for(spec) + "\n\nRecord your answer with the tool.")
     return "\n\n".join(blocks)
+
+
+def _strength_line(t: Any) -> str:
+    try:
+        t = float(t)
+    except (TypeError, ValueError):
+        return ""
+    return ("You hold this outlook firmly." if t >= 0.67 else "You hold this outlook moderately, with exceptions." if t >= 0.34
+            else "You hold this outlook loosely — closer to the middle than most people like you.")
+
+
+def _convictions_block(agent: SpawnedAgent) -> str:
+    """A twin written from a population kit answers a form with its own convictions in front of it.
+    In its system prompt they sit inside a long persona; placed beside the questions they are what
+    the answer is weighed against, so the twin leans as far as it actually holds a view instead of
+    drifting to the model's own balanced middle (run 3: our segments differed about a third as
+    much as the real ones)."""
+    ch = getattr(agent, "character", None) or {}
+    if not isinstance(ch, dict) or not ch.get("beliefs"):
+        return ""
+    lines = ["WHO YOU ARE, AS YOU ANSWER — keep this in front of you. Where a question touches one of these, your chances should follow it as strongly as you hold it; do not drift to a balanced middle that is not yours."]
+    if ch.get("outlook"):
+        lines.append(f"Your outlook: {ch['outlook']}. {_strength_line(ch.get('typicality'))}".strip())
+    lines.append("Your convictions:\n" + "\n".join(f"- {b}" for b in ch["beliefs"]))
+    if ch.get("life_facts"):
+        lines.append("Facts of your life:\n" + "\n".join(f"- {f}" for f in ch["life_facts"]))
+    if ch.get("survey_style"):
+        lines.append(f"How you answer surveys: {ch['survey_style']}")
+    return "\n".join(lines)
 
 
 # ── "not mine to answer" (brief L3-06) ────────────────────────────────────────

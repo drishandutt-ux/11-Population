@@ -145,6 +145,19 @@ CHARACTER = {
         life=["older, wealthier, mostly white", "rural areas and small towns, homeowners", "strong Leavers and Conservative voters"]),
 }
 
+# How closely each segment follows news and public affairs, from the report's own statements
+# (no per-segment percentage is published). Drives each twin's tendency to opt out of
+# questions it has no view on (see registry.survey_style).
+ENGAGEMENT = {
+    "Progressive Activists": ("high", "most politically engaged segment; read online news and blogs more than any segment; 55% post political content (p38-40, p11)"),
+    "Civic Pragmatists": ("medium", "well-informed but not ideological; watch TV news and use social media (p42-43)"),
+    "Disengaged Battlers": ("low", "lowest consumers of almost every type of information; large numbers say they have no interest in news (p46-47)"),
+    "Established Liberals": ("high", "above average for all forms of media consumption except social media (p50-51)"),
+    "Loyal Nationals": ("medium", "get news from the Daily Mail, ITV, The Sun, Facebook and local papers (p54)"),
+    "Disengaged Traditionalists": ("low", "lowest news interest; large numbers say they have no interest in news (p58)"),
+    "Backbone Conservatives": ("high", "keen followers of the news; two-thirds watch TV news daily (p62-63)"),
+}
+
 POLL_SHARES = {  # June 2023 poll: weighted N per segment of 2,018 (its own composition, not its answers)
     "progressive_activists": 165, "civic_pragmatists": 224, "disengaged_battlers": 152, "established_liberals": 341,
     "loyal_nationals": 451, "disengaged_traditionalists": 287, "backbone_conservatives": 398,
@@ -216,6 +229,7 @@ def build() -> dict:
             "psychology": list((s.get("tagline") or {}).get("keywords") or []),
             "life": ch["life"],
             "humanity_hint": ch["humanity_hint"], "temperature": ch["temperature"], "top_emotions": ch["top_emotions"],
+            "engagement": {"level": ENGAGEMENT[name][0], "source": ENGAGEMENT[name][1]},
             "character": {k: ch[k] for k in ("decision_rules", "behaviour", "vocabulary", "information_diet", "failure_modes")},
             "distributions": dists,
             "beliefs": beliefs,
@@ -260,6 +274,7 @@ def build() -> dict:
         "assumptions": [
             "No 2019 general-election vote mix is published per segment, so agents carry their 2016 EU referendum vote instead and the GE 2019 banner is not scored.",
             "Each agent also draws personal health facts (long-term condition, prescribed medicine, unpaid caring, health literacy, recent anxiety/depression, smoking, obesity) at the published national rate for its age and sex (population_health_gb: Census 2021, HSE, APMS 2023/4, ONS 2025, Rowlands 2015), independently of its segment and of each other.",
+            "Each twin's tendency to answer 'Don't know', 'Neither' or 'None of the above' (low / medium / high) combines its segment's news engagement — set from the report's statements, as no per-segment figure is published — with its own education: low engagement or GCSE-level education raise it, high engagement with a degree lowers it. The rule is a modelling choice, not a published rate.",
             "Beliefs are drawn item by item at each segment's published share, linked by one latent 'how typical of the segment' score per person; the report does not publish how items co-occur within a person.",
             "Attitudes were measured in February–March 2020 (some items mid-pandemic); a June 2023 respondent may have moved since.",
             "The 2020 report has no segment-level measures of trust in vaccines, pharma, charities or health apps, nor of charity giving beyond Civic Pragmatists; those answers rest on each persona's psychology.",

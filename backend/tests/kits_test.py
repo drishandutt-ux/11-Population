@@ -414,3 +414,24 @@ def test_kit_build_chooses_dynamic_dials_and_facets(api_client, monkeypatch):
     assert [d["key"] for d in b["plan"]["dynamic_dials"]] == ["nhs_loyalty"] and b["plan"]["facets"][0]["key"] == "segment"
     assert seen["dials"][0] == "Health and the NHS" and "Loyal Nationals" in seen["dials"][1] and seen["facets"] == 7
     assert any("Dynamic dials — 1 chosen" in e["message"] for e in b["log"])
+
+
+def test_survey_style_and_convictions_beside_the_questions():
+    from types import SimpleNamespace
+    from app.services.measurement import probe as probe_svc
+    from app.services.measurement import instruments
+    assert registry.survey_style("low", "GCSEs or below") == "high" and registry.survey_style("high", "Degree") == "low"
+    assert registry.survey_style("medium", "A-levels or equivalent") == "medium" and registry.survey_style(None, "Degree") is None
+    kit = registry.load_kit("britains_choice_2020")
+    seg = next(s for s in kit["segments"] if s["name"] == "Disengaged Traditionalists")
+    assert seg["engagement"]["level"] == "low"
+    card = {"slot": 1, "age": 50, "gender": "male", "region": "Wales", "education": "GCSEs or below", "beliefs": ["I trust the NHS"],
+            "facts": ["I smoke."], "survey_style": "high", "typicality": 0.9}
+    d = cast.enforce(seg, card, {"name": "X"})
+    agent = SimpleNamespace(name="X", role="r", character=d["character"], dials={}, demographics={}, age=50, stance="neutral", humanity=50)
+    msg = probe_svc._build_user_message(agent=agent, instrument=instruments.get("survey"), spec={"questions": [{"key": "q", "type": "yesno", "text": "Q?"}]},
+                                        query="t", kg_context="", said=[], decided=[])
+    i, j = msg.index("WHO YOU ARE, AS YOU ANSWER"), msg.index("THE QUESTION:")
+    assert i < j and "I trust the NHS" in msg[i:j] and "I smoke." in msg[i:j] and "genuinely do not know" in msg[i:j] and "firmly" in msg[i:j]
+    plain = SimpleNamespace(**{**agent.__dict__, "character": None})
+    assert "WHO YOU ARE, AS YOU ANSWER" not in probe_svc._build_user_message(agent=plain, instrument=instruments.get("survey"), spec={"questions": [{"key": "q", "type": "yesno", "text": "Q?"}]}, query="t", kg_context="", said=[], decided=[])
