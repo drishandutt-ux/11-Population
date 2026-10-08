@@ -388,3 +388,29 @@ def test_benchmark_rerun_is_a_fresh_respondent(api_client, monkeypatch):
     n_second = len(users)
     client.post(f"/api/v1/sessions/{sid}/probes", json={"instrument": "survey", "spec": other})   # an ordinary form still sees them
     assert any("WHAT YOU ALREADY DECIDED" in u for u in users[n_second:])
+
+
+def test_kit_build_chooses_dynamic_dials_and_facets(api_client, monkeypatch):
+    import app.models.population  # noqa: F401
+    from app.services.agents import dynamic_dials as dyn_mod
+    from app.services.population import facets as facets_mod
+    client, Session = api_client
+    seen = {}
+
+    async def fake_ensure(session_id, query, *, context="", refresh=False):
+        seen["dials"] = (query, context)
+        return [{"key": "nhs_loyalty", "label": "Loyalty to the NHS", "why": "w", "low": "l", "high": "h"}]
+
+    async def fake_facets(session_id, question, detected, segments):
+        seen["facets"] = len(segments)
+        return [{"key": "segment", "label": "Segment", "kind": "attribute"}]
+    monkeypatch.setattr(dyn_mod, "ensure", fake_ensure)
+    monkeypatch.setattr(facets_mod, "pick_facets", fake_facets)
+    sid = client.post("/api/v1/sessions", json={"title": "T", "query": "Health and the NHS", "auto_research": False}).json()["id"]
+    r = client.post(f"/api/v1/sessions/{sid}/population/kit", json={"kit_id": "britains_choice_2020", "count": 14})
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["status"] == "awaiting_review"
+    assert [d["key"] for d in b["plan"]["dynamic_dials"]] == ["nhs_loyalty"] and b["plan"]["facets"][0]["key"] == "segment"
+    assert seen["dials"][0] == "Health and the NHS" and "Loyal Nationals" in seen["dials"][1] and seen["facets"] == 7
+    assert any("Dynamic dials — 1 chosen" in e["message"] for e in b["log"])

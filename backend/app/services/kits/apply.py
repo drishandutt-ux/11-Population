@@ -26,15 +26,33 @@ async def start_kit_build(session_id: str, kit_id: str, *, count: int, mode: str
     count = max(len(kit.get("segments") or []), min(1000, int(count or 100)))
     plan = registry.plan_from_kit(kit, count, preset=preset, seed=seed)
     frame = registry.frame_from_kit(kit)
+    # The kit replaces the planner, not the question: the session's dynamic dials (the forces this
+    # question needs beyond the fixed 112) and the population map's facets are chosen exactly as a
+    # planned build chooses them, from the question and the kit's segments.
+    from app.models.session import AnalysisSession
+    from app.services.agents import dynamic_dials as dyn_mod
+    from app.services.population import facets as facets_mod
+    async with dbm.AsyncSessionLocal() as db:
+        sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
+    question = (sess.query if sess else "") or kit.get("title", "")
+    seg_text = "\n".join(f"- {sg['name']}: {sg.get('description', '')}" for sg in plan["segments"])
+    detected = {"topic": kit.get("title"), "target_population": kit.get("population"), "population_kind": "general public",
+                "geography": kit.get("population"), "confidence": 100, "decision": "From a published segmentation kit"}
+    try:
+        plan["dynamic_dials"] = await dyn_mod.ensure(session_id, question, context=f"Population: {kit.get('title')} ({kit.get('population')})\n\nSegments:\n{seg_text}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[kits] dynamic dials not chosen: {type(e).__name__}: {e}")
+    try:
+        plan["facets"] = await facets_mod.pick_facets(session_id, question, detected, plan["segments"])
+    except Exception as e:  # noqa: BLE001
+        print(f"[kits] facets not chosen: {type(e).__name__}: {e}")
     async with dbm.AsyncSessionLocal() as db:
         for o in (await db.execute(select(PopulationBuild).where(PopulationBuild.session_id == session_id, PopulationBuild.status.in_(list(builder.ACTIVE))))).scalars().all():
             o.status = "stopped"
             builder._stop[o.id] = True
         bld = PopulationBuild(id=str(uuid.uuid4()), session_id=session_id, status="awaiting_review", mode="pro" if mode == "pro" else "fast",
                               target_count=count, constraints={"kit": {"id": kit_id, "preset": plan["kit"]["preset"], "seed": seed}},
-                              sources={}, questions=[], log=[], plan=plan, frame=frame,
-                              detected={"topic": kit.get("title"), "target_population": kit.get("population"), "population_kind": "general public",
-                                        "geography": kit.get("population"), "confidence": 100, "decision": "From a published segmentation kit"})
+                              sources={}, questions=[], log=[], plan=plan, frame=frame, detected=detected)
         db.add(bld)
         await db.commit()
         await db.refresh(bld)
@@ -45,6 +63,12 @@ async def start_kit_build(session_id: str, kit_id: str, *, count: int, mode: str
         cards = sg.get("kit_cards") or []
         await builder.log(bld.id, "plan", "info", f"{sg['name']} — {sg['share_pct']}% ({sg['count']} agents)",
                           _mix_line(cards))
+    dyn = plan.get("dynamic_dials") or []
+    if dyn:
+        await builder.log(bld.id, "plan", "info", f"Dynamic dials — {len(dyn)} chosen for this question, on top of the fixed 112: " + dyn_mod.summary_line(dyn),
+                          " · ".join(f"{d['label']}: {d.get('why', '')}" for d in dyn))
+    else:
+        await builder.log(bld.id, "plan", "warn", "No dynamic dials for this question — personas run on the fixed 112 only")
     if frame:
         await builder.log(bld.id, "frame", "ok", "Sampling frame from the kit: " + ", ".join(d["label"] for d in frame["dimensions"]),
                           " · ".join(f"{d['label']}: {frame['targets'][d['key']].get('source')}" for d in frame["dimensions"]))
@@ -54,7 +78,7 @@ async def start_kit_build(session_id: str, kit_id: str, *, count: int, mode: str
     await builder.refresh_frame_report(bld.id)
     if approve:
         bld = await builder.approve(bld.id) or bld
-    return bld
+    return await builder._load(bld.id) or bld          # with the log lines just written
 
 
 def _mix_line(cards: list[dict]) -> str:
