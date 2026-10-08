@@ -36,3 +36,21 @@ class PopulationBuild(Base):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Playbook(Base):
+    """A segmentation playbook (services/population/playbook.py): an analyst's own method for
+    cutting a population — approach, segments, extra variables, rules — written as markdown.
+    Shared: every signed-in user sees and can use every playbook (no multi-tenancy yet);
+    `user_id` / `author` record who wrote it."""
+
+    __tablename__ = "playbooks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True, default=None)
+    author: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(160), default="")
+    markdown: Mapped[str] = mapped_column(Text, default="")
+    parsed: Mapped[dict] = mapped_column(_JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

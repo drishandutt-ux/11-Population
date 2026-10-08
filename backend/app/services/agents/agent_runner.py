@@ -339,6 +339,11 @@ def _character_block(agent: SpawnedAgent) -> str:
     life = [str(b).strip() for b in (ch.get("life_facts") or []) if str(b or "").strip()] if isinstance(ch.get("life_facts"), list) else []
     if life:
         parts.append("FACTS OF YOUR LIFE:\n" + "\n".join(f"- {b}" for b in life))
+    # A persona built from an analyst's segmentation playbook: its segment's rules, and the forces
+    # that run high in this person (burnout 8/10 → how it shows), in the analyst's words.
+    rules = [str(b).strip() for b in (ch.get("playbook_rules") or []) if str(b or "").strip()] if isinstance(ch.get("playbook_rules"), list) else []
+    if rules:
+        parts.append("YOUR SITUATION AND HOW IT SHOWS:\n" + "\n".join(f"- {b}" for b in rules))
     if not parts:
         return ""
     return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"

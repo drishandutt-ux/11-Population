@@ -525,7 +525,8 @@ def test_http_studio_round_trip(api_client):
     # start → detect → clarify (waits for the analyst)
     r = client.post(f"/api/v1/sessions/{sid}/population/builds", json={"mode": "fast", "count": 20, "constraints": {"humanity": 50}, "sources": {"quant": False}})
     assert r.status_code == 200
-    b = _wait(client, sid, lambda b: b["status"] == "clarifying")
+    # The build flips to "clarifying" while the questions are still being drafted; wait for them.
+    b = _wait(client, sid, lambda b: b["status"] == "clarifying" and b["questions"])
     assert b["detected"]["geography"] == "United Kingdom"
     assert b["questions"][0]["text"] == "Which boroughs?"
     assert any(e["level"] == "question" for e in b["log"])

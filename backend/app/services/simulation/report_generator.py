@@ -84,6 +84,9 @@ async def _context(session_id: str, question: str, db: AsyncSession, records: Op
                 lines.append(f"- {d['label']}: {tg.get('status', 'missing')}" + (f" — {tg.get('source')} ({tg.get('geography') or ''} {tg.get('year') or ''})".rstrip() if tg.get("source") else ""))
             if lines:
                 frame_text += "\n" + "\n".join(lines)
+        if bld and (bld.plan or {}).get("playbook"):
+            from app.services.population import playbook as pb_mod
+            frame_text += "\n\nSEGMENTATION PLAYBOOK (state under SOURCE MATERIALS, with every flag and hypothesis):\n" + pb_mod.report_block(bld.plan["playbook"])
     except Exception as e:  # noqa: BLE001
         print(f"[report] frame summary unavailable: {type(e).__name__}: {e}")
 

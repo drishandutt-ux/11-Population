@@ -27,6 +27,7 @@ from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
 from app.services.agents import archetypes as archetypes_mod
 
 from . import facets as facets_mod
+from . import playbook as pb_mod
 from app.services.agents import dynamic_dials as dyn_mod
 from . import frame as frame_mod
 from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts, load_research_rows
@@ -318,6 +319,25 @@ async def latest_build(session_id: str) -> Optional[PopulationBuild]:
 
 # ── Pure helpers (tested) ────────────────────────────────────────────────────
 
+def playbook_of(c: Optional[dict]) -> Optional[dict]:
+    """The segmentation playbook a build follows (constraints.playbook), or None."""
+    pb = (c or {}).get("playbook")
+    return pb if isinstance(pb, dict) and (pb.get("segments") or pb.get("variables") or pb.get("approach")) else None
+
+
+def with_normalised_playbook(c: Optional[dict]) -> dict:
+    """Constraints with the playbook validated (its id kept), or without the key when it is empty."""
+    c = dict(c or {})
+    raw = c.get("playbook")
+    if isinstance(raw, dict) and raw:
+        pb = pb_mod.normalise(raw)
+        pb["id"] = raw.get("id")
+        c["playbook"] = pb
+    else:
+        c.pop("playbook", None)
+    return c
+
+
 def _clamp(v, lo, hi, default):
     try:
         return max(lo, min(hi, int(v)))
@@ -456,6 +476,8 @@ def constraints_summary(c: dict) -> str:
         lines.append(f"Analyst's audience profile: {c['profile_query']}")
     if c.get("doc_context"):
         lines.append("A survey / profile document was uploaded (its respondents should be reflected in the segments).")
+    if playbook_of(c):
+        lines.append(pb_mod.constraints_line(playbook_of(c)))
     auto, v = voice_setting(c)
     lines.append("Expert ↔ Reactive (voice only, not composition): " + ("let the system decide from the question" if auto else f"{v}/100 (0 measured, evidence-led · 50 each group's natural voice · 100 feeling-led, from their own lives)"))
     return "\n".join(lines) if lines else "none set"
@@ -618,6 +640,8 @@ async def _gather_inputs(bld: PopulationBuild, question: str) -> dict:
 def _inputs_text(inp: dict, bld: PopulationBuild) -> str:
     c = bld.constraints or {}
     parts = [f"Question: {inp['question']}", f"Analyst's dials:\n{constraints_summary(c)}"]
+    if playbook_of(c):
+        parts.append(pb_mod.prompt_block(playbook_of(c)))
     if inp.get("brief"):
         parts.append(inp["brief"])
     if inp.get("facts"):
@@ -650,7 +674,7 @@ async def start_build(session_id: str, *, mode: str, count: int, constraints: di
             o.status = "stopped"
             _stop[o.id] = True
         bld = PopulationBuild(id=str(uuid.uuid4()), session_id=session_id, status="queued", mode="pro" if mode == "pro" else "fast",
-                              target_count=max(1, min(1000, int(count or 50))), constraints=constraints or {}, sources=sources or {}, questions=[], log=[])
+                              target_count=max(1, min(1000, int(count or 50))), constraints=with_normalised_playbook(constraints), sources=sources or {}, questions=[], log=[])
         db.add(bld)
         await db.commit()
         await db.refresh(bld)
@@ -712,6 +736,11 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
         if from_stage == "detect":
             bld = await _save(build_id, status="detecting")
             await log(build_id, "detect", "info", "Reading what we already know about this population")
+            pb = playbook_of(bld.constraints)
+            if pb:
+                await log(build_id, "detect", "decision", f"Following your segmentation playbook: {pb['title']}",
+                          f"Segments by {pb['approach']['primary']} · {len(pb['segments'])} segment(s) · {len(pb['variables'])} variable(s) · {len(pb['rules'])} rule(s). "
+                          "Research still runs; where it disagrees with the playbook it is flagged, never overridden.")
             inp = await _gather_inputs(bld, question)
             for level, msg in inp["found"]:
                 await log(build_id, "detect", level, msg)
@@ -792,6 +821,10 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                         targets = ftargets + [t for t in targets if t.get("dimension") not in {ft["dimension"] for ft in ftargets if ft["dimension"] != "size"}]
                     except Exception as e:  # noqa: BLE001
                         await log(build_id, "frame", "warn", "Could not plan the frame's searches; the planner's targets run alone", str(e)[:120])
+                pb_targets = pb_mod.gather_targets(playbook_of(bld.constraints), geography, keys)
+                for pt in pb_targets:
+                    await log(build_id, "gather", "info", f"Playbook search: {pt['fact']}", " | ".join(f"“{q['query']}”" for q in pt["queries"]))
+                targets = pb_targets + targets
                 if src.get("quant_query"):
                     own = src["quant_query"]
                     if looks_like_question(own):
@@ -803,7 +836,7 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 async def _lg(level: str, message: str, detail: Optional[str]):
                     await log(build_id, "gather", level, message, detail)
 
-                rows = await gather_targets(bld.session_id, question, targets[: (9 if frame_dims else 5)], keys, build_id=build_id, log=_lg, region=region, geography=geography,
+                rows = await gather_targets(bld.session_id, question, targets[: (9 if frame_dims else 5) + len(pb_targets) + (1 if src.get("quant_query") else 0)], keys, build_id=build_id, log=_lg, region=region, geography=geography,
                                             should_stop=lambda: _stopped(build_id))
                 if _stopped(build_id):
                     return
@@ -917,6 +950,27 @@ async def load_archetypes(session_id: str) -> list[dict]:
     return [{"id": a.id, "name": a.name, "role": a.role, "profile": a.profile or {}} for a in rows]
 
 
+async def _playbook_log(build_id: str, pb: dict, plan: dict) -> None:
+    """What the playbook did to the plan: pinned dials and cells, links, and every flag."""
+    dials = [v for v in pb["variables"] if v["kind"] == "dial"]
+    cats = [v for v in pb["variables"] if v["kind"] == "category"]
+    if dials:
+        await log(build_id, "plan", "info", "Playbook dials pinned for every twin: " + ", ".join(v["label"] for v in dials),
+                  " · ".join(f"{v['label']} pushes " + ", ".join(f"{ln['dial'].split('.', 1)[1].replace('_', ' ')} {'↑' if ln['direction'] > 0 else '↓'}{ln['strength']}" for ln in v["links"]) for v in dials if v["links"]) or None)
+    if cats:
+        await log(build_id, "plan", "info", "Playbook cells on the population map: " + ", ".join(f"{v['label']} ({' / '.join(v['values'])})" for v in cats))
+    checks = (plan.get("playbook") or {}).get("checks") or []
+    for c in checks:
+        if c["status"] == "contradicted":
+            await log(build_id, "plan", "warn", f"Flag · the evidence disagrees with your playbook on {c['item']}", (c.get("note") or "") + (f" ({c['source']})" if c.get("source") else "") + " — your choice is kept.")
+    for c in checks:
+        if c["status"] == "supported":
+            await log(build_id, "plan", "ok", f"Supported by the evidence · {c['item']}", (c.get("note") or "") + (f" ({c['source']})" if c.get("source") else ""))
+    hyp = (plan.get("playbook") or {}).get("hypotheses") or []
+    if hyp:
+        await log(build_id, "plan", "info", "Kept as your hypotheses (nothing on file speaks to them): " + ", ".join(hyp), "The report states these as the analyst's assumptions.")
+
+
 async def _cast_log(build_id: str, segments: list[dict]) -> None:
     cast = [sg for sg in segments if sg.get("archetype_id") and sg.get("decision") != "rejected"]
     kept = [sg for sg in segments if sg.get("decision") != "rejected"]
@@ -948,6 +1002,12 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     if keep:
         kept_ids = {k.get("id") for k in keep}
         segments = [k for k in keep] + [sg for sg in segments if sg.get("id") not in kept_ids and sg.get("name") not in {k.get("name") for k in keep}]
+    pb = playbook_of(bld.constraints)
+    if pb:
+        # The analyst's segmentation is kept: their segments, their stated shares.
+        segments, pb_notes = pb_mod.apply_to_plan(segments, pb)
+        for note in pb_notes:
+            await log(build_id, "plan", "decision", note)
     segments = normalise_segments(segments, bld.target_count, bld.constraints)
     archetypes_mod.assign_archetypes(segments, await load_archetypes(bld.session_id))
     auto, v_set = voice_setting(bld.constraints)
@@ -962,12 +1022,28 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     facets = (bld.plan or {}).get("facets") if keep and (bld.plan or {}).get("facets") else None
     if not facets:
         facets = await facets_mod.pick_facets(bld.session_id, question, bld.detected, segments)
+    if pb and pb_mod.facet_definitions(pb):
+        facets = pb_mod.merge_facets(pb_mod.facet_definitions(pb), facets)
     plan["facets"] = facets
     # Dynamic dials (brief L3-04): the dials this question needs that the fixed 112 do not have.
     # Chosen once per session from the question and the plan; every persona is then tuned on them.
     seg_text = "\n".join(f"- {sg.get('name')}: {sg.get('description', '')}" for sg in segments[:10])
-    dynamic = await dyn_mod.ensure(bld.session_id, question, context=f"Detected population: {bld.detected or {}}\n\nSegments:\n{seg_text}")
+    pinned = pb_mod.dial_definitions(pb)
+    pinned_note = ("\n\nThe analyst's playbook already defines these dials — do not repeat or rename them: " + ", ".join(d["label"] for d in pinned)) if pinned else ""
+    dynamic = await dyn_mod.ensure(bld.session_id, question, context=f"Detected population: {bld.detected or {}}\n\nSegments:\n{seg_text}{pinned_note}")
+    if pinned:
+        merged = pb_mod.merge_dials(pinned, dynamic)
+        if [d["key"] for d in merged] != [d.get("key") for d in dynamic]:
+            await dyn_mod.save_for_session(bld.session_id, merged)
+        dynamic = merged
     plan["dynamic_dials"] = dynamic
+    if pb:
+        # Fit every variable to the planned segments, and check the analyst's hunches against what is on file.
+        material = "\n\n".join(x for x in (inp.get("brief"), inp.get("facts"), inp.get("kg"), (bld.constraints or {}).get("doc_context", "")[:6000]) if x)
+        fitted = await pb_mod.fit(bld.session_id, pb, segments, material)
+        pb_mod.attach_fits(segments, fitted["fits"])
+        pb_mod.ensure_fits(pb, segments)
+        plan["playbook"] = pb_mod.plan_summary(pb, fitted["checks"])
     await _save(build_id, plan=plan)
     await log(build_id, "plan", "info", "Population map — cells the analyst reads the population by: " + ", ".join(f"{k + 1}. {f['label']}" for k, f in enumerate(facets)),
               "persona-level: " + (", ".join(f["label"] for f in facets if f.get("kind") == "persona") or "none — all read from what personas carry"))
@@ -977,7 +1053,9 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
     else:
         await log(build_id, "plan", "warn", "No dynamic dials for this question — personas run on the fixed 112 only")
     for sg in segments:
-        await log(build_id, "plan", "info", f"Proposed · {sg['name']} — {sg['share_pct']}% ({sg['count']} agents), {sg['stance']}", sg.get("rationale"))
+        await log(build_id, "plan", "info", f"Proposed · {sg['name']} — {sg['share_pct']}% ({sg['count']} agents), {sg['stance']}" + (" · share from your playbook" if sg.get("share_source") == "analyst" else ""), sg.get("rationale"))
+    if pb:
+        await _playbook_log(build_id, pb, plan)
     await _cast_log(build_id, segments)
     for a in plan["assumptions"][:5]:
         await log(build_id, "plan", "warn", f"Assumed: {a}")
@@ -1237,7 +1315,7 @@ async def replan(build_id: str, constraints: Optional[dict] = None, count: Optio
         return None
     fields: dict = {}
     if constraints is not None:
-        fields["constraints"] = constraints
+        fields["constraints"] = with_normalised_playbook(constraints)
     if count:
         fields["target_count"] = max(1, min(1000, int(count)))
     keep = [sg for sg in ((bld.plan or {}).get("segments") or []) if sg.get("decision") in ("accepted", "edited")] if keep_accepted else []
@@ -1332,6 +1410,7 @@ async def approve(build_id: str, *, count: Optional[int] = None, mode: Optional[
     if bld.plan.get("kit"):
         from app.services.kits.registry import ensure_cards
         ensure_cards(bld.plan, segments)
+    pb_mod.ensure_fits(playbook_of(bld.constraints), segments)
     fields["plan"] = {**bld.plan, "segments": segments}
     bld = await _save(build_id, **fields)
     async with dbm.AsyncSessionLocal() as db:
@@ -1387,6 +1466,8 @@ async def _spawn(build_id: str):
         # The question's dynamic dials (L3-04) travel with the plan: the persona writer tunes
         # every one of them per persona, exactly as it does the sentiment dials.
         persona_constraints["dynamic_dials"] = (bld.plan or {}).get("dynamic_dials") or await dyn_mod.for_session(session_id)
+        if playbook_of(bld.constraints):
+            await log(build_id, "spawn", "info", f"Playbook values drawn per twin inside each segment's range ({playbook_of(bld.constraints)['title']}), then pushed into the linked standard dials")
         wanted = {sg.get("archetype_id") for sg in segments if sg.get("archetype_id")}
         if wanted:
             persona_constraints["archetypes"] = {a["id"]: a for a in await load_archetypes(session_id) if a["id"] in wanted}

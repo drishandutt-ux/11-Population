@@ -385,6 +385,18 @@ export const api = {
         body: JSON.stringify({ preset_id: presetId }),
       }),
   },
+  /** Segmentation playbooks: the analyst's own method (approach, segments, variables, rules), shared library. */
+  playbooks: {
+    template: () => request<{ template: string; example: string }>("/playbooks/template"),
+    parse: (markdown: string) => request<{ playbook: Playbook; markdown: string; dial_paths: string[] }>("/playbooks/parse", { method: "POST", body: JSON.stringify({ markdown }) }, 180_000),
+    render: (playbook: Playbook) => request<{ playbook: Playbook; markdown: string }>("/playbooks/render", { method: "POST", body: JSON.stringify({ playbook }) }),
+    dials: () => request<{ dial_paths: string[] }>("/playbooks/dials"),
+    list: () => request<{ playbooks: PlaybookSummary[] }>("/playbooks"),
+    get: (id: string) => request<PlaybookSummary & { markdown: string; playbook: Playbook }>(`/playbooks/${id}`),
+    save: (playbook: Playbook) => request<PlaybookSummary & { markdown: string; playbook: Playbook }>("/playbooks", { method: "POST", body: JSON.stringify({ playbook }) }),
+    update: (id: string, playbook: Playbook) => request<PlaybookSummary & { markdown: string; playbook: Playbook }>(`/playbooks/${id}`, { method: "PUT", body: JSON.stringify({ playbook }) }),
+    delete: (id: string) => request<{ deleted: boolean }>(`/playbooks/${id}`, { method: "DELETE" }),
+  },
   /** Archetypes (brief L3-02): hand-authored twins the Studio casts personas from. */
   archetypes: {
     list: () => request<Archetype[]>("/archetypes"),
@@ -1364,7 +1376,28 @@ export type PopulationConstraints = {
   auto_run?: { intensity: number; mode: SimMode };
   /** Dials the detect stage set from the research (dial → the evidence it rests on). */
   derived_from_research?: Record<string, string>;
+  /** The analyst's segmentation playbook this build follows. */
+  playbook?: Playbook | null;
 };
+
+// ── Segmentation playbooks ───────────────────────────────────────────────────
+export type PlaybookLink = { dial: string; direction: 1 | -1; strength: number };
+export type PlaybookVariable = {
+  key: string; label: string; kind: "dial" | "category" | "rule"; what: string; low: string; high: string;
+  range: [number, number] | null;
+  by_segment: { segment: string; low?: number; high?: number; values?: string[] }[];
+  values: string[]; shows_up_as: string; evidence: string; evidence_mode: "source" | "find" | "none"; links: PlaybookLink[];
+};
+export type Playbook = {
+  id?: string | null; version?: number; title: string; population: string; geography: string; size_hint?: number | null; author?: string; parsed_by?: string;
+  approach: { primary: string; secondary: string; why: string; match_exactly: string[]; weight_only: string[] };
+  segments: { name: string; share_pct: number | null; share_mode: "given" | "find" | "planner"; description: string; source: string }[];
+  variables: PlaybookVariable[];
+  rules: { segment: string; text: string }[];
+  unsure: string[];
+};
+export type PlaybookSummary = { id: string; title: string; author: string; mine: boolean; approach: string; population: string; segments: number; variables: number; created_at: string; updated_at: string };
+export type PlaybookCheck = { item: string; kind: string; status: "supported" | "contradicted" | "no_evidence"; note: string; source: string };
 
 export type PopulationSegment = {
   id: string;
@@ -1398,6 +1431,10 @@ export type PopulationSegment = {
   reason?: string | null;
   /** Set on a segment that replaced a rejected one. */
   replaced?: string;
+  /** Playbook builds: the analyst's segment it stands for, where its share came from, and each variable's range / labels here. */
+  playbook_segment?: string;
+  share_source?: "analyst" | "evidence" | "planner";
+  playbook_fit?: { ranges: Record<string, [number, number]>; values: Record<string, string[]> };
 };
 
 export type PopulationQuestion = { id: string; text: string; why: string; suggested: string[]; default: string; answer: string | null };
@@ -1450,7 +1487,8 @@ export type PopulationBuild = {
   sources: PopulationSources;
   detected: PopulationDetected | null;
   questions: PopulationQuestion[];
-  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string; facets?: PopulationFacet[]; voice?: { auto: boolean; value: number; reason: string } } | null;
+  plan: { segments: PopulationSegment[]; rationale: string; assumptions: string[]; evidence_coverage: string; facets?: PopulationFacet[]; voice?: { auto: boolean; value: number; reason: string };
+    playbook?: { id?: string | null; title: string; approach: string; checks: PlaybookCheck[]; hypotheses: string[]; dials: string[]; facets: string[] } } | null;
   frame?: PopulationFrame | null;
   log: PopulationLogEntry[];
   error: string | null;

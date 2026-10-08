@@ -636,7 +636,7 @@ def _constraints_block(constraints: dict) -> str:
 
 
 def _plan_prompt(query: str, seg: dict, n: int, constraints: dict, kg_summary: str, evidence_text: str, taken: list[dict],
-                 dyn_mod=None, dynamic: Optional[list[dict]] = None) -> str:
+                 dyn_mod=None, dynamic: Optional[list[dict]] = None, extra: str = "") -> str:
     dyn_prompt = dyn_mod.prompt_block(dynamic) if dyn_mod else ""
     dyn_schema = dyn_mod.schema_block(dynamic) if dyn_mod else ""
     doc = (constraints or {}).get("doc_context") or ""
@@ -650,6 +650,7 @@ QUERY: {query}
 {(constraints or {}).get('frame_prompt') or ''}
 {(constraints or {}).get('facets_prompt') or ''}
 {dyn_prompt}
+{extra}
 KNOWLEDGE CONTEXT:
 {kg_summary[:2000]}
 {('EVIDENCE:' + chr(10) + evidence_text[:3500]) if evidence_text else ''}
@@ -754,8 +755,12 @@ async def generate_agents_from_plan(
     after every batch so the Studio log can narrate the build."""
     from app.services.agents import archetypes as arch_mod
     from app.services.agents import dynamic_dials as dyn_mod
+    from app.services.population import playbook as pb_mod
 
     settings = get_settings()
+    # The analyst's segmentation playbook: values drawn per twin inside the segment's range, pinned
+    # on what comes back, then pushed into the linked fixed dials (services/population/playbook.py).
+    playbook = (constraints or {}).get("playbook") or None
     gen_model = settings.orchestration_model(mode)
     rag = await get_lightrag(session_id)
     kg_summary = await query_rag(rag, query, mode="hybrid")
@@ -783,23 +788,27 @@ async def generate_agents_from_plan(
             print(f"[agent_factory] scoped context unavailable ({seg.get('name')}): {type(e).__name__}: {e}")
             return None
 
-    async def _batch(seg: dict, n: int, taken: list[dict], label: str) -> list[dict]:
+    async def _batch(seg: dict, n: int, taken: list[dict], label: str, seed: str = "0") -> list[dict]:
         if should_stop and should_stop():
             return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
         seg_knowledge = (await _segment_knowledge(seg)) or kg_summary
+        slots = pb_mod.draw_slots(playbook, seg, n, f"{label}:{seed}") if playbook else []
         async with sem:
             try:
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
                     system=_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic)}],
+                    messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic,
+                                                                       extra=pb_mod.slots_block(playbook, slots))}],
                 )
-                return dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
+                out = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
+                pb_mod.pin(playbook, seg, slots, out)
+                return out
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
                 return []
 
-    async def _cast_batch(seg: dict, arch: dict, slots: list[dict], taken: list[dict], label: str) -> list[dict]:
+    async def _cast_batch(seg: dict, arch: dict, slots: list[dict], taken: list[dict], label: str, seed: str = "0") -> list[dict]:
         """One batch cast from an archetype: the facts are drawn already, the model writes texture,
         and the mould's rules are enforced on what comes back."""
         if should_stop and should_stop():
@@ -810,8 +819,9 @@ async def generate_agents_from_plan(
                 continue
             # Scoped first (what a twin of this segment in this place can reach), the place-keyword slice otherwise.
             contexts[r] = (await _segment_knowledge(seg, role=arch.get("role", ""), region=r)) or arch_mod.local_context(session_id, r, arch.get("role", ""))
+        pb_slots = pb_mod.draw_slots(playbook, seg, len(slots), f"{label}:{seed}") if playbook else []
         prompt = arch_mod.cast_prompt(query, seg, arch, slots, contexts, _constraints_block(constraints), _taken_block_text(taken),
-                                      (constraints or {}).get("facets_prompt") or "",
+                                      ((constraints or {}).get("facets_prompt") or "") + pb_mod.slots_block(playbook, pb_slots),
                                       dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))
         async with sem:
             try:
@@ -823,7 +833,9 @@ async def generate_agents_from_plan(
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] cast batch failed ({seg.get('name')}, {len(slots)}): {type(e).__name__}: {e}")
                 return []
-        return [arch_mod.enforce_archetype(arch, slot, d) for slot, d in arch_mod.pair_slots(slots, raw)]
+        cast = [arch_mod.enforce_archetype(arch, slot, d) for slot, d in arch_mod.pair_slots(slots, raw)]
+        pb_mod.pin(playbook, seg, pb_slots, cast)
+        return cast
 
     progress_lock = asyncio.Lock()
 
@@ -900,20 +912,21 @@ async def generate_agents_from_plan(
         # rest concurrently. Segments themselves run side by side (bounded by the semaphore) —
         # they are different slices of the population, so they rarely collide, and the
         # duplicate repair below catches the few that do.
-        first = await _batch(seg, sizes[0], seg_dicts, "spawn:plan")
+        first = await _batch(seg, sizes[0], seg_dicts, "spawn:plan", "0")
         seg_dicts.extend(first)
         done_total += len(first)
         await _note()
         if len(sizes) > 1:
-            async def _rest(n: int):
+            async def _rest(n: int, k: int):
                 nonlocal done_total
-                r = await _batch(seg, n, list(seg_dicts), "spawn:plan")
+                r = await _batch(seg, n, list(seg_dicts), "spawn:plan", str(k))
                 seg_dicts.extend(r)
                 done_total += len(r)
                 await _note()
-            await asyncio.gather(*[_rest(n) for n in sizes[1:]])
+            await asyncio.gather(*[_rest(n, k) for k, n in enumerate(sizes[1:], 1)])
         finalise_segment_dicts(seg, seg_dicts)
         apply_voice(seg_dicts, (constraints or {}).get('voice_used'))
+        pb_mod.apply_links(playbook, seg_dicts)
         return seg_dicts
 
     async def _cast_segment(seg: dict, arch: dict, count: int) -> list[dict]:
@@ -928,19 +941,20 @@ async def generate_agents_from_plan(
                 if on_progress:
                     await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
 
-        first = await _cast_batch(seg, arch, batches[0], seg_dicts, "spawn:cast")
+        first = await _cast_batch(seg, arch, batches[0], seg_dicts, "spawn:cast", "0")
         seg_dicts.extend(first)
         done_total += len(first)
         await _note()
         if len(batches) > 1:
-            async def _rest(b: list[dict]):
+            async def _rest(b: list[dict], k: int):
                 nonlocal done_total
-                r = await _cast_batch(seg, arch, b, list(seg_dicts), "spawn:cast")
+                r = await _cast_batch(seg, arch, b, list(seg_dicts), "spawn:cast", str(k))
                 seg_dicts.extend(r)
                 done_total += len(r)
                 await _note()
-            await asyncio.gather(*[_rest(b) for b in batches[1:]])
+            await asyncio.gather(*[_rest(b, k) for k, b in enumerate(batches[1:], 1)])
         finalise_segment_dicts(seg, seg_dicts)
+        pb_mod.apply_links(playbook, seg_dicts)
         return seg_dicts
 
     for part in await asyncio.gather(*[_segment(seg) for seg in segments]):
@@ -968,6 +982,7 @@ async def generate_agents_from_plan(
             try:
                 repl = await _batch(seg, len(ds), snapshot, "spawn:plan:repair")
                 finalise_segment_dicts(seg, repl)
+                pb_mod.apply_links(playbook, repl)
                 return repl
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] plan duplicate repair failed: {type(e).__name__}: {e}")

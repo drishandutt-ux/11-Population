@@ -11,6 +11,7 @@ import PlanReview from "@/components/population/PlanReview";
 import SamplingFrameGraph from "@/components/population/SamplingFrameGraph";
 import FrameCard from "@/components/population/FrameCard";
 import KitPicker from "@/components/population/KitPicker";
+import PlaybookPanel, { PlaybookChecks } from "@/components/population/PlaybookPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SwitchRow } from "@/components/population/controls";
 import { ArrowLeft, Users, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Network, UserPlus, Bookmark, Trash2 } from "lucide-react";
@@ -330,7 +331,9 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
               </div>
             )}
 
-            {!build && <KitPicker count={count} busy={busy || !session} onStart={startFromKit} />}
+            {!build && <PlaybookPanel active={constraints.playbook || null} onChange={(pb) => setConstraints((c) => ({ ...c, playbook: pb }))} disabled={busy || !session} />}
+
+            {!build && !constraints.playbook && <KitPicker count={count} busy={busy || !session} onStart={startFromKit} />}
 
             {!build && presets.length > 0 && onApplyPreset && (
               <div className="surface rounded-xl overflow-hidden animate-fade-in">
@@ -373,6 +376,16 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
             {build && status === "clarifying" && (
               <ErrorBoundary label="The questions">
                 <QuestionsCard build={build} onAnswer={answer} busy={busy} />
+              </ErrorBoundary>
+            )}
+
+            {build && constraints.playbook && !active && (
+              <PlaybookPanel active={constraints.playbook} onChange={(pb) => setConstraints((c) => ({ ...c, playbook: pb }))} disabled={busy} />
+            )}
+
+            {build?.plan?.playbook && (
+              <ErrorBoundary label="The playbook">
+                <PlaybookChecks build={build} />
               </ErrorBoundary>
             )}
 
