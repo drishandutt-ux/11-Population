@@ -1,0 +1,3211 @@
+{
+ "title": "Britain's Choice — the British Seven (2020)",
+ "publisher": "More in Common",
+ "year": 2020,
+ "population": "Great Britain, adults 18+",
+ "description": "More in Common's 2020 segmentation of GB adults by core beliefs (moral foundations, authoritarianism, threat, agency, group identity) — the segments the June 2023 11 London poll is broken down by.",
+ "sources": [
+  {
+   "title": "Britain's Choice: Common Ground and Division in 2020s Britain",
+   "publisher": "More in Common",
+   "published": "October 2020",
+   "url": "https://www.britainschoice.uk/",
+   "report_pdf": "https://www.britainschoice.uk/media/ecrevsbt/0917-mic-uk-britain-s-choice_report_dec01.pdf"
+  }
+ ],
+ "share_presets": {
+  "published_2020": {
+   "label": "Published shares (Britain's Choice, 2020)",
+   "source": "More in Common, Britain's Choice (Oct 2020), YouGov fieldwork Feb–Mar 2020, n=10,385, p7 and p278",
+   "shares": {
+    "progressive_activists": 13,
+    "civic_pragmatists": 13,
+    "disengaged_battlers": 12,
+    "established_liberals": 12,
+    "loyal_nationals": 17,
+    "disengaged_traditionalists": 18,
+    "backbone_conservatives": 15
+   }
+  },
+  "june2023_sample": {
+   "label": "As sampled in the June 2023 11 London poll",
+   "source": "More in Common for 11 London, 15–19 June 2023, weighted N by segment (n=2,018)",
+   "shares": {
+    "progressive_activists": 8.2,
+    "civic_pragmatists": 11.1,
+    "disengaged_battlers": 7.5,
+    "established_liberals": 16.9,
+    "loyal_nationals": 22.3,
+    "disengaged_traditionalists": 14.2,
+    "backbone_conservatives": 19.7
+   }
+  }
+ },
+ "default_preset": "june2023_sample",
+ "frame": [
+  {
+   "key": "region",
+   "label": "Region",
+   "attribute": "region",
+   "source": "More in Common, Britain's Choice (Oct 2020), YouGov fieldwork Feb–Mar 2020, n=10,385, UK average p275",
+   "categories": [
+    {
+     "label": "North East England",
+     "share_pct": 4
+    },
+    {
+     "label": "North West England",
+     "share_pct": 11
+    },
+    {
+     "label": "Yorkshire and the Humber",
+     "share_pct": 9
+    },
+    {
+     "label": "East Midlands",
+     "share_pct": 8
+    },
+    {
+     "label": "West Midlands",
+     "share_pct": 9
+    },
+    {
+     "label": "East of England",
+     "share_pct": 7
+    },
+    {
+     "label": "Greater London",
+     "share_pct": 12
+    },
+    {
+     "label": "South East England",
+     "share_pct": 16
+    },
+    {
+     "label": "South West England",
+     "share_pct": 11
+    },
+    {
+     "label": "Wales",
+     "share_pct": 4
+    },
+    {
+     "label": "Scotland",
+     "share_pct": 10
+    }
+   ]
+  },
+  {
+   "key": "age",
+   "label": "Age",
+   "attribute": "age",
+   "source": "More in Common, Britain's Choice (Oct 2020), YouGov fieldwork Feb–Mar 2020, n=10,385, UK average p275",
+   "categories": [
+    {
+     "label": "18-24",
+     "share_pct": 11,
+     "age_min": 18,
+     "age_max": 24
+    },
+    {
+     "label": "25-44",
+     "share_pct": 31,
+     "age_min": 25,
+     "age_max": 44
+    },
+    {
+     "label": "45-54",
+     "share_pct": 18,
+     "age_min": 45,
+     "age_max": 54
+    },
+    {
+     "label": "55-74",
+     "share_pct": 34,
+     "age_min": 55,
+     "age_max": 74
+    },
+    {
+     "label": "75+",
+     "share_pct": 6,
+     "age_min": 75,
+     "age_max": 120
+    }
+   ]
+  },
+  {
+   "key": "gender",
+   "label": "Gender",
+   "attribute": "gender",
+   "source": "More in Common, Britain's Choice (Oct 2020), YouGov fieldwork Feb–Mar 2020, n=10,385, UK average p275",
+   "categories": [
+    {
+     "label": "Male",
+     "share_pct": 49
+    },
+    {
+     "label": "Female",
+     "share_pct": 51
+    }
+   ]
+  },
+  {
+   "key": "ethnicity",
+   "label": "Ethnicity",
+   "attribute": "ethnicity",
+   "source": "More in Common, Britain's Choice (Oct 2020), YouGov fieldwork Feb–Mar 2020, n=10,385, UK average p275",
+   "categories": [
+    {
+     "label": "White (British/Irish/Other)",
+     "share_pct": 89
+    },
+    {
+     "label": "Mixed descent (e.g. White & Asian, White & Black)",
+     "share_pct": 1
+    },
+    {
+     "label": "Asian/ Asian British",
+     "share_pct": 5
+    },
+    {
+     "label": "Black/ Black British",
+     "share_pct": 3
+    },
+    {
+     "label": "Other",
+     "share_pct": 2
+    }
+   ]
+  }
+ ],
+ "frame_defaults": {},
+ "segments": [
+  {
+   "id": "progressive_activists",
+   "name": "Progressive Activists",
+   "share_pct": 13,
+   "tagline": "Globally minded, highly educated activists for whom politics is identity; they want to correct long-standing injustices",
+   "summary": "Highly educated, urban, working-age cosmopolitans whose politics is central to who they are. They see Britain through structural injustice (race, gender, class, wealth), are the most pessimistic about the country's direction, the most pro-immigration and the least patriotic, and they are by far the most vocal on social media. Strongest Remain group. Low threat perception, lowest authoritarianism, and moral concern focused almost entirely on care and fairness.",
+   "priorities": [
+    "Environment and climate change; economy; inequality"
+   ],
+   "psychology": [
+    "politically-engaged",
+    "critical",
+    "opinionated",
+    "frustrated",
+    "cosmopolitan",
+    "environmentally-friendly"
+   ],
+   "life": [
+    "mostly working age and urban",
+    "highly educated, many in professional or third-sector jobs",
+    "strongly Remain"
+   ],
+   "humanity_hint": "tempered",
+   "temperature": 7,
+   "top_emotions": [
+    "anger",
+    "frustration",
+    "hope"
+   ],
+   "character": {
+    "decision_rules": "Reads every issue through structural injustice — race, gender, class, wealth — and asks who holds power. Moral concern rests almost entirely on care and fairness; authority, loyalty and tradition carry little weight. Sides with intervention to fix markets and help the vulnerable, here and abroad.",
+    "behaviour": "Follows politics closely and posts about it; the most pessimistic about the country's direction and the most likely to see Britain as very divided; does not soften views to fit in.",
+    "vocabulary": "Articulate and critical; the language of privilege, inequality, the climate crisis and racism; sceptical of 'meritocracy'.",
+    "information_diet": "The Guardian, Channel 4, Twitter, podcasts, BBC Radio 4 and local papers; heavy online news and blog readers, light TV news watchers.",
+    "failure_modes": "Can be uncompromising and out of step with the wider public; tends to assume the system is rigged and that others share its priorities."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 17.0,
+      "25-44": 41.0,
+      "45-54": 12.0,
+      "55-74": 27.0,
+      "75+": 3.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 47.0,
+      "female": 53.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 4.0,
+      "North West England": 11.0,
+      "Yorkshire and the Humber": 7.0,
+      "East Midlands": 6.0,
+      "West Midlands": 6.0,
+      "East of England": 7.0,
+      "Greater London": 19.0,
+      "South East England": 14.0,
+      "South West England": 9.0,
+      "Wales": 4.0,
+      "Scotland": 13.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 90.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Asian/ Asian British": 4.0,
+      "Black/ Black British": 1.0,
+      "Other": 4.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 56.0,
+      "A-levels or equivalent": 31.0,
+      "GCSEs or below": 11.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 16.0,
+      "lower-middle": 25.0,
+      "middle": 16.0,
+      "upper-middle": 14.0,
+      "high": 6.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 82.0,
+      "a small town": 9.0,
+      "a village or the countryside": 10.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 52.0,
+      "working class": 37.0,
+      "no class identity": 11.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 18.0,
+      "no religion": 72.0,
+      "Muslim": 1.0,
+      "Jewish": 1.0,
+      "Buddhist": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 74,
+      "Leave": 6,
+      "Did not vote": 20
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 72,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 89,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 95,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 94,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 34,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 46,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 28,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 5,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 32,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 52,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 70,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 75,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 65,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 76,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 28,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 47,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 94,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 84,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 85,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 3,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 89,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 98,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 96,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 98,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 49,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 14,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 91,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 55,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 13,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "It's not really a meritocracy we live in. The people who have privilege to begin with are far more likely to end up in their dream career.",
+     "speaker": "Sally, 29, South East",
+     "page": 38
+    },
+    {
+     "quote": "I don't genuinely believe they're there to make a difference or to improve the lives of ordinary people.",
+     "speaker": "Omar, 35, London",
+     "page": 100
+    },
+    {
+     "quote": "Division is how media companies make their money, how corporations make their money. I think it's intentional.",
+     "speaker": "Nick, 34, London",
+     "page": 122
+    },
+    {
+     "quote": "...probably are more hardworking than my friends' children, and yet it's so much harder for them to get anywhere.",
+     "speaker": "Imogen, 39",
+     "page": 81
+    },
+    {
+     "quote": "They've come here to help us. They're not scroungers like what they keep saying...",
+     "speaker": "Maria, 25, East of England",
+     "page": 213
+    },
+    {
+     "quote": "...our history is also full of colonialism, war, death and oppression as well.",
+     "speaker": "Nick, 34, London",
+     "page": 165
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "Key concerns include austerity; profile participant Sally is particularly worried about austerity cuts to public services and their impact on poor communities.",
+     "source": "p39, 41"
+    },
+    {
+     "finding": "The only segment reporting a small weakening in feeling part of a caring community after Covid-19 hit.",
+     "source": "p261"
+    },
+    {
+     "finding": "Sally is active in several community groups campaigning on local and environmental issues.",
+     "source": "p41"
+    },
+    {
+     "finding": "Favour government policies that intervene in markets to achieve better outcomes for society.",
+     "source": "p39"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 53
+   }
+  },
+  {
+   "id": "civic_pragmatists",
+   "name": "Civic Pragmatists",
+   "share_pct": 13,
+   "tagline": "Well-informed, caring and tolerant; worn out by division and looking for compromise and common ground",
+   "summary": "Well-informed but not ideological, mostly women, and spread evenly across ages. Their worldview rests on concern for others' welfare, at home and abroad: almost all give to charity regularly. They are socially liberal, pro-immigration and pro-climate action, yet perceive more threat than Progressive Activists. More than most they are worn out by political division and value compromise, consensus, democracy and community.",
+   "priorities": [
+    "Environment and climate change; economy; terrorism"
+   ],
+   "psychology": [
+    "charitable",
+    "concerned",
+    "exhausted",
+    "community-minded",
+    "open to compromise",
+    "socially liberal"
+   ],
+   "life": [
+    "mostly women, spread evenly across ages",
+    "middling incomes",
+    "family- and community-centred"
+   ],
+   "humanity_hint": "balanced",
+   "temperature": 4,
+   "top_emotions": [
+    "anxiety",
+    "hope",
+    "trust"
+   ],
+   "character": {
+    "decision_rules": "Weighs what is kind and fair to others, at home and abroad; values compromise, consensus, democracy and community over winning arguments. Socially liberal, pro-immigration and pro-climate action, but perceives more threat than activists do.",
+    "behaviour": "Gives to charity regularly (almost all do, against about half the public); volunteers and helps neighbours; avoids political rows and is exhausted by division.",
+    "vocabulary": "Moderate, warm, practical; talks about looking after people, fairness and getting along; rarely ideological.",
+    "information_diet": "BBC, ITV, Channel 5 and BBC Radio 4; watches TV news and uses social media but is not an activist online.",
+    "failure_modes": "Avoids conflict and can drift to the middle option; trusting of good intentions; may not follow detail on complex issues."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 9.0,
+      "25-44": 32.0,
+      "45-54": 18.0,
+      "55-74": 35.0,
+      "75+": 5.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 37.0,
+      "female": 63.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 4.0,
+      "North West England": 12.0,
+      "Yorkshire and the Humber": 9.0,
+      "East Midlands": 7.0,
+      "West Midlands": 10.0,
+      "East of England": 7.0,
+      "Greater London": 10.0,
+      "South East England": 15.0,
+      "South West England": 12.0,
+      "Wales": 3.0,
+      "Scotland": 11.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 88.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Asian/ Asian British": 5.0,
+      "Black/ Black British": 4.0,
+      "Other": 2.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 36.0,
+      "A-levels or equivalent": 43.0,
+      "GCSEs or below": 18.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 18.0,
+      "lower-middle": 29.0,
+      "middle": 15.0,
+      "upper-middle": 10.0,
+      "high": 2.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 78.0,
+      "a small town": 11.0,
+      "a village or the countryside": 11.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 38.0,
+      "working class": 52.0,
+      "no class identity": 11.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 37.0,
+      "no religion": 52.0,
+      "Muslim": 3.0,
+      "Hindu": 1.0,
+      "Sikh": 1.0,
+      "Buddhist": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 57,
+      "Leave": 26,
+      "Did not vote": 16
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 64,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 91,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 82,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 92,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 58,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 74,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 54,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 25,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 46,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 52,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 72,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 73,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 72,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 62,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 71,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 74,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 84,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 49,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 60,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 18,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 74,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 92,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 93,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 90,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 65,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 35,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 68,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 9,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 12,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "We're lucky to have a lot of the things that we have got... although there is a lot of inequality in society.",
+     "speaker": "Bea, 52, North West",
+     "page": 42
+    },
+    {
+     "quote": "I don't think [politicians] would actively try to hurt us, but I think they'd usually put monetary value before the population.",
+     "speaker": "Peter, 37, North West",
+     "page": 100
+    },
+    {
+     "quote": "...our system is certainly a lot better than the dictatorial system.",
+     "speaker": "Jessica, 60, South West",
+     "page": 102
+    },
+    {
+     "quote": "I've seen how it can bring formally strong friendships down.",
+     "speaker": "Peter, 37, North West (on Brexit)",
+     "page": 110
+    },
+    {
+     "quote": "...quite disturbing in the twenty first century that there is such a difference between people with money and people without money.",
+     "speaker": "Lily, 47, North East",
+     "page": 174
+    },
+    {
+     "quote": "It would be nice to be heard a little bit more in the North West...",
+     "speaker": "Daniel, 34, North West",
+     "page": 146
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "Profile participant Jessica thinks many people are struggling with their mental health because of an always-on, work-driven, consumerist culture, and wants key workers paid fairly.",
+     "source": "p44, 45"
+    },
+    {
+     "finding": "Almost all Civic Pragmatists regularly donate money to charity, compared with about half of the wider population.",
+     "source": "p43"
+    },
+    {
+     "finding": "Strong commitment to the welfare of others; support civic values, community, consensus and compromise.",
+     "source": "p43; web"
+    },
+    {
+     "finding": "Profile participant Jessica volunteers helping elderly people with day-to-day activities.",
+     "source": "p44"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 63
+   }
+  },
+  {
+   "id": "disengaged_battlers",
+   "name": "Disengaged Battlers",
+   "share_pct": 12,
+   "tagline": "Just getting by; blame the system for its unfairness, but not other people",
+   "summary": "Insecure, lower-income workers just keeping their heads above water (the 'precariat'). They feel disconnected from their communities and from politics, are the loneliest and most anxious segment, and many have given up on the system. Yet they blame the system, not other groups: they are socially liberal, tolerant and relatively positive about immigrants. Lowest social trust alongside Loyal Nationals; least likely to vote.",
+   "priorities": [
+    "Inequality; immigration and refugees; pensions"
+   ],
+   "psychology": [
+    "tolerant",
+    "surviving",
+    "insecure",
+    "disillusioned",
+    "disconnected",
+    "overlooked",
+    "socially liberal"
+   ],
+   "life": [
+    "younger and lower-income",
+    "insecure work, the 'precariat'",
+    "renting, many struggling with bills"
+   ],
+   "humanity_hint": "defensive",
+   "temperature": 5,
+   "top_emotions": [
+    "anxiety",
+    "loneliness",
+    "frustration"
+   ],
+   "character": {
+    "decision_rules": "Judges things by whether they help people at the bottom who are struggling; distrusts politicians and the system but does not blame immigrants or other groups. Tolerant and socially liberal by instinct rather than ideology.",
+    "behaviour": "Disconnected from politics and often from community; the loneliest and most anxious segment; least likely to vote; many have given up on the system working for them.",
+    "vocabulary": "Plain, tired and personal; talks about bills, money worries and being let down; little political vocabulary.",
+    "information_diet": "TV news and social media; the Daily Mirror, Metro and commercial radio; many say they have no interest in news, and turn to the BBC when they do follow it.",
+    "failure_modes": "Low information on many topics and quick to say they don't know or can't see the point; low trust in people and institutions; can feel no one is on their side."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 16.0,
+      "25-44": 39.0,
+      "45-54": 22.0,
+      "55-74": 20.0,
+      "75+": 3.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 54.0,
+      "female": 46.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 4.0,
+      "North West England": 11.0,
+      "Yorkshire and the Humber": 9.0,
+      "East Midlands": 8.0,
+      "West Midlands": 10.0,
+      "East of England": 7.0,
+      "Greater London": 16.0,
+      "South East England": 13.0,
+      "South West England": 7.0,
+      "Wales": 4.0,
+      "Scotland": 11.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 85.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Asian/ Asian British": 6.0,
+      "Black/ Black British": 3.0,
+      "Other": 5.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 27.0,
+      "A-levels or equivalent": 33.0,
+      "GCSEs or below": 29.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 26.0,
+      "lower-middle": 23.0,
+      "middle": 12.0,
+      "upper-middle": 7.0,
+      "high": 1.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 83.0,
+      "a small town": 8.0,
+      "a village or the countryside": 9.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 23.0,
+      "working class": 59.0,
+      "no class identity": 18.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 25.0,
+      "no religion": 60.0,
+      "Muslim": 5.0,
+      "Hindu": 1.0,
+      "Jewish": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 37,
+      "Leave": 29,
+      "Did not vote": 32
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 40,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 90,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 83,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 88,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 47,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 54,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 63,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 30,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 60,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 31,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 61,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 59,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 66,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 49,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 70,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 77,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 68,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 48,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 46,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 40,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 64,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 77,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 81,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 68,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 49,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 26,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 56,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 9,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 23,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "I don't generally feel very, very lucky. I've had a lot of financial issues and struggles, but obviously I'm grateful for what I have got.",
+     "speaker": "Kelly, 39, North West",
+     "page": 46
+    },
+    {
+     "quote": "They promise you the world until they get into power.",
+     "speaker": "William, 76, North West",
+     "page": 100
+    },
+    {
+     "quote": "I was a Remainer but as time went on, I just wanted it to stop.",
+     "speaker": "William, 76, North West",
+     "page": 107
+    },
+    {
+     "quote": "They just don't look after us at the bottom.",
+     "speaker": "Renee, 18, Yorkshire and the Humber",
+     "page": 173
+    },
+    {
+     "quote": "...if you can't afford to change that then you're forced to damage the environment and keep using plastic.",
+     "speaker": "Alex, 42, Wales",
+     "page": 233
+    },
+    {
+     "quote": "...Black Lives Matter, I understand it and I get it, but everybody matters.",
+     "speaker": "Max, 43, East of England",
+     "page": 203
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "The two Disengaged segments are about three times as likely as others to reject a duty to follow social distancing rules, and almost three times as likely to say they will not take a Covid-19 vaccine even if safe and effective.",
+     "source": "p139, 258"
+    },
+    {
+     "finding": "Profile participant Sujita worries Brexit will hit staffing of care homes and the NHS (her daughter relies on carers, many from Eastern Europe).",
+     "source": "p49"
+    },
+    {
+     "finding": "In focus groups they talked about one rule for ordinary people and another for the elite (e.g. the Cummings incident) and asked how government could be trusted.",
+     "source": "p258"
+    },
+    {
+     "finding": "Fewer than one in three feel part of a caring community (lowest); largest increases in local agency after Covid were among the Disengaged.",
+     "source": "p260, 263"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 46
+   }
+  },
+  {
+   "id": "established_liberals",
+   "name": "Established Liberals",
+   "share_pct": 12,
+   "tagline": "Comfortable, confident and trusting; see a lot of good in the status quo and mean well towards others",
+   "summary": "Educated, comfortable, often wealthy, and secure in themselves and the country. The highest-trust segment: they trust government, institutions and other people, feel represented and believe citizens can change society. Socially liberal and internationalist (pro-immigration, Remain) but pro-market and economically centre-right (largely One Nation Conservative voters). Lowest threat perception of any group; value compromise and act as a bridge between progressive and conservative groups.",
+   "priorities": [
+    "Economy; divisions in society; housing"
+   ],
+   "psychology": [
+    "comfortable",
+    "privileged",
+    "cosmopolitan",
+    "trusting",
+    "confident",
+    "pro-market"
+   ],
+   "life": [
+    "educated and comfortable, often wealthy",
+    "professional jobs, homeowners",
+    "Remain-leaning, many One Nation Conservative voters"
+   ],
+   "humanity_hint": "tempered",
+   "temperature": 3,
+   "top_emotions": [
+    "trust",
+    "pride",
+    "hope"
+   ],
+   "character": {
+    "decision_rules": "Trusts government, institutions, experts and other people; believes citizens can change society and that hard work is rewarded. Socially liberal and internationalist, but pro-market and economically centre-right; values compromise.",
+    "behaviour": "Well informed across media except social media; feels represented; the lowest threat perception of any segment; a bridge between progressive and conservative views.",
+    "vocabulary": "Measured, educated and confident; the language of the economy, evidence, opportunity and Britain's place in the world.",
+    "information_diet": "BBC, The Times (more than any other group), the Daily Telegraph, BBC Radio 4 and podcasts.",
+    "failure_modes": "Can be complacent that the system works for everyone; less attuned to people who are struggling; sceptical of tax rises and heavy state intervention."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 13.0,
+      "25-44": 30.0,
+      "45-54": 18.0,
+      "55-74": 33.0,
+      "75+": 6.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 51.0,
+      "female": 49.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 3.0,
+      "North West England": 9.0,
+      "Yorkshire and the Humber": 8.0,
+      "East Midlands": 6.0,
+      "West Midlands": 6.0,
+      "East of England": 9.0,
+      "Greater London": 13.0,
+      "South East England": 18.0,
+      "South West England": 14.0,
+      "Wales": 3.0,
+      "Scotland": 9.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 90.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Asian/ Asian British": 6.0,
+      "Black/ Black British": 2.0,
+      "Other": 1.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 42.0,
+      "A-levels or equivalent": 38.0,
+      "GCSEs or below": 17.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 17.0,
+      "lower-middle": 24.0,
+      "middle": 19.0,
+      "upper-middle": 13.0,
+      "high": 6.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 75.0,
+      "a small town": 10.0,
+      "a village or the countryside": 14.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 54.0,
+      "working class": 34.0,
+      "no class identity": 11.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 37.0,
+      "no religion": 54.0,
+      "Muslim": 1.0,
+      "Hindu": 2.0,
+      "Jewish": 1.0,
+      "Sikh": 1.0,
+      "Buddhist": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 48,
+      "Leave": 29,
+      "Did not vote": 21
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 71,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 71,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 47,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 42,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 81,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 79,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 44,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 35,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 18,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 64,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 78,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 55,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 75,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 41,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 68,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 77,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 63,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 39,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 60,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 15,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 81,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 77,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 84,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 82,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 65,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 60,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 41,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 9,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 8,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "We are a very equal society and we are incredibly supportive of each other.",
+     "speaker": "Michael, 39, South West",
+     "page": 50
+    },
+    {
+     "quote": "...they obviously can't please everyone, but they try and say things that can be relatable to everyone.",
+     "speaker": "Michael, 39, South West",
+     "page": 101
+    },
+    {
+     "quote": "...if I mentioned how I voted that people would get quite angry at me...",
+     "speaker": "Rose, 28, South West",
+     "page": 111
+    },
+    {
+     "quote": "...just being reminded that people don't need to identify purely as that, that people can work together despite it.",
+     "speaker": "Declan, 27, West Midlands",
+     "page": 111
+    },
+    {
+     "quote": "A lot of the current issues tend to end up being like old people on one side, young people on another...",
+     "speaker": "Bradley, 24, South East",
+     "page": 124
+    },
+    {
+     "quote": "...it feels like the cards are stacked against us.",
+     "speaker": "Ellen, 27, London (on housing)",
+     "page": 184
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "Second most likely to say government should play a bigger role in our lives only while the pandemic lasts; more sceptical of government intervention than others.",
+     "source": "p230"
+    },
+    {
+     "finding": "More likely than any segment to believe citizens, through collective effort, can change society.",
+     "source": "p51"
+    },
+    {
+     "finding": "Slightly lower support for executive pay caps than other segments.",
+     "source": "p189"
+    },
+    {
+     "finding": "Unlikely to support increased taxation as the price of climate action.",
+     "source": "p230"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 49
+   }
+  },
+  {
+   "id": "loyal_nationals",
+   "name": "Loyal Nationals",
+   "share_pct": 17,
+   "tagline": "Proud and patriotic, worried our way of life is threatened, and angry that society has become more unfair",
+   "summary": "Proud, patriotic, working-class and older, with the strongest sense of threat of any group and the highest authoritarianism. They see the world through in-groups and out-groups, feel disrespected by educated elites and London, and believe others' interests (especially immigrants') are put ahead of theirs. Most anti-immigration and most Leave-voting (with BCs), yet economically left: very worried about inequality, distrustful of the wealthy and employers, pro-intervention, and strongly pro-environment. Highest care and authority scores; many shifted Labour-to-Conservative in 2019.",
+   "priorities": [
+    "Immigration; ageing population; preserving cultural heritage"
+   ],
+   "psychology": [
+    "proud",
+    "patriotic",
+    "tribal",
+    "threatened",
+    "aggrieved",
+    "worried about inequality"
+   ],
+   "life": [
+    "older and working-class, many retired",
+    "Leave voters, many former Labour voters who switched in 2019",
+    "lower-middle incomes, outside the big cities"
+   ],
+   "humanity_hint": "defensive",
+   "temperature": 7,
+   "top_emotions": [
+    "anxiety",
+    "anger",
+    "pride"
+   ],
+   "character": {
+    "decision_rules": "Sees the world as dangerous and through in-groups and out-groups; puts British people and their own community first; wants a strong leader. Economically left — very worried about inequality, distrusts the wealthy and big business, wants government to intervene — while socially conservative and the most anti-immigration segment.",
+    "behaviour": "Feels disrespected by educated elites and London; feels like a stranger in their own country; highly sensitive to division and to being labelled.",
+    "vocabulary": "Blunt and heartfelt; 'people like me', fairness, paying in, Britain coming first; dislikes 'virtue-signalling'.",
+    "information_diet": "Daily Mail, ITV, The Sun, Facebook and local newspapers.",
+    "failure_modes": "Threat-focused and quick to blame outsiders; distrusts experts and institutions that seem not to respect them; can see things in black and white."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 2.0,
+      "25-44": 22.0,
+      "45-54": 19.0,
+      "55-74": 50.0,
+      "75+": 8.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 43.0,
+      "female": 57.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 5.0,
+      "North West England": 11.0,
+      "Yorkshire and the Humber": 10.0,
+      "East Midlands": 7.0,
+      "West Midlands": 9.0,
+      "East of England": 7.0,
+      "Greater London": 8.0,
+      "South East England": 17.0,
+      "South West England": 11.0,
+      "Wales": 5.0,
+      "Scotland": 10.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 93.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Asian/ Asian British": 3.0,
+      "Black/ Black British": 2.0,
+      "Other": 1.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 16.0,
+      "A-levels or equivalent": 36.0,
+      "GCSEs or below": 44.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 25.0,
+      "lower-middle": 30.0,
+      "middle": 12.0,
+      "upper-middle": 5.0,
+      "high": 1.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 78.0,
+      "a small town": 11.0,
+      "a village or the countryside": 11.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 25.0,
+      "working class": 65.0,
+      "no class identity": 9.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 50.0,
+      "no religion": 42.0,
+      "Muslim": 2.0,
+      "Hindu": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 24,
+      "Leave": 63,
+      "Did not vote": 12
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 39,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 92,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 76,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 96,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 73,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 84,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 72,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 56,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 65,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 48,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 63,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 64,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 81,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 56,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 90,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 94,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 77,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 23,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 19,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 79,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 43,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 74,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 87,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 79,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 72,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 43,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 44,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 12,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 16,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "The likes of myself don't matter anymore. I don't fit in.",
+     "speaker": "George, 62, West Midlands",
+     "page": 54
+    },
+    {
+     "quote": "I trust scientists more than I do politicians.",
+     "speaker": "Megan, 56, South West",
+     "page": 101
+    },
+    {
+     "quote": "...rules may be for breaking, but laws are not.",
+     "speaker": "George, 62, West Midlands",
+     "page": 76
+    },
+    {
+     "quote": "If I don't let other people's opinions into my head then I'm only dealing with what I'm thinking...",
+     "speaker": "Elizabeth, 39, Scotland",
+     "page": 133
+    },
+    {
+     "quote": "...how do you continue to make ends meet, when the cost of your bills is increasing...",
+     "speaker": "Elizabeth, 39, Scotland",
+     "page": 186
+    },
+    {
+     "quote": "It's like, why do they let us live in an area like this with rubbish everywhere...",
+     "speaker": "Emily, 33, London",
+     "page": 187
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "Profile participant George, a retired NHS worker receiving NHS treatment, is proud of the NHS but thinks it should be available only to British citizens who have paid National Insurance.",
+     "source": "p57"
+    },
+    {
+     "finding": "Priorities include 'our ageing population'.",
+     "source": "p54"
+    },
+    {
+     "finding": "Only Disengaged Battlers feel less part of a caring community; but the pandemic had its most positive community effect on LNs.",
+     "source": "p55, 261"
+    },
+    {
+     "finding": "Second most likely (after PAs) to strongly agree Covid support should not go to companies based offshore in tax havens.",
+     "source": "p55"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 57
+   }
+  },
+  {
+   "id": "disengaged_traditionalists",
+   "name": "Disengaged Traditionalists",
+   "share_pct": 18,
+   "tagline": "Value a well-ordered society, self-reliance and hard work; want strong leadership that keeps people in line",
+   "summary": "Self-reliant, rule-minded, mostly male and lower-income, valuing hard work, order and personal responsibility. They watch others' behaviour with suspicion, put a high priority on crime and tough punishment, and are coldest of all segments towards people on benefits. Patriotic and immigration-sceptical like Loyal Nationals, but they see society through individuals rather than groups and are much less concerned about inequality. Disengaged from news and party politics, low in social trust, yet surprisingly satisfied with democracy; Conservative by about four to one among voters.",
+   "priorities": [
+    "Economy; crime; taxes"
+   ],
+   "psychology": [
+    "self-reliant",
+    "ordered",
+    "patriotic",
+    "tough-minded",
+    "suspicious",
+    "disconnected"
+   ],
+   "life": [
+    "mostly men, lower incomes",
+    "practical and manual work, self-employed or retired",
+    "Leave voters, Conservative by about four to one among voters"
+   ],
+   "humanity_hint": "defensive",
+   "temperature": 5,
+   "top_emotions": [
+    "frustration",
+    "anxiety",
+    "pride"
+   ],
+   "character": {
+    "decision_rules": "Puts personal responsibility first: help yourself before others, you make your own way. Wants order, rules enforced and crime punished; coldest of all segments towards people on benefits; sees society through individuals, not groups, and is much less worried about inequality.",
+    "behaviour": "Disengaged from news and party politics; watches others' behaviour with suspicion; low social trust but surprisingly satisfied with democracy; patriotic and sceptical of immigration.",
+    "vocabulary": "Short, practical and tough-minded; 'zero tolerance', 'hand-outs', 'stand on your own two feet'.",
+    "information_diet": "The Sun and the Daily Express; many say they have no interest in news.",
+    "failure_modes": "Low information and quick to dismiss what doesn't affect them; suspicious of 'scroungers'; impatient with nuance and with advice rather than rules."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 11.0,
+      "25-44": 32.0,
+      "45-54": 20.0,
+      "55-74": 33.0,
+      "75+": 4.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 59.0,
+      "female": 41.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 4.0,
+      "North West England": 12.0,
+      "Yorkshire and the Humber": 10.0,
+      "East Midlands": 9.0,
+      "West Midlands": 10.0,
+      "East of England": 7.0,
+      "Greater London": 12.0,
+      "South East England": 14.0,
+      "South West England": 10.0,
+      "Wales": 3.0,
+      "Scotland": 9.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 87.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Asian/ Asian British": 7.0,
+      "Black/ Black British": 3.0,
+      "Other": 2.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 18.0,
+      "A-levels or equivalent": 34.0,
+      "GCSEs or below": 41.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 22.0,
+      "lower-middle": 25.0,
+      "middle": 12.0,
+      "upper-middle": 6.0,
+      "high": 1.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 82.0,
+      "a small town": 9.0,
+      "a village or the countryside": 9.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 34.0,
+      "working class": 54.0,
+      "no class identity": 11.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 38.0,
+      "no religion": 48.0,
+      "Muslim": 3.0,
+      "Hindu": 2.0,
+      "Jewish": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 21,
+      "Leave": 51,
+      "Did not vote": 24
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 44,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 80,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 54,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 62,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 88,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 90,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 70,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 60,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 48,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 43,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 60,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 48,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 72,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 37,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 78,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 83,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 64,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 21,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 22,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 62,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 52,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 63,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 78,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 57,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 64,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 54,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 25,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 5,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 13,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "I'm a great believer of don't help someone else until you've helped yourself.",
+     "speaker": "Jake, 47, South East",
+     "page": 58
+    },
+    {
+     "quote": "...I'd like to live in a country of zero tolerance on crime...",
+     "speaker": "Jake, 47, South East",
+     "page": 77
+    },
+    {
+     "quote": "...it's government's problem, it's the council's problem, it's the police's problem. Actually, it's always our problem.",
+     "speaker": "Gareth, 49, East Midlands",
+     "page": 80
+    },
+    {
+     "quote": "I believe you make your own way in life.",
+     "speaker": "Gareth, 49, East Midlands",
+     "page": 82
+    },
+    {
+     "quote": "No, don't advise people. You've got to tell people what to do...",
+     "speaker": "Nigel, 45, London",
+     "page": 104
+    },
+    {
+     "quote": "...now I'm like, oh God, they're all just as bad as each other.",
+     "speaker": "Olivia, 38, West Midlands",
+     "page": 105
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "The two Disengaged segments are almost three times as likely to say they won't take a Covid-19 vaccine even if safe and effective, and about three times as likely to reject a duty to follow distancing rules.",
+     "source": "p139, 258"
+    },
+    {
+     "finding": "See Covid through individual behaviour; want tougher enforcement of rules rather than advice; worried about people taking advantage of furlough out of laziness.",
+     "source": "p104, 258"
+    },
+    {
+     "finding": "Put the NHS, UK history and armed forces ahead of the countryside as sources of pride (only segment without countryside in its top three).",
+     "source": "p224"
+    },
+    {
+     "finding": "Strongly opposed to what they see as a culture of hand-outs.",
+     "source": "p59"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 41
+   }
+  },
+  {
+   "id": "backbone_conservatives",
+   "name": "Backbone Conservatives",
+   "share_pct": 15,
+   "tagline": "Proud of their country, optimistic about Britain's future outside Europe, and keen followers of the news",
+   "summary": "Older, wealthier, mostly white, rural and small-town Conservatives: proud, nostalgic about history, the monarchy and the armed forces, and the only segment where most think the country is heading the right way. Strong Leavers, keen consumers of traditional news, secure and high in trust and local agency. They put individual responsibility first, back spending cuts, are least worried about inequality and racism and negative on immigration; they back gradual rather than radical climate action and give all moral foundations similar weight.",
+   "priorities": [
+    "Brexit; defence and security; pensions"
+   ],
+   "psychology": [
+    "nostalgic",
+    "patriotic",
+    "proud",
+    "secure",
+    "confident",
+    "engaged"
+   ],
+   "life": [
+    "older, wealthier, mostly white",
+    "rural areas and small towns, homeowners",
+    "strong Leavers and Conservative voters"
+   ],
+   "humanity_hint": "tempered",
+   "temperature": 4,
+   "top_emotions": [
+    "pride",
+    "nostalgia",
+    "trust"
+   ],
+   "character": {
+    "decision_rules": "Individual responsibility first: you get out of life what you put in. Backs spending restraint and gradual rather than radical change; least worried about inequality and racism; negative on immigration; gives all moral foundations similar weight, including authority and loyalty.",
+    "behaviour": "Engaged and secure; high trust and local agency; the only segment where most think the country is heading in the right direction; active in local clubs and institutions.",
+    "vocabulary": "Confident and traditional; pride in the monarchy, armed forces and British history; impatient with 'bleeding hearts'.",
+    "information_diet": "BBC, ITV, Sky News, the Daily Mail, Daily Telegraph and Daily Express; most watch TV news daily; light on social media.",
+    "failure_modes": "Can be dismissive of people who are struggling or of structural explanations; nostalgic; blames social media and foreign governments for problems."
+   },
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 5.0,
+      "25-44": 22.0,
+      "45-54": 16.0,
+      "55-74": 45.0,
+      "75+": 13.0
+     },
+     "source": "p275"
+    },
+    "gender": {
+     "dist": {
+      "male": 48.0,
+      "female": 52.0
+     },
+     "source": "p275"
+    },
+    "region": {
+     "dist": {
+      "North East England": 4.0,
+      "North West England": 9.0,
+      "Yorkshire and the Humber": 10.0,
+      "East Midlands": 9.0,
+      "West Midlands": 10.0,
+      "East of England": 8.0,
+      "Greater London": 6.0,
+      "South East England": 21.0,
+      "South West England": 13.0,
+      "Wales": 3.0,
+      "Scotland": 7.0
+     },
+     "source": "p275"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 96.0,
+      "Asian/ Asian British": 2.0,
+      "Black/ Black British": 2.0
+     },
+     "source": "p275"
+    },
+    "education": {
+     "dist": {
+      "Degree": 21.0,
+      "A-levels or equivalent": 41.0,
+      "GCSEs or below": 34.0
+     },
+     "source": "p276"
+    },
+    "income_band": {
+     "dist": {
+      "low": 17.0,
+      "lower-middle": 27.0,
+      "middle": 17.0,
+      "upper-middle": 10.0,
+      "high": 4.0
+     },
+     "source": "p277"
+    },
+    "settlement": {
+     "dist": {
+      "a city or large town": 74.0,
+      "a small town": 11.0,
+      "a village or the countryside": 15.0
+     },
+     "source": "p276"
+    },
+    "class": {
+     "dist": {
+      "middle class": 49.0,
+      "working class": 44.0,
+      "no class identity": 7.0
+     },
+     "source": "p276"
+    },
+    "religion": {
+     "dist": {
+      "Christian": 55.0,
+      "no religion": 38.0,
+      "Muslim": 1.0,
+      "Jewish": 1.0
+     },
+     "source": "p277"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 23,
+      "Leave": 63,
+      "Did not vote": 12
+     },
+     "source": "p11, 108"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "trust_people",
+     "agree": "Generally speaking, most people can be trusted.",
+     "disagree": "You can't be too careful in dealing with people.",
+     "agree_pct": 63,
+     "uk_pct": 55,
+     "source": "'Generally speaking, most people can be trusted' (vs 'you can't be too careful in dealing with people') (p257)"
+    },
+    {
+     "id": "politicians_dont_care",
+     "agree": "Most politicians don't care what people like me think.",
+     "disagree": "Politicians do, on the whole, care what people like me think.",
+     "agree_pct": 70,
+     "uk_pct": 83,
+     "source": "'Most politicians don't care what people like me think' (agree side of paired statement) (p99)"
+    },
+    {
+     "id": "system_rigged",
+     "agree": "In the UK the system is rigged to serve the rich and influential.",
+     "disagree": "In the UK the system works for the majority of people.",
+     "agree_pct": 35,
+     "uk_pct": 67,
+     "source": "'In the UK, the system is rigged to serve the rich and influential' (vs 'works for the majority of people') (p178)"
+    },
+    {
+     "id": "one_law",
+     "agree": "There is one law for the rich and one for the poor.",
+     "disagree": "I don't buy that there is one law for the rich and one for the poor.",
+     "agree_pct": 41,
+     "uk_pct": 74,
+     "source": "Agree: 'there is one law for the rich and one for the poor' (p179)"
+    },
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 94,
+     "uk_pct": 69,
+     "source": "'People are largely responsible for their own outcomes in life' (vs 'determined largely by forces outside their control') (p83, 182)"
+    },
+    {
+     "id": "hard_work_me",
+     "agree": "Hard work and effort, more than luck, got me where I am today.",
+     "disagree": "Luck and circumstance, more than my own effort, explain where I am today.",
+     "agree_pct": 94,
+     "uk_pct": 76,
+     "source": "'Hard work and effort' (vs 'luck and circumstance') played the greater role in getting me where I am today (p83)"
+    },
+    {
+     "id": "strong_leader",
+     "agree": "To put the UK in order we need a strong leader who is willing to break the rules.",
+     "disagree": "We don't need a leader who is willing to break the rules.",
+     "agree_pct": 71,
+     "uk_pct": 59,
+     "source": "Agree: 'to put the UK in order, we need a strong leader who is willing to break the rules' (p103)"
+    },
+    {
+     "id": "govt_power",
+     "agree": "Once a government is voted in it should have much more power to decide, with fewer checks.",
+     "disagree": "Governments should stay checked and constrained, even after winning an election.",
+     "agree_pct": 70,
+     "uk_pct": 43,
+     "source": "Agree: 'once a government has been voted in, they should have much more power to make decisions with less constraints' (p104)"
+    },
+    {
+     "id": "area_dangerous",
+     "agree": "The area where I live is becoming a more dangerous place.",
+     "disagree": "The area where I live isn't getting more dangerous.",
+     "agree_pct": 36,
+     "uk_pct": 44,
+     "source": "Agree: 'the area where I live is becoming a more and more dangerous place' (p79)"
+    },
+    {
+     "id": "community",
+     "agree": "I'm part of a community — people who understand, care for and help each other.",
+     "disagree": "I don't really feel part of a community where I live.",
+     "agree_pct": 63,
+     "uk_pct": 50,
+     "source": "Agree: 'I am part of a community – people that understand, care for and help each other' (February) (p12, 261)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Ordinary citizens' decisions have little influence on how society works.",
+     "agree_pct": 77,
+     "uk_pct": 68,
+     "source": "'Through their decisions and actions, citizens can change society' (vs 'citizens' decisions have little influence') (p17, 262)"
+    },
+    {
+     "id": "exhausted_division",
+     "agree": "I feel exhausted by the division in politics.",
+     "disagree": "Political division doesn't wear me out.",
+     "agree_pct": 50,
+     "uk_pct": 60,
+     "source": "Agree: 'I feel exhausted by the division in politics' (p13, 131)"
+    },
+    {
+     "id": "media_divides",
+     "agree": "The media often makes our country feel more divided than it really is.",
+     "disagree": "I don't think the media makes the country seem more divided than it is.",
+     "agree_pct": 83,
+     "uk_pct": 74,
+     "source": "Agree: 'the media often makes our country feel more divided than it really is' (p122)"
+    },
+    {
+     "id": "most_divided",
+     "agree": "In my lifetime, this is the most divided the country has been.",
+     "disagree": "The country has been as divided as this, or worse, before in my lifetime.",
+     "agree_pct": 36,
+     "uk_pct": 50,
+     "source": "In my lifetime, 'this is the most divided that we have been' (p120)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness isn't really a problem in this country.",
+     "agree_pct": 89,
+     "uk_pct": 72,
+     "source": "Agree: 'political correctness is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People aren't too easily offended; they are right to call things out.",
+     "agree_pct": 93,
+     "uk_pct": 79,
+     "source": "Agree: 'people are too easily offended nowadays' (p145)"
+    },
+    {
+     "id": "hate_speech",
+     "agree": "Hate speech is a problem in this country.",
+     "disagree": "Hate speech is overblown as a problem in this country.",
+     "agree_pct": 65,
+     "uk_pct": 73,
+     "source": "Agree: 'hate speech is a problem in our country' (p26, 134)"
+    },
+    {
+     "id": "older_selfish",
+     "agree": "Older generations are being selfish with their political choices.",
+     "disagree": "Older generations aren't being selfish with their political choices.",
+     "agree_pct": 14,
+     "uk_pct": 38,
+     "source": "Agree: 'older generations are being selfish with the political choices they are making' (p146)"
+    },
+    {
+     "id": "immigration_positive",
+     "agree": "Immigration has a positive impact on the UK.",
+     "disagree": "I don't think immigration has a positive impact on the UK.",
+     "agree_pct": 23,
+     "uk_pct": 43,
+     "source": "Immigration currently has a positive impact on the UK (p210)"
+    },
+    {
+     "id": "care_more_immigrants",
+     "agree": "These days we seem to care more about immigrants than about British citizens.",
+     "disagree": "We don't put immigrants ahead of British citizens.",
+     "agree_pct": 63,
+     "uk_pct": 42,
+     "source": "'These days, we seem to care more about immigrants than about British citizens' (p214)"
+    },
+    {
+     "id": "immigrants_integrate",
+     "agree": "Most immigrants make efforts to integrate into British society.",
+     "disagree": "Many immigrants don't make much effort to integrate into British society.",
+     "agree_pct": 44,
+     "uk_pct": 62,
+     "source": "Agree: 'most immigrants make efforts to integrate into British society' (p212)"
+    },
+    {
+     "id": "racism_serious",
+     "agree": "Racism is a serious problem in the UK today.",
+     "disagree": "Racism isn't a serious problem in the UK today.",
+     "agree_pct": 62,
+     "uk_pct": 77,
+     "source": "Racism is a serious problem in the UK today (p24, 198)"
+    },
+    {
+     "id": "climate_everyone",
+     "agree": "Climate change concerns all of us, regardless of politics.",
+     "disagree": "Climate change is mainly a concern for left-wing people.",
+     "agree_pct": 81,
+     "uk_pct": 85,
+     "source": "'Climate change concerns all of us, regardless of politics' (vs 'mainly a concern for left-wing people') (p22, 224)"
+    },
+    {
+     "id": "green_investment",
+     "agree": "The government should invest on a large scale to make the economy greener.",
+     "disagree": "I'm against large-scale government spending to green the economy.",
+     "agree_pct": 73,
+     "uk_pct": 77,
+     "source": "Support 'developing a Green New Deal that makes large-scale government investments to make our economy more environmentally friendly' (p191, 237)"
+    },
+    {
+     "id": "people_care",
+     "agree": "The pandemic showed me that most people in the UK care about each other.",
+     "disagree": "The pandemic didn't convince me that people here care much about each other.",
+     "agree_pct": 75,
+     "uk_pct": 64,
+     "source": "Agree: 'the Covid-19 pandemic has shown me that most people in the UK care about each other' (p255)"
+    },
+    {
+     "id": "democracy_satisfied",
+     "agree": "I'm satisfied with the way democracy works in the UK.",
+     "disagree": "I'm not satisfied with the way democracy works in the UK.",
+     "agree_pct": 69,
+     "uk_pct": 45,
+     "source": "Satisfied with the way democracy works in the UK (p99)"
+    },
+    {
+     "id": "pessimistic_politics",
+     "agree": "I feel pessimistic about politics in the UK today.",
+     "disagree": "I'm not especially pessimistic about politics in the UK.",
+     "agree_pct": 20,
+     "uk_pct": 48,
+     "source": "Attitude towards politics in the UK today: pessimistic (p97)"
+    },
+    {
+     "id": "posts_politics",
+     "agree": "I post or share political content on social media.",
+     "disagree": "I never post or share anything political on social media.",
+     "agree_pct": 9,
+     "uk_pct": 15,
+     "source": "Took part in past year: posting/sharing political content on social media (p11)"
+    },
+    {
+     "id": "lonely",
+     "agree": "I feel lonely all or most of the time.",
+     "disagree": "",
+     "agree_pct": 9,
+     "uk_pct": 13,
+     "source": "Feel lonely 'all or most of the time' (p261)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "I'm proud of the fact I'm British. I would always hang my British flags out if I could.",
+     "speaker": "Michelle, 78, Yorkshire and the Humber",
+     "page": 62
+    },
+    {
+     "quote": "There are a lot of bone-idle, fat, lazy people... So, the bleeding-heart argument just really doesn't work for me.",
+     "speaker": "Richard, late 60s",
+     "page": 81
+    },
+    {
+     "quote": "...they promise more than they can fulfil.",
+     "speaker": "Patrick, 76, North West",
+     "page": 101
+    },
+    {
+     "quote": "I don't feel part of a society that's so divided I couldn't have a constructive conversation with someone...",
+     "speaker": "Philip, 28, South East",
+     "page": 115
+    },
+    {
+     "quote": "...you get out of life what you put into it.",
+     "speaker": "Paul, 38, South East",
+     "page": 183
+    },
+    {
+     "quote": "...if you have a leader who is absolutely strict, you might not like them, but it's much better than being soft with everybody.",
+     "speaker": "Michelle, 78, Yorkshire and the Humber",
+     "page": 65
+    }
+   ],
+   "evidence": [
+    {
+     "finding": "The NHS was the top source of pride in the UK in every one of the seven segments (pre-Covid, Feb 2020 'proud of' question).",
+     "source": "p163"
+    },
+    {
+     "finding": "The report leaves healthcare out of segment priority lists because almost every group named it as a priority, so it did not tell the segments apart.",
+     "source": "p37"
+    },
+    {
+     "finding": "Priorities include pensions.",
+     "source": "p62"
+    },
+    {
+     "finding": "Michelle is a governor of a girls' school and active in clubs; above average for personal environmental actions.",
+     "source": "p65, 231"
+    },
+    {
+     "finding": "Optimistic about Britain's future outside Europe; Michelle wants Britain to return to a leading role on the world stage.",
+     "source": "p8, 65"
+    },
+    {
+     "finding": "Far more likely than other segments to blame foreign governments for environmental damage.",
+     "source": "p238"
+    }
+   ],
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 52
+   }
+  }
+ ],
+ "benchmarks": [
+  "mic_11london_june2023"
+ ],
+ "assumptions": [
+  "No 2019 general-election vote mix is published per segment, so agents carry their 2016 EU referendum vote instead and the GE 2019 banner is not scored.",
+  "Beliefs are drawn item by item at each segment's published share, linked by one latent 'how typical of the segment' score per person; the report does not publish how items co-occur within a person.",
+  "Attitudes were measured in February–March 2020 (some items mid-pandemic); a June 2023 respondent may have moved since.",
+  "The 2020 report has no segment-level measures of trust in vaccines, pharma, charities or health apps, nor of charity giving beyond Civic Pragmatists; those answers rest on each persona's psychology."
+ ],
+ "evidence_coverage": "Every demographic mix and belief share is cited to a page of More in Common, Britain's Choice (Oct 2020), YouGov fieldwork Feb–Mar 2020, n=10,385; character text summarises the report's segment profiles."
+}

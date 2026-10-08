@@ -1,0 +1,3062 @@
+{
+ "title": "Shattered Britain — the Seven Segments (2025)",
+ "publisher": "More in Common",
+ "year": 2025,
+ "population": "Great Britain, adults 18+",
+ "description": "More in Common's current segmentation (July 2025): seven segments built on new fault lines — appetite for change, simple vs complex solutions, agency, conspiracy and 'own truth', multiculturalism, disconnection, free speech.",
+ "sources": [
+  {
+   "title": "Shattered Britain",
+   "publisher": "More in Common",
+   "published": "July 2025",
+   "url": "https://www.moreincommon.org.uk/research/shattered-britain/"
+  },
+  {
+   "title": "The Seven Segments",
+   "url": "https://www.moreincommon.org.uk/seven-segments/"
+  },
+  {
+   "title": "Heading for Hope? Public opinion on mental health (with Wellcome)",
+   "published": "September 2026",
+   "url": "https://www.moreincommon.org.uk/wp-content/uploads/2026/09/mic-Wellcome-Mental-Health-Report.pdf"
+  }
+ ],
+ "share_presets": {
+  "published_2025": {
+   "label": "Published shares (Shattered Britain, 2025)",
+   "source": "More in Common, Shattered Britain (July 2025), polling of 20,000+ GB adults; moreincommon.org.uk/seven-segments",
+   "shares": {
+    "progressive_activists": 12,
+    "incrementalist_left": 21,
+    "established_liberals": 9,
+    "sceptical_scrollers": 10,
+    "rooted_patriots": 20,
+    "traditional_conservatives": 8,
+    "dissenting_disruptors": 20
+   }
+  }
+ },
+ "default_preset": "published_2025",
+ "frame": [
+  {
+   "key": "age",
+   "label": "Age",
+   "attribute": "age",
+   "source": "More in Common, Shattered Britain (July 2025), polling of 20,000+ GB adults, national row of Fig 147 (p263)",
+   "categories": [
+    {
+     "label": "18-24",
+     "share_pct": 11,
+     "age_min": 18,
+     "age_max": 24
+    },
+    {
+     "label": "25-34",
+     "share_pct": 16,
+     "age_min": 25,
+     "age_max": 34
+    },
+    {
+     "label": "35-44",
+     "share_pct": 16,
+     "age_min": 35,
+     "age_max": 44
+    },
+    {
+     "label": "45-54",
+     "share_pct": 16,
+     "age_min": 45,
+     "age_max": 54
+    },
+    {
+     "label": "55-64",
+     "share_pct": 16,
+     "age_min": 55,
+     "age_max": 64
+    },
+    {
+     "label": "65-74",
+     "share_pct": 13,
+     "age_min": 65,
+     "age_max": 74
+    },
+    {
+     "label": "75+",
+     "share_pct": 12,
+     "age_min": 75,
+     "age_max": 120
+    }
+   ]
+  },
+  {
+   "key": "gender",
+   "label": "Gender",
+   "attribute": "gender",
+   "source": "More in Common, Shattered Britain (July 2025), polling of 20,000+ GB adults, national row of Fig 158 (p273)",
+   "categories": [
+    {
+     "label": "Male",
+     "share_pct": 48
+    },
+    {
+     "label": "Female",
+     "share_pct": 52
+    }
+   ]
+  },
+  {
+   "key": "ethnicity",
+   "label": "Ethnicity",
+   "attribute": "ethnicity",
+   "source": "More in Common, Shattered Britain (July 2025), polling of 20,000+ GB adults, national row of Fig 153 (p268)",
+   "categories": [
+    {
+     "label": "White (British/Irish/Other)",
+     "share_pct": 85
+    },
+    {
+     "label": "Asian/ Asian British",
+     "share_pct": 8
+    },
+    {
+     "label": "Black/ Black British",
+     "share_pct": 3
+    },
+    {
+     "label": "Mixed descent (e.g. White & Asian, White & Black)",
+     "share_pct": 2
+    },
+    {
+     "label": "Other",
+     "share_pct": 2
+    }
+   ]
+  },
+  {
+   "key": "region",
+   "label": "Region",
+   "attribute": "region",
+   "source": "More in Common, Britain's Choice (2020), UK average p275 — Shattered Britain publishes no region mix",
+   "categories": [
+    {
+     "label": "North East England",
+     "share_pct": 4
+    },
+    {
+     "label": "North West England",
+     "share_pct": 11
+    },
+    {
+     "label": "Yorkshire and the Humber",
+     "share_pct": 9
+    },
+    {
+     "label": "East Midlands",
+     "share_pct": 8
+    },
+    {
+     "label": "West Midlands",
+     "share_pct": 9
+    },
+    {
+     "label": "East of England",
+     "share_pct": 7
+    },
+    {
+     "label": "Greater London",
+     "share_pct": 12
+    },
+    {
+     "label": "South East England",
+     "share_pct": 16
+    },
+    {
+     "label": "South West England",
+     "share_pct": 11
+    },
+    {
+     "label": "Wales",
+     "share_pct": 4
+    },
+    {
+     "label": "Scotland",
+     "share_pct": 10
+    }
+   ]
+  }
+ ],
+ "frame_defaults": {
+  "region": {
+   "dist": {
+    "North East England": 4,
+    "North West England": 11,
+    "Yorkshire and the Humber": 9,
+    "East Midlands": 8,
+    "West Midlands": 9,
+    "East of England": 7,
+    "Greater London": 12,
+    "South East England": 16,
+    "South West England": 11,
+    "Wales": 4,
+    "Scotland": 10
+   },
+   "source": "More in Common, Britain's Choice (2020), UK average p275 — Shattered Britain publishes no region mix"
+  }
+ },
+ "segments": [
+  {
+   "id": "progressive_activists",
+   "name": "Progressive Activists",
+   "share_pct": 12,
+   "tagline": "Highly engaged, globally minded, driven by social justice; increasingly alienated from mainstream parties",
+   "summary": "A highly engaged, globally minded group driven by social justice. Politically active but increasingly alienated from mainstream party politics, they put climate change and international affairs first, are sometimes outliers on social issues, and hold their beliefs firmly and at times uncompromisingly.",
+   "priorities": [
+    "global issues such as the war in Gaza and climate change",
+    "inequality in Britain",
+    "the power of billionaires",
+    "the rise of Reform UK and of Donald Trump",
+    "Brexit",
+    "affordable housing",
+    "racial justice"
+   ],
+   "psychology": [
+    "idealistic",
+    "radical",
+    "uncompromising",
+    "political",
+    "woke"
+   ],
+   "life": [
+    "in university towns and cities",
+    "in Labour and Green Party meetings; on Bluesky",
+    "in flatshares or living with their parents",
+    "working in the third sector or universities",
+    "constituencies such as Hackney South and Shoreditch, Edinburgh South, Bristol Central"
+   ],
+   "humanity_hint": "tempered",
+   "temperature": 7,
+   "top_emotions": [
+    "anger",
+    "anxiety",
+    "hope"
+   ],
+   "character": {
+    "decision_rules": "Judges an issue by whether it is just and who holds power; distrusts compromise that leaves injustice standing; thinks individual lifestyle change matters less than systemic change.",
+    "behaviour": "Follows politics closely, shares and argues about it online, joins grassroots campaigns; feels guilty switching off from the world's problems; has fallen out with people over politics.",
+    "vocabulary": "Fluent in the language of justice, systems and power; references global events and campaigns; can be strident and morally certain.",
+    "information_diet": "High news engagement: notifications from several news apps (typically the Guardian and the BBC), independent digital outlets such as Novara, political commentators on social media, and podcasts such as The News Agents or Pod Save the UK.",
+    "failure_modes": "Can be uncompromising and dismissive of views it sees as unjust; assumes others share its priorities; overrates how engaged the wider public is."
+   },
+   "pen_portrait": "A junior academic sharing a house in Cardiff; gave up vegetarianism after years of trying; consumed by the war in Gaza; voted Labour in 2024 and felt betrayed within weeks; goes to Extinction Rebellion meetings; deletes and reinstalls news apps when the crises keep him awake.",
+   "findings": [
+    "Only segment where a majority want immigration kept the same or increased. [p108]",
+    "Unique in being more likely to think Britain takes advantage of other countries than vice versa. [p112]",
+    "Only segment significantly more likely than not to enjoy talking about politics. [p111]",
+    "Only segment where more think benefit recipients pay more than their fair share in tax than less. [p190]",
+    "Most indebted segment, about a fifth in student debt. [p265]",
+    "Most likely segment to be trade union members. [p270]",
+    "lived experience: Tied with Dissenting Disruptors for highest personal experience of a mental health issue; also highest for close friend and immediate family. (self 40%, close friend 27%, immediate family 30% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Most comfortable segment if a friend opened up about mental illness. (86% comfortable (very 44, somewhat 42; not very 8, not at all 2)) [mental-health report p13]",
+    "structural vs personal causes: Rarely frame mental health individually; see it as a structural problem driven by social media, work and the cost of living, and talk about it in institutional terms (waiting times, delays). [mental-health report p34]",
+    "government action on services: Want the government to do more on mental health, 11 points above the national average; much more likely than others to say 'much more'. (86% do more (national 75%); 53% 'much more' vs 37% other six segments) [mental-health report p34]",
+    "parity of esteem: Strongest belief that mental health should be treated as importantly as physical health, yet least likely to think parity exists today. (86% should be equal (other six segments 71%); 72% say it is treated as less important (national 55%)) [mental-health report p35]",
+    "mental vs physical spending: Only segment as likely (or more) to back extra government research investment for mental health as for physical health; far more likely to strongly support mental health research investment. (59% strongly support vs 33% other six segments) [mental-health report p35]",
+    "new interventions: Above-average awareness of treatments from talking therapy to apps and more likely to think new treatments could work - except AI chatbots, which they are more sceptical of than any other segment. [mental-health report p35]",
+    "need for breakthroughs: More likely than others to think new scientific breakthroughs are needed for young people's mental health. (51% vs 41% other six segments) [mental-health report p35]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 18.0,
+      "25-34": 18.0,
+      "35-44": 19.0,
+      "45-54": 18.0,
+      "55-64": 13.0,
+      "65-74": 7.0,
+      "75+": 7.0
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 47.0,
+      "female": 53.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 84.0,
+      "Asian/ Asian British": 8.0,
+      "Black/ Black British": 2.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 3.0,
+      "Other": 2.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 47.0,
+      "No degree": 53.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 5.0,
+      "upper-middle": 32.0,
+      "middle": 36.0,
+      "lower-middle": 21.0,
+      "low": 6.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 30.0,
+      "the suburbs": 26.0,
+      "a large town": 14.0,
+      "a small town": 18.0,
+      "a village or the countryside": 13.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 67.0,
+      "Christian": 21.0,
+      "Buddhist": 1.0,
+      "Hindu": 1.0,
+      "Muslim": 4.0,
+      "Sikh": 1.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 78.0,
+      "Did not vote": 7.0,
+      "Leave": 6.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 35,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 55,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 66,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 17,
+     "uk_pct": 36,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 67,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 37,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 10,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 10,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 47,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 49,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 34,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 31,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 7,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 43,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 54,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 50,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 70,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 41,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 64,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 25,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 54,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 73,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 60,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 46,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 23,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 67,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 27,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "I got called woke the other day because I read the Guardian. Like, what does that even mean!?",
+     "speaker": "Abby, Hackney",
+     "page": 106
+    },
+    {
+     "quote": "Personally I think it's important to keep up to date with what's going on.",
+     "speaker": "Hannah, East Dulwich",
+     "page": 106
+    },
+    {
+     "quote": "So I try to limit what I post even though I feel quite strongly about stuff like Palestine",
+     "speaker": "Maddie, East Dulwich",
+     "page": 111
+    },
+    {
+     "quote": "But at the end of the day we do only have one planet.",
+     "speaker": "Ebenezer, East Dulwich",
+     "page": 65
+    },
+    {
+     "quote": "I think (mental health) is a consequence of other problems. I think it's hard to separate them. I think they're connected.",
+     "speaker": "Levi, tradesman, Progressive Activist",
+     "page": 15,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I think the approach is effective. It's just whether the patient can access them.",
+     "speaker": "Kira, Progressive Activist",
+     "page": 18,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I got called woke the other day because I read the Guardian. Like, what does that even mean!?",
+     "speaker": "Abby, Hackney",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "It's one of the ways that we can affect change is by who we vote for or by corresponding with our MP… Personally I think it's important to keep up to date with what's going on.",
+     "speaker": "Hannah, East Dulwich",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/progressive-activists-7/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 53
+   }
+  },
+  {
+   "id": "incrementalist_left",
+   "name": "Incrementalist Left",
+   "share_pct": 21,
+   "tagline": "Civic-minded and community-oriented, left of centre but averse to extremes; prefers gradual reform",
+   "summary": "A civic-minded, community-oriented group with generally left-of-centre views and an aversion to the extreme; they prefer gradual reform to revolution. They trust experts and institutions but are largely tuned out of day-to-day politics and step away from issues they find fraught or complex.",
+   "priorities": [
+    "rising inequality",
+    "polarisation and division in Britain",
+    "the rise of Reform UK",
+    "global instability and populist leaders",
+    "the future of the NHS"
+   ],
+   "psychology": [
+    "liberal",
+    "compromising",
+    "conflict-averse",
+    "cautious",
+    "satisfied",
+    "community-oriented",
+    "trusting"
+   ],
+   "life": [
+    "public sector jobs in schools and hospitals",
+    "volunteering locally",
+    "young children; cities and commuter towns",
+    "constituencies such as Reading Central, Milton Keynes Central, Edinburgh North and Leith, Hove and Portslade, Coventry East"
+   ],
+   "humanity_hint": "balanced",
+   "temperature": 3,
+   "top_emotions": [
+    "hope",
+    "anxiety",
+    "trust"
+   ],
+   "character": {
+    "decision_rules": "Trusts experts and institutions to sort out the big problems eventually; prefers steady improvement to upheaval; looks for the compromise.",
+    "behaviour": "Volunteers and helps locally rather than arguing politics; clicks on shared articles but rarely shares them; steps back from divisive topics.",
+    "vocabulary": "Warm, reasonable, practical; talks about community, kindness and fairness; avoids heated political language.",
+    "information_diet": "Does not seek out news constantly but wants to be somewhat informed: BBC News over dinner, a podcast such as Newscast on the commute, non-current-affairs podcasts like The Rest is History; meets news on social media and often tries to block it out.",
+    "failure_modes": "Avoids taking a stand on contentious issues; can be naively trusting of institutions; disengages when topics feel complex or fraught."
+   },
+   "pen_portrait": "A comprehensive-school teacher in Reading for fifteen years; workload up and resources down but still loves the job; felt relief at Labour's win; worries about conspiracy content her pupils absorb online; volunteers at a food bank; catches the six o'clock BBC news some days.",
+   "findings": [
+    "Segment most likely to donate to their place of worship; more likely than average to volunteer. [p120]",
+    "Highest proportion identifying as Muslim (9%) and almost a quarter non-white. [p120]",
+    "Dislike leaders they see as extreme (Trump, Corbyn, Farage); strongly value compromise. [p120]",
+    "More willing than other segments to give Labour more time to deliver. [p221]",
+    "lived experience: Slightly below average personal experience; average for family. (self 24%, close friend 18%, immediate family 22% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Highly comfortable if a friend opened up. (85% comfortable (very 42, somewhat 43; not very 9, not at all 2)) [mental-health report p13]",
+    "government action on services: Highest share wanting the government to do more, but unlike Progressive Activists they have some faith the government can deliver. (87%) [mental-health report p16]",
+    "views on services / NHS: Like others they think services are in a bad state, but remain hopeful; more likely than average to approve of the government's handling and to think the range and quality of treatments have improved. [mental-health report p37]",
+    "parity of esteem: Strong belief in parity, but more likely than average to think parity already exists in Britain. (85% should be treated equally) [mental-health report p36]",
+    "source of optimism: Optimism comes from mental health finally getting attention, which they expect to bring investment and treatment breakthroughs. [mental-health report p36]",
+    "new interventions / digital: High awareness of new interventions and often most likely to rate them effective and to feel comfortable using them personally, across drug, non-drug and digital routes; highest belief in digital treatments. (37% say digital treatments (AI chatbots, apps) have potential, highest segment, 6 points above average) [mental-health report p37]",
+    "trust in voices: Exceptionally high trust across many voices; prize lived experience most but also far more trusting than others of institutions such as universities, charities and the NHS (net trust above other six segments on every voice tested). [mental-health report p65]",
+    "treatment nuance: Want clarity on limits of treatments and dislike one-size-fits-all narratives; some worry medication is reached for too quickly before talking. [mental-health report p59]",
+    "information sources: Reached through live TV and social media; biggest music fans and heavy podcast listeners. (live TV 64%; social media 46%) [mental-health report p66]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 12.0,
+      "25-34": 22.0,
+      "35-44": 17.0,
+      "45-54": 16.0,
+      "55-64": 13.0,
+      "65-74": 11.0,
+      "75+": 9.0
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 45.0,
+      "female": 55.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 73.0,
+      "Asian/ Asian British": 14.0,
+      "Black/ Black British": 7.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 2.0,
+      "Other": 3.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 42.0,
+      "No degree": 58.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 6.0,
+      "upper-middle": 34.0,
+      "middle": 39.0,
+      "lower-middle": 16.0,
+      "low": 3.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 31.0,
+      "the suburbs": 25.0,
+      "a large town": 13.0,
+      "a small town": 19.0,
+      "a village or the countryside": 12.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 34.0,
+      "Christian": 48.0,
+      "Buddhist": 1.0,
+      "Hindu": 2.0,
+      "Jewish": 1.0,
+      "Muslim": 9.0,
+      "Sikh": 1.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 65.0,
+      "Did not vote": 10.0,
+      "Leave": 14.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 77,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 76,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 81,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 31,
+     "uk_pct": 32,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 73,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 54,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 19,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 17,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 60,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 55,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 50,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 43,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 21,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 38,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 49,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 63,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 74,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 36,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 35,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 35,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 68,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 73,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 77,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 55,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 29,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 68,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 26,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "I like Keir Starmer. I think he is a good man amongst a lot of politicians who are not",
+     "speaker": "Tamara, Chester",
+     "page": 116
+    },
+    {
+     "quote": "we're quite active in the local community",
+     "speaker": "Becky, Chester",
+     "page": 116
+    },
+    {
+     "quote": "I do a lot for charity, for an autism charity",
+     "speaker": "Abbie, St Albans",
+     "page": 118
+    },
+    {
+     "quote": "I kind of try not to look into them. I end up going down that spiral of negativity.",
+     "speaker": "Frankie, St Albans",
+     "page": 120
+    },
+    {
+     "quote": "My personal experience with a close family member would suggest that the NHS are rather overwhelmed with mental health problems.",
+     "speaker": "Jackie, hairdresser, Incrementalist Left",
+     "page": 15,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I'm hopeful that there will, I think because there's definitely a lot more eyes on mental health",
+     "speaker": "Paul, charity worker, Incrementalist Left",
+     "page": 36,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I like Keir Starmer. I think he is a good man amongst a lot of politicians who are not and I think he genuinely cares about all people in society",
+     "speaker": "Tamara, Chester",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "We're quite active in the local community, both giving back from a business point of view but also doing things, helping out at groups.",
+     "speaker": "Becky, Chester",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/incrementalist-left/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 55
+   }
+  },
+  {
+   "id": "established_liberals",
+   "name": "Established Liberals",
+   "share_pct": 9,
+   "tagline": "Prosperous and confident; believe the system broadly works and trust experts to deliver progress",
+   "summary": "A prosperous, confident segment who believe the system broadly works and trust experts to keep delivering progress. A strong belief in individual agency can make them less empathetic to those who struggle. Institutionally trusting, they keep faith in democratic processes and engage with issues through information and evidence.",
+   "priorities": [
+    "global instability and threats to liberal democracy",
+    "climate change",
+    "Brexit's long-term consequences",
+    "populism and extremism",
+    "economic inequality",
+    "the difficulty of doing business in the UK and competitiveness"
+   ],
+   "psychology": [
+    "secure",
+    "internationally-minded",
+    "institutional",
+    "trusting",
+    "optimistic",
+    "liberal",
+    "compromising",
+    "meritocratic",
+    "comfortable"
+   ],
+   "life": [
+    "affluent suburbs and commuter towns",
+    "professional jobs with hybrid working",
+    "literary festivals and the theatre",
+    "homeowners",
+    "constituencies such as Winchester, St Albans, Twickenham"
+   ],
+   "humanity_hint": "tempered",
+   "temperature": 3,
+   "top_emotions": [
+    "trust",
+    "anxiety",
+    "pride"
+   ],
+   "character": {
+    "decision_rules": "Weighs evidence and expertise; values stability, competence and long-term planning; believes hard work and good judgement are rewarded.",
+    "behaviour": "Reads widely, cross-checks claims, avoids online debate; supportive of public spending on health and education but wary of anything that 'punishes success'.",
+    "vocabulary": "Measured, articulate, evidence-led; speaks of policy, long-term plans and institutions; avoids social media rows.",
+    "information_diet": "Broadsheets and magazines, the BBC, the Financial Times and The Times; political podcasts such as Political Currency; long-form analysis from trusted journalists. Dislikes partisan or tabloid news and checks stories against mainstream sources.",
+    "failure_modes": "Can be complacent about how well the system works for others; less empathetic to people who are struggling; baffled by populism."
+   },
+   "pen_portrait": "An actuary in the City living in Godalming, homeowner for ten years; commutes listening to Political Currency; subscribes to The Times and the FT; moved by neighbours hosting Ukrainian refugees; baffled by Reform; struggles with his student children's new vocabulary.",
+   "findings": [
+    "Most likely to say they feel happy and respected; lowest perceived threat and greatest optimism. [p126]",
+    "Most likely to say the ultra-wealthy pay their fair share in taxes. [p128]",
+    "Only segment where Labour has maintained support since the 2024 election. [p215]",
+    "Most likely to live in a different country from where they grew up. [p266]",
+    "Only segment that thinks Britain's climate policies have made a meaningful difference. [p204]",
+    "lived experience: Low personal experience; tied with Traditional Conservatives as least likely to have close friends or family with experience. (self 16%, close friend 9%, immediate family 13% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Mostly comfortable, slightly below average. (74% comfortable (very 36, somewhat 38; not very 15, not at all 2)) [mental-health report p13]",
+    "views on services / government handling: Nearly twice as likely as the public to say the government handles mental health well; by far the most likely to think services are improving. (39% handling well (general public 20%; other six segments 18%)) [mental-health report p38]",
+    "treatments improving: More likely than others to say the range and quality of treatments has improved in recent years. (range 46% vs 32%; quality 44% vs 31% (other six segments)) [mental-health report p38]",
+    "salience / government action: Medium-to-low salience: less likely than average to say government must do more, which the report links to their optimism rather than indifference. [mental-health report p31]",
+    "science optimism: Highly optimistic that science and technology will help. (77% say advances will help people lead better lives (public 65%); 37% say science has 'a great deal' of potential vs 30% other six segments) [mental-health report p38]",
+    "trust in pharma and tech: Profit motive is no barrier: most likely segment to think pharma and tech firms can improve lives; only segment with net positive trust in pharmaceutical companies and tech companies on mental health, and uniquely trusting of national government. (pharma potential 62%; tech potential 51%) [mental-health report p38]",
+    "new interventions / digital: Techno-optimists: highest openness to mobile apps, wearables and virtual reality for mental health. [mental-health report p38]",
+    "early intervention: Back early intervention on pragmatic grounds that prevention is more efficient than cure. [mental-health report p48]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 9.0,
+      "25-34": 16.0,
+      "35-44": 17.0,
+      "45-54": 12.0,
+      "55-64": 14.0,
+      "65-74": 14.0,
+      "75+": 17.0
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 49.0,
+      "female": 51.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 80.0,
+      "Asian/ Asian British": 12.0,
+      "Black/ Black British": 6.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Other": 1.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 47.0,
+      "No degree": 53.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 13.0,
+      "upper-middle": 49.0,
+      "middle": 28.0,
+      "lower-middle": 7.0,
+      "low": 1.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 28.0,
+      "the suburbs": 25.0,
+      "a large town": 10.0,
+      "a small town": 20.0,
+      "a village or the countryside": 17.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 33.0,
+      "Christian": 51.0,
+      "Buddhist": 1.0,
+      "Hindu": 4.0,
+      "Jewish": 2.0,
+      "Muslim": 3.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 56.0,
+      "Did not vote": 12.0,
+      "Leave": 24.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 89,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 90,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 89,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 12,
+     "uk_pct": 36,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 70,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 46,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 23,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 23,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 62,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 39,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 42,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 43,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 18,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 22,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 68,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 85,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 87,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 26,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 45,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 27,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 88,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 76,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 77,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 73,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 23,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 52,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 15,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "in order to fix this country, I think it's got to be a long plan.",
+     "speaker": "Jonathan, Chippenham",
+     "page": 32
+    },
+    {
+     "quote": "Barack Obama, we all know he is the bee's knees.",
+     "speaker": "Denise, Beaconsfield",
+     "page": 124
+    },
+    {
+     "quote": "Personally I voted Remain, I don't mind saying",
+     "speaker": "Andrew, Chippenham",
+     "page": 128
+    },
+    {
+     "quote": "people opened their homes to Ukrainian families.",
+     "speaker": "Leanne, Beaconsfield",
+     "page": 128
+    },
+    {
+     "quote": "I think as a whole, support is improving.",
+     "speaker": "Wendy, retired, Established Liberal",
+     "page": 38,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I'm a great believer in prevention, but we just don't have it anymore, do we? We're more of a reactive country.",
+     "speaker": "Maxine, Sunning, Established Liberal",
+     "page": 49,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "All the politicians are short-term gain thinking about their votes, not about the future of the country… in order to fix this country, I think it's got to be a long plan.",
+     "speaker": "Jonathan",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "Barack Obama, we all know he is the bee's knees.",
+     "speaker": "Denise",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/established-liberals/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 51
+   }
+  },
+  {
+   "id": "sceptical_scrollers",
+   "name": "Sceptical Scrollers",
+   "share_pct": 10,
+   "tagline": "Digitally native, unhappy with the social contract; distrust institutions and look for truth online",
+   "summary": "A digitally native group whose unhappiness with the social contract has cost them faith in traditional institutions; they look for alternative sources of truth online. Often shaped by the Covid pandemic, they prefer individual influencers to mainstream media and are increasingly drawn to conspiratorial thinking.",
+   "priorities": [
+    "the gap between rich and poor",
+    "the job market",
+    "corrupt politicians",
+    "media bias",
+    "crime",
+    "mental health"
+   ],
+   "psychology": [
+    "online",
+    "disengaged",
+    "disillusioned",
+    "open-minded",
+    "non-ideological",
+    "untrusting",
+    "curious"
+   ],
+   "life": [
+    "on Discord, Snapchat, TikTok and Reddit",
+    "living with parents or renting",
+    "working multiple or temporary jobs",
+    "urban city centres",
+    "constituencies such as Birmingham Perry Barr, Glasgow South, Luton North, Swindon North"
+   ],
+   "humanity_hint": "defensive",
+   "temperature": 5,
+   "top_emotions": [
+    "confusion",
+    "frustration",
+    "curiosity"
+   ],
+   "character": {
+    "decision_rules": "Trusts what feels authentic and first-hand over official sources; assumes institutions have an agenda; keeps an open mind to alternative explanations.",
+    "behaviour": "Scrolls late into the night, cross-references creators, reads the comments; disengaged from formal politics; doesn't trust the government or doctors on everything since Covid.",
+    "vocabulary": "Casual, online, sceptical; 'do your own research', 'the mainstream won't tell you'; non-ideological.",
+    "information_diet": "Rarely seeks out political news but meets it on social media and in YouTube discussion shows watched for entertainment; trusts individual creators and comment sections over large media institutions.",
+    "failure_modes": "Drawn into rabbit holes and conspiracy content; overestimates their own critical filtering; distrust can tip into cynicism about everything."
+   },
+   "pen_portrait": "A graduate eighteen months out of university, back in his childhood bedroom working shifts at a garden centre; gets news from YouTube and TikTok; trusts creators more than politicians; feels the promises about degrees and hard work were stories.",
+   "findings": [
+    "Least likely to vote yet most likely to post about politics online. [p139]",
+    "Most likely to say they struggle to keep up with and understand what is going on in government. [p139]",
+    "Most likely to hold the racist belief that some races are more intelligent than others. [p198]",
+    "More likely to use Snapchat and TikTok and to play video games than any other segment. [p134]",
+    "Most likely to have used a food bank in the last year. [p137]",
+    "lived experience: Third-highest personal experience, at the national average. (self 28%, close friend 16%, immediate family 19% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Least comfortable segment, though still a majority. (55% comfortable (very 19, somewhat 36; don't know 12; not very 25, not at all 7)) [mental-health report p13]",
+    "science / trust in scientific establishment: Lowest confidence in science and innovation to help; few think treatments have improved or will improve. (64% say science has potential through discoveries (public 86%); 60% for mental health specifically (public 77%)) [mental-health report p39]",
+    "mental vs physical spending: Lowest net support of any segment for more research investment in both physical and mental health, with mental health lower than physical (chart unlabelled; direction only). [mental-health report p16]",
+    "views on awareness / over-discussion: See greater openness cynically as 'more talk, less action' without better services; linked to atomisation. (58% often feel disconnected from society (second only to Dissenting Disruptors)) [mental-health report p40]",
+    "trust in medication: Particularly cynical about pharmacological treatment. (53% say prescribed medication is effective; 33% ineffective) [mental-health report p40]",
+    "trust in therapy and traditional methods: Far lower belief than other segments in talking therapy, medication, support groups and talking to friends and family (net efficacy well below other six segments; chart unlabelled). [mental-health report p41]",
+    "digital tools / AI / spiritual: Openness to digital: more likely than the public to rate AI-based therapy effective, and higher awareness of new tech; no more sceptical than average on VR or spiritual practices. (31% say AI-based therapy could be effective (public 21%)) [mental-health report p40]",
+    "tailored care: Criticise one-size-fits-all support; want bespoke and culturally diverse approaches. [mental-health report p40]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 22.0,
+      "25-34": 27.0,
+      "35-44": 21.0,
+      "45-54": 12.0,
+      "55-64": 9.0,
+      "65-74": 4.7,
+      "75+": 4.3
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 51.0,
+      "female": 49.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 75.0,
+      "Asian/ Asian British": 16.0,
+      "Black/ Black British": 4.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 2.0,
+      "Other": 3.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 33.0,
+      "No degree": 67.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 8.0,
+      "upper-middle": 27.0,
+      "middle": 38.0,
+      "lower-middle": 18.0,
+      "low": 6.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 32.0,
+      "the suburbs": 23.0,
+      "a large town": 18.0,
+      "a small town": 17.0,
+      "a village or the countryside": 10.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 46.0,
+      "Christian": 36.0,
+      "Buddhist": 1.0,
+      "Hindu": 3.0,
+      "Jewish": 1.0,
+      "Muslim": 8.0,
+      "Sikh": 1.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 46.0,
+      "Did not vote": 16.0,
+      "Leave": 24.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 60,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 41,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 55,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 52,
+     "uk_pct": 36,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 52,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 56,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 58,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 56,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 52,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 53,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 54,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 54,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 59,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 50,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 44,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 51,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 55,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 47,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 38,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 60,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 53,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 56,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 63,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 55,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 44,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 66,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 32,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "now I want to do my own research because I don't trust the government or doctors on everything",
+     "speaker": "Talia, Leeds",
+     "page": 132
+    },
+    {
+     "quote": "I used to vote, but I just don't have any faith in any parties at this point",
+     "speaker": "Carolyn, Glasgow",
+     "page": 132
+    },
+    {
+     "quote": "just the lads helping the other lads from the public school",
+     "speaker": "Claire, Manchester",
+     "page": 134
+    },
+    {
+     "quote": "Every night I struggle with doom scrolling",
+     "speaker": "Vicky, Glasgow",
+     "page": 135
+    },
+    {
+     "quote": "I feel like there's more talk, less action done (...) If I was struggling now with my mental health, I wouldn't know where to go.",
+     "speaker": "Zain, car trader, Sceptical Scroller",
+     "page": 40,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I think a therapist needs to go through certain situations and maybe experience anxiety or depression themselves",
+     "speaker": "Zafiyah, student, Sceptical Scroller",
+     "page": 39,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "Post-Covid I am much more critical about what I read – now I want to do my own research because I don't trust the government or doctors on everything",
+     "speaker": "Talia, Leeds",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "Twitter or X is perfect for it because when you go to the comment section you get a different perspective from everybody and I think you tend to find people who have better answers and more truth.",
+     "speaker": "James, Glasgow",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/sceptical-scrollers/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 49
+   }
+  },
+  {
+   "id": "rooted_patriots",
+   "name": "Rooted Patriots",
+   "share_pct": 20,
+   "tagline": "Patriotic but politically untethered; feel overlooked by elites and want common sense, not revolution",
+   "summary": "A patriotic but politically untethered group who feel abandoned and overlooked by political elites and want leaders with common sense, without wanting to overthrow the system. Particularly concerned about community decline and the pressures of migration; interventionist on the economy and conservative on social issues.",
+   "priorities": [
+    "immigration levels and pressure on public services",
+    "the cost of living",
+    "out-of-touch politicians",
+    "decline of British culture and values",
+    "crime and antisocial behaviour",
+    "the NHS"
+   ],
+   "psychology": [
+    "patriotic",
+    "nostalgic",
+    "cautious",
+    "overlooked",
+    "family-focused",
+    "disillusioned",
+    "common-sense",
+    "pessimistic"
+   ],
+   "life": [
+    "villages, rural areas, post-industrial, 'Red Wall' and coastal towns",
+    "owner-occupiers living with a spouse",
+    "practical jobs, retired, or caring for grandchildren",
+    "constituencies such as Scarborough and Whitby, Merthyr Tydfil, Redcar, Hartlepool, North West Norfolk"
+   ],
+   "humanity_hint": "defensive",
+   "temperature": 6,
+   "top_emotions": [
+    "frustration",
+    "nostalgia",
+    "anxiety"
+   ],
+   "character": {
+    "decision_rules": "Asks whether something is fair to people who have worked hard and paid in; puts own community and country first; distrusts elites and experts who seem out of touch.",
+    "behaviour": "Keeps up with local goings-on; feels politicians break promises; drawn to whoever acknowledges that ordinary people feel forgotten; cautious with money.",
+    "vocabulary": "Plain-spoken, common-sense, about 'people like us', hard work, fairness and respect; proud of Britain and the NHS but sure things have gone downhill.",
+    "information_diet": "Local Facebook community groups and local news, BBC television news and local radio, glances at newspaper headlines; trusts neighbours' experience more than expert analysis.",
+    "failure_modes": "Pessimistic and nostalgic; can blame newcomers for strains on services; disengages from complicated debates."
+   },
+   "pen_portrait": "A 64-year-old part-time cleaner in Whitby who looks after her grandchildren two days a week; can't afford to retire; voted Labour in 2024 for the first time since 1997 and felt let down by the Winter Fuel decision; reads local Facebook groups with her morning tea; drawn to Reform.",
+   "findings": [
+    "By far the segment most likely to support tougher sentences and the death penalty for some crimes. [p147]",
+    "Most likely to say young people lack respect for traditional values. [p147]",
+    "Most likely to say politics is too confusing and complicated to follow; most likely to say they back no party. [p149]",
+    "Far more likely than other segments to use Facebook for information (local community groups). [p149]",
+    "Among the most worried about climate change and supportive of many climate policies, but want a fair transition. [p206]",
+    "lived experience: Slightly below average personal experience but among the most likely to cite an immediate family member; relatives' struggles dominate their focus-group stories. (self 25%, close friend 12%, immediate family 26% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Comfortable, around the national average. (79% comfortable (very 34, somewhat 45; not very 12, not at all 3)) [mental-health report p13]",
+    "government action on services: High salience: almost as urgent as the left-leaning segments; see services as in a dire state needing dramatic change. (81% want more done; 44% 'much more') [mental-health report p42]",
+    "views on services / NHS: Considerably less likely than average to think range and quality of support is improving; NHS seen as lacking capacity. [mental-health report p42]",
+    "science optimism: Sceptical that innovation alone can fix a strained system. (33% say scientific and technological advances will have little or no impact) [mental-health report p42]",
+    "trust in NHS / doctors: Highly trust the NHS and especially frontline clinicians. (79% trust the NHS (national 75%); 83% would find advice from doctors and medical professionals convincing) [mental-health report p68]",
+    "trust in government: Distinct distrust of national and local government; also, like Progressive Activists, uneasy about the profit motive in research. (22% trust national government on mental health information (lower than every segment except Dissenting Disruptors)) [mental-health report p42]",
+    "trust in therapy: Strongly back in-person therapy but much less so online therapy; tied with Dissenting Disruptors as most likely to feel 'very uncomfortable' talking to a therapist online. (in-person therapy effective 80%; online therapy effective 59%) [mental-health report p43]",
+    "apps / digital tools / AI: Low awareness of digital interventions and more undecided than opposed, except AI chatbots which they distrust; second only to Traditional Conservatives in discomfort with AI chatbots, wearables and VR. (mobile apps: 34% effective, 30% ineffective, 36% don't know) [mental-health report p43]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 4.0,
+      "25-34": 9.0,
+      "35-44": 13.0,
+      "45-54": 18.0,
+      "55-64": 23.0,
+      "65-74": 19.0,
+      "75+": 14.0
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 41.0,
+      "female": 59.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 94.0,
+      "Asian/ Asian British": 3.0,
+      "Black/ Black British": 1.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Other": 1.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 14.0,
+      "No degree": 86.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 4.0,
+      "upper-middle": 32.0,
+      "middle": 38.0,
+      "lower-middle": 19.0,
+      "low": 6.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 16.0,
+      "the suburbs": 27.0,
+      "a large town": 14.0,
+      "a small town": 23.0,
+      "a village or the countryside": 20.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 41.0,
+      "Christian": 53.0,
+      "Hindu": 1.0,
+      "Jewish": 1.0,
+      "Muslim": 1.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 36.0,
+      "Did not vote": 14.0,
+      "Leave": 42.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 78,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 63,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 70,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 31,
+     "uk_pct": 36,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 91,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 77,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 91,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 86,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 56,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 69,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 66,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 59,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 89,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 48,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 44,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 50,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 72,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 51,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 26,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 61,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 61,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 58,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 84,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 42,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 44,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 88,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 43,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "if there is a medical emergency you can get seen to pretty quickly still",
+     "speaker": "Charlie, Wrexham",
+     "page": 144
+    },
+    {
+     "quote": "I can't think of something that has improved.",
+     "speaker": "Susan, Bridgwater",
+     "page": 144
+    },
+    {
+     "quote": "I'm not a horrible person, but I really feel like we need to look after our own people.",
+     "speaker": "Mel, Bridgwater",
+     "page": 147
+    },
+    {
+     "quote": "They don't respect the people that vote for them",
+     "speaker": "Diane, Bridgwater",
+     "page": 42
+    },
+    {
+     "quote": "The waiting lists for seeing specialist doctors seems to be getting longer... I do feel that things like the NHS, it hasn't got the capacity to help everybody.",
+     "speaker": "Gail, retired, Rooted Patriot",
+     "page": 17,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "There's never going to be that magic cure... because there's no money to be made in these big organisations.",
+     "speaker": "Ryan, Doncaster, Rooted Patriot",
+     "page": 43,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "We've got stuff like the NHS that yes, there's long waiting lists, but if there is a medical emergency you can get seen to pretty quickly still.",
+     "speaker": "Charlie, Wrexham",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "Society has gone downhill in my view for lots of reasons. Whether it is money, whether it is immigrants, whether it is expectations… I can't think of something that has improved.",
+     "speaker": "Susan, Bridgewater",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/rooted-patriots/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 59
+   }
+  },
+  {
+   "id": "traditional_conservatives",
+   "name": "Traditional Conservatives",
+   "share_pct": 8,
+   "tagline": "Respect authority and tradition; individual responsibility; nostalgic but optimistic",
+   "summary": "Respectful of authority and tradition, Traditional Conservatives believe in individual responsibility and the established norms that have served them well. Nostalgic for the past but optimistic about the future, they are deeply sceptical of forces of change such as immigration and the path to net zero.",
+   "priorities": [
+    "declining respect for authority and tradition",
+    "social disorder and antisocial behaviour",
+    "economic instability",
+    "threats to British institutions",
+    "breakdown of family values"
+   ],
+   "psychology": [
+    "comfortable",
+    "traditional",
+    "institutional",
+    "optimistic",
+    "meritocratic",
+    "stable",
+    "individualist",
+    "risk-averse",
+    "conservative"
+   ],
+   "life": [
+    "rural areas and market towns",
+    "detached houses owned outright",
+    "church and community events",
+    "older and retired",
+    "constituencies such as Hexham, Stratford-on-Avon, Richmond and Northallerton"
+   ],
+   "humanity_hint": "tempered",
+   "temperature": 3,
+   "top_emotions": [
+    "nostalgia",
+    "trust",
+    "pride"
+   ],
+   "character": {
+    "decision_rules": "Trusts established institutions (Church, Monarchy, Parliament) and individual responsibility; reform, not revolution; hard work and patience are the path to prosperity.",
+    "behaviour": "Keeps steady routines, involved in church and parish life; listens politely to challenge but holds to established views; retreats to faith and community when debates get heated.",
+    "vocabulary": "Courteous, traditional, measured; speaks of respect, responsibility, family and duty; sceptical of new terminology.",
+    "information_diet": "The Times, Telegraph and Financial Times; BBC Radio 4 and BBC television news; seeks expert opinion and trusts established outlets over social media voices.",
+    "failure_modes": "Can be dismissive of younger people's struggles; resistant to change; sceptical of claims of structural disadvantage."
+   },
+   "pen_portrait": "A 72-year-old widow in a Cotswold cottage; arranges flowers at the village church; BBC One news while knitting; voted Conservative again despite frustration over immigration; listens politely when grandchildren challenge her on gender or climate.",
+   "findings": [
+    "Only segment preferring an economy as wealthy as possible even with bigger rich-poor gaps. [p156]",
+    "Most likely to say it is more important that children are well behaved than creative. [p157]",
+    "Most likely of all groups to say people on benefits do not pay their fair share of taxes. [p191]",
+    "Only segment to decisively back the Conservatives in 2024; now narrowly more likely to back Reform. [p215]",
+    "Treat national decline as temporary; expect their children's generation to live better lives. [p156]",
+    "lived experience: Least likely segment to have personally experienced a mental health issue; tied with Established Liberals as least likely to have friends or family with experience. (self 12%, close friend 8%, immediate family 16% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Seven in ten would be comfortable if a friend opened up. (71% comfortable (very 27, somewhat 44; not very 15, not at all 6)) [mental-health report p13]",
+    "overdiagnosis / 'excuse' view: 'Snowflake' views are a minority even here: about a third think people often use mental health as an excuse. (about a third) [mental-health report p44]",
+    "salience: Lowest salience of any segment by far; mental health is peripheral compared with other issues. [mental-health report p31]",
+    "government action on services: Barely half want government to do more; far fewer say 'much more'. (52% do more (public 75%); 18% 'much more' vs 41% other six segments) [mental-health report p45]",
+    "parity of esteem: Far less likely to accept parity of esteem. (61% vs 74% other six segments) [mental-health report p45]",
+    "mental vs physical spending: Widest physical-vs-mental gap of any segment in a split-sample test: among the most supportive of physical health research investment, least supportive of mental health research. (87% support more physical health research vs 54% mental health; 22% strongly support mental health research vs 37% other six segments) [mental-health report p44]",
+    "personal responsibility vs structural: Tend to see mental health as a personal rather than societal problem, often solved with support from friends and family; least likely to think new breakthroughs are needed. (29% say new scientific breakthroughs needed (other six segments 44%)) [mental-health report p45]",
+    "science optimism: Broadly trusting of science in general but sceptical on mental health innovation. (6 points below average on scientific advances helping people lead better lives) [mental-health report p45]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 4.0,
+      "25-34": 5.0,
+      "35-44": 8.0,
+      "45-54": 13.0,
+      "55-64": 19.0,
+      "65-74": 21.0,
+      "75+": 30.0
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 55.0,
+      "female": 45.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 96.0,
+      "Asian/ Asian British": 2.0,
+      "Black/ Black British": 1.0,
+      "Other": 1.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 26.0,
+      "No degree": 74.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 10.0,
+      "upper-middle": 50.0,
+      "middle": 32.0,
+      "lower-middle": 7.0,
+      "low": 1.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 11.0,
+      "the suburbs": 28.0,
+      "a large town": 10.0,
+      "a small town": 24.0,
+      "a village or the countryside": 26.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 37.0,
+      "Christian": 59.0,
+      "Jewish": 1.0,
+      "Muslim": 1.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 34.0,
+      "Did not vote": 11.0,
+      "Leave": 44.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 94,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 80,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 79,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 24,
+     "uk_pct": 36,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 42,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 81,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 95,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 88,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 45,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 57,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 70,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 75,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 90,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 30,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 59,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 69,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 81,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 56,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 50,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 55,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 88,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 63,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 77,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 60,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 38,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 81,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 31,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "I think the world's in a bloody bad place at the moment as well.",
+     "speaker": "Chris, Cirencester",
+     "page": 154
+    },
+    {
+     "quote": "Children have no respect for their elders these days",
+     "speaker": "Margaret, Great Yarmouth",
+     "page": 154
+    },
+    {
+     "quote": "I felt that that was Britain at its best",
+     "speaker": "Susan, Great Yarmouth",
+     "page": 154
+    },
+    {
+     "quote": "What I don't like is coming over on a boat and jumping the queue on everything.",
+     "speaker": "Ray, Great Yarmouth",
+     "page": 192
+    },
+    {
+     "quote": "If I was going to the doctors tomorrow and they told me I had cancer, or they told me I'm suffering anxiety, I know what I'd choose.",
+     "speaker": "Steve, sales manager, Traditional Conservative",
+     "page": 44,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "But I think there's a lot to be said for sitting down and talking to somebody.",
+     "speaker": "Steve, sales manager, Traditional Conservative",
+     "page": 45,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I definitely feel that we are in a very bad place at the moment, but if you look at the rest of the world, I think the world's in a bloody bad place at the moment as well.",
+     "speaker": "Chris, Cirencester",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "There is a very big lack of respect in the country for authorities mainly. Children have no respect for their elders these days.",
+     "speaker": "Susan, Great Yarmouth",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/traditional-conservatives/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 45
+   }
+  },
+  {
+   "id": "dissenting_disruptors",
+   "name": "Dissenting Disruptors",
+   "share_pct": 20,
+   "tagline": "Frustrated, distrustful, want radical change and strong leadership",
+   "summary": "Frustrated with their circumstances and hungry for radical solutions, Dissenting Disruptors crave dramatic change and strong leadership. Highly distrustful of institutions, opposed to multiculturalism and disconnected from society, they are drawn to movements that promise to overhaul the status quo and put people like them first.",
+   "priorities": [
+    "immigration and cultural change",
+    "economic decline and lack of opportunity",
+    "political correctness silencing ordinary people",
+    "crime and social disorder",
+    "loss of British identity"
+   ],
+   "psychology": [
+    "frustrated",
+    "outsider",
+    "anti-establishment",
+    "disillusioned",
+    "worried",
+    "populist",
+    "distrusting",
+    "determined"
+   ],
+   "life": [
+    "post-industrial towns",
+    "social housing or struggling with housing costs",
+    "manual or service jobs",
+    "constituencies such as Blackpool South, Clacton, Ashfield, Dudley, Wolverhampton South East"
+   ],
+   "humanity_hint": "reactive",
+   "temperature": 8,
+   "top_emotions": [
+    "anger",
+    "frustration",
+    "anxiety"
+   ],
+   "character": {
+    "decision_rules": "Puts people like them and British families first; assumes the establishment lies; wants the whole system swept away and started afresh.",
+    "behaviour": "Shares content the mainstream 'won't show'; often doesn't vote because 'it never changes anything'; drawn to strong leaders who break the rules.",
+    "vocabulary": "Blunt, angry, plain; 'common sense', 'the system is rotten', 'nobody asked us'; hates political correctness.",
+    "information_diet": "Older members watch GB News and phone-in talk radio; younger ones use social media and YouTube, hearing directly from politicians such as Nigel Farage; many avoid mainstream news as biased against people like them.",
+    "failure_modes": "Susceptible to conspiracy theories and misinformation; blames immigrants and elites; little trust in any institution."
+   },
+   "pen_portrait": "A 48-year-old delivery driver in Middlesbrough whose father worked in steel; talk radio all shift; dislikes the BBC; drawn to Farage; rarely votes; scrolls Facebook groups and YouTube; doesn't consider himself racist but thinks newcomers come first.",
+   "findings": [
+    "Most likely to feel lonely and least likely to feel respected. [p164]",
+    "Most likely to feel like a stranger or outcast in Britain. [p164]",
+    "Lowest institutional trust of any segment. [p166]",
+    "Only segment more likely to trust an independent observer on social media than a large media organisation on an international conflict. [p211]",
+    "Most likely to have fallen behind with bills or borrowed from family or friends. [p180]",
+    "Half of GB News viewers are Dissenting Disruptors. [p210]",
+    "lived experience: Tied with Progressive Activists for highest personal experience (two in five); often speak from their own experience of seeking help. (self 39%, close friend 17%, immediate family 26% (all: 28/16/22)) [mental-health report p21]",
+    "comfort talking about mental health: Highly comfortable if a friend opened up. (82% comfortable (very 40, somewhat 42; not very 10, not at all 2)) [mental-health report p13]",
+    "views on services / NHS: Most likely segment to think range and availability of treatments has worsened; extremely pessimistic about public services while valuing informal networks. (range improved 25% vs 36%; quality improved 23% vs 33% (other six segments)) [mental-health report p47]",
+    "government handling: Three quarters say government handles mental health badly. (three quarters badly; 12% handling well vs 23% other six segments) [mental-health report p47]",
+    "science optimism: Two in five expect scientific discoveries to have little or no impact; fewer see great potential in science. (two in five little/no impact; 26% 'a great deal' of potential vs 31% other six segments) [mental-health report p46]",
+    "need for breakthroughs / delivery: Most think the tools already exist and the problem is the state's ability to deliver. (40% think new breakthroughs needed; three in five think we already have the skills and technologies) [mental-health report p46]",
+    "trust in medication / pharma: Prefer non-drug interventions: roughly average on online and in-person talking therapy but considerably less likely to rate prescribed medication effective, linked to exceptional distrust of pharma (on a par with Progressive Activists). [mental-health report p47]",
+    "trust in voices: Extremely low trust in every institution, especially government and pharma, but very high trust in people with lived experience; want named doctors and practitioners rather than an anonymous NHS. (86% trust members of the public with lived experience; 67% trust the NHS; 16% trust national government) [mental-health report p70]"
+   ],
+   "distributions": {
+    "age_band": {
+     "dist": {
+      "18-24": 8.0,
+      "25-34": 14.0,
+      "35-44": 18.0,
+      "45-54": 20.0,
+      "55-64": 19.0,
+      "65-74": 12.0,
+      "75+": 9.0
+     },
+     "source": "Fig 147, p263"
+    },
+    "gender": {
+     "dist": {
+      "male": 55.0,
+      "female": 45.0
+     },
+     "source": "Fig 158, p273"
+    },
+    "ethnicity": {
+     "dist": {
+      "White (British/Irish/Other)": 92.0,
+      "Asian/ Asian British": 4.0,
+      "Black/ Black British": 1.0,
+      "Mixed descent (e.g. White & Asian, White & Black)": 1.0,
+      "Other": 1.0
+     },
+     "source": "Fig 153, p268"
+    },
+    "education": {
+     "dist": {
+      "Degree": 21.0,
+      "No degree": 79.0
+     },
+     "source": "Fig 148, p264"
+    },
+    "income_band": {
+     "dist": {
+      "high": 4.0,
+      "upper-middle": 26.0,
+      "middle": 35.0,
+      "lower-middle": 24.0,
+      "low": 9.0
+     },
+     "source": "Fig 149 (how well off they feel), p265"
+    },
+    "settlement": {
+     "dist": {
+      "a city centre": 20.0,
+      "the suburbs": 26.0,
+      "a large town": 15.0,
+      "a small town": 22.0,
+      "a village or the countryside": 16.0
+     },
+     "source": "Fig 150, p266"
+    },
+    "religion": {
+     "dist": {
+      "no religion": 51.0,
+      "Christian": 42.0,
+      "Buddhist": 1.0,
+      "Muslim": 2.0
+     },
+     "source": "Fig 152, p267"
+    },
+    "eu2016": {
+     "dist": {
+      "Remain": 30.0,
+      "Did not vote": 8.0,
+      "Leave": 52.0
+     },
+     "source": "EU referendum vote, p128"
+    }
+   },
+   "beliefs": [
+    {
+     "id": "own_outcomes",
+     "agree": "People are largely responsible for their own outcomes in life.",
+     "disagree": "People's outcomes in life are largely determined by forces outside their control.",
+     "agree_pct": 65,
+     "uk_pct": 70,
+     "source": "Fig 33: Belief in personal agency by segment (p70)"
+    },
+    {
+     "id": "preserve_institutions",
+     "agree": "Our political and social institutions are worth preserving and improving, not destroying.",
+     "disagree": "When I think about our political and social institutions, part of me thinks: just let them all burn.",
+     "agree_pct": 39,
+     "uk_pct": 62,
+     "source": "Fig 28: Desire for radical change by segment (p64)"
+    },
+    {
+     "id": "reform_not_restart",
+     "agree": "We can fix the problems in our institutions through reform, without starting over.",
+     "disagree": "Our institutions can't be fixed by reform — we need to start over.",
+     "agree_pct": 53,
+     "uk_pct": 69,
+     "source": "Fig 67: Desire to drastically change our institutions by segment (reform vs tear down) (p119)"
+    },
+    {
+     "id": "covid_exaggerated",
+     "agree": "The Covid pandemic was exaggerated to control people.",
+     "disagree": "The Covid pandemic was not exaggerated to control people.",
+     "agree_pct": 65,
+     "uk_pct": 36,
+     "source": "Fig 39: Belief in conspiracies by segment (p75)"
+    },
+    {
+     "id": "protect_from_hate_speech",
+     "agree": "We need to protect people from dangerous and hateful speech.",
+     "disagree": "People should be free to say what they think, even if it's controversial or offensive.",
+     "agree_pct": 11,
+     "uk_pct": 59,
+     "source": "Fig 51: Attitudes to free speech by segment (p86)"
+    },
+    {
+     "id": "pc_problem",
+     "agree": "Political correctness is a problem in this country.",
+     "disagree": "Political correctness is necessary to make sure people are treated with respect.",
+     "agree_pct": 82,
+     "uk_pct": 63,
+     "source": "Fig 52: Attitudes to political correctness by segment (p86)"
+    },
+    {
+     "id": "identity_disappearing",
+     "agree": "British identity is disappearing nowadays.",
+     "disagree": "British identity is being strengthened through diversity.",
+     "agree_pct": 94,
+     "uk_pct": 57,
+     "source": "Fig 46: Impacts of multiculturalism on British identity by segment (p81)"
+    },
+    {
+     "id": "british_first",
+     "agree": "The government should put British people first.",
+     "disagree": "The government should prioritise everyone in Britain equally, whatever their nationality or background.",
+     "agree_pct": 86,
+     "uk_pct": 53,
+     "source": "Fig 49: Putting British people first by segment (p84)"
+    },
+    {
+     "id": "compromise",
+     "agree": "The people I agree with politically need to be willing to listen and compromise.",
+     "disagree": "The people I agree with politically need to stick to their beliefs and fight.",
+     "agree_pct": 50,
+     "uk_pct": 53,
+     "source": "Fig 44: Desire for compromise by segment (p79)"
+    },
+    {
+     "id": "people_not_experts",
+     "agree": "Ordinary people understand the country's problems better than experts.",
+     "disagree": "Experts understand the country's problems better than ordinary people.",
+     "agree_pct": 73,
+     "uk_pct": 59,
+     "source": "Fig 40: Trust in experts by segment (p76)"
+    },
+    {
+     "id": "simple_solutions",
+     "agree": "The big challenges facing the UK are straightforward and just need plain common sense.",
+     "disagree": "The big challenges facing the UK are complex and need careful expert solutions.",
+     "agree_pct": 70,
+     "uk_pct": 57,
+     "source": "Fig 31: Perceptions of whether Britain's challenges are simple or complex (p68)"
+    },
+    {
+     "id": "too_offended",
+     "agree": "People are too easily offended nowadays.",
+     "disagree": "People are right to be more sensitive to offensive language and actions.",
+     "agree_pct": 85,
+     "uk_pct": 56,
+     "source": "Fig 64: Attitudes to personal offence by segment (p110)"
+    },
+    {
+     "id": "immigration_undermined",
+     "agree": "Immigration has undermined British culture and society.",
+     "disagree": "Immigration has enriched British culture and society.",
+     "agree_pct": 87,
+     "uk_pct": 55,
+     "source": "Fig 97: Attitudes towards the impact of multiculturalism on British identity (immigration undermined vs enriched) (p194)"
+    },
+    {
+     "id": "people_decide",
+     "agree": "The people, not politicians, should take our most important policy decisions.",
+     "disagree": "Our most important policy decisions should be taken by elected representatives.",
+     "agree_pct": 63,
+     "uk_pct": 45,
+     "source": "Fig 32: Views on democracy by segment (who should decide) (p69)"
+    },
+    {
+     "id": "trust_people",
+     "agree": "Most people can be trusted.",
+     "disagree": "You can't be too careful with most people.",
+     "agree_pct": 29,
+     "uk_pct": 47,
+     "source": "Fig 54: Interpersonal trust by segment (p89)"
+    },
+    {
+     "id": "genuine_democracy",
+     "agree": "Britain's system of government is a genuine democracy.",
+     "disagree": "Britain's system of government is not a genuine democracy.",
+     "agree_pct": 31,
+     "uk_pct": 54,
+     "source": "Fig 32: Views on democracy by segment (genuine democracy) (p69)"
+    },
+    {
+     "id": "trust_neighbours",
+     "agree": "I trust my neighbours.",
+     "disagree": "I don't really trust my neighbours.",
+     "agree_pct": 64,
+     "uk_pct": 71,
+     "source": "Fig 25: Trust in neighbours by segment (p58)"
+    },
+    {
+     "id": "rule_breaking_leader",
+     "agree": "The UK needs a leader who is willing to break the rules.",
+     "disagree": "The UK needs a leader who follows the rules.",
+     "agree_pct": 65,
+     "uk_pct": 47,
+     "source": "Fig 80: Desire for a strongman leader by segment (p165)"
+    },
+    {
+     "id": "likes_debate",
+     "agree": "I quite like debating political issues with friends.",
+     "disagree": "I prefer to avoid talking about politics.",
+     "agree_pct": 43,
+     "uk_pct": 41,
+     "source": "Fig 65: The segments which enjoy talking about politics (p112)"
+    },
+    {
+     "id": "pressure_on_immigration",
+     "agree": "I feel pressure to speak a certain way about subjects like immigration.",
+     "disagree": "I feel free to speak about subjects like immigration.",
+     "agree_pct": 69,
+     "uk_pct": 48,
+     "source": "Fig 53: Freedom to speak about immigration by segment (p87)"
+    },
+    {
+     "id": "same_opportunities",
+     "agree": "People like me have the same opportunities in society as other people.",
+     "disagree": "People like me are not offered the same opportunities as others.",
+     "agree_pct": 52,
+     "uk_pct": 64,
+     "source": "Fig 34: Perceived personal life chances by segment (p71)"
+    },
+    {
+     "id": "citizens_change",
+     "agree": "Through their decisions and actions, citizens can change society.",
+     "disagree": "Citizens' decisions and actions have little influence on society.",
+     "agree_pct": 52,
+     "uk_pct": 63,
+     "source": "Fig 35: Ability of citizens to shape society by segment (p72)"
+    },
+    {
+     "id": "risk_averse",
+     "agree": "A sensible person avoids activities that are dangerous.",
+     "disagree": "I sometimes like doing things that are a little frightening.",
+     "agree_pct": 66,
+     "uk_pct": 73,
+     "source": "Fig 30: Risk tolerance by segment (p67)"
+    },
+    {
+     "id": "connected",
+     "agree": "I feel connected to the society around me.",
+     "disagree": "I feel disconnected from the society around me.",
+     "agree_pct": 34,
+     "uk_pct": 49,
+     "source": "Fig 55: Connection to local community by segment (p90)"
+    },
+    {
+     "id": "too_divided",
+     "agree": "The differences between Britons are too big for us to come together.",
+     "disagree": "The differences between Britons aren't so big that we can't come together.",
+     "agree_pct": 48,
+     "uk_pct": 35,
+     "source": "Fig 61: Feelings of division by segment (p99)"
+    },
+    {
+     "id": "best_years_behind",
+     "agree": "Britain's best years are behind us.",
+     "disagree": "Britain's best years are ahead of us.",
+     "agree_pct": 88,
+     "uk_pct": 74,
+     "source": "Fig 20: Most Britons think the country's best years are behind us (p53)"
+    },
+    {
+     "id": "area_more_dangerous",
+     "agree": "Where I live is getting more dangerous.",
+     "disagree": "Where I live isn't getting more dangerous.",
+     "agree_pct": 46,
+     "uk_pct": 33,
+     "source": "Fig 17: Feelings of local safety by segment (p49)"
+    }
+   ],
+   "voice": [
+    {
+     "quote": "we need politicians with a backbone and a pair of balls.",
+     "speaker": "Tony, Wolverhampton",
+     "page": 162
+    },
+    {
+     "quote": "the roads are knackered, the town centres are knackered",
+     "speaker": "Damien, Wigan",
+     "page": 162
+    },
+    {
+     "quote": "it feels like the country's lost its identity.",
+     "speaker": "Johnny, Wigan",
+     "page": 81
+    },
+    {
+     "quote": "Sack the lot, put someone else in for half the price",
+     "speaker": "Paul, Dudley",
+     "page": 166
+    },
+    {
+     "quote": "I went to seek support for my mental health, I was basically told no, that it was just hormonal... don't get any help from the NHS because there's too much of a backlog.",
+     "speaker": "Rachel, maternity leave, Dissenting Disruptor",
+     "page": 46,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "Definitely the stories. It's like whenever you look at a product, you're looking at reviews before you buy it.",
+     "speaker": "Lawrence, Clacton, Dissenting Disruptor",
+     "page": 71,
+     "source": "mental-health report"
+    },
+    {
+     "quote": "I think to sort the country out, we need politicians with a backbone and a pair of balls.",
+     "speaker": "Tony, Wolverhampton",
+     "source": "moreincommon.org.uk segment page"
+    },
+    {
+     "quote": "It feels like the country's lost its identity. We don't really know who we are anymore… Everyone feels that they have to caveat with saying I'm not racist.",
+     "speaker": "Johnny, Wigan",
+     "source": "moreincommon.org.uk segment page"
+    }
+   ],
+   "url": "https://www.moreincommon.org.uk/seven-segments/dissenting-disruptors/",
+   "plan_demographics": {
+    "age_min": 18,
+    "age_max": 90,
+    "gender_female_pct": 45
+   }
+  }
+ ],
+ "benchmarks": [],
+ "assumptions": [
+  "Shattered Britain publishes no region mix per segment: every segment's agents are spread over GB regions in the national proportions (Britain's Choice 2020 UK average).",
+  "No 2019 or 2024 general-election vote mix is published for every segment, so agents carry their EU referendum vote and no general-election vote.",
+  "Thirteen of the 21 segmentation-quiz items (authority, care, autonomy, parenting, the left-right grid, self-efficacy, victimhood) have no published by-segment figures; the beliefs use the 27 items that do.",
+  "Where an age chart leaves more than one small bar unlabelled (Sceptical Scrollers: 65-74 and 75+), the unlabelled remainder is split across those bands in proportion to their national shares.",
+  "Beliefs are drawn item by item at each segment's published share, linked by one latent 'how typical of the segment' score per person.",
+  "The June 2023 11 London poll is broken down by the 2020 segments, not these — use the Britain's Choice kit to score against it."
+ ],
+ "evidence_coverage": "Every demographic mix and belief share is cited to a figure and page of More in Common, Shattered Britain (July 2025), polling of 20,000+ GB adults (chart values read from the rendered pages); health findings from More in Common/Wellcome (2026); character text summarises the segment pages on moreincommon.org.uk."
+}

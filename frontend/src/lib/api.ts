@@ -355,6 +355,13 @@ export const api = {
       request<{ queued: boolean }>(`/sessions/${sessionId}/population/quant-search`, { method: "POST", body: JSON.stringify({ query, sources, build_id: buildId ?? null }) }),
     /** Statistics pages gathered for this session (`quant` evidence). */
     facts: (sessionId: string) => request<EvidenceItem[]>(`/sessions/${sessionId}/evidence?source_class=quant&limit=200`),
+    /** Published segmentations that build a population directly, and the real polls to score against. */
+    kits: () => request<{ kits: PopulationKit[]; benchmarks: BenchmarkSummary[] }>(`/kits`),
+    fromKit: (sessionId: string, body: { kit_id: string; count: number; mode: SimMode; preset?: string | null; seed?: number; approve?: boolean }) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/kit`, { method: "POST", body: JSON.stringify(body) }),
+    /** A finished Forms run scored against a real poll: per question, per segment, per demographic cut. */
+    benchmarkScore: (sessionId: string, probeId: string, benchmarkId: string) =>
+      request<BenchmarkScore>(`/sessions/${sessionId}/probes/${probeId}/benchmark/${encodeURIComponent(benchmarkId)}`),
   },
   presets: {
     list: () => request<AgentPreset[]>("/presets"),
@@ -1164,6 +1171,42 @@ export type SurveyQuestion = {
   min_label?: string;
   max_label?: string;
   primary?: boolean;
+  /** "Select up to N" on a multi question. */
+  max_choices?: number;
+  /** Options that stand alone ("Don't know", "None of the above"). */
+  exclusive?: string[];
+  /** Routing: asked only of those who gave one of `equals` to question `key`. */
+  show_if?: { key: string; equals: string[] } | null;
+};
+
+/** A published segmentation the Studio can build from (backend/app/data/kits). */
+export type PopulationKit = {
+  id: string;
+  title: string;
+  publisher?: string;
+  population?: string;
+  description?: string;
+  year?: number | string;
+  share_presets: Record<string, { label: string; source?: string }>;
+  default_preset?: string;
+  segments: { id: string; name: string; share_pct?: number; tagline?: string }[];
+  benchmarks: string[];
+};
+
+export type BenchmarkSummary = { id: string; title?: string; fieldwork?: string; sample?: string; segmentation?: string; kit?: string; questions: number };
+
+export type BenchmarkSummaryStats = {
+  items: number; mae_pts: number; median_mae_pts: number; uniform_baseline_mae_pts: number | null;
+  top_choice_agreement: number | null; mean_rank_corr: number | null; within_5_pts: number; national_baseline_mae_pts?: number | null;
+};
+
+export type BenchmarkScore = {
+  benchmark: string; title?: string; respondents: number;
+  headline: BenchmarkSummaryStats;
+  per_question: (BenchmarkSummaryStats & { question: string; number?: string; text: string; type: string })[];
+  by_column: Record<string, BenchmarkSummaryStats>;
+  segment_gradients: { question: string; option: string; real_spread_pts: number; corr: number | null; real: Record<string, number>; sim: Record<string, number> }[];
+  units: { question: string; row?: string; mae_pts: number; options: { option: string; real_pct: number; sim_pct: number; diff_pts: number }[] }[];
 };
 
 export type SurveyTemplate = {

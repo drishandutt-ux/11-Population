@@ -252,11 +252,25 @@ def _iso(dt) -> Optional[str]:
     return v if (dt.tzinfo is not None or v.endswith("Z")) else v + "Z"
 
 
+def _plan_for_payload(plan: Optional[dict]) -> Optional[dict]:
+    """A kit plan carries every agent's drawn card (facts and beliefs); the Studio polls the build,
+    so the cards travel as a count and the first two as a sample, not in full."""
+    if not plan or not any(sg.get("kit_cards") for sg in plan.get("segments") or []):
+        return plan
+    segs = []
+    for sg in plan.get("segments") or []:
+        cards = sg.get("kit_cards") or []
+        sg = {k: v for k, v in sg.items() if k != "kit_cards"}
+        sg["kit_cards_count"], sg["kit_cards_sample"] = len(cards), cards[:2]
+        segs.append(sg)
+    return {**plan, "segments": segs}
+
+
 def build_payload(bld: PopulationBuild) -> dict:
     return {
         "id": bld.id, "session_id": bld.session_id, "status": bld.status, "mode": bld.mode, "target_count": bld.target_count,
         "constraints": bld.constraints or {}, "sources": bld.sources or {}, "detected": bld.detected, "questions": bld.questions or [],
-        "plan": bld.plan, "frame": bld.frame, "log": bld.log or [], "error": bld.error, "created_at": _iso(bld.created_at), "updated_at": _iso(bld.updated_at),
+        "plan": _plan_for_payload(bld.plan), "frame": bld.frame, "log": bld.log or [], "error": bld.error, "created_at": _iso(bld.created_at), "updated_at": _iso(bld.updated_at),
     }
 
 
@@ -1315,6 +1329,9 @@ async def approve(build_id: str, *, count: Optional[int] = None, mode: Optional[
     for sg in segments:
         if sg.get("decision") == "proposed":
             sg["decision"] = "accepted"
+    if bld.plan.get("kit"):
+        from app.services.kits.registry import ensure_cards
+        ensure_cards(bld.plan, segments)
     fields["plan"] = {**bld.plan, "segments": segments}
     bld = await _save(build_id, **fields)
     async with dbm.AsyncSessionLocal() as db:

@@ -827,11 +827,63 @@ async def generate_agents_from_plan(
 
     progress_lock = asyncio.Lock()
 
+    async def _kit_batch(seg: dict, kseg: dict, cards: list[dict], taken: list[dict], label: str) -> list[dict]:
+        """One batch written from kit cards (a published segmentation): the facts and beliefs are
+        drawn already, the model writes the life, and the card is enforced on what comes back."""
+        from app.services.kits import cast as kit_cast
+        if should_stop and should_stop():
+            return []
+        prompt = kit_cast.cast_prompt(query, kseg, cards, _constraints_block(constraints), _taken_block_text(taken),
+                                      dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))
+        async with sem:
+            try:
+                response = await tracked_messages_create(
+                    client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
+                    system=_SYSTEM_PROMPT, messages=[{"role": "user", "content": prompt}],
+                )
+                raw = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
+            except Exception as e:  # noqa: BLE001
+                print(f"[agent_factory] kit batch failed ({seg.get('name')}, {len(cards)}): {type(e).__name__}: {e}")
+                return []
+        return [kit_cast.enforce(kseg, card, d) for card, d in kit_cast.pair(cards, raw)]
+
+    async def _kit_segment(seg: dict, kseg: dict) -> list[dict]:
+        nonlocal done_total
+        cards = list(seg.get("kit_cards") or [])
+        count = len(cards)
+        seg_dicts: list[dict] = []
+        batches = [cards[k:k + _BATCH_SIZE] for k in range(0, len(cards), _BATCH_SIZE)]
+
+        async def _note():
+            async with progress_lock:
+                if on_progress:
+                    await on_progress(seg.get("name", ""), len(seg_dicts), count, done_total)
+
+        first = await _kit_batch(seg, kseg, batches[0], seg_dicts, "spawn:kit")
+        seg_dicts.extend(first)
+        done_total += len(first)
+        await _note()
+        if len(batches) > 1:
+            async def _rest(b: list[dict]):
+                nonlocal done_total
+                r = await _kit_batch(seg, kseg, b, list(seg_dicts), "spawn:kit")
+                seg_dicts.extend(r)
+                done_total += len(r)
+                await _note()
+            await asyncio.gather(*[_rest(b) for b in batches[1:]])
+        finalise_segment_dicts(seg, seg_dicts)
+        return seg_dicts
+
     async def _segment(seg: dict) -> list[dict]:
         nonlocal done_total
         count = int(seg.get("count") or 0)
         if count <= 0:
             return []
+        if seg.get("kit_cards"):
+            from app.services.kits.registry import segment_kit
+            kseg = segment_kit(seg)
+            if kseg:
+                return await _kit_segment(seg, kseg)
         arch = archetypes.get(seg.get("archetype_id") or "")
         if arch:
             return await _cast_segment(seg, arch, count)

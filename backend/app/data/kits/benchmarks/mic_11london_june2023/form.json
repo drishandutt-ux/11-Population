@@ -1,0 +1,404 @@
+{
+  "title": "Health, charities and society",
+  "intro": "A short survey about health, the NHS, charities and how people in Britain get on. There are no right or wrong answers; answer as yourself.",
+  "questions": [
+    {
+      "key": "q1_priorities",
+      "type": "multi",
+      "text": "Which of the following health issues should be the biggest priority for the government? Select up to three",
+      "options": [
+        "Improving early years services",
+        "Investing more into research in new medicines",
+        "Reducing air pollution",
+        "Improving the access to welfare",
+        "Encouraging healthy choices (eating well and exercising, not smoking or drinking)",
+        "Improving living conditions, such as housing and access to green spaces",
+        "Improving social care for the elderly",
+        "Improving services for mental health",
+        "Improving emergency services (e.g., A&E)",
+        "Increasing the availability of GP appointments",
+        "Don't know"
+      ],
+      "max_choices": 3,
+      "exclusive": [
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q2_top_priority",
+      "type": "single",
+      "text": "And of those you chose in question 1, which should be the biggest priority for the government? Select only one",
+      "options": [
+        "Improving early years services",
+        "Investing more into research in new medicines",
+        "Reducing air pollution",
+        "Improving the access to welfare",
+        "Encouraging healthy choices (eating well and exercising, not smoking or drinking)",
+        "Improving living conditions, such as housing and access to green spaces",
+        "Improving social care for the elderly",
+        "Improving services for mental health",
+        "Improving emergency services (e.g., A&E)",
+        "Increasing the availability of GP appointments",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q3_talked_about",
+      "type": "grid",
+      "text": "Generally speaking, do you think that each of the following issues is talked about too much, too little or about the right amount?",
+      "rows": [
+        "Mental health",
+        "Men’s health",
+        "Antibiotic resistance",
+        "Dementia",
+        "Obesity",
+        "Addiction to painkillers",
+        "Alcoholism",
+        "Menopause",
+        "Maternal health",
+        "Cancer",
+        "Inherited conditions (e.g. Cystic Fibrosis)"
+      ],
+      "columns": [
+        "Too much",
+        "About the right amount",
+        "Too little",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q4_trust",
+      "type": "grid",
+      "text": "How much trust do you have in the following?",
+      "rows": [
+        "NHS",
+        "Vaccines",
+        "Prescription drugs",
+        "Over-the-counter medicines",
+        "Health charities",
+        "Pharma companies",
+        "Health apps (e.g. blood sugar trackers)"
+      ],
+      "columns": [
+        "A great deal",
+        "Quite a lot",
+        "Not very much",
+        "Not at all",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q5_long_term_condition",
+      "type": "single",
+      "text": "Do you have an existing long-term health condition?",
+      "options": [
+        "Yes",
+        "No",
+        "Don't know",
+        "Prefer not to say"
+      ]
+    },
+    {
+      "key": "q6_health_app",
+      "type": "single",
+      "text": "What feature would most encourage you to use a health app on your smartphone or smart watch? Select one",
+      "options": [
+        "Disease-specific functions (e.g. blood-glucose tracking)",
+        "Helps you manage your medications",
+        "Symptoms tracking",
+        "Health reminders",
+        "Information log for consultations with a doctor/nurse",
+        "Health-related articles",
+        "Quality of life monitors (e.g. sleep quality or exercise)",
+        "None of the above"
+      ]
+    },
+    {
+      "key": "q7a_trust_support",
+      "type": "grid",
+      "text": "How much trust do you have in the following to give you support with your health?",
+      "rows": [
+        "My family",
+        "My GP",
+        "Hospital consultants / team",
+        "Friends",
+        "Pharma companies",
+        "Health charity (e.g. Prostate Cancer UK)",
+        "Patient groups (e.g. local support groups)",
+        "Work colleagues",
+        "Google",
+        "Social media"
+      ],
+      "columns": [
+        "A great deal",
+        "Quite a lot",
+        "Not very much",
+        "Not at all",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q7b_trust_advice",
+      "type": "grid",
+      "text": "How much trust do you have in the following to give you advice with your health?",
+      "rows": [
+        "My family",
+        "My GP",
+        "Hospital consultants / team",
+        "Friends",
+        "Pharma companies",
+        "Health charity (e.g. Prostate Cancer UK)",
+        "Patient groups (e.g. local support groups)",
+        "Work colleagues",
+        "Google",
+        "Social media"
+      ],
+      "columns": [
+        "A great deal",
+        "Quite a lot",
+        "Not very much",
+        "Not at all",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q8_trials_familiar",
+      "type": "single",
+      "text": "How familiar are you with the term 'clinical trials'?",
+      "options": [
+        "I have heard of it and could explain what it means",
+        "I have heard of it but could not explain what it means",
+        "I have not heard of it",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q9_trials_statements",
+      "type": "multi",
+      "text": "Regarding clinical trials, please select the statements you most agree with (up to three)",
+      "options": [
+        "They are an important way to improve medicines",
+        "They make a real difference to people’s lives",
+        "I don’t believe they make a difference",
+        "I worry about their safety",
+        "It’s important that a diverse population is included in any clinical trial",
+        "I never hear about them"
+      ],
+      "max_choices": 3
+    },
+    {
+      "key": "q10_free_nhs",
+      "type": "grid",
+      "text": "Do you think people with the following conditions should be receiving free treatment on the NHS?",
+      "rows": [
+        "Lung cancer",
+        "Diabetes",
+        "Liver disease",
+        "Migraines",
+        "Mental health conditions",
+        "HIV/Aids",
+        "Obesity",
+        "Breast cancer",
+        "Heart disease",
+        "Drug addiction",
+        "Addiction to painkillers",
+        "Alcoholism"
+      ],
+      "columns": [
+        "Yes",
+        "No",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q11_skipped_meds",
+      "type": "single",
+      "text": "Have you ever not taken medications that you were advised to take?",
+      "options": [
+        "Yes",
+        "No",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q12_why_skipped",
+      "type": "multi",
+      "text": "Why was that? Select all that apply",
+      "options": [
+        "I forgot",
+        "Couldn’t be bothered",
+        "Worried about the side effects",
+        "Didn’t trust it to make me better",
+        "Too complicated to take",
+        "Hard to coordinate with lifestyle",
+        "Too difficult to get prescription",
+        "Preferred alternative medications",
+        "Preferred alternative options to medication (e.g. natural remedies, diet, fitness programme)",
+        "Too expensive",
+        "Decided to just grin and bear it",
+        "Thought I’d be able to get better without it",
+        "Other",
+        "None of the above"
+      ],
+      "exclusive": [
+        "None of the above"
+      ],
+      "show_if": {
+        "key": "q11_skipped_meds",
+        "equals": [
+          "Yes"
+        ]
+      }
+    },
+    {
+      "key": "q13_conditions_heard",
+      "type": "grid",
+      "text": "Have you heard of the following conditions?",
+      "rows": [
+        "Pulmonary fibrosis",
+        "Motor neurone disease",
+        "Berger’s disease",
+        "Fabry disease",
+        "PANDAS",
+        "Pompa disease"
+      ],
+      "columns": [
+        "I have heard of it and could explain what it means",
+        "I have heard of it but could not explain what it means",
+        "I have not heard of it",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q14_where_heard",
+      "type": "text",
+      "text": "Where did you hear about them? Please explain in a few words"
+    },
+    {
+      "key": "q15_gov_or_charity",
+      "type": "grid",
+      "text": "For each of the following, please indicate if you think this is more a responsibility of the UK Government, or of charities",
+      "rows": [
+        "Tackling climate change",
+        "Relieving and preventing poverty in the UK",
+        "Protect children and young people",
+        "Funding medical research",
+        "Funding medical care/support",
+        "Helping the homeless",
+        "Social housing",
+        "Foodbanks",
+        "Energy poverty",
+        "Helping people with mental health issues",
+        "Helping refugees",
+        "Helping people in disasters and emergencies",
+        "Giving aid to poor countries",
+        "Helping animals in need",
+        "Drug addiction"
+      ],
+      "columns": [
+        "UK government",
+        "Charities",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q16_giving_next_year",
+      "type": "single",
+      "text": "Thinking of the year ahead do you think you will be giving more or less to the charities that you support?",
+      "options": [
+        "I will give more",
+        "I will give the same amount",
+        "I will give less",
+        "Don’t know"
+      ]
+    },
+    {
+      "key": "q17_charity_love",
+      "type": "single",
+      "text": "Are there any charities you really love?",
+      "options": [
+        "Yes",
+        "No",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q18_why_love",
+      "type": "text",
+      "text": "Please explain why you love those charities in a few words",
+      "show_if": {
+        "key": "q17_charity_love",
+        "equals": [
+          "Yes"
+        ]
+      }
+    },
+    {
+      "key": "q19_developing_countries",
+      "type": "single",
+      "text": "What most gets your attention with regards to the challenges faced in developing countries? Select one",
+      "options": [
+        "Growth and innovation initiatives",
+        "Historic debt cancellation",
+        "Anti-corruption and accountability",
+        "Disasters and emergency relief",
+        "Projects supporting women and girls",
+        "Tackling the effects of climate change",
+        "Hunger and poverty",
+        "Desertification (fertile land becoming desert)",
+        "Mass movement of people (human migration)",
+        "Wars and conflict",
+        "Don't know"
+      ]
+    },
+    {
+      "key": "q20_africa_health",
+      "type": "multi",
+      "text": "When it comes to specific health issues in Africa, what do you think are the most important areas to focus on? Select up to three",
+      "options": [
+        "Emergency/disaster relief",
+        "The effects of climate change",
+        "Maternal health",
+        "Eradicating FGM (female genital mutilation)",
+        "Providing water and sanitation",
+        "Training healthcare workers",
+        "Innovation and new health techniques",
+        "Vaccinations",
+        "Preparing for/preventing another pandemic",
+        "Malnutrition",
+        "Don't know"
+      ],
+      "max_choices": 3
+    },
+    {
+      "key": "q21_compromise",
+      "type": "single",
+      "text": "Which do you agree with most?",
+      "options": [
+        "People I agree with need to stick to their beliefs and fight",
+        "The people I agree with need to be willing to listen to others and compromise",
+        "Don’t know"
+      ]
+    },
+    {
+      "key": "q22_polarisation",
+      "type": "grid",
+      "text": "Do you agree or disagree with the following statements?",
+      "rows": [
+        "We have lost the art of polite debate",
+        "The media is becoming more divisive",
+        "Social media has made us less united",
+        "People have become too entrenched in their position on issues",
+        "Most people in society respect others’ opinions",
+        "Most people in our society are quite tolerant of others"
+      ],
+      "columns": [
+        "Strongly agree",
+        "Somewhat agree",
+        "Neither agree nor disagree",
+        "Somewhat disagree",
+        "Strongly disagree"
+      ]
+    }
+  ]
+}

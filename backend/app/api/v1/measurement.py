@@ -1,5 +1,6 @@
 """Behaviour Lab API — run instruments against a population and read the results back."""
 import io
+import json
 import csv
 import random
 from typing import Any, Optional
@@ -86,8 +87,23 @@ def _instrument_payload(inst) -> dict:
 def _templates_for(key: str) -> list:
     if key == "survey":
         from app.services.measurement.instruments.survey import TEMPLATES
-        return TEMPLATES
+        return TEMPLATES + _benchmark_templates()
     return []
+
+
+def _benchmark_templates() -> list:
+    """Each real poll on file (a benchmark) offers its questionnaire as a Forms template — the
+    exact wording and options, with its routing and 'up to three' caps — so a run of it can be
+    scored against the poll (GET …/probes/{id}/benchmark/{benchmark_id})."""
+    from app.services.kits import benchmark as bench_svc
+    out = []
+    for b in bench_svc.list_benchmarks():
+        form = bench_svc.load_form(b["id"])
+        if form:
+            out.append({"key": f"benchmark:{b['id']}", "label": f"Real poll · {b.get('title') or b['id']}",
+                        "description": f"The questionnaire of a real poll ({b.get('fieldwork') or ''}, {b.get('sample') or ''}); run it on a kit population and score the answers against the published results.",
+                        "title": form.get("title") or "", "questions": form.get("questions") or []})
+    return out
 
 
 def _probe_payload(p: Probe) -> dict:
@@ -711,15 +727,32 @@ async def export_probe_csv(
         answer_keys.append(inst.driver_key)          # coded theme, written after the run
     segment_keys = ["stance", "age_band", "humanity_band", "purchase_intent_prior", "price_pain_prior"]
 
+    # Who answered (segment, age, gender, region, past vote, weight) travels with the answers, so
+    # the file can be weighted and cut by the same banner as a real poll; list and grid answers
+    # are JSON so they read back exactly.
+    person_keys = ["segment", "age", "gender", "region", "ge2019", "weight"]
+
+    def _cell(v):
+        return json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v
+
+    def _person(ag) -> list:
+        if not ag:
+            return [""] * len(person_keys)
+        demo = getattr(ag, "demographics", None) or {}
+        fr = demo.get("frame") or {} if isinstance(demo, dict) else {}
+        return [getattr(ag, "segment", "") or "", getattr(ag, "age", ""), demo.get("gender", ""),
+                fr.get("region") or demo.get("region", ""), fr.get("ge2019", ""), getattr(ag, "weight", 1.0)]
+
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["agent_id", "name", "role", *segment_keys, *answer_keys])
+    w.writerow(["agent_id", "name", "role", *segment_keys, *person_keys, *answer_keys])
     for a, ag in rows:
         segs = probe_svc.segments_for(ag) if ag else {}
         w.writerow([
             a.agent_id, getattr(ag, "name", ""), getattr(ag, "role", ""),
             *[segs.get(k, "") for k in segment_keys],
-            *[(a.answer or {}).get(k, "") for k in answer_keys],
+            *_person(ag),
+            *[_cell((a.answer or {}).get(k, "")) for k in answer_keys],
         ])
     buf.seek(0)
     filename = f"{p.instrument}_{probe_id[:8]}.csv"

@@ -331,6 +331,11 @@ def _character_block(agent: SpawnedAgent) -> str:
     if not isinstance(ch, dict):
         return ""
     parts = [f"{CHARACTER_LABELS[k]}:\n{str(ch[k]).strip()}" for k in CHARACTER_KEYS if str(ch.get(k) or "").strip()]
+    # A persona written from a population kit carries its own beliefs, drawn from its segment's
+    # published shares: they are this person's convictions, not the segment's average.
+    beliefs = [str(b).strip() for b in (ch.get("beliefs") or []) if str(b or "").strip()] if isinstance(ch.get("beliefs"), list) else []
+    if beliefs:
+        parts.append("WHAT YOU BELIEVE:\n" + "\n".join(f"- {b}" for b in beliefs))
     if not parts:
         return ""
     return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"

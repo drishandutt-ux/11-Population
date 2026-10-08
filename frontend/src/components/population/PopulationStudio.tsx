@@ -10,6 +10,7 @@ import { BuildLog, QuestionsCard, STATUS_LABEL, Stepper, isActive } from "@/comp
 import PlanReview from "@/components/population/PlanReview";
 import SamplingFrameGraph from "@/components/population/SamplingFrameGraph";
 import FrameCard from "@/components/population/FrameCard";
+import KitPicker from "@/components/population/KitPicker";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SwitchRow } from "@/components/population/controls";
 import { ArrowLeft, Users, Loader2, Square, RefreshCw, Check, AlertCircle, Wand2, Network, UserPlus, Bookmark, Trash2 } from "lucide-react";
@@ -204,6 +205,12 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
     seededRef.current = true;
     setBuild(b);
   });
+  const startFromKit = (kitId: string, preset: string | null) => guard(async () => {
+    setLooseLog([]);
+    const b = await api.population.fromKit(id, { kit_id: kitId, count, mode, preset });
+    seededRef.current = true;
+    setBuild(b);
+  });
   const answer = (answers: Record<string, string>, skip: boolean) => guard(async () => { if (build) setBuild(await api.population.answer(id, build.id, answers, skip)); });
   const decide = async (segmentId: string, body: { decision: "accept" | "reject" | "edit"; edits?: Partial<PopulationSegment>; reason?: string }) => {
     if (!build) return;
@@ -322,6 +329,8 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
                 </p>
               </div>
             )}
+
+            {!build && <KitPicker count={count} busy={busy || !session} onStart={startFromKit} />}
 
             {!build && presets.length > 0 && onApplyPreset && (
               <div className="surface rounded-xl overflow-hidden animate-fade-in">

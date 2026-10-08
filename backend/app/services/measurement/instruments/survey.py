@@ -25,7 +25,7 @@ from app.services.measurement.themes import apply_themes, theme_key_for
 
 TYPES = ("single", "multi", "scale", "yesno", "number", "text", "grid")
 MAX_QUESTIONS = 25
-MAX_OPTIONS = 12
+MAX_OPTIONS = 16
 
 DIRECTIVE = """
 
@@ -34,6 +34,11 @@ YOU ARE FILLING IN A SURVEY, NOT WRITING A POST.
   Answer as yourself, from your own life, circumstances and what you actually think.
 - Answer every question. Pick the option that is closest to you even when none is perfect; use
   the middle of a scale only when you genuinely sit in the middle.
+- Where the form offers "Don't know" (or "None of the above"), use it when that is honestly
+  where you are — you have not heard of it, never thought about it, or could not say — as real
+  respondents often do. Do not manufacture an opinion you would not have.
+- Give YOUR answer, not the one that sounds kindest, most balanced or most sensible. If you are
+  blunt, sceptical, uninterested or out of step with polite opinion, answer that way.
 - Open questions: answer in your own words, specifically — one or two sentences, in character.
 - Keep the whole form consistent: your reasoning first, then answers that follow from it."""
 
@@ -68,8 +73,33 @@ def normalise(questions: Any) -> list[dict]:
             "min_label": str(q.get("min_label") or "").strip(),
             "max_label": str(q.get("max_label") or "").strip(),
             "primary": bool(q.get("primary")),
+            # "Select up to three": a cap on a multi question (0 = no cap).
+            "max_choices": max(0, int(q.get("max_choices") or 0)) if qtype == "multi" else 0,
+            # Options that stand alone ("Don't know", "None of the above"): never ticked with others.
+            "exclusive": [str(o).strip() for o in (q.get("exclusive") or []) if str(o).strip() in opts],
+            # Routing: asked only of those who gave `equals` to question `key` (e.g. "why not?"
+            # only to those who said yes). Everyone else is out of this question's base.
+            "show_if": _show_if(q.get("show_if")),
         })
     return out
+
+
+def _show_if(v: Any) -> Optional[dict]:
+    if not isinstance(v, dict) or not str(v.get("key") or "").strip():
+        return None
+    eq = v.get("equals")
+    vals = [str(x).strip() for x in (eq if isinstance(eq, list) else [eq]) if str(x or "").strip()]
+    return {"key": str(v["key"]).strip(), "equals": vals} if vals else None
+
+
+def asked(q: dict, answer: dict) -> bool:
+    """Whether this respondent was routed to question `q` (always, unless it has a show_if)."""
+    cond = q.get("show_if")
+    if not cond:
+        return True
+    given = (answer or {}).get(cond["key"])
+    given = given if isinstance(given, list) else [given]
+    return any(str(g) in cond["equals"] for g in given if g is not None)
 
 
 def validate(spec: dict) -> list[str]:
@@ -105,7 +135,10 @@ def schema_for(spec: dict) -> dict:
         if t == "single":
             props[q["key"]] = enum(q["options"] or ["yes", "no"], text)
         elif t == "multi":
-            props[q["key"]] = arr(enum(q["options"] or ["yes", "no"]), f"{text} (choose all that apply)", max_items=len(q["options"]) or 2)
+            cap = q["max_choices"] or len(q["options"]) or 2
+            props[q["key"]] = arr(enum(q["options"] or ["yes", "no"]), f"{text} ({'choose up to ' + str(cap) if q['max_choices'] else 'choose all that apply'}"
+                                  + (f"; {' / '.join(q['exclusive'])} only on its own" if q["exclusive"] else "")
+                                  + ("; leave empty if this question was not for you" if q["show_if"] else "") + ")", max_items=cap)
         elif t == "scale":
             lo, hi = q["min"], q["max"]
             ends = f" ({lo} = {q['min_label']}, {hi} = {q['max_label']})" if q["min_label"] or q["max_label"] else ""
@@ -132,8 +165,14 @@ def question_for(spec: dict) -> str:
     for k, q in enumerate(normalise(spec.get("questions")), 1):
         t = q["type"]
         line = f"{k}. {q['text']}"
+        if q["show_if"]:
+            src = next((n for n, x in enumerate(normalise(spec.get("questions")), 1) if x["key"] == q["show_if"]["key"]), None)
+            line += f" (ONLY if you answered {' or '.join(chr(34) + e + chr(34) for e in q['show_if']['equals'])} to question {src or q['show_if']['key']}; otherwise leave it empty)"
         if t in ("single", "multi"):
-            line += f" [{'choose one' if t == 'single' else 'choose all that apply'}: " + " / ".join(q["options"]) + "]"
+            how = "choose one" if t == "single" else (f"choose up to {q['max_choices']}" if q["max_choices"] else "choose all that apply")
+            line += f" [{how}: " + " / ".join(q["options"]) + "]"
+            if t == "multi" and q["exclusive"]:
+                line += f" ({' / '.join(q['exclusive'])}: only on its own)"
         elif t == "scale":
             line += f" [{q['min']}–{q['max']}" + (f", {q['min']} = {q['min_label']}" if q["min_label"] else "") + (f", {q['max']} = {q['max_label']}" if q["max_label"] else "") + "]"
         elif t == "yesno":
@@ -177,6 +216,7 @@ def _hist(values: list[float], lo: Optional[int], hi: Optional[int]) -> list[dic
 
 def _aggregate_question(q: dict, rows: list[dict], seed: int) -> dict:
     t, key = q["type"], q["key"]
+    rows = [r for r in rows if asked(q, r.get("answer") or {})]
     answers = [r["answer"].get(key) for r in rows]
     out: dict[str, Any] = {"key": key, "type": t, "text": q["text"], "n": len(rows), "primary": q["primary"]}
 
@@ -398,7 +438,7 @@ INSTRUMENT = register(SurveyInstrument(
     kpis=(Kpi("n", "Responses", "count", "How many personas completed the form."),),
     page="survey",
     form="survey",
-    max_tokens=2500,
+    max_tokens=4500,
     version=1,
     stimulus_key="intro",
     postprocess=postprocess,
