@@ -359,3 +359,32 @@ def test_benchmark_matched_from_the_form():
     form = benchmark.load_form("mic_11london_june2023")
     assert benchmark.match({"questions": form["questions"]}) == "mic_11london_june2023"
     assert benchmark.match({"questions": [{"key": "q1_priorities"}]}) is None
+
+
+def test_benchmark_rerun_is_a_fresh_respondent(api_client, monkeypatch):
+    import asyncio
+    from tests.measurement_test import _agent
+    client, Session = api_client
+    form = benchmark.load_form("mic_11london_june2023")
+    users = []
+
+    async def fake_analyze(schema, system, user, **kw):
+        users.append(user)
+        return {"reasoning": "r"}
+    monkeypatch.setattr("app.services.measurement.probe.analyze", fake_analyze)
+    sid = client.post("/api/v1/sessions", json={"title": "T", "query": "q", "auto_research": False}).json()["id"]
+
+    async def seed():
+        async with Session() as db:
+            db.add(_agent(session_id=sid, name="A"))
+            await db.commit()
+    asyncio.run(seed())
+    other = {"questions": [{"key": "x", "type": "single", "text": "Tea?", "options": ["Tea", "Coffee"]}]}
+    client.post(f"/api/v1/sessions/{sid}/probes", json={"instrument": "survey", "spec": other})
+    client.post(f"/api/v1/sessions/{sid}/probes", json={"instrument": "survey", "spec": form})
+    n_first = len(users)
+    client.post(f"/api/v1/sessions/{sid}/probes", json={"instrument": "survey", "spec": form})
+    assert users[n_first:] and not any("WHAT YOU ALREADY DECIDED" in u for u in users[n_first:])
+    n_second = len(users)
+    client.post(f"/api/v1/sessions/{sid}/probes", json={"instrument": "survey", "spec": other})   # an ordinary form still sees them
+    assert any("WHAT YOU ALREADY DECIDED" in u for u in users[n_second:])

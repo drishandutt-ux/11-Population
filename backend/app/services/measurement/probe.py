@@ -343,9 +343,15 @@ async def answer_one(
     denominator rather than filled with a default — a made-up answer would corrupt the share)."""
     started = time.monotonic()
     amendments = spec.get("amendments") if isinstance(spec.get("amendments"), dict) else None
+    hide: tuple[str, ...] = ("journey",) if amendments and amendments.get("rules") else ()
+    # A real poll's questionnaire (a benchmark) is answered as a fresh respondent would answer it:
+    # the twin does not see its earlier Forms answers, or a re-run would be anchored to the last.
+    if instrument.key == "survey":
+        from app.services.kits.benchmark import match as bench_match
+        if bench_match(spec):
+            hide = hide + ("survey",)
     async with AsyncSessionLocal() as db:
-        said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id,
-                                             hide_instruments=("journey",) if amendments and amendments.get("rules") else ())
+        said, decided = await _agent_history(db, session_id, agent.id, probe_id, experiment_id, hide_instruments=hide)
 
     from app.services.agents import dynamic_dials as dyn_mod
     # A lever run (brief L7-04): the twins the rule covers answer with their dials shifted as the
