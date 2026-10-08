@@ -287,6 +287,13 @@ def planned_distribution(dim: dict, target: dict, segments: list[dict], total: i
         count = float(seg.get("count") or 0)
         if count <= 0:
             continue
+        cards = seg.get("kit_cards") or []
+        if cards:   # a kit segment's people are drawn already: count them, not the segment's summary
+            for c in cards:
+                lab = category_of(dim, target, value=c.get(dim["key"]) or c.get(attr), age=c.get("age"))
+                if lab:
+                    out[lab] += count / len(cards); placed += count / len(cards)
+            continue
         d = seg.get("demographics") or {}
         fv = (seg.get("frame_values") or {}).get(dim["key"])
         if fv:

@@ -74,14 +74,16 @@ def test_forms_cap_exclusive_and_routing():
     schema = schema_for(form)
     assert schema["properties"]["c"]["maxItems"] == 2
     text = question_for(form)
-    assert "choose up to 2" in text and "ONLY if you answered \"Yes\" to question 1" in text and "None of the above: only on its own" in text
-    rows = [{"answer": {"a": "Yes", "b": ["x"], "c": ["p"]}, "agent": {}, "agent_id": "1"},
+    assert schema["properties"]["c"]["uniqueItems"] is True
+    assert "choose up to 2 different options" in text and "ONLY if you answered \"Yes\" to question 1" in text and "None of the above: only on its own" in text
+    rows = [{"answer": {"a": "Yes", "b": ["x", "x"], "c": ["p"]}, "agent": {}, "agent_id": "1"},
             {"answer": {"a": "No", "b": [], "c": ["q"]}, "agent": {}, "agent_id": "2"},
             {"answer": {"a": "Yes", "b": ["y"], "c": ["p", "q"]}, "agent": {}, "agent_id": "3"}]
     out = aggregate(rows, form)
     b = next(q for q in out["questions"] if q["key"] == "b")
     assert b["n"] == 2                                   # only the two routed to it
-    assert {d["value"]: d["count"] for d in b["distribution"]}["x"] == 1
+    assert {d["value"]: d["count"] for d in b["distribution"]}["x"] == 1     # ["x", "x"] counts once
+    assert b["mean_selected"] == 1.0
 
 
 KIT = {
@@ -240,3 +242,11 @@ def test_shattered_britain_kit_is_cited_and_builds():
     assert sum(s["count"] for s in plan["segments"]) == 100
     assert all(c.get("region") for s in plan["segments"] for c in s["kit_cards"])   # national region mix fills the gap
     assert "What the research found" in cast.segment_block(dd)
+
+
+def test_frame_report_counts_the_drawn_cards():
+    from app.services.population import frame as F
+    kit = registry.load_kit("britains_choice_2020")
+    plan = registry.plan_from_kit(kit, 200)
+    rep = F.build_report(registry.frame_from_kit(kit), plan["segments"], 200)
+    assert F.summary_line(rep).startswith("Frame match good")      # not "poor — 89 pts off" from the segment summaries

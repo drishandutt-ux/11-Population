@@ -136,9 +136,12 @@ def schema_for(spec: dict) -> dict:
             props[q["key"]] = enum(q["options"] or ["yes", "no"], text)
         elif t == "multi":
             cap = q["max_choices"] or len(q["options"]) or 2
-            props[q["key"]] = arr(enum(q["options"] or ["yes", "no"]), f"{text} ({'choose up to ' + str(cap) if q['max_choices'] else 'choose all that apply'}"
+            props[q["key"]] = arr(enum(q["options"] or ["yes", "no"]), f"{text} ({'choose up to ' + str(cap) + ' DIFFERENT options' if q['max_choices'] else 'choose all that apply'}"
+                                  + "; list each option at most once, and only as many as are really true of you"
                                   + (f"; {' / '.join(q['exclusive'])} only on its own" if q["exclusive"] else "")
                                   + ("; leave empty if this question was not for you" if q["show_if"] else "") + ")", max_items=cap)
+            # A capped list was filled with the same option three times (prod, 2026-10-08): the picks must differ.
+            props[q["key"]]["uniqueItems"] = True
         elif t == "scale":
             lo, hi = q["min"], q["max"]
             ends = f" ({lo} = {q['min_label']}, {hi} = {q['max_label']})" if q["min_label"] or q["max_label"] else ""
@@ -169,7 +172,7 @@ def question_for(spec: dict) -> str:
             src = next((n for n, x in enumerate(normalise(spec.get("questions")), 1) if x["key"] == q["show_if"]["key"]), None)
             line += f" (ONLY if you answered {' or '.join(chr(34) + e + chr(34) for e in q['show_if']['equals'])} to question {src or q['show_if']['key']}; otherwise leave it empty)"
         if t in ("single", "multi"):
-            how = "choose one" if t == "single" else (f"choose up to {q['max_choices']}" if q["max_choices"] else "choose all that apply")
+            how = "choose one" if t == "single" else (f"choose up to {q['max_choices']} different options" if q["max_choices"] else "choose all that apply")
             line += f" [{how}: " + " / ".join(q["options"]) + "]"
             if t == "multi" and q["exclusive"]:
                 line += f" ({' / '.join(q['exclusive'])}: only on its own)"
@@ -233,6 +236,7 @@ def _aggregate_question(q: dict, rows: list[dict], seed: int) -> dict:
         out["sentence"] = f"{stats.pct(lead['share'])} said \"{lead['value']}\" ({lead['count']} of {len(rows)})." if lead else ""
     elif t == "multi":
         n_rows = len(rows)
+        answers = [list(dict.fromkeys(a)) if isinstance(a, list) else a for a in answers]   # a repeated pick counts once
         out["distribution"] = []
         for o in q["options"]:
             c = sum(1 for a in answers if isinstance(a, list) and o in a)
