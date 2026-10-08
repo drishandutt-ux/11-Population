@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, Playbook, PlaybookSummary, PopulationBuild } from "@/lib/api";
+import { api, Playbook, PlaybookSection, PlaybookSummary, PopulationBuild } from "@/lib/api";
 import PlaybookReview, { downloadText } from "@/components/population/PlaybookReview";
 import { BookOpen, Upload, ClipboardPaste, FileDown, Loader2, Trash2, Pencil, X, AlertTriangle, CheckCircle2, HelpCircle } from "lucide-react";
 
@@ -16,7 +16,7 @@ interface Props {
  *  Studio shows what it understood, and the next Detect & plan follows it. */
 export default function PlaybookPanel({ active, onChange, disabled }: Props) {
   const [library, setLibrary] = useState<PlaybookSummary[]>([]);
-  const [reviewing, setReviewing] = useState<Playbook | null>(null);
+  const [reviewing, setReviewing] = useState<{ pb: Playbook; view: PlaybookSection[] | null } | null>(null);
   const [paste, setPaste] = useState<string | null>(null);
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export default function PlaybookPanel({ active, onChange, disabled }: Props) {
 
   const read = async (markdown: string) => {
     setBusy("read"); setError(null);
-    try { const r = await api.playbooks.parse(markdown); setReviewing(r.playbook); setPaste(null); }
+    try { const r = await api.playbooks.parse(markdown); setReviewing({ pb: r.playbook, view: r.view }); setPaste(null); }
     catch (e: any) { setError(e?.message || "Could not read the playbook"); } finally { setBusy(""); }
   };
   const onFile = async (f: File | undefined) => {
@@ -36,7 +36,7 @@ export default function PlaybookPanel({ active, onChange, disabled }: Props) {
   };
   const open = async (id: string) => {
     setBusy(id); setError(null);
-    try { const r = await api.playbooks.get(id); setReviewing({ ...r.playbook, id: r.id }); }
+    try { const r = await api.playbooks.get(id); setReviewing({ pb: { ...r.playbook, id: r.id }, view: r.view }); }
     catch (e: any) { setError(e?.message || "Could not open it"); } finally { setBusy(""); }
   };
   const remove = async (p: PlaybookSummary) => {
@@ -48,7 +48,7 @@ export default function PlaybookPanel({ active, onChange, disabled }: Props) {
   };
 
   const review = reviewing && (
-    <PlaybookReview playbook={reviewing} onClose={() => setReviewing(null)} onSaved={() => loadLibrary()}
+    <PlaybookReview playbook={reviewing.pb} view={reviewing.view} onClose={() => setReviewing(null)} onSaved={() => loadLibrary()}
       onUse={(pb) => { onChange(pb); setReviewing(null); }} />
   );
 
@@ -60,13 +60,13 @@ export default function PlaybookPanel({ active, onChange, disabled }: Props) {
           <BookOpen className="w-3.5 h-3.5 text-primary" />
           <span className="text-[13px] font-medium text-foreground">Following your playbook: {active.title}</span>
           <span className="ml-auto flex items-center gap-1">
-            <button disabled={disabled} onClick={() => setReviewing(active)} className="btn btn-xs btn-ghost"><Pencil className="w-3 h-3" /> Edit</button>
+            <button disabled={disabled} onClick={() => setReviewing({ pb: active, view: null })} className="btn btn-xs btn-ghost"><Pencil className="w-3 h-3" /> Edit</button>
             <button disabled={disabled} onClick={() => onChange(null)} className="btn btn-xs btn-ghost" title="Plan without the playbook"><X className="w-3 h-3" /> Remove</button>
           </span>
         </div>
         <p className="hint">
           Segments by {active.approach.primary}{active.approach.secondary ? `, then ${active.approach.secondary}` : ""} · {active.segments.length ? `${active.segments.length} segments kept as you named them` : "segments proposed your way"}
-          {dials.length ? ` · ${dials.map((d) => d.label).join(", ")} pinned on every twin` : ""}{active.rules.length ? ` · ${active.rules.length} rule${active.rules.length === 1 ? "" : "s"}` : ""}. Research still runs and flags disagreements without changing your choices.
+          {dials.length ? ` · ${dials.map((d) => d.label).join(", ")} pinned on every twin` : ""}{active.rules.length ? ` · ${active.rules.length} rule${active.rules.length === 1 ? "" : "s"}` : ""}{active.extras?.length ? ` · ${active.extras.length} more section${active.extras.length === 1 ? "" : "s"} kept as written` : ""}. Research still runs and flags disagreements without changing your choices.
         </p>
         {review}
       </div>

@@ -799,7 +799,7 @@ async def generate_agents_from_plan(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
                     system=_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic,
-                                                                       extra=pb_mod.slots_block(playbook, slots))}],
+                                                                       extra=pb_mod.context_block(playbook, seg) + pb_mod.slots_block(playbook, slots))}],
                 )
                 out = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
                 pb_mod.pin(playbook, seg, slots, out)
@@ -821,7 +821,7 @@ async def generate_agents_from_plan(
             contexts[r] = (await _segment_knowledge(seg, role=arch.get("role", ""), region=r)) or arch_mod.local_context(session_id, r, arch.get("role", ""))
         pb_slots = pb_mod.draw_slots(playbook, seg, len(slots), f"{label}:{seed}") if playbook else []
         prompt = arch_mod.cast_prompt(query, seg, arch, slots, contexts, _constraints_block(constraints), _taken_block_text(taken),
-                                      ((constraints or {}).get("facets_prompt") or "") + pb_mod.slots_block(playbook, pb_slots),
+                                      ((constraints or {}).get("facets_prompt") or "") + pb_mod.context_block(playbook, seg) + pb_mod.slots_block(playbook, pb_slots),
                                       dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))
         async with sem:
             try:

@@ -49,7 +49,7 @@ def test_the_template_reader_gets_the_example_whole():
     assert {"dial": "motivation.novelty", "direction": -1, "strength": 2} in v["burnout"]["links"]
     assert v["burnout"]["evidence_mode"] == "find" and v["commute_burden"]["evidence_mode"] == "none"
     # rules aimed at a segment by a short prefix land on the right segment
-    assert {"segment": "Community pharmacists", "text": "see medication-overuse headache weekly and worry about it."} in p["rules"]
+    assert {"segment": "Community pharmacists", "text": "see medication-overuse headache weekly and worry about it.", "section": "Rules of character"} in p["rules"]
     assert len(p["unsure"]) == 2
 
 
@@ -324,17 +324,23 @@ def test_library_round_trip(client):
     parsed = client.post("/api/v1/playbooks/parse", json={"markdown": t["example"]}).json()["playbook"]
     assert parsed["parsed_by"] == "template" and len(parsed["segments"]) == 6
     assert client.post("/api/v1/playbooks/parse", json={"markdown": "  "}).status_code == 400
-    # edit what was understood (drop a link), save, and the stored markdown follows the edit
+    # edit what was understood (drop a link), save: the analyst's text is kept as written and the
+    # confirmed settings are appended as "Studio settings" (3 dial variables → 3 more Pushes lines)
     parsed["variables"][1]["links"] = parsed["variables"][1]["links"][:1]
-    saved = client.post("/api/v1/playbooks", json={"playbook": parsed}).json()
-    assert saved["title"] == "Migraine HCPs in London" and saved["markdown"].count("- **Pushes:**") == 3
+    saved = client.post("/api/v1/playbooks", json={"playbook": parsed, "edited": True}).json()
+    assert saved["title"] == "Migraine HCPs in London" and saved["markdown"].startswith(t["example"].rstrip())
+    assert "## Studio settings" in saved["markdown"] and saved["markdown"].count("- **Pushes:**") == 4
+    assert [s["heading"] for s in saved["view"]][:3] == ["About this playbook", "Migraine HCPs in London — segmentation playbook", "Approach"]
+    # reading the saved file again: the settings win over the original text
+    again = client.post("/api/v1/playbooks/parse", json={"markdown": saved["markdown"]}).json()["playbook"]
+    assert len(next(v for v in again["variables"] if v["key"] == "burnout")["links"]) == 1
     lst = client.get("/api/v1/playbooks").json()["playbooks"]
     assert len(lst) == 1 and lst[0]["segments"] == 6 and lst[0]["variables"] == 4
     upd = client.put(f"/api/v1/playbooks/{saved['id']}", json={"markdown": t["example"].replace("Migraine HCPs in London", "Migraine HCPs v2")}).json()
     assert upd["title"] == "Migraine HCPs v2"
     assert client.get(f"/api/v1/playbooks/{saved['id']}").json()["playbook"]["id"] == saved["id"]
     md = client.post("/api/v1/playbooks/render", json={"playbook": parsed}).json()["markdown"]
-    assert md.startswith("---") and "## Variables" in md
+    assert md.rstrip() == t["example"].rstrip()                      # not edited → the file exactly as written
     assert client.delete(f"/api/v1/playbooks/{saved['id']}").json() == {"deleted": True}
     assert client.get("/api/v1/playbooks").json()["playbooks"] == []
 
@@ -379,3 +385,56 @@ def test_a_small_segment_still_spans_its_range():
     seg = _fitted("GPs with an extended role in headache")
     burn = [s["dials"]["burnout"] for s in pb.draw_slots(EXAMPLE, seg, 5, "x")]
     assert set(burn) == {6, 7, 8}
+
+
+# ── nothing the analyst wrote is dropped ─────────────────────────────────────
+
+FREEFORM = pb.example().replace(
+    "| Segment | Share | Who they are | Source for share |\n|---|---|---|---|",
+    "| Segment | Share | Who they are | Source for share | Typical channel |\n|---|---|---|---|---|").replace(
+    "| find |\n| General neurologists", "| find | conferences |\n| General neurologists").replace(
+    "- **Evidence:** find — NICE TA", "- **Pharma contact:** reps are not seen in most practices\n- **Evidence:** find — NICE TA") + """
+
+## Decision-making unit
+
+- GPs defer to the ICB medicines-optimisation pharmacist on anything new.
+
+## Generalist GPs — a day in the life
+
+Back-to-back 10-minute slots, 40 patients a day, admin until 8pm.
+"""
+
+
+def test_sections_columns_and_fields_the_template_has_no_slot_for_are_kept():
+    p = _run(pb.parse(FREEFORM, use_model=False))
+    ex = {e["heading"]: e for e in p["extras"]}
+    assert "ICB medicines-optimisation pharmacist" in ex["Decision-making unit"]["text"] and ex["Decision-making unit"]["applies_to"] == ""
+    assert ex["Generalist GPs — a day in the life"]["applies_to"] == "Generalist GPs"
+    assert p["segments"][0]["attributes"] == {"Typical channel": "conferences"}
+    assert next(v for v in p["variables"] if v["key"] == "formulary_pressure")["notes"] == {"pharma contact": "reps are not seen in most practices"}
+    assert "Decision-making unit" in p["source_markdown"]
+    view = {s["heading"]: s["uses"] for s in pb.annotate_sections(p)}
+    assert view["Burnout"]["variables"] == ["burnout"] and view["Decision-making unit"]["extras"] == [0]
+
+
+def test_a_free_form_document_loses_nothing_even_when_no_reader_understands_it():
+    md = "# Pharmacists in Leeds\n\nThey are split by how much they rely on the wholesaler.\n\n## Who calls the shots\n\nThe superintendent.\n"
+    p = _run(pb.parse(md, use_model=False))
+    texts = " ".join(e["text"] for e in p["extras"])
+    assert "wholesaler" in texts and "superintendent" in texts
+
+
+def test_the_planner_and_each_twin_get_what_was_kept():
+    p = _run(pb.parse(FREEFORM, use_model=False))
+    block = pb.prompt_block(p)
+    assert "Decision-making unit" in block and "Typical channel: conferences" in block and "THE PLAYBOOK AS THE ANALYST WROTE IT" in block
+    gp = {"id": "s1", "name": "Generalist GPs", "playbook_segment": "Generalist GPs"}
+    nurse = {"id": "s2", "name": "Headache specialist nurses", "playbook_segment": "Headache specialist nurses"}
+    assert any("40 patients a day" in c for c in pb.segment_context(p, gp))
+    assert not any("40 patients a day" in c for c in pb.segment_context(p, nurse))
+    assert any("ICB medicines-optimisation" in c for c in pb.segment_context(p, nurse))
+    d = {"dials": {}}
+    pb.pin(p, gp, [], [d])
+    assert any("40 patients" in c for c in d["character"]["playbook_context"])
+    from app.services.agents.agent_runner import _character_block
+    assert "WHAT IS TRUE OF PEOPLE LIKE YOU" in _character_block(type("A", (), {"character": d["character"]})())

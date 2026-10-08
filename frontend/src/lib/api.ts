@@ -388,13 +388,14 @@ export const api = {
   /** Segmentation playbooks: the analyst's own method (approach, segments, variables, rules), shared library. */
   playbooks: {
     template: () => request<{ template: string; example: string }>("/playbooks/template"),
-    parse: (markdown: string) => request<{ playbook: Playbook; markdown: string; dial_paths: string[] }>("/playbooks/parse", { method: "POST", body: JSON.stringify({ markdown }) }, 180_000),
-    render: (playbook: Playbook) => request<{ playbook: Playbook; markdown: string }>("/playbooks/render", { method: "POST", body: JSON.stringify({ playbook }) }),
+    parse: (markdown: string) => request<{ playbook: Playbook; markdown: string; view: PlaybookSection[]; dial_paths: string[] }>("/playbooks/parse", { method: "POST", body: JSON.stringify({ markdown }) }, 180_000),
+    render: (playbook: Playbook, edited = false) => request<{ playbook: Playbook; markdown: string }>("/playbooks/render", { method: "POST", body: JSON.stringify({ playbook, edited }) }),
+    view: (playbook: Playbook) => request<{ view: PlaybookSection[] }>("/playbooks/view", { method: "POST", body: JSON.stringify({ playbook }) }),
     dials: () => request<{ dial_paths: string[] }>("/playbooks/dials"),
     list: () => request<{ playbooks: PlaybookSummary[] }>("/playbooks"),
-    get: (id: string) => request<PlaybookSummary & { markdown: string; playbook: Playbook }>(`/playbooks/${id}`),
-    save: (playbook: Playbook) => request<PlaybookSummary & { markdown: string; playbook: Playbook }>("/playbooks", { method: "POST", body: JSON.stringify({ playbook }) }),
-    update: (id: string, playbook: Playbook) => request<PlaybookSummary & { markdown: string; playbook: Playbook }>(`/playbooks/${id}`, { method: "PUT", body: JSON.stringify({ playbook }) }),
+    get: (id: string) => request<PlaybookSummary & { markdown: string; playbook: Playbook; view: PlaybookSection[] }>(`/playbooks/${id}`),
+    save: (playbook: Playbook, edited = false) => request<PlaybookSummary & { markdown: string; playbook: Playbook; view: PlaybookSection[] }>("/playbooks", { method: "POST", body: JSON.stringify({ playbook, edited }) }),
+    update: (id: string, playbook: Playbook, edited = false) => request<PlaybookSummary & { markdown: string; playbook: Playbook; view: PlaybookSection[] }>(`/playbooks/${id}`, { method: "PUT", body: JSON.stringify({ playbook, edited }) }),
     delete: (id: string) => request<{ deleted: boolean }>(`/playbooks/${id}`, { method: "DELETE" }),
   },
   /** Archetypes (brief L3-02): hand-authored twins the Studio casts personas from. */
@@ -1387,14 +1388,29 @@ export type PlaybookVariable = {
   range: [number, number] | null;
   by_segment: { segment: string; low?: number; high?: number; values?: string[] }[];
   values: string[]; shows_up_as: string; evidence: string; evidence_mode: "source" | "find" | "none"; links: PlaybookLink[];
+  /** Anything else the analyst wrote about it, by their own field names. */
+  notes?: Record<string, string>;
+  /** The heading of the section it came from. */
+  section?: string;
+};
+/** One section of the analyst's document, with what the Studio took from it. */
+export type PlaybookSection = {
+  id: string; level: number; heading: string; body: string; fields?: Record<string, string>;
+  uses: { front: boolean; approach: boolean; segments: string[]; variables: string[]; rules: number[]; unsure: boolean; extras: number[] };
 };
 export type Playbook = {
   id?: string | null; version?: number; title: string; population: string; geography: string; size_hint?: number | null; author?: string; parsed_by?: string;
-  approach: { primary: string; secondary: string; why: string; match_exactly: string[]; weight_only: string[] };
-  segments: { name: string; share_pct: number | null; share_mode: "given" | "find" | "planner"; description: string; source: string }[];
+  approach: { primary: string; secondary: string; why: string; match_exactly: string[]; weight_only: string[]; source?: string };
+  segments: { name: string; share_pct: number | null; share_mode: "given" | "find" | "planner"; description: string; source: string; attributes?: Record<string, string>; section?: string }[];
   variables: PlaybookVariable[];
-  rules: { segment: string; text: string }[];
+  rules: { segment: string; text: string; section?: string }[];
   unsure: string[];
+  unsure_source?: string;
+  /** Everything with no slot of its own, kept as written: given to the planner and to the twins it is about. */
+  extras?: { heading: string; text: string; applies_to: string }[];
+  /** The document as written, and its sections. */
+  source_markdown?: string;
+  sections?: { id: string; level: number; heading: string; body: string; fields?: Record<string, string> }[];
 };
 export type PlaybookSummary = { id: string; title: string; author: string; mine: boolean; approach: string; population: string; segments: number; variables: number; created_at: string; updated_at: string };
 export type PlaybookCheck = { item: string; kind: string; status: "supported" | "contradicted" | "no_evidence"; note: string; source: string };

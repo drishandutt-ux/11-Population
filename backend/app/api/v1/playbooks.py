@@ -27,11 +27,13 @@ class ParseRequest(BaseModel):
 
 class RenderRequest(BaseModel):
     playbook: dict
+    edited: bool = False                # the analyst changed settings: append them as "Studio settings"
 
 
 class SaveRequest(BaseModel):
     markdown: Optional[str] = None
     playbook: Optional[dict] = None     # an edited "what I understood"; wins over markdown
+    edited: bool = False
 
 
 def _row_summary(p: Playbook, user: AuthUser) -> dict:
@@ -42,8 +44,14 @@ def _row_summary(p: Playbook, user: AuthUser) -> dict:
             "created_at": p.created_at, "updated_at": p.updated_at}
 
 
+def _view(pb: dict) -> list[dict]:
+    """The analyst's document, section by section, with what the Studio took from each."""
+    return pb_mod.annotate_sections(pb)
+
+
 def _full(p: Playbook, user: AuthUser) -> dict:
-    return {**_row_summary(p, user), "markdown": p.markdown, "playbook": {**(p.parsed or {}), "id": p.id}}
+    pb = {**(p.parsed or {}), "id": p.id}
+    return {**_row_summary(p, user), "markdown": p.markdown, "playbook": pb, "view": _view(pb)}
 
 
 @router.get("/template")
@@ -62,14 +70,23 @@ async def parse(body: ParseRequest, user: AuthUser = Depends(get_current_user)):
     if len(md) > MAX_CHARS:
         raise HTTPException(status_code=400, detail=f"The playbook is too long ({len(md):,} characters; the limit is {MAX_CHARS:,})")
     parsed = await pb_mod.parse(md)
-    return {"playbook": parsed, "markdown": md, "dial_paths": pb_mod.FIXED_PATHS}
+    return {"playbook": parsed, "markdown": md, "view": _view(parsed), "dial_paths": pb_mod.FIXED_PATHS}
 
 
 @router.post("/render")
 async def render(body: RenderRequest, user: AuthUser = Depends(get_current_user)):
-    """An edited playbook back to markdown (for Download after editing what the Studio understood)."""
+    """The analyst's own document for Download — untouched, plus a 'Studio settings' section when
+    they changed the reading."""
     pb = pb_mod.normalise(body.playbook)
-    return {"playbook": pb, "markdown": pb_mod.to_markdown(pb)}
+    return {"playbook": pb, "markdown": pb_mod.download_markdown(pb, body.edited)}
+
+
+@router.post("/view")
+async def view(body: RenderRequest, user: AuthUser = Depends(get_current_user)):
+    """The document section by section with what the Studio took from each (for a playbook held
+    in a build's constraints, which carries no view of its own)."""
+    pb = pb_mod.normalise(body.playbook)
+    return {"view": _view(pb)}
 
 
 @router.get("/dials")
@@ -96,7 +113,7 @@ async def _parsed_from(body: SaveRequest) -> tuple[dict, str]:
     if body.playbook:
         pb = pb_mod.normalise(body.playbook)
         pb["parsed_by"] = body.playbook.get("parsed_by") or "edited"
-        return pb, pb_mod.to_markdown(pb)
+        return pb, pb_mod.download_markdown(pb, body.edited)
     md = (body.markdown or "").strip()
     if not md:
         raise HTTPException(status_code=400, detail="Send the markdown or the edited playbook")

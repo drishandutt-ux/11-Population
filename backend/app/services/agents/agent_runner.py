@@ -344,6 +344,9 @@ def _character_block(agent: SpawnedAgent) -> str:
     rules = [str(b).strip() for b in (ch.get("playbook_rules") or []) if str(b or "").strip()] if isinstance(ch.get("playbook_rules"), list) else []
     if rules:
         parts.append("YOUR SITUATION AND HOW IT SHOWS:\n" + "\n".join(f"- {b}" for b in rules))
+    ctx = [str(b).strip() for b in (ch.get("playbook_context") or []) if str(b or "").strip()] if isinstance(ch.get("playbook_context"), list) else []
+    if ctx:
+        parts.append("WHAT IS TRUE OF PEOPLE LIKE YOU (true of you too unless your own story says otherwise):\n" + "\n".join(f"- {b}" for b in ctx))
     if not parts:
         return ""
     return "\n\nWHO YOU ARE, IN YOUR OWN TERMS — these rules decide how you think and act; never contradict them:\n" + "\n\n".join(parts) + "\n"
