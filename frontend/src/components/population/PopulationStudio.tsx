@@ -360,15 +360,19 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
 
             {build?.detected && (
               <div className="surface rounded-xl px-5 py-4 space-y-1.5 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium text-foreground">Detected</span>
-                  <span className={`chip ${build.detected.confidence >= 60 ? "chip-ok" : "chip-warn"}`}>{build.detected.confidence}% confident</span>
-                  <span className="ml-auto text-[11px] text-muted-foreground/70 capitalize">{build.detected.population_kind} · {build.detected.geography}</span>
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 text-[13px] font-medium text-foreground leading-[22px]">Detected</span>
+                  <span className={`shrink-0 chip ${build.detected.confidence >= 60 ? "chip-ok" : "chip-warn"}`}>{build.detected.confidence}% confident</span>
+                  <span className="ml-auto min-w-0 text-right text-[11px] leading-snug pt-[3px] text-muted-foreground/70 capitalize break-words">{build.detected.population_kind} · {build.detected.geography}</span>
                 </div>
                 <p className="text-[13px] text-foreground/90 leading-relaxed">{build.detected.target_population}</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">{build.detected.decision}</p>
                 {build.detected.segments_hinted?.length ? (
-                  <div className="flex flex-wrap gap-1.5 pt-1">{build.detected.segments_hinted.map((s) => <span key={s} className="chip">{s}</span>)}</div>
+                  <ul className="flex flex-col gap-1.5 pt-1">
+                    {build.detected.segments_hinted.map((s) => (
+                      <li key={s} className="min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground break-words bg-foreground/[0.06]">{s}</li>
+                    ))}
+                  </ul>
                 ) : null}
               </div>
             )}
