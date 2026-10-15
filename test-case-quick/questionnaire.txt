@@ -1,0 +1,25 @@
+PedalPass quick questionnaire (TEST DATA)
+
+Thank you for taking part. This takes two minutes. Your answers are anonymous.
+
+1. How do you usually get to work?
+   - Tube
+   - Bus
+   - Train
+   - Walk
+   - Own bike
+   - Car
+
+2. Would you pay £15 a month for unlimited 30-minute e-bike rides in Zones 1-3?
+   - Yes
+   - No
+
+3. On a scale of 1 to 10, how safe would you feel riding an e-bike on your commute?
+
+4. Which of these would make you more likely to sign up? (pick any)
+   - A free first month
+   - A free helmet delivered to your door
+   - A dock within 2 minutes of your station
+   - A lower price of £9 a month
+
+5. What is the single biggest thing stopping you from cycling to work?
