@@ -205,12 +205,26 @@ def retrieve(units: list[dict], onto: dict | None, profile: dict, rules: list[di
     return {"visible": visible[:limit], "visible_total": len(visible), "hidden": hidden, "profile_values": pv}
 
 
+def when_tag(source_ref: str) -> str:
+    """' · 2020, 6 years ago' from the date field of a `[SOURCE …]` header, or '' when the item is
+    undated — so a twin reads a years-old figure as years old (2026-10-19)."""
+    from app.services.agents.today import age_note
+    ref = str(source_ref or "").strip().rstrip("]")
+    if "|" not in ref:
+        return ""
+    note = age_note(ref.rsplit("|", 1)[-1].strip())
+    return f" · {note}" if note else ""
+
+
+DATED_NOTE = "The year in the brackets is when an item was published: an item from years ago describes then, not now."
+
+
 def knowledge_block(visible: list[dict], max_chars: int = 3600) -> str:
-    lines = ["Where you know each thing from is in brackets."]
+    lines = ["Where you know each thing from is in brackets. " + DATED_NOTE]
     used = len(lines[0])
     for r in visible:
         text = " ".join((r["unit"].get("text") or "").split())
-        line = f"- ({r['route']}) {text[:420]}"
+        line = f"- ({r['route']}{when_tag(r['unit'].get('source_ref', ''))}) {text[:420]}"
         if used + len(line) > max_chars:
             break
         lines.append(line)

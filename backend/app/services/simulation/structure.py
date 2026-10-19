@@ -43,7 +43,7 @@ REPORT_PROMPT = """You are a senior analyst. Produce a structured executive brie
 CRITICAL: Your VERY FIRST line must be "## DIRECT ANSWER" — no preamble, no intro. Use exactly these five sections in this order:
 
 ## DIRECT ANSWER
-One precise sentence directly answering the user's question, leading with the headline record ([[R1]]). Do NOT write a confidence level — it is computed from the record and shown beside your sentence.
+One precise sentence directly answering the user's question, leading with the headline record ([[R1]]) — or, when R1 is marked TORN, with the record marked DIRECT READ if there is one, followed by what the verdict depends on (a torn panel is neither a yes nor a no, and never "against"). Do NOT write a confidence level — it is computed from the record and shown beside your sentence.
 
 ## QUESTION
 Restate the question being investigated and why it matters.
@@ -165,7 +165,12 @@ def positions_block(positions: list[dict], handle_of_agent: dict[str, str], name
     maj, dissent = dissent_for(positions)
     n = len(positions)
     counts = {k: sum(1 for p in positions if p["position"] == k) for k in ("for", "against", "mixed")}
-    lines = [f"Majority position: {maj} ({counts[maj]} of {n}); for {counts['for']}, against {counts['against']}, mixed {counts['mixed']}."]
+    if maj == "mixed":
+        lines = [f"Majority position: TORN — {counts['mixed']} of {n} answered 'it depends' (for {counts['for']}, against {counts['against']}). "
+                 "The panel did not give a yes or a no: say so, state what it depends on from their verdict lines and the transcript, and never call the panel 'against'. "
+                 "The twins below committed to a side; name them as the dissent."]
+    else:
+        lines = [f"Majority position: {maj} ({counts[maj]} of {n}); for {counts['for']}, against {counts['against']}, mixed {counts['mixed']}."]
     if dissent:
         lines.append("DISSENT (the twins who did not hold the majority position — name these, by handle):")
         for p in dissent:
@@ -468,6 +473,10 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
         "version": 2,
         "direct_answer": {
             "record_id": (headline or {}).get("id"),
+            # A torn verdict (the plurality answered "it depends") and, when one exists, the Lab record
+            # that asked the question directly — the page leads its yes/no with that one.
+            "torn": bool((headline or {}).get("torn")) if headline else False,
+            "direct_read_record_id": next((r.get("id") for r in records if r.get("direct")), None),
             "confidence": {"band": confidence_band(score) if headline else None, "score": score, "drivers": list(conf.get("drivers") or [])},
             "claimed_band": claimed_band,
         },

@@ -200,3 +200,20 @@ def test_prior_dials_are_not_treated_as_people():
 def test_nothing_to_say_without_a_share_or_splits():
     assert unanimity.check(None, {}) is None
     assert unanimity.check({"share": 0.9}, {}) is None
+
+
+# ── today's date reaches every twin, and dated knowledge reads as dated (2026-10-19) ──
+
+def test_every_twin_prompt_carries_todays_date_and_the_dated_knowledge_rule():
+    from app.services.agents import today
+    from app.services.agents.agent_runner import _build_system_prompt
+    from types import SimpleNamespace
+    a = SimpleNamespace(name="T", age=30, role="nurse", background="b", correlation="c", personality=["x"], debate_style="d",
+                        stance="direct", dials={}, humanity=5, demographics={}, segment=None, character={}, session_id="s")
+    for task in ("post", "probe", "chat"):
+        p = _build_system_prompt(a, task=task)
+        assert f"TODAY IS {today.today_text().upper()}" in p and "a survey from years ago describes then" in p
+    assert today.year_of("Mon, 22 Jan 2024") == "2024" and today.year_of("2020-01-10") == "2020" and today.year_of("2025") == "2025"
+    assert today.year_of("https://g/a2024") is None and today.year_of("undated") is None and today.year_of("") is None
+    assert today.age_note("2020-01-10").startswith("2020, ") and today.age_note("2020-01-10").endswith("years ago")
+    assert "Today is" in today.planner_line()

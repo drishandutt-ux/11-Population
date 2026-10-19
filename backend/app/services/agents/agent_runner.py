@@ -4,6 +4,7 @@ from typing import Optional
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 from app.models.agent import SpawnedAgent
+from app.services.agents.today import today_block
 import anthropic
 
 
@@ -428,6 +429,9 @@ Your stance type: {agent.stance} ({"a first-hand stake — you live this decisio
     prompt += _geo_block(agent)
     prompt += _character_block(agent)
     prompt += _limits_block(agent)
+    # The date, and the rule that dated knowledge is that old (2026-10-19): a twin that is
+    # not told the year answers from wherever its model's memory ends.
+    prompt += today_block()
     prompt += _dials_to_behavioral_guidance(agent.dials or {}, humanity)
     if dynamic:
         from app.services.agents import dynamic_dials as dyn_mod

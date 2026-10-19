@@ -44,9 +44,13 @@ def compare(a: dict, b: dict) -> dict:
     }
     # headline
     if ea.get("value") is not None and eb.get("value") is not None:
+        # A verdict that was "in favour" then and "torn" now (or the reverse) is a different reading,
+        # not a move of N points: the two shares are compared only when they measure the same thing.
+        same = (ea.get("metric") or "") == (eb.get("metric") or "")
         out["headline"] = {"label": eb.get("label") or ea.get("label"), "then": ea, "now": eb,
-                           "change_points": round((float(eb["value"]) - float(ea["value"])) * 100, 1) if ea.get("format") == "share" else None,
-                           "real": _real_change(ea, eb)}
+                           "change_points": round((float(eb["value"]) - float(ea["value"])) * 100, 1) if same and ea.get("format") == "share" else None,
+                           "real": _real_change(ea, eb) if same else None,
+                           "reading_changed": (None if same else f"then {ea.get('label')}, now {eb.get('label')}")}
     else:
         out["headline"] = None
     # positions

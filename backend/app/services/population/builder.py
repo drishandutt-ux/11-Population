@@ -23,6 +23,7 @@ from app.core.redis_client import publish, session_channel
 from app.models.agent import SpawnedAgent
 from app.models.population import PopulationBuild
 from app.models.session import AnalysisSession, SessionStatus
+from app.services.agents import today as _today
 from app.services.evidence.llm import analyze, arr, b, enum, i, obj, s
 from app.services.agents import archetypes as archetypes_mod
 
@@ -745,7 +746,7 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
             for level, msg in inp["found"]:
                 await log(build_id, "detect", level, msg)
             try:
-                detected = await analyze(DETECT_SCHEMA, DETECT_SYSTEM, _inputs_text(inp, bld), session_id=bld.session_id, label="population_detect", max_tokens=2500)
+                detected = await analyze(DETECT_SCHEMA, DETECT_SYSTEM + _today.planner_line(), _inputs_text(inp, bld), session_id=bld.session_id, label="population_detect", max_tokens=2500)
             except Exception as e:  # noqa: BLE001
                 from app.core.llm_errors import friendly_llm_error
                 await log(build_id, "detect", "error", "Detection failed", friendly_llm_error(e))
@@ -993,7 +994,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
                       "size and place the segments so that, summed over the plan, the population lands close to those shares.")
     user = (_inputs_text(inp, bld) + f"\n\nDetected:\n{bld.detected}\n\nTarget population size: {bld.target_count} agents.\n\n" + voice_instruction(bld.constraints) + frame_text + kept_text)
     try:
-        p = await analyze(PLAN_SCHEMA, PLAN_SYSTEM, user, session_id=bld.session_id, label="population_plan", max_tokens=9000)
+        p = await analyze(PLAN_SCHEMA, PLAN_SYSTEM + _today.planner_line(), user, session_id=bld.session_id, label="population_plan", max_tokens=9000)
     except Exception as e:  # noqa: BLE001
         from app.core.llm_errors import friendly_llm_error
         await log(build_id, "plan", "error", "Planning failed", friendly_llm_error(e))

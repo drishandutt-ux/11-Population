@@ -118,13 +118,14 @@ async def context_for_agent(session_id: str, agent: Any, query: str, *, purpose:
 def numbered_block(visible: list[dict], max_chars: int = 3600) -> tuple[str, list[dict]]:
     """The knowledge block with every item numbered S1 … Sn, and the items themselves, so a
     twin can cite what it drew on and the answer can be traced to the document (brief L6-05)."""
-    lines = ["Where you know each thing from is in brackets. Each item has a number (S1, S2 …) so you can say which you drew on."]
+    from app.services.scoping.engine import DATED_NOTE, when_tag
+    lines = ["Where you know each thing from is in brackets. Each item has a number (S1, S2 …) so you can say which you drew on. " + DATED_NOTE]
     used = len(lines[0])
     items: list[dict] = []
     for k, r in enumerate(visible, 1):
         u = r["unit"]
         text = " ".join((u.get("text") or "").split())
-        line = f"[S{k}] ({r['route']}) {text[:420]}"
+        line = f"[S{k}] ({r['route']}{when_tag(u.get('source_ref', ''))}) {text[:420]}"
         if used + len(line) > max_chars:
             break
         lines.append(line)

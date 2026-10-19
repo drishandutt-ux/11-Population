@@ -1119,8 +1119,14 @@ type Tile = { key: string; title: string; value: string; reading: string; record
 function tilesFor(records: OutcomeRecord[]): Tile[] {
   const out: Tile[] = [];
   const head = records.find((r) => r.kind === "headline");
-  if (head) {
-    out.push({ key: "answer", title: "The answer", value: fmtEstimate(head), reading: `${head.estimate.label || "of the population"} · ${fmtIntervalText(head)} · ${head.estimate.n} twins`, recordId: head.id, runs: head.runs?.count });
+  const direct = records.find((r) => r.direct);
+  if (head && head.torn && direct) {
+    // A torn verdict is neither a yes nor a no: the answer tile is the record that asked directly,
+    // and the verdict tile says what the panel actually did.
+    out.push({ key: "answer", title: "The answer (asked directly)", value: fmtEstimate(direct), reading: `${direct.estimate.label || direct.label} · ${fmtIntervalText(direct)} · ${direct.estimate.n} twins`, recordId: direct.id, runs: direct.runs?.count });
+    out.push({ key: "verdict", title: "The verdict", value: "torn", tone: "warn", reading: head.reading || "the panel answered \"it depends\"", recordId: head.id, runs: head.runs?.count });
+  } else if (head) {
+    out.push({ key: "answer", title: head.torn ? "The verdict" : "The answer", value: fmtEstimate(head), tone: head.torn ? "warn" : undefined, reading: head.torn ? (head.reading || "the panel answered \"it depends\"") : `${head.estimate.label || "of the population"} · ${fmtIntervalText(head)} · ${head.estimate.n} twins`, recordId: head.id, runs: head.runs?.count });
   }
   const journey = records.find((r) => r.candidates?.length);
   if (journey) {
@@ -1649,6 +1655,7 @@ function RecordGrid({ records }: { records: OutcomeRecord[] }) {
                 {r.runs && r.runs.count > 1 ? <Term k="runs" className="text-[9px] text-muted-foreground/60 ml-auto">latest of {r.runs.count}</Term> : null}
               </div>
               <div className="text-[11px] text-foreground/85 leading-snug line-clamp-2">{r.label}</div>
+              {r.direct && <div className="mt-0.5 text-[9px] uppercase tracking-wide text-teal-300/80 font-semibold">asked directly</div>}
               {flat ? (
                 <div className="mt-1.5 text-[12px] font-semibold text-muted-foreground/85 leading-snug">{r.summary}</div>
               ) : (
@@ -1657,6 +1664,7 @@ function RecordGrid({ records }: { records: OutcomeRecord[] }) {
                   <Interval r={r} />
                 </div>
               )}
+              {r.reading && <div className={`mt-1 text-[10px] leading-snug ${r.torn ? "text-yellow-300/85" : "text-muted-foreground/70"}`}>{r.torn ? "Torn — neither a yes nor a no: " : ""}{r.reading}</div>}
               <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground/70">
                 <Term k="n">{r.estimate.n} twins</Term>
                 <Term k="confidence">· confidence {r.confidence.score ?? "—"}/100</Term>

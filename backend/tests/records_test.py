@@ -301,3 +301,47 @@ def test_only_the_latest_run_of_a_tool_at_a_step_is_kept_and_the_count_is_carrie
     assert out[3]["runs"]["count"] == 1 and out[4]["runs"]["count"] == 1
     text, _ = rec.records_block(out[1:2])
     assert "latest of 2 runs of this tool at this step" in text
+
+
+# ── a torn verdict is torn, never "0% in favour" (2026-10-19) ─────────────────
+
+def _rows(positions):
+    return [{"agent_id": f"a{k}", "agent": {"name": f"N{k}", "role": "r"}, "segments": {"stance": "direct" if k % 2 else "neutral"},
+             "answer": {"position": p, "confidence": 50, "verdict": f"line {k}", "reasoning": "why"}} for k, p in enumerate(positions)]
+
+
+def test_a_torn_verdict_is_headlined_as_torn_with_its_full_reading():
+    agg = verdict_inst.aggregate(_rows(["mixed"] * 9 + ["against"]), {"seed": 1})
+    assert agg["headline"]["metric"] == "mixed_share" and agg["headline"]["successes"] == 9 and agg["lean"]["value"] == "mixed"
+    assert agg["headline"]["label"].startswith("Torn")
+    assert agg["reading"] == "0% in favour outright, 10% against, 90% torn (it depends)"
+    assert "it depends" in agg["sentence"] and "not a yes and not a no" in agg["sentence"]
+    assert "for" in agg and agg["for"]["successes"] == 0
+    # the splits follow the headline: a torn verdict is cut by the torn share, not the for share
+    assert all(b["successes"] <= 9 for b in agg["segments"]["stance"]) and sum(b["successes"] for b in agg["segments"]["stance"]) == 9
+    # a clear lean keeps the for share as the headline
+    clear = verdict_inst.aggregate(_rows(["for"] * 6 + ["mixed"] * 3 + ["against"]), {"seed": 1})
+    assert clear["headline"]["metric"] == "for_share" and clear["lean"]["value"] == "for" and clear["reading"].startswith("60% in favour outright")
+
+
+def test_the_torn_record_names_the_direct_read_and_the_prompt_line_says_so():
+    torn = {"n": 10, "headline": {"metric": "mixed_share", "label": "Torn — it depends (neither a yes nor a no)", "share": 0.9, "low": 0.6, "high": 0.98, "n": 10, "successes": 9},
+            "lean": {"value": "mixed", "share": 0.9, "count": 9}, "reading": "0% in favour outright, 10% against, 90% torn (it depends)", "sentence": "s", "segments": {}}
+    head = rec.record_from_probe(_probe(id="v1", instrument="verdict", spec={"question": "Will they pay?"}, aggregates=torn))
+    assert head["torn"] is True and head["lean"]["value"] == "mixed" and head["estimate"]["metric"] == "mixed_share"
+    survey = rec.record_from_probe(_probe(id="s1", instrument="survey", spec={"title": "Quick questionnaire"},
+                                          aggregates={"n": 10, "headline": {"metric": "pay", "label": "Would you pay £15? — yes", "share": 0.4, "low": 0.2, "high": 0.6, "n": 10, "successes": 4}, "sentence": "s", "segments": {}}))
+    older = rec.record_from_probe(_probe(id="s0", instrument="survey", spec={"title": "Earlier questionnaire"}, created_at=datetime(2026, 1, 1),
+                                         aggregates={"n": 10, "headline": {"metric": "pay", "label": "yes", "share": 0.5, "low": 0.2, "high": 0.7, "n": 10, "successes": 5}, "sentence": "s", "segments": {}}))
+    marked = rec.mark_direct_read([head, survey, older])
+    assert [r["direct"] for r in marked] == [False, True, False]            # the newest direct question, not the verdict
+    text, handles = rec.records_block(marked)
+    r1 = text.splitlines()[0]
+    assert "TORN" in r1 and "90% torn" in r1 and "never state it as the share who would do, pay, buy or adopt" in r1
+    assert text.splitlines()[1].startswith("DIRECT READ of the question") and handles["r2"] == "s1"
+    # a verdict with a clear lean is not torn and marks nothing
+    clear = rec.record_from_probe(_probe(id="v2", instrument="verdict", aggregates={"n": 10, "headline": {"metric": "for_share", "label": "In favour outright", "share": 0.7, "low": 0.4, "high": 0.9, "n": 10, "successes": 7},
+                                                                                     "lean": {"value": "for", "share": 0.7, "count": 7}, "reading": "70% in favour outright, 20% against, 10% torn (it depends)", "sentence": "s", "segments": {}}))
+    assert clear["torn"] is False and [r["direct"] for r in rec.mark_direct_read([clear, survey])] == [False, False]
+    assert "split: 70% in favour outright" in rec.records_block([clear])[0]
+    assert "unless it is marked TORN" in rec.FIGURE_RULES

@@ -23,7 +23,9 @@ VISIBLE = [
 
 def test_the_knowledge_block_is_numbered_and_the_served_items_are_returned():
     block, items = service.numbered_block(VISIBLE)
-    assert block.splitlines()[1].startswith("[S1] (via Local press) Two GP surgeries") and "[S2] (from a statistic) 34%" in block
+    # Every item carries the year it was published (2026-10-19): a years-old figure reads as years old.
+    assert block.splitlines()[1].startswith("[S1] (via Local press · 2025) Two GP surgeries") and "[S2] (from a statistic · 2024, " in block and "years ago) 34%" in block
+    assert "year in the brackets" in block.splitlines()[0]
     assert [i["sid"] for i in items] == ["S1", "S2"] and items[1]["unit_id"] == "u2" and items[1]["provenance_class"] == "official_statistic"
 
 

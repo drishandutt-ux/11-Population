@@ -114,7 +114,8 @@ export default function VerdictPage({ probe, dynamicDials = [], agentsById = {} 
           </>
         ) : (
           <>
-            <ShareBar value={a.headline} label="In favour" />
+            <ShareBar value={a.headline} label={a.headline?.label || "In favour"} />
+            {a.reading && <p className="text-[11px] text-muted-foreground mt-2">{a.reading}</p>}
             <p className="text-xs text-foreground/70 mt-3 leading-relaxed">{a.sentence}</p>
           </>
         )}
@@ -133,7 +134,7 @@ export default function VerdictPage({ probe, dynamicDials = [], agentsById = {} 
 
       {a.segments && Object.keys(a.segments).length > 0 && (
         <div>
-          <div className="text-xs text-muted-foreground mb-2">In favour, by cut <span className="text-muted-foreground/60">— click a heading to read that cut</span></div>
+          <div className="text-xs text-muted-foreground mb-2">{a.headline?.label || "In favour"}, by cut <span className="text-muted-foreground/60">— click a heading to read that cut</span></div>
           <div className="grid grid-cols-2 gap-5">
             {[...Object.entries(a.segments)].sort(([x], [y]) => (SPLIT_ORDER.indexOf(x) + 1 || 99) - (SPLIT_ORDER.indexOf(y) + 1 || 99)).map(([key, rows]) => (
               <button key={key} type="button" onClick={() => { setSegKey(key); setSegValue(""); }}

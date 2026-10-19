@@ -322,7 +322,7 @@ def client_markdown(*, run: dict, report: Optional[dict], records: list[dict], a
             if r.get("summary") and (est.get("format") == "lift") and not est.get("significant"):
                 figure = f"{r['summary']} ({figure})"
             runs = r.get("runs") or {}
-            lines.append(f"- **{r.get('label')}** — {figure}; {_conf(r)}; {_equity(r.get('equity'))}"
+            lines.append(f"- **{r.get('label')}** — {figure}" + (f" ({r['reading']})" if r.get("reading") else "") + ("; asked directly — the yes/no the verdict could not give" if r.get("direct") else "") + f"; {_conf(r)}; {_equity(r.get('equity'))}"
                          + (f"; {len(r.get('sources') or [])} document(s) cited by the twins" if r.get("sources") else "")
                          + (f"; latest of {runs['count']} runs" if int(runs.get('count') or 0) > 1 else ""))
         lines.append("")

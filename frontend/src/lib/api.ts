@@ -578,6 +578,12 @@ export type OutcomeRecord = {
   basis: "simulated" | "evidence_anchored" | "client_reported";
   estimate: { metric: string; label: string; format: "share" | "lift" | "mean" | "text"; value: number | null; low: number | null; high: number | null; n: number; successes?: number; significant?: boolean; control?: number | null; variant?: number | null };
   sentence: string;
+  /** A verdict's full split in words ("0% in favour outright, 2% against, 98% torn (it depends)"). */
+  reading?: string;
+  /** A verdict whose plurality answered "it depends": its share is neither a yes nor a no. */
+  torn?: boolean;
+  /** The Lab record that asked the question directly, when the verdict is torn — the report leads its yes/no with it. */
+  direct?: boolean;
   distribution: { value: string; count: number; share: number }[];
   splits: Record<string, { value: string; share: number; low?: number; high?: number; n: number }[]>;
   /** Equity by default (brief L6-04): the record by deprivation level — most vs least deprived cell, the gap, whether it is real. */

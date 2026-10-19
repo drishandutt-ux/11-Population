@@ -96,7 +96,8 @@ def test_build_structure_wires_every_section():
     pos = st.positions_from_answers(_rows())
     s = st.build_structure(session_query="Q?", records=[headline], headline=headline, positions=pos, evidence=[], frame={"level": "none"},
                            cited_record_ids=["h1"], claimed_band="LOW")
-    assert s["direct_answer"] == {"record_id": "h1", "confidence": {"band": "HIGH", "score": 72, "drivers": ["5 twins answered"]}, "claimed_band": "LOW"}
+    assert s["direct_answer"] == {"record_id": "h1", "confidence": {"band": "HIGH", "score": 72, "drivers": ["5 twins answered"]}, "claimed_band": "LOW",
+                                  "torn": False, "direct_read_record_id": None}
     assert s["question"] == {"session_query": "Q?", "instrument": "verdict", "asked": 6, "answered": 5}
     assert s["discussion"]["majority"] == "for" and s["discussion"]["n"] == 5
     assert s["discussion"]["positions"][0] == {"value": "for", "count": 3, "share": 0.6}
@@ -161,3 +162,16 @@ def test_build_structure_carries_coverage_follow_ups_and_no_zero_for_an_unasked_
                            activity={"posts": 12, "evidence_items": 3})
     assert s["version"] == 2 and s["question"]["asked"] is None and s["question"]["answered"] is None
     assert [x["key"] for x in s["coverage"]["ran"]] == ["debate", "evidence"] and s["follow_ups"]
+
+
+def test_a_torn_majority_is_said_to_be_torn_and_the_committed_twins_are_the_dissent():
+    mk = lambda k, pos, conf: {"agent_id": f"a{k}", "position": pos, "confidence": conf, "verdict": f"line {k}"}
+    pos = [mk(1, "mixed", 80), mk(2, "mixed", 60), mk(3, "against", 90), mk(4, "mixed", 40)]
+    block = st.positions_block(pos, {"a1": "A1", "a2": "A2", "a3": "A3", "a4": "A4"}, {})
+    assert block.startswith("Majority position: TORN — 3 of 4 answered 'it depends'") and "never call the panel 'against'" in block
+    assert "[[A3]] — against" in block
+    head = {"id": "h1", "instrument": "verdict", "torn": True, "estimate": {"n": 4}, "provenance": {"agents": 4}, "confidence": {"score": 40}}
+    s = st.build_structure(session_query="Q?", records=[head, {"id": "s1", "kind": "probe", "direct": True}], headline=head, positions=pos, evidence=[], frame={"level": "none"},
+                           cited_record_ids=[], claimed_band=None)
+    assert s["direct_answer"]["torn"] is True and s["direct_answer"]["direct_read_record_id"] == "s1"
+    assert "TORN" in st.REPORT_PROMPT and "DIRECT READ" in st.REPORT_PROMPT

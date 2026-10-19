@@ -48,7 +48,11 @@ FIGURE_RULES = (
     "it, say it in words (\"most\", \"a minority\", \"the older twins\") and cite the twins instead.\n"
     "- Figures from the source material (a statistic, a price in a document) are cited too — "
     "see SOURCE FIGURES: [[F3]] for a typed statistic, [[E5]] for the document it was read in.\n"
-    "- The headline record (R1) is the population's answer to the question: lead with it.\n"
+    "- The headline record (R1) is the population's answer to the question: lead with it — unless it is marked TORN. "
+    "A TORN verdict means the twins answered 'it depends', not yes and not no: never state its share as the share who "
+    "would do, pay, buy or adopt, never call the panel 'against' or 'unanimous against', and say what it depends on, "
+    "citing the twins. For the yes/no part lead with the record marked DIRECT READ when there is one; when there is "
+    "none, give no share for the yes/no part and say that the question was not put to the panel directly.\n"
     "- Every record carries an equity line (most vs least deprived cell). State the gap only as the record gives it, "
     "say when it is not distinguishable at this size, and never read a gap into a record whose equity line is unavailable.\n"
     "- A record with 'barriers ranked' is the only source for what stands in the way: name barriers from that list, in that "
@@ -279,6 +283,13 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
         "estimate": est,
         "sentence": str(agg.get("sentence") or ""),
         "distribution": agg.get("position") or agg.get("would_buy") or agg.get("verdict") or [],
+        # A verdict's full split in words ("0% in favour outright, 2% against, 98% torn") and where it
+        # leans; `torn` when the plurality answered "it depends" — then its share is not a yes or a no.
+        "reading": str(agg.get("reading") or "") if instrument == "verdict" else "",
+        "lean": dict(agg.get("lean") or {}) if instrument == "verdict" and isinstance(agg.get("lean"), dict) else None,
+        "torn": bool((agg.get("lean") or {}).get("value") == "mixed") if instrument == "verdict" and isinstance(agg.get("lean"), dict) else False,
+        # Set by `mark_direct_read`: the record that asked the question directly, when the verdict is torn.
+        "direct": False,
         "splits": splits,
         "equity": equity,
         # Barriers (brief L6-05): the ranked list this record carries, traceable to twins and evidence.
@@ -733,9 +744,14 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
             flags.append("FLAGGED: more unanimous than the population should be")
         if (r.get("refusals") or {}).get("refused"):
             flags.append(f"{r['refusals']['refused']} refused to answer")
+        if r.get("torn"):
+            flags.append(f"TORN — the panel answered 'it depends': {r.get('reading')}. This share is neither a yes nor a no: never state it as the share who would do, pay, buy or adopt, never call the panel 'against'; say what it depends on and cite the twins")
+        elif r.get("reading"):
+            flags.append(f"split: {r['reading']}")
         runs = r.get("runs") or {}
         lines.append(
-            f"[[{h}]] {r.get('label')} — {est.get('label') or 'value'}: {_fmt_value(est)}"
+            ("DIRECT READ of the question (the twins were asked it directly — lead the DIRECT ANSWER's yes/no with this figure; the verdict record gives the conditions) " if r.get("direct") else "")
+            + f"[[{h}]] {r.get('label')} — {est.get('label') or 'value'}: {_fmt_value(est)}"
             + (f" — in words: {r['summary']}" if r.get("summary") else "")
             + (f" (latest of {runs['count']} runs of this tool at this step; the earlier runs are superseded)" if int(runs.get("count") or 0) > 1 else "")
             + (f"; question: {r['question']}" if r.get("question") else "")
@@ -783,6 +799,29 @@ async def _frame(session_id: str) -> Optional[dict]:
         return bld.frame if bld and bld.frame else None
     except Exception:  # noqa: BLE001
         return None
+
+
+#: Instruments that put the question to the twins directly, as a share: the yes/no a torn verdict cannot give.
+DIRECT_INSTRUMENTS = ("survey", "purchase_intent", "choice", "ask")
+
+
+def mark_direct_read(records: list[dict]) -> list[dict]:
+    """When the verdict is TORN (the plurality answered "it depends"), the newest Lab record that
+    asked the question directly as a share is flagged `direct`: the report leads its yes/no with
+    that figure and reads the conditions from the verdict (2026-10-19 — the PedalPass report
+    printed "0% would pay" from a verdict where 45 of 46 twins were torn, while the Forms run
+    sitting beside it had 41% saying yes to the same question)."""
+    head = next((r for r in records if r.get("kind") == "headline"), None)
+    for r in records:
+        r["direct"] = False
+    if not head or not head.get("torn"):
+        return records
+    cands = [r for r in records if r.get("kind") == "probe" and str(r.get("instrument") or "") in DIRECT_INSTRUMENTS
+             and (r.get("estimate") or {}).get("format") == "share" and (r.get("estimate") or {}).get("value") is not None]
+    if cands:
+        newest = max(cands, key=lambda r: (r.get("provenance") or {}).get("created_at") or "")
+        newest["direct"] = True
+    return records
 
 
 def latest_runs(records: list[dict]) -> list[dict]:
@@ -852,7 +891,7 @@ async def records_for_session(session_id: str, *, latest_only: bool = True) -> l
     heads = [r for r in out if r["kind"] == "headline"]
     rest = sorted([r for r in out if r["kind"] != "headline"], key=lambda r: r.get("provenance", {}).get("created_at") or "", reverse=True)
     ordered = heads + rest
-    return latest_runs(ordered) if latest_only else ordered
+    return mark_direct_read(latest_runs(ordered) if latest_only else ordered)
 
 
 async def records_by_ids(session_id: str, ids: list[str]) -> list[dict]:
@@ -879,7 +918,7 @@ async def records_by_ids(session_id: str, ids: list[str]) -> list[dict]:
              else record_from_commitment(commits[rid]) if rid in commits else None)
         if r:
             out.append(r)
-    return out
+    return mark_direct_read(out)
 
 
 async def ensure_headline(session_id: str, query: str, *, mode: str = "fast") -> Optional[dict]:

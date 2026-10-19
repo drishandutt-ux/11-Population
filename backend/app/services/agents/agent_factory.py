@@ -37,6 +37,13 @@ that reflects their emotional state, motivations, habits, trust patterns, fricti
 commercial intent, product experience, and composite readiness scores — all relative to the topic being debated."""
 
 
+def _spawn_system() -> str:
+    """The spawn system prompt with today's date: a persona's life, city and habits are written
+    as they stand now, and a dated fact in the evidence is written as that old."""
+    from app.services.agents.today import planner_line
+    return _SYSTEM_PROMPT + planner_line()
+
+
 _DIALS_INSTRUCTIONS = """DIALS INSTRUCTIONS:
 - All dial values are integers 0-10 (0=none/lowest, 10=extreme/highest)
 - Tune each dial to reflect this specific agent's psychological profile RELATIVE TO THE QUERY topic
@@ -323,7 +330,7 @@ name, a different job title, a different angle. Do not produce a variation of an
                     label=label,
                     model=gen_model,
                     max_tokens=12000,
-                    system=_SYSTEM_PROMPT,
+                    system=_spawn_system(),
                     messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h) + _taken_block(taken)}],
                 )
                 return dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
@@ -802,7 +809,7 @@ async def generate_agents_from_plan(
             try:
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
-                    system=_SYSTEM_PROMPT,
+                    system=_spawn_system(),
                     messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic,
                                                                        extra=pb_mod.context_block(playbook, seg) + pb_mod.slots_block(playbook, slots))}],
                 )
@@ -832,7 +839,7 @@ async def generate_agents_from_plan(
             try:
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
-                    system=_SYSTEM_PROMPT, messages=[{"role": "user", "content": prompt}],
+                    system=_spawn_system(), messages=[{"role": "user", "content": prompt}],
                 )
                 raw = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
@@ -856,7 +863,7 @@ async def generate_agents_from_plan(
             try:
                 response = await tracked_messages_create(
                     client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
-                    system=_SYSTEM_PROMPT, messages=[{"role": "user", "content": prompt}],
+                    system=_spawn_system(), messages=[{"role": "user", "content": prompt}],
                 )
                 raw = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
