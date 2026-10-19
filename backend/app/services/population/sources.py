@@ -44,6 +44,14 @@ QUANT_MAX_PAGES = int(os.environ.get("QUANT_MAX_PAGES", 16))
 QUANT_RESULTS_PER_SOURCE = int(os.environ.get("QUANT_RESULTS_PER_SOURCE", 5))
 QUANT_PAGES_PER_QUERY = int(os.environ.get("QUANT_PAGES_PER_QUERY", 3))
 QUANT_MAX_ROUNDS = int(os.environ.get("QUANT_MAX_ROUNDS", 2))
+#: Every ticked publisher is searched for every query (2026-10-19 — before, only the two or three the
+#: planner named were, and a dialog listing 29 publishers showed figures from four). The searches run
+#: concurrently, this many at a time; publishers the planner did not name return fewer results each so
+#: the triage listing stays readable.
+QUANT_SEARCH_CONCURRENCY = int(os.environ.get("QUANT_SEARCH_CONCURRENCY", 6))
+QUANT_RESULTS_PER_EXTRA_SOURCE = int(os.environ.get("QUANT_RESULTS_PER_EXTRA_SOURCE", 3))
+#: No target is left unsearched: the shared page budget is at least this many pages per target.
+QUANT_MIN_PAGES_PER_TARGET = int(os.environ.get("QUANT_MIN_PAGES_PER_TARGET", 2))
 
 #: The population dimensions a fact target can describe. The planner names one per target and
 #: the catalogue says which publishers cover it, so a target that comes back empty can be
@@ -398,25 +406,43 @@ async def _seen_urls(session_id: str) -> set[str]:
     return seen
 
 
-async def _search_sources(query: str, keys: list[str], *, region: Optional[str], seen: set[str], log: LogFn) -> list[tuple[dict, object]]:
-    """Run one query against each publisher with its `site:` operator; return (source, result)
-    pairs on the publisher's domain that have not been read in this session."""
+async def _search_sources(query: str, keys: list[str], *, region: Optional[str], seen: set[str], log: LogFn,
+                          featured: Optional[set[str]] = None) -> list[tuple[dict, object]]:
+    """Run one query against each publisher with its `site:` operator, `QUANT_SEARCH_CONCURRENCY` at a
+    time; return (source, result) pairs on the publisher's domain that have not been read in this
+    session, in the order the publishers were given. Publishers in `featured` (the ones the planner
+    named) return `QUANT_RESULTS_PER_SOURCE` results each, the rest `QUANT_RESULTS_PER_EXTRA_SOURCE`."""
     provider = get_search_provider()
-    out: list[tuple[dict, object]] = []
-    for key in keys:
+    featured = featured if featured is not None else set(keys)
+    gate = asyncio.Semaphore(max(1, QUANT_SEARCH_CONCURRENCY))
+
+    async def one(key: str) -> list[tuple[dict, object]]:
         src = _BY_KEY[key]
         q = f"{query} site:{src.get('site') or src['domain']}"
-        try:
-            results = await provider.search(q, {"max_results": QUANT_RESULTS_PER_SOURCE, "region": region})
-        except Exception as e:  # noqa: BLE001
-            await log("warn", f"{src['label']}: search failed", str(e)[:200])
-            continue
-        results = [r for r in results if src["domain"] in (r.domain or "") and r.url not in seen]
+        want = QUANT_RESULTS_PER_SOURCE if key in featured else QUANT_RESULTS_PER_EXTRA_SOURCE
+        async with gate:
+            try:
+                results = await provider.search(q, {"max_results": want, "region": region})
+            except Exception as e:  # noqa: BLE001
+                await log("warn", f"{src['label']}: search failed", str(e)[:200])
+                return []
+        results = [r for r in results if src["domain"] in (r.domain or "") and r.url not in seen][:want]
         if not results:
             await log("info", f"{src['label']}: nothing for “{query}”", None)
-            continue
+            return []
         await log("info", f"{src['label']}: {len(results)} result(s) for “{query}”", " · ".join(r.title[:70] for r in results[:3]))
-        out.extend((src, r) for r in results)
+        return [(src, r) for r in results]
+
+    # One row per URL: a page can come back from two publishers whose domains nest (an ONS page
+    # matches gov.uk too), and the first publisher listed is the one the planner named.
+    out: list[tuple[dict, object]] = []
+    urls: set[str] = set()
+    for batch in await asyncio.gather(*(one(k) for k in keys)):
+        for src, r in batch:
+            if r.url in urls:
+                continue
+            urls.add(r.url)
+            out.append((src, r))
     return out
 
 
@@ -555,9 +581,12 @@ async def gather_target(
         for q in queries:
             if answered or pages_read >= max_pages or (should_stop and should_stop()):
                 break
-            chosen = route_sources(q.get("sources"), keys, target.get("dimension") or "")
-            await log("info", f"Round {rnd}: “{q['query']}” → {', '.join(chosen)}", target.get("fact"))
-            found = await _search_sources(q["query"], chosen, region=region, seen=seen, log=log)
+            # Every ticked publisher is searched; the ones the planner named (or that cover the
+            # dimension) go first and return more results, so the triage sees the likely pages first.
+            named = route_sources(q.get("sources"), keys, target.get("dimension") or "")
+            chosen = named + [k for k in keys if k not in named]
+            await log("info", f"Round {rnd}: “{q['query']}” → all {len(chosen)} ticked publisher(s), first {', '.join(named[:4])}", target.get("fact"))
+            found = await _search_sources(q["query"], chosen, region=region, seen=seen, log=log, featured=set(named))
             record = {"query": q["query"], "sources": chosen, "read": []}
             tried.append(record)
             if not found:
@@ -601,21 +630,28 @@ async def gather_targets(
     max_pages: int = QUANT_MAX_PAGES,
     should_stop: Optional[Callable[[], bool]] = None,
 ) -> list[Evidence]:
-    """Run every target in priority order, sharing one page budget (each target gets at least
-    three pages; unused pages roll over to the next target)."""
+    """Run every target in priority order, sharing one page budget: the budget is at least
+    `QUANT_MIN_PAGES_PER_TARGET` pages per target so no target goes unsearched (on 2026-10-19 a
+    Blackpool-vs-Oxford build spent 16 pages on its first targets and never looked up income or
+    qualifications), unused pages roll over to the next target, and a target reached after the
+    budget is gone still reads one page."""
     targets = sorted([t for t in targets if t.get("queries")], key=lambda t: int(t.get("priority") or 2))
     if not targets:
         return []
     saved: list[Evidence] = []
-    remaining = max_pages
+    remaining = max(max_pages, QUANT_MIN_PAGES_PER_TARGET * len(targets))
+    thin_said = False
     for n, t in enumerate(targets):
         if should_stop and should_stop():
             break
         left = len(targets) - n
-        budget = max(3, math.ceil(remaining / left)) if remaining > 0 else 0
-        if budget <= 0:
-            await log("warn", "Page budget spent", f"{len(targets) - n} target(s) not searched")
-            break
+        if remaining > 0:
+            budget = max(QUANT_MIN_PAGES_PER_TARGET, math.ceil(remaining / left))
+        else:
+            budget = 1
+            if not thin_said:
+                await log("warn", "Page budget thin", f"{left} target(s) still get one page each so none goes unsearched")
+                thin_said = True
         rows = await gather_target(session_id, question, t, keys, build_id=build_id, log=log, region=region, geography=geography, max_pages=budget, should_stop=should_stop)
         saved.extend(rows)
         remaining -= len(rows)

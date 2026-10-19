@@ -400,8 +400,11 @@ def test_gather_target_refires_with_another_route_when_the_first_round_misses(mo
               "queries": [{"query": "household income North West", "sources": ["ons"]}]}
     rows = asyncio.new_event_loop().run_until_complete(
         sources.gather_target("s1", "Would parents pay £12?", target, ["ons", "govuk"], log=log, region="uk-en", max_pages=6))
-    assert searched == ["household income North West site:ons.gov.uk", "Households below average income North West site:gov.uk/government/statistics"]
+    # Every ticked publisher is searched for every query (2026-10-19), the named one first.
+    assert searched == ["household income North West site:ons.gov.uk", "household income North West site:gov.uk/government/statistics",
+                        "Households below average income North West site:gov.uk/government/statistics", "Households below average income North West site:ons.gov.uk"]
     assert read == ["https://www.ons.gov.uk/a", "https://www.gov.uk/government/statistics/hbai"]
+    assert any("all 2 ticked publisher(s), first ons" in m for _, m, _ in logged)
     assert [r.on_topic for r in rows] == [True, True]
     assert [(r.structured or {}).get("answers_target") for r in rows] == [False, True]
     assert rows[1].structured["target"]["dimension"] == "income" and rows[1].relevance == 0.9
@@ -436,6 +439,72 @@ def test_gather_targets_shares_the_page_budget_by_priority(monkeypatch):
     targets = [{"fact": "b", "priority": 2, "queries": [{"query": "b"}]}, {"fact": "a", "priority": 1, "queries": [{"query": "a"}]}, {"fact": "none", "priority": 1, "queries": []}]
     asyncio.new_event_loop().run_until_complete(sources.gather_targets("s", "q", targets, ["ons"], max_pages=8))
     assert order == [("a", 4), ("b", 8)]  # priority first; unused pages roll over
+
+
+def test_gather_targets_never_leaves_a_target_unsearched(monkeypatch):
+    """A Blackpool-vs-Oxford build (2026-10-19) spent its 16 pages on the first targets and logged
+    'Page budget spent — 3 targets not searched', so income and qualifications were never looked up.
+    Now the budget is at least QUANT_MIN_PAGES_PER_TARGET pages per target, and a target reached after
+    the pages are gone still gets one."""
+    order, logged = [], []
+
+    async def fake_gather_target(session_id, question, target, keys, **kw):
+        order.append((target["fact"], kw["max_pages"]))
+        return [object()] * 3            # every target reads three pages, more than its share
+
+    async def log(level, message, detail=None):
+        logged.append((level, message, detail))
+
+    monkeypatch.setattr(sources, "gather_target", fake_gather_target)
+    monkeypatch.setattr(sources, "QUANT_MIN_PAGES_PER_TARGET", 2)
+    targets = [{"fact": f, "priority": 1, "queries": [{"query": f}]} for f in ("a", "b", "c", "d")]
+    asyncio.new_event_loop().run_until_complete(sources.gather_targets("s", "q", targets, ["ons"], log=log, max_pages=3))
+    assert [f for f, _ in order] == ["a", "b", "c", "d"]            # all four searched
+    assert order[0] == ("a", 2) and order[-1] == ("d", 1)            # floor of 2 × 4 = 8 pages; the last one reads one page
+    assert any(m == "Page budget thin" for _, m, _ in logged) and not any("not searched" in (d or "") for _, _, d in logged)
+
+
+def test_estimate_open_gaps_climbs_the_ladder_when_questions_are_skipped(monkeypatch):
+    """The Simple view skips the clarifying questions, so before 2026-10-19 every frame gap was skipped
+    outright and its row read 'not matched'. Now each gap is estimated (labelled) and only what the
+    model declines is skipped, with a note saying why."""
+    from app.services.population import frame as frame_mod
+
+    class Bld:
+        frame = {"dimensions": [{"key": "age", "label": "Age", "attribute": "age", "kind": "demographic"},
+                                {"key": "trust", "label": "Trust", "attribute": "attitude", "kind": "attitudinal"},
+                                {"key": "region", "label": "Region", "attribute": "region", "kind": "demographic"}],
+                 "targets": {"region": {"status": "found", "categories": [{"label": "N", "share_pct": 50}, {"label": "S", "share_pct": 50}]}}}
+
+    bld = Bld()
+    resolved, skipped, logged = [], [], []
+
+    async def fake_load(build_id):
+        return bld
+
+    async def fake_resolve(build_id, key, action, **kw):
+        resolved.append((key, action))
+        if key == "age":
+            bld.frame["targets"]["age"] = {"status": "estimated", "categories": [{"label": "18-34", "share_pct": 50}, {"label": "35+", "share_pct": 50}]}
+        return bld
+
+    async def fake_skip(build_id, why, note=None):
+        skipped.append((why, note, [d["key"] for d in frame_mod.gaps(bld.frame)]))
+        return bld
+
+    async def fake_log(build_id, stage, level, message, detail=None):
+        logged.append((stage, level, message))
+
+    monkeypatch.setattr(builder, "_load", fake_load)
+    monkeypatch.setattr(builder, "resolve_frame_gap", fake_resolve)
+    monkeypatch.setattr(builder, "_skip_open_gaps", fake_skip)
+    monkeypatch.setattr(builder, "log", fake_log)
+    monkeypatch.setattr(builder, "_stopped", lambda build_id: False)
+    asyncio.new_event_loop().run_until_complete(builder._estimate_open_gaps("b1"))
+    assert resolved == [("age", "estimate"), ("trust", "estimate")]      # the found dimension is left alone
+    assert skipped and skipped[0][2] == ["trust"] and "will not estimate an attitude" in (skipped[0][1] or "")
+    assert any("estimated rather than left unmatched" in m for _, _, m in logged)
+    assert "attitude" in frame_mod.skipped_target("no figure; the model will not estimate an attitude")["note"]
 
 
 # ── HTTP surface with the model stubbed ───────────────────────────────────────

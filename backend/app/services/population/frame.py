@@ -898,8 +898,9 @@ def proxy_target(frame: dict, proxy_of: str) -> dict:
     return {**src, "status": "proxy", "proxy_attribute": attr, "note": f"matched via {dim['label']} ({src.get('source') or src.get('status')})"}
 
 
-def skipped_target() -> dict:
-    return {"status": "skipped", "categories": [], "source": "", "year": "", "geography": "", "proxy_attribute": "other", "note": "not matched and not weighted — estimate or upload a distribution to change that", "provenance": ""}
+def skipped_target(note: Optional[str] = None) -> dict:
+    return {"status": "skipped", "categories": [], "source": "", "year": "", "geography": "", "proxy_attribute": "other",
+            "note": (note or "not matched and not weighted — estimate or upload a distribution to change that")[:400], "provenance": ""}
 
 
 def gaps(frame: dict) -> list[dict]:

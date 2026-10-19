@@ -438,7 +438,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
               )}
             </ErrorBoundary>
             <div className="mt-5 pt-5 border-t hairline">
-              <SwitchRow on={!!constraints.skip_questions} disabled={active} onChange={(v) => setConstraints((c) => ({ ...c, skip_questions: v }))} title="Skip clarifying questions" hint="Plan on the defaults without asking." />
+              <SwitchRow on={!!constraints.skip_questions} disabled={active} onChange={(v) => setConstraints((c) => ({ ...c, skip_questions: v }))} title="Skip clarifying questions" hint="Plan on the defaults without asking. A frame dimension with no published figure gets a labelled model estimate instead of being left unmatched." />
             </div>
           </div>
           <div className="px-5 py-4 border-t hairline space-y-2 shrink-0 sticky bottom-0 bg-background/95 backdrop-blur xl:static">

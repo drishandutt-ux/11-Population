@@ -923,7 +923,11 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 await _save(build_id, questions=questions, status="clarifying")
                 return  # the answers endpoint resumes at "plan"
             if gap_dims:
-                await _skip_open_gaps(build_id, "questions skipped")
+                # Questions are skipped (the Simple view, or the Studio switch), so nobody will be asked
+                # about the gaps: climb the ladder for them here — a labelled model estimate anchored to
+                # what is on file — and skip only what the model declines (attitudes). Before 2026-10-19
+                # every gap was skipped outright and the Simple view's frame read "not matched" on all of them.
+                await _estimate_open_gaps(build_id)
             await log(build_id, "clarify", "ok", "No clarifying questions needed" if not questions else "Questions skipped — planning on the defaults")
             await _save(build_id, questions=questions)
             from_stage = "plan"
@@ -1133,17 +1137,40 @@ async def _research_material(bld: PopulationBuild) -> frame_mod.ResearchMaterial
     return frame_mod.ResearchMaterial(web, chunks, (bld.constraints or {}).get("doc_context") or "")
 
 
-async def _skip_open_gaps(build_id: str, why: str) -> Optional[PopulationBuild]:
+async def _skip_open_gaps(build_id: str, why: str, note: Optional[str] = None) -> Optional[PopulationBuild]:
     bld = await _load(build_id)
     if not bld or not bld.frame:
         return bld
     fr = dict(bld.frame)
     targets = dict(fr.get("targets") or {})
     for d in frame_mod.gaps(fr):
-        targets[d["key"]] = frame_mod.skipped_target()
+        targets[d["key"]] = frame_mod.skipped_target(note)
         await log(build_id, "frame", "decision", f"Skipped · {d['label']}: not matched ({why})", "Nothing was invented; the population is weighted on the dimensions that have data")
     fr["targets"] = targets
     return await _save(build_id, frame=fr)
+
+
+async def _estimate_open_gaps(build_id: str) -> Optional[PopulationBuild]:
+    """The ladder for every open gap when nobody will be asked (questions skipped): a model estimate
+    anchored to what is on file, labelled model_inference and shown as *Assumed*; a dimension the
+    model declines (attitudes have no known distribution) is skipped with a note that says why."""
+    bld = await _load(build_id)
+    if not bld or not bld.frame:
+        return bld
+    open_dims = frame_mod.gaps(bld.frame)
+    if not open_dims:
+        return bld
+    await log(build_id, "frame", "decision", f"Questions are skipped, so the {len(open_dims)} open gap(s) are estimated rather than left unmatched: " + ", ".join(d["label"] for d in open_dims),
+              "Each estimate is anchored to the statistics and research on file, labelled a model estimate and lowers confidence; a dimension the model will not estimate is skipped")
+    for d in open_dims:
+        if _stopped(build_id):
+            break
+        try:
+            bld = await resolve_frame_gap(build_id, d["key"], "estimate")
+        except Exception as e:  # noqa: BLE001
+            await log(build_id, "frame", "warn", f"Could not estimate {d['label']}", str(e)[:120])
+    return await _skip_open_gaps(build_id, "no published figure, and the model declined to estimate it",
+                                 note="no published figure on file, and the model will not estimate an attitude — not weighted; upload a distribution in the Studio to change that")
 
 
 async def refresh_frame_report(build_id: str) -> Optional[PopulationBuild]:
