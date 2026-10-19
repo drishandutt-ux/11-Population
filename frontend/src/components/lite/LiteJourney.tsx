@@ -113,14 +113,21 @@ export default function LiteJourney({ sessionId, agents, onBack }: Props) {
     const id = setInterval(tick, 2500); void tick();
     return () => { alive = false; clearInterval(id); };
   }, [stage, probe?.id, sessionId, loadPast]); // eslint-disable-line react-hooks/exhaustive-deps
-  // The barriers are coded (and movability scored) a few seconds after the run lands: keep refreshing.
+  // The barriers are coded, then movability (who could move them) is scored, in the seconds after
+  // the run lands: keep refreshing until both are on the record (or two and a half minutes pass).
+  const settled = (p: Probe | null) => {
+    const ag: any = p?.aggregates || {};
+    if (!ag.barriers_coded) return false;
+    const top = [...(ag.candidates || [])].sort((x: any, y: any) => (y.stuck || 0) - (x.stuck || 0))[0];
+    return !top || Boolean(top.movability);
+  };
   useEffect(() => {
-    if (stage !== "results" || !probe || probe.status !== "complete" || (probe.aggregates as any)?.barriers_coded) return;
+    if (stage !== "results" || !probe || probe.status !== "complete" || settled(probe)) return;
     let alive = true; const started = Date.now();
     const tick = async () => { if (Date.now() - started > 150_000) return; try { const full = await api.lab.probe(sessionId, probe.id); if (alive) setProbe(full); } catch { /* try again */ } };
     const id = setInterval(tick, 4000);
     return () => { alive = false; clearInterval(id); };
-  }, [stage, probe?.id, probe?.status, (probe?.aggregates as any)?.barriers_coded, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stage, probe?.id, probe?.status, settled(probe), sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openPast = async (p: Probe) => {
     setProbe(p); setDraft(null); setAmends([]); setAmending(null); setOpenStep(null);
@@ -164,10 +171,11 @@ export default function LiteJourney({ sessionId, agents, onBack }: Props) {
   const recommended = useMemo(() => {
     const out: string[] = [];
     const seen = new Set(signed.map((r) => r.lever.toLowerCase()));
-    for (const c of [...candidates].sort((x, y) => y.stuck - x.stuck)) {
-      for (const lv of c.movability?.levers || []) if (lv.lever && !seen.has(lv.lever.toLowerCase())) { seen.add(lv.lever.toLowerCase()); out.push(lv.lever); }
-      for (const b of c.barriers || []) if (b.lever && !seen.has(b.lever.toLowerCase())) { seen.add(b.lever.toLowerCase()); out.push(b.lever); }
-    }
+    const add = (t?: string) => { const v = String(t || "").trim(); if (v && v.length >= 6 && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); out.push(v); } };
+    const ranked = [...candidates].sort((x, y) => y.stuck - x.stuck);
+    for (const c of ranked) { for (const lv of c.movability?.levers || []) add(lv.lever); for (const b of c.barriers || []) add(b.lever); }
+    // Before movability is scored (or when it could not be), the stuck people's own removals are the recommendations.
+    for (const c of ranked) for (const b of (c.barriers || []).slice(0, 3)) { const rem = b.removals?.[0]; add(typeof rem === "string" ? rem : rem?.value); }
     return out.slice(0, 4);
   }, [candidates, signed]);
 
@@ -345,7 +353,7 @@ export default function LiteJourney({ sessionId, agents, onBack }: Props) {
         <button type="button" onClick={() => setStage("compose")} className="lite-pill-quiet"><ChevronLeft className="w-3.5 h-3.5" /> Change the steps</button>
         <div className="min-w-0 flex-1">
           <h1 className="text-[22px] font-semibold tracking-tight">Where people drop off</h1>
-          <p className="text-[12.5px] text-muted-foreground">{probe.answer_count} of {probe.agent_count} answered{probe.created_at ? ` · ${ago(probe.created_at)}` : ""}{probe.status === "complete" && !a.barriers_coded ? <span className="inline-flex items-center gap-1 ml-2"><Loader2 className="w-3 h-3 animate-spin" /> grouping what stops them…</span> : null}{growth ? <span className="ml-2 text-emerald-700">· with {growth.rules.length} rule{growth.rules.length === 1 ? "" : "s"} in place: {pct(growth.end.then)} → {pct(growth.end.now)} reach the end</span> : null}</p>
+          <p className="text-[12.5px] text-muted-foreground">{probe.answer_count} of {probe.agent_count} answered{probe.created_at ? ` · ${ago(probe.created_at)}` : ""}{probe.status === "complete" && !settled(probe) ? <span className="inline-flex items-center gap-1 ml-2"><Loader2 className="w-3 h-3 animate-spin" /> {a.barriers_coded ? "working out what could move them…" : "grouping what stops them…"}</span> : null}{growth ? <span className="ml-2 text-emerald-700">· with {growth.rules.length} rule{growth.rules.length === 1 ? "" : "s"} in place: {pct(growth.end.then)} → {pct(growth.end.now)} reach the end</span> : null}</p>
         </div>
       </div>
       {probe.status !== "complete" || !funnel.length ? (
