@@ -132,10 +132,30 @@ def route_for(unit: dict, profile_values: dict) -> str:
 _TRUST = {"high": 0.6, "medium": 0.3, "low": 0.0}
 
 
+#: How much a unit's recency can add to its score: a current item gets the whole weight, one
+#: from RECENCY_HORIZON_YEARS ago none, an undated item half (2026-10-19 — a 2020 poll used to
+#: outrank a 2025 report with the same term hits).
+RECENCY_WEIGHT = 0.5
+RECENCY_HORIZON_YEARS = 8
+
+
+def recency(unit: dict) -> float:
+    """0-1 from the year in the unit's `[SOURCE …]` header; 0.5 when it carries no date."""
+    from app.services.agents.today import today, year_of
+    ref = str(unit.get("source_ref") or "").strip().rstrip("]")
+    if "|" not in ref:
+        return 0.5
+    y = year_of(ref.rsplit("|", 1)[-1].strip())
+    if not y:
+        return 0.5
+    age = max(0, today().year - int(y))
+    return round(max(0.0, 1.0 - age / RECENCY_HORIZON_YEARS), 3)
+
+
 def score(unit: dict, terms: list[str]) -> float:
     text = (unit.get("text") or "").lower()
     hits = sum(1 for t in terms if t in text)
-    return hits * 1.0 + _TRUST.get(unit.get("trust_tier", "medium"), 0.3)
+    return hits * 1.0 + _TRUST.get(unit.get("trust_tier", "medium"), 0.3) + RECENCY_WEIGHT * recency(unit)
 
 
 def evaluate(unit: dict, profile_values: dict, rules: list[dict], anc: dict[str, set[str]]) -> dict:

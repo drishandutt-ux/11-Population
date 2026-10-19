@@ -300,3 +300,12 @@ def test_http_scoping_round_trip(api_client):
     # the graph grew → stale
     asyncio.run(lightrag_service._save_kg(sid, {"entities": entities, "relations": [], "chunks": chunks + ["[SOURCE web | x | u | 2026] more"]}))
     assert client.get(f"/api/v1/sessions/{sid}/scoping").json()["stale"] is True
+
+
+def test_a_newer_unit_outranks_an_older_one_with_the_same_hits():
+    old = {"text": "half of Londoners cite dangerous roads", "trust_tier": "high", "source_ref": "[SOURCE quant | Savanta | https://s/x | 2020-01-10]"}
+    new = {"text": "half of Londoners cite dangerous roads", "trust_tier": "high", "source_ref": "[SOURCE quant | TfL | https://t/y | 2025-11-03]"}
+    undated = {"text": "half of Londoners cite dangerous roads", "trust_tier": "high", "source_ref": "[SOURCE personal | pasted text]"}
+    terms = ["dangerous", "roads"]
+    assert engine.score(new, terms) > engine.score(undated, terms) > engine.score(old, terms)
+    assert engine.recency(new) > 0.8 and engine.recency(undated) == 0.5 and engine.recency(old) < 0.3

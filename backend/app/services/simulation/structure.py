@@ -193,6 +193,11 @@ def evidence_summary(rows: Iterable[Any], chunk_count: int = 0) -> list[dict]:
     for cls in list(CLASS_ORDER) + [c for c in by_class if c not in CLASS_ORDER]:
         items = by_class.get(cls) or []
         if not items:
+            # Research ran (other classes exist) but the social pull came back empty: say so, so the
+            # report names the gap instead of describing sentiment it does not have (2026-10-19).
+            if cls == "social" and by_class:
+                out.append({"class": cls, "label": CLASS_LABELS[cls], "count": 0, "on_topic": 0, "trust": {}, "top": [],
+                            "gap": "none gathered — the sentiment and language of real people are not on file; say so under SOURCE MATERIALS and do not describe public reaction"})
             continue
         items.sort(key=lambda e: (-(1 if getattr(e, "on_topic", False) else 0), -float(getattr(e, "relevance", 0) or 0)))
         trust: dict[str, int] = {}
@@ -232,6 +237,9 @@ def evidence_block(summary: list[dict]) -> str:
         return "(no evidence on file — say so under SOURCE MATERIALS; do not describe material that is not there)"
     lines = []
     for s in summary:
+        if s.get("gap"):
+            lines.append(f"{s['label']}: {s['gap']}")
+            continue
         head = f"{s['label']}: {s['count']} item(s)"
         if s.get("trust"):
             head += ", trust " + ", ".join(f"{k} {v}" for k, v in sorted(s["trust"].items()))

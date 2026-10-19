@@ -31,8 +31,10 @@ export function useLiteRoot() {
   }, []);
 }
 
-/** Hidden defaults the simple view runs with. Shown only in the explanation lines. */
-export const LITE_DEFAULTS = { count: 40, mode: "fast" as const, intensity: 2 };
+/** Hidden defaults the simple view runs with. Shown only in the explanation lines.
+ *  Intensity 3 = every person posts, reacts, then challenges someone (2026-10-19): at 2 the
+ *  second phase was reactions only, so the PedalPass panel never pushed back on itself. */
+export const LITE_DEFAULTS = { count: 40, mode: "fast" as const, intensity: 3 };
 
 /** Something the reader dropped into "Add anything". */
 export type Dropped =

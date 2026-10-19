@@ -175,3 +175,11 @@ def test_a_torn_majority_is_said_to_be_torn_and_the_committed_twins_are_the_diss
                            cited_record_ids=[], claimed_band=None)
     assert s["direct_answer"]["torn"] is True and s["direct_answer"]["direct_read_record_id"] == "s1"
     assert "TORN" in st.REPORT_PROMPT and "DIRECT READ" in st.REPORT_PROMPT
+
+
+def test_an_empty_social_pull_is_named_as_a_gap_when_research_ran():
+    ev = lambda cls, title: SimpleNamespace(id=title, source_class=cls, title=title, author="x", source_ref="u", relevance=0.5, on_topic=True, trust_tier="medium")
+    s = st.evidence_summary([ev("web", "w1"), ev("quant", "q1")])
+    assert [x["class"] for x in s] == ["quant", "web", "social"] and s[2]["count"] == 0 and "not on file" in s[2]["gap"]
+    assert "Social & forum posts: none gathered" in st.evidence_block(s)
+    assert [x["class"] for x in st.evidence_summary([])] == []          # no research at all: nothing to name

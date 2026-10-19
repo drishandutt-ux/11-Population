@@ -669,3 +669,31 @@ def test_graph_chunks_use_snippets_only_for_web_pages():
     s = Evidence(source_class="social", source_ref="https://reddit.example/p", text="post body", full_text="post body", published_at="2026-09-29",
                  structured={"subreddit": "r/Dorset", "score": 4, "public_comments": [{"likes": 3, "text": "a comment"}]})
     assert "Top comments:\n- (3 pts) a comment" in _kg_chunks_for(s)[0]
+
+
+# ── the state of play today, dated freshness and the empty social pull (2026-10-19) ──
+
+def test_the_plan_always_carries_a_state_of_play_query_and_the_frame_names_it(monkeypatch):
+    from app.services.evidence import plan as pln, brief as br
+
+    async def fake_analyze(schema, system, user, **kw):
+        assert "state of play today" in system
+        return {"web_queries": ["pedalpass e-bike subscription london"], "state_of_play_queries": ["dockless e-bike operators London 2026", "pedalpass e-bike subscription london"],
+                "web_region": "uk-en", "reddit_queries": ["e-bike commute london"], "rationale": "r"}
+    monkeypatch.setattr(pln, "analyze", fake_analyze)
+    p = asyncio.run(pln.plan_query("Will London commuters pay £15 a month?", None))
+    assert p["web_queries"] == ["pedalpass e-bike subscription london", "dockless e-bike operators London 2026"]   # merged, deduplicated
+    assert p["state_of_play_queries"] == ["dockless e-bike operators London 2026", "pedalpass e-bike subscription london"]
+    fb = pln.fallback_plan("Will London commuters pay £15 a month for an e-bike subscription?")
+    assert len(fb["web_queries"]) == 2 and "what is available now" in fb["web_queries"][1] and fb["state_of_play_queries"] == [fb["web_queries"][1]]
+    frame = {**fr.fallback_frame("q"), "state_of_play": ["Santander Cycles e-bike pricing 2026"]}
+    assert "State of play to establish, as of today: Santander Cycles e-bike pricing 2026" in fr.frame_for_prompt(frame)
+    assert "state_of_play" in fr.FRAME_SCHEMA["properties"] and "State of play" in fr.SYSTEM
+    # the brief reads each item's freshness, and an empty social pull is said, not scored 0/0/0
+    e = types.SimpleNamespace(source_class="web", source_ref="u", author="tfl.gov.uk", published_at="2020-01-10", title="Old poll", full_text="t", text="t",
+                              structured={"freshness": 0.05, "kg_snippets": ["half cite dangerous roads"]})
+    assert 'freshness="0.05"' in br._render([e]) and "freshness score" in br.SYSTEM
+    assert "No social or forum posts were gathered" in br.brief_for_prompt({"summary": "s", "key_facts": ["f (x, 2020)"], "groups": [], "overall_for_pct": 0, "overall_against_pct": 0, "overall_mixed_pct": 0, "gaps": [], "source_mix": "1 web", "social_posts": 0})
+    assert "Overall social sentiment: 40% for" in br.brief_for_prompt({"summary": "s", "key_facts": ["f"], "groups": [], "overall_for_pct": 40, "overall_against_pct": 30, "overall_mixed_pct": 30, "gaps": [], "source_mix": "x", "social_posts": 9})
+    assert br.normalise_brief({"summary": "s", "social_posts": 0})["social_posts"] == 0 and br.normalise_brief({"summary": "s"})["social_posts"] is None
+    assert "not on file" in br.NO_SOCIAL_GAP and "years ago" in br.brief_for_prompt({"summary": "s", "key_facts": ["f"], "groups": [], "gaps": []})

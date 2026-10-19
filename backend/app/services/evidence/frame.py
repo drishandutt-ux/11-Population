@@ -23,6 +23,7 @@ FRAME_SCHEMA = obj({
     "aliases": arr(s(), "Other names, nicknames, abbreviations and plain-language phrasings people use for the subject", 12),
     "hashtags": arr(s(), "Hashtags likely used on X and Instagram for this subject", 10),
     "angles": arr(s(), "Stakeholder groups whose reaction matters: officials, developers, local councils, fishing communities, environmental groups, unions, users…", 8),
+    "state_of_play": arr(s(), "What already exists TODAY for the people this question is about, that the question takes for granted or competes with: the current operators, products, services, schemes, prices, infrastructure and rules as they stand now — 3 to 6 searchable phrases naming the real things (e.g. 'dockless e-bike operators London 2026', 'TfL Cycleway network length 2025')", 6),
     "lookalikes": arr(s(), "Similarly named things that are NOT the subject and must be excluded or labelled", 6),
     "recency": s("The time window that matters, in words, e.g. 'since March 2026' or 'last 12 months' or 'any'"),
     "time_sensitivity": enum(["live", "recent", "period", "timeless"], "live: changes week to week; recent: latest state, older material is background; period: a specific past period; timeless: age does not matter"),
@@ -36,6 +37,7 @@ Hard rules:
 - Aliases, abbreviations, and hashtags must be ones you are confident are actually used in press, official material, or public posts. Never coin an abbreviation or hashtag; if unsure, leave it out. Plain-language phrasings ("the leasing round", "the new seabed auction") are safe aliases.
 - People must be named individuals you are confident hold the role now; never write role placeholders like "CEO of X". Omit if unknown.
 - Look-alikes must be real things that share a name or label with the subject.
+- State of play: list what exists today for this audience that the question takes for granted or competes with — the current operators, products, schemes, prices, infrastructure and rules. A researcher who skips this answers against a market or a city as it was years ago.
 - How-to and advice questions: the sub-questions must cover what a seasoned practitioner would insist on for this kind of question, not only what the question literally names.
 - Time: decide honestly whether outdated information would mislead this user. "live" is reserved for questions whose answer moves week to week. A reaction to a specific announcement, decision, plan, or law is "recent", and window_start is the date of that announcement (or 12 months before today if you do not know it). A question about how something works or its history is "timeless" or "period"."""
 
@@ -59,7 +61,7 @@ async def build_frame(question: str, session_id: Optional[str] = None, context: 
 
 def fallback_frame(question: str) -> dict:
     return {"subject": question, "sub_questions": [{"id": "q1", "text": question, "kind": "status"}], "organisations": [], "people": [], "places": [],
-            "programmes": [], "aliases": [], "hashtags": [], "angles": [], "lookalikes": [], "recency": "any",
+            "programmes": [], "aliases": [], "hashtags": [], "angles": [], "state_of_play": [], "lookalikes": [], "recency": "any",
             "time_sensitivity": "recent", "window_start": "", "window_end": "", "time_why": "Heuristic frame (no LLM)."}
 
 
@@ -115,7 +117,7 @@ def frame_for_prompt(f: dict) -> str:
         f"Subject: {f.get('subject', '')}",
         "Sub-questions: " + " | ".join(f"[{q.get('id')} {q.get('kind')}] {q.get('text')}" for q in f.get("sub_questions", [])),
     ]
-    for key, label in (("organisations", "Organisations"), ("people", "People"), ("places", "Places"), ("programmes", "Programmes/projects"), ("aliases", "Aliases people use"), ("angles", "Stakeholder angles"), ("lookalikes", "Look-alikes to exclude")):
+    for key, label in (("organisations", "Organisations"), ("people", "People"), ("places", "Places"), ("programmes", "Programmes/projects"), ("aliases", "Aliases people use"), ("angles", "Stakeholder angles"), ("state_of_play", "State of play to establish, as of today"), ("lookalikes", "Look-alikes to exclude")):
         if f.get(key):
             lines.append(f"{label}: {', '.join(f[key])}")
     if f.get("hashtags"):
