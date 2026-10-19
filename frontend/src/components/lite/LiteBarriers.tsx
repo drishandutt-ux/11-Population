@@ -137,6 +137,21 @@ export default function LiteBarriers({ sessionId, agents, onBack }: Props) {
     return () => { alive = false; clearInterval(id); };
   }, [stage, probe?.id, sessionId, loadPast]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The run lands "complete" a few seconds before the answers are coded into shared barriers
+  // (the pro Lab waits on the socket for that; the simple view polls): keep refreshing the
+  // result until `barriers_coded` is true, for up to two minutes.
+  useEffect(() => {
+    if (stage !== "results" || !probe || probe.status !== "complete" || probe.aggregates?.barriers_coded) return;
+    let alive = true;
+    const started = Date.now();
+    const tick = async () => {
+      if (Date.now() - started > 120_000) return;
+      try { const full = await api.lab.probe(sessionId, probe.id); if (alive) setProbe(full); } catch { /* try again */ }
+    };
+    const id = setInterval(tick, 4000);
+    return () => { alive = false; clearInterval(id); };
+  }, [stage, probe?.id, probe?.status, probe?.aggregates?.barriers_coded, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openPast = async (p: Probe) => {
     setProbe(p);
     setStage(p.status === "queued" || p.status === "running" ? "running" : "results");
@@ -214,7 +229,7 @@ export default function LiteBarriers({ sessionId, agents, onBack }: Props) {
           <button type="button" onClick={() => setStage("compose")} className="lite-pill-quiet"><ChevronLeft className="w-3.5 h-3.5" /> Set it up again</button>
           <div className="min-w-0">
             <h1 className="text-[20px] font-semibold tracking-tight truncate">What stands in the way of: {String((probe.spec as any)?.outcome || "the outcome")}</h1>
-            <p className="text-[12.5px] text-muted-foreground">{probe.answer_count} of {probe.agent_count} answered{probe.created_at ? ` · ${ago(probe.created_at)}` : ""}{probe.status !== "complete" ? ` · ${probe.status}` : ""}</p>
+            <p className="text-[12.5px] text-muted-foreground">{probe.answer_count} of {probe.agent_count} answered{probe.created_at ? ` · ${ago(probe.created_at)}` : ""}{probe.status !== "complete" ? ` · ${probe.status}` : ""}{probe.status === "complete" && !probe.aggregates?.barriers_coded ? <span className="inline-flex items-center gap-1 ml-2"><Loader2 className="w-3 h-3 animate-spin" /> grouping the answers…</span> : null}</p>
           </div>
           <button type="button" onClick={startOver} className="lite-btn-soft lite-btn-sm ml-auto"><Plus className="w-3.5 h-3.5" /> Another outcome</button>
         </div>
