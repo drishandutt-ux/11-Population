@@ -24,7 +24,8 @@ RESPOND_SCHEMA = obj({
     "reply": s("What you say to the reader: 1-4 short sentences, conversational. When a setting is still open, state your recommended answer for it in the reply and ask them to use it or change it."),
     "asking": s("The key of the ONE setting you are asking about now; empty when every required setting is settled"),
     "recommended": s("Your recommended value for the setting you are asking about, as it would be used; empty when not asking"),
-    "settings": obj({}, "Every setting settled so far: the key and the value the reader accepted or gave. Include a setting only once it is settled (the reader said yes, gave a value, or you were told to decide). Omit the one you are still asking about."),
+    "settings": arr(obj({"key": s("The setting's key"), "value": s("The value, as it would be used")}),
+                    "Every setting settled so far: the key and the value the reader accepted or gave. Include a setting only once it is settled (the reader said yes, gave a value, or you were told to decide). Omit the one you are still asking about.", 12),
     "ready": b("True only when every required setting is settled and the reader has not asked to change anything else"),
     "chips": arr(s(), "Up to 3 quick taps for the reader, as they would tap them: 'Use that', 'Change it', 'Decide for me', 'Run it'", 3),
 })
@@ -62,9 +63,18 @@ def inputs_for_prompt(inst, session_query: str = "") -> str:
     return "\n".join(lines) if lines else "(this tool has no settings)"
 
 
+def as_mapping(raw: Any) -> dict:
+    """Settings as a dict, from either a dict or the model's list of {key, value} pairs."""
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, list):
+        return {str(x.get("key")): x.get("value") for x in raw if isinstance(x, dict) and x.get("key")}
+    return {}
+
+
 def clean_settings(inst, raw: Any) -> dict:
     """Only the tool's own inputs, typed; a select must be one of its options."""
-    raw = raw if isinstance(raw, dict) else {}
+    raw = as_mapping(raw)
     out: dict[str, Any] = {}
     for f in inst.inputs:
         if f.key not in raw:

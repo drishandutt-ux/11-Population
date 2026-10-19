@@ -215,6 +215,9 @@ def test_configure_cleans_settings_to_the_tools_inputs_and_knows_when_it_is_read
     reg._load()
     inst = reg.get("barriers")
     assert cfg.clean_settings(inst, {"outcome": "  You sign up  ", "price": 9, "nope": "x"}) == {"outcome": "You sign up"}
+    assert cfg.clean_settings(inst, [{"key": "outcome", "value": "listed"}, {"key": "nope", "value": 1}, "junk"]) == {"outcome": "listed"}
+    import jsonschema
+    jsonschema.Draft202012Validator.check_schema(cfg.RESPOND_SCHEMA)       # the schema the API rejected on prod (2026-10-19) is now valid
     assert cfg.status(inst, {})["missing"] == ["outcome"] and cfg.status(inst, {"outcome": "y"})["ready"] is True
     text = cfg.inputs_for_prompt(inst, "Will they pay?")
     assert "outcome (textarea, required)" in text and "Suggestions:" in text and "Will they pay?" in text
@@ -235,9 +238,9 @@ def test_http_configure_chat_recommends_then_settles_then_is_ready(api_client, m
         last = (kw.get("messages") or [{}])[-1].get("content", "")
         if "Use that" in last:
             return {"reply": "Done — I'll ask the people what stands in the way of signing up.", "asking": "", "recommended": "",
-                    "settings": {"outcome": "You sign up to PedalPass at £15 a month and keep it"}, "ready": True, "chips": ["Run it"]}
+                    "settings": [{"key": "outcome", "value": "You sign up to PedalPass at £15 a month and keep it"}], "ready": True, "chips": ["Run it"]}
         return {"reply": "I'd phrase the outcome as: you sign up at £15 a month and keep it. Use that, or change it?", "asking": "outcome",
-                "recommended": "You sign up to PedalPass at £15 a month and keep it", "settings": {}, "ready": False, "chips": ["Use that", "Change it"]}
+                "recommended": "You sign up to PedalPass at £15 a month and keep it", "settings": [], "ready": False, "chips": ["Use that", "Change it"]}
     monkeypatch.setattr("app.services.measurement.lab_brief.analyze", fake)
     monkeypatch.setattr("app.services.measurement.configure.analyze", fake)
 
