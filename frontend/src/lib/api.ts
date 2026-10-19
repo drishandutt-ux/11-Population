@@ -278,6 +278,9 @@ export const api = {
     formsGenerate: (sessionId: string, body: { goal?: string; length?: "short" | "standard" | "deep"; existing?: FormDraftInput | null }) =>
       request<FormDraft>(`/sessions/${sessionId}/forms/generate`, { method: "POST", body: JSON.stringify({ ...body, mode: "pro" }) }, 180_000),
     /** One turn of the brainstorm: the history and the form on screen go up; the reply may carry a changed form. An empty history returns the opening line. */
+    /** Set up a Lab tool by chat (2026-10-19): the colleague settles each of the tool's inputs with a recommended value; `ready` once it can run with `settings` as the spec. */
+    configureChat: (sessionId: string, body: { instrument: string; messages: FormsChatMessage[]; settings: Record<string, any> | null; mode?: SimMode }) =>
+      request<ConfigureChatReply>(`/sessions/${sessionId}/lab/configure/chat`, { method: "POST", body: JSON.stringify(body) }),
     formsChat: (sessionId: string, body: { messages: FormsChatMessage[]; form: FormDraftInput | null }) =>
       request<FormsChatReply>(`/sessions/${sessionId}/forms/chat`, { method: "POST", body: JSON.stringify({ ...body, mode: "pro" }) }, 180_000),
     journeySuggest: (sessionId: string, question?: string) =>
@@ -1298,6 +1301,17 @@ export type FormDraft = {
 };
 
 export type FormsChatMessage = { role: "user" | "assistant"; content: string };
+/** One turn of setting up a tool by chat: what the colleague said, the setting it is asking about with its recommended value, every setting settled so far, and whether the tool can run. */
+export type ConfigureChatReply = {
+  reply: string;
+  chips: string[];
+  asking: string;
+  recommended: string;
+  settings: Record<string, any>;
+  missing: string[];
+  ready: boolean;
+  inputs: InstrumentInput[];
+};
 
 export type FormsChatReply = {
   reply: string;

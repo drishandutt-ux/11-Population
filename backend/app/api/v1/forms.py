@@ -43,6 +43,29 @@ class ChatRequest(BaseModel):
     mode: str = "pro"
 
 
+class ConfigureChatRequest(BaseModel):
+    instrument: str
+    messages: list[ChatMessage] = []
+    settings: Optional[dict[str, Any]] = None
+    mode: str = "pro"
+
+
+@router.post("/sessions/{session_id}/lab/configure/chat")
+async def configure_chat(session_id: str, body: ConfigureChatRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Set up a Lab tool by chat (2026-10-19): one turn. Stateless — the client sends the
+    history and the settings settled so far; the reply carries the settings as they now stand,
+    the setting being asked about with the colleague's recommended value, `missing` and `ready`.
+    The settings are the instrument's own inputs, so the result is the `spec` to run it with."""
+    await get_owned_session(session_id, user, db)
+    from app.services.measurement import configure as configure_svc
+    try:
+        return await configure_svc.chat(session_id, body.instrument, [m.model_dump() for m in body.messages], body.settings, mode=body.mode)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"The chat failed: {type(e).__name__}: {str(e)[:160]}")
+
+
 @router.get("/sessions/{session_id}/lab/brief")
 async def get_brief(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """The stored Lab brief with `stale` (the session has moved on since it was written)."""

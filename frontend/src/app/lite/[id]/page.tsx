@@ -12,7 +12,7 @@ import Detail, { DetailLink } from "@/components/lite/Detail";
 import TalkBox from "@/components/lite/TalkBox";
 import ConjureGrid from "@/components/lite/ConjureGrid";
 import HowMade from "@/components/lite/HowMade";
-import LiteForms from "@/components/lite/LiteForms";
+import LiteTools from "@/components/lite/LiteTools";
 import PersonaAvatar from "@/components/PersonaAvatar";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
@@ -78,12 +78,12 @@ function LiteSession() {
     );
   }
 
-  // ── Lab tools: Forms (2026-10-06) ──
+  // ── Lab tools (2026-10-06 Forms; 2026-10-19 the landing with Forms and Barriers as icons) ──
   if (view === "lab") {
     return (
       <LiteShell {...shell} step="tools" proHref={proLinks.lab(id)} backHref={`/lite/${id}`} layout="app">
-        <ErrorBoundary label="Forms">
-          <LiteForms sessionId={id} agents={s.agents} onBack={() => setView("flow")} />
+        <ErrorBoundary label="Lab tools">
+          <LiteTools sessionId={id} agents={s.agents} onBack={() => setView("flow")} />
         </ErrorBoundary>
       </LiteShell>
     );

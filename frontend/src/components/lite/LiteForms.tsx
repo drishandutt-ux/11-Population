@@ -38,9 +38,9 @@ const KINDS: { key: SurveyQuestionType; label: string }[] = [
   { key: "grid", label: "rate a few things" },
 ];
 
-type Props = { sessionId: string; agents: Agent[]; onBack: () => void };
+type Props = { sessionId: string; agents: Agent[]; onBack: () => void; /** A goal handed over from the tools landing (2026-10-19): the questions are written on arrival. */ initialGoal?: string };
 
-export default function LiteForms({ sessionId, agents, onBack }: Props) {
+export default function LiteForms({ sessionId, agents, onBack, initialGoal = "" }: Props) {
   const [draft, setDraftState] = useState<Draft>(EMPTY);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -119,6 +119,14 @@ export default function LiteForms({ sessionId, agents, onBack }: Props) {
   }, [sessionId]);
 
   useEffect(() => { (async () => { await loadBrief(); await askOpening(); })(); }, [loadBrief, askOpening]);
+  // Arriving from the tools landing with a goal: write the questions straight away, once.
+  const goalWritten = useRef(false);
+  useEffect(() => {
+    if (!initialGoal || goalWritten.current || draftRef.current.questions.length) return;
+    goalWritten.current = true;
+    setGoal(initialGoal);
+    void write(initialGoal);
+  }, [initialGoal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [messages, chatBusy, chatOpen]);
 
   // ── applying what comes back ─────────────────────────────────────────────

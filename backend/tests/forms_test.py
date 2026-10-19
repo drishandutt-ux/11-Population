@@ -205,3 +205,54 @@ def test_chat_keeps_the_form_when_a_change_would_empty_it(api_client, monkeypatc
 
     c = client.post(f"/api/v1/sessions/{sid}/forms/chat", json={"messages": [{"role": "user", "content": "clear it"}], "form": FORM}).json()
     assert c["form_changed"] is False and c["form"] is None and c["reply"] == "Cleared it."
+
+
+# ── setting up a tool by chat (2026-10-19) ───────────────────────────────────
+
+def test_configure_cleans_settings_to_the_tools_inputs_and_knows_when_it_is_ready():
+    from app.services.measurement import configure as cfg
+    from app.services.measurement import instruments as reg
+    reg._load()
+    inst = reg.get("barriers")
+    assert cfg.clean_settings(inst, {"outcome": "  You sign up  ", "price": 9, "nope": "x"}) == {"outcome": "You sign up"}
+    assert cfg.status(inst, {})["missing"] == ["outcome"] and cfg.status(inst, {"outcome": "y"})["ready"] is True
+    text = cfg.inputs_for_prompt(inst, "Will they pay?")
+    assert "outcome (textarea, required)" in text and "Suggestions:" in text and "Will they pay?" in text
+    fb = cfg._fallback(inst, {}, "Timeout")
+    assert fb["asking"] == "outcome" and fb["recommended"] == inst.inputs[0].suggestions[0] and fb["ready"] is False
+
+
+def test_http_configure_chat_recommends_then_settles_then_is_ready(api_client, monkeypatch):
+    client, _ = api_client
+    sid = client.post("/api/v1/sessions", json={"title": "T", "query": "Will London commuters pay £15 a month?", "auto_research": False}).json()["id"]
+    seen = {}
+
+    async def fake(schema, system, user, **kw):
+        if kw.get("label") == "lab_brief":
+            return {"summary": "s", "population": "", "what_we_know": [], "tensions": [], "challenges": [], "already_measured": [], "vocabulary": [], "gaps": []}
+        seen["system"] = system
+        seen["messages"] = kw.get("messages")
+        last = (kw.get("messages") or [{}])[-1].get("content", "")
+        if "Use that" in last:
+            return {"reply": "Done — I'll ask the people what stands in the way of signing up.", "asking": "", "recommended": "",
+                    "settings": {"outcome": "You sign up to PedalPass at £15 a month and keep it"}, "ready": True, "chips": ["Run it"]}
+        return {"reply": "I'd phrase the outcome as: you sign up at £15 a month and keep it. Use that, or change it?", "asking": "outcome",
+                "recommended": "You sign up to PedalPass at £15 a month and keep it", "settings": {}, "ready": False, "chips": ["Use that", "Change it"]}
+    monkeypatch.setattr("app.services.measurement.lab_brief.analyze", fake)
+    monkeypatch.setattr("app.services.measurement.configure.analyze", fake)
+
+    # the opening turn: no history → a synthetic first user turn, a recommendation comes back
+    r = client.post(f"/api/v1/sessions/{sid}/lab/configure/chat", json={"instrument": "barriers", "messages": [], "settings": None})
+    assert r.status_code == 200, r.text
+    c = r.json()
+    assert c["asking"] == "outcome" and c["recommended"].startswith("You sign up") and c["ready"] is False and c["missing"] == ["outcome"]
+    assert seen["messages"][-1]["role"] == "user" and "THE SETTINGS, IN ORDER" in seen["system"] and "outcome (textarea, required)" in seen["system"]
+    assert c["inputs"][0]["key"] == "outcome" and c["chips"] == ["Use that", "Change it"]
+    # the reader accepts → settled, ready, nothing left to ask
+    r = client.post(f"/api/v1/sessions/{sid}/lab/configure/chat", json={"instrument": "barriers", "messages": [{"role": "assistant", "content": c["reply"]}, {"role": "user", "content": "Use that"}], "settings": {}})
+    d = r.json()
+    assert d["ready"] is True and d["asking"] == "" and d["settings"] == {"outcome": "You sign up to PedalPass at £15 a month and keep it"} and d["missing"] == []
+    # a setting the client already had survives a model that forgets to repeat it
+    r = client.post(f"/api/v1/sessions/{sid}/lab/configure/chat", json={"instrument": "barriers", "messages": [{"role": "user", "content": "hello"}], "settings": {"outcome": "kept"}})
+    assert r.json()["settings"] == {"outcome": "kept"} and r.json()["ready"] is False      # the model said not ready, so it is not
+    assert client.post(f"/api/v1/sessions/{sid}/lab/configure/chat", json={"instrument": "nope", "messages": []}).status_code == 404
