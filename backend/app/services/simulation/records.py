@@ -183,7 +183,32 @@ def caveats_for(*, n: int, unanimity: Optional[dict], refusals: Optional[dict], 
     return out
 
 
+def verdict_lean(agg: dict) -> dict:
+    """Where a verdict leans, from its stored split — for probes aggregated before 2026-10-19,
+    which carry `position` / `for-against-mixed` blocks but no `lean` or `reading`. Returns the
+    same `{lean, reading, headline}` shape the instrument now writes, or {} when the aggregate
+    is not a verdict's."""
+    if isinstance(agg.get("lean"), dict) and agg.get("reading"):
+        return {"lean": agg["lean"], "reading": agg["reading"], "headline": agg.get("headline")}
+    dist = {str(d.get("value")): d for d in (agg.get("position") or []) if isinstance(d, dict)}
+    head = agg.get("headline") if isinstance(agg.get("headline"), dict) else None
+    if not dist or not head:
+        return {}
+    from app.services.measurement.instruments.verdict import HEAD_LABEL, lean_of
+    counts = {k: int((dist.get(k) or {}).get("count") or 0) for k in ("for", "against", "mixed")}
+    lean = lean_of(counts)
+    pct = lambda k: f"{round(float((dist.get(k) or {}).get('share') or 0) * 100)}%"
+    reading = f"{pct('for')} in favour outright, {pct('against')} against, {pct('mixed')} torn (it depends)"
+    if lean == "mixed" and isinstance(agg.get("mixed"), dict) and agg["mixed"].get("share") is not None:
+        head = {"metric": "mixed_share", "label": HEAD_LABEL["mixed"], **agg["mixed"]}
+    elif lean != "mixed":
+        head = {**head, "metric": head.get("metric") or "for_share", "label": HEAD_LABEL["for"]}
+    return {"lean": {"value": lean, "share": float(head.get("share") or 0), "count": counts[lean]}, "reading": reading, "headline": head}
+
+
 def _estimate_from_aggregates(instrument: str, agg: dict, spec: dict) -> dict:
+    if instrument == "verdict":
+        agg = {**agg, **verdict_lean(agg)}
     head = agg.get("headline") if isinstance(agg.get("headline"), dict) else None
     if head:
         return {
@@ -264,6 +289,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
     instrument = str(getattr(p, "instrument", "") or "")
     rep = (frame or {}).get("report") if isinstance(frame, dict) else None
     frame_level = (rep or {}).get("level") if isinstance(rep, dict) else None
+    if instrument == "verdict":
+        agg = {**agg, **verdict_lean(agg)}   # a verdict on file from before the lean was stored
     est = _estimate_from_aggregates(instrument, agg, spec)
     weighted = agg.get("weighted") if isinstance(agg.get("weighted"), dict) else None
     unanimity = agg.get("unanimity") if isinstance(agg.get("unanimity"), dict) else None

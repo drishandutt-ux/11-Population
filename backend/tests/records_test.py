@@ -345,3 +345,18 @@ def test_the_torn_record_names_the_direct_read_and_the_prompt_line_says_so():
     assert clear["torn"] is False and [r["direct"] for r in rec.mark_direct_read([clear, survey])] == [False, False]
     assert "split: 70% in favour outright" in rec.records_block([clear])[0]
     assert "unless it is marked TORN" in rec.FIGURE_RULES
+
+
+def test_a_verdict_stored_before_the_lean_existed_is_read_from_its_split():
+    # The Travel run (2026-10-15): 45 of 46 mixed, headline for_share 0% — no `lean`, no `reading` on file.
+    old = {"n": 46, "headline": {"metric": "for_share", "label": "In favour", "share": 0.0, "low": 0.0, "high": 0.077, "n": 46, "successes": 0},
+           "against": {"share": 0.0217, "low": 0.0038, "high": 0.1134, "n": 46, "successes": 1},
+           "mixed": {"share": 0.9783, "low": 0.8866, "high": 0.9962, "n": 46, "successes": 45},
+           "position": [{"value": "mixed", "count": 45, "share": 0.9783}, {"value": "against", "count": 1, "share": 0.0217}],
+           "sentence": "0% of the population come down in favour", "segments": {}}
+    r = rec.record_from_probe(_probe(id="v-old", instrument="verdict", aggregates=old))
+    assert r["torn"] is True and r["lean"]["value"] == "mixed" and r["estimate"]["metric"] == "mixed_share" and r["estimate"]["value"] == 0.9783
+    assert r["reading"] == "0% in favour outright, 2% against, 98% torn (it depends)"
+    clear = {**old, "headline": {**old["headline"], "share": 0.6, "successes": 28}, "position": [{"value": "for", "count": 28, "share": 0.6}, {"value": "mixed", "count": 18, "share": 0.4}]}
+    r2 = rec.record_from_probe(_probe(id="v-old2", instrument="verdict", aggregates=clear))
+    assert r2["torn"] is False and r2["estimate"]["metric"] == "for_share" and r2["estimate"]["label"] == "In favour outright" and r2["reading"].startswith("60% in favour outright")
