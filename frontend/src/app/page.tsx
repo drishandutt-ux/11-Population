@@ -223,7 +223,7 @@ export default function HomePage() {
           {(sessions.length > 0 || shared.length > 0 || scope !== "mine") && (
             <div className="mt-6 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between mb-3 shrink-0">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{scope === "shared" ? "Shared with you" : "Recent sessions"}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{scope === "shared" ? "Shared sessions" : "Recent sessions"}</p>
                 {authOn && (
                   <div className="flex bg-muted rounded p-0.5 gap-0.5">
                     {(["mine", "shared", ...(me?.is_admin ? ["all" as const] : [])] as ("mine" | "shared" | "all")[]).map((sc) => (
@@ -241,7 +241,7 @@ export default function HomePage() {
               </div>
               <div className="space-y-1.5 overflow-y-auto flex-1">
                 {scope === "shared" && shared.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-1 py-4">Nothing has been shared with you yet. When a colleague shares a session, it appears here and opens as a chat.</p>
+                  <p className="text-xs text-muted-foreground px-1 py-4">No shared sessions yet. Share one of yours with the share icon on its card, or wait for a colleague to share one with you — either way it appears here and opens as a chat.</p>
                 )}
                 {scope === "shared" && shared.map((s) => (
                   <div
@@ -257,7 +257,7 @@ export default function HomePage() {
                           <StatusDot status={s.status} />
                         </div>
                         <p className="text-[11px] text-muted-foreground truncate">{s.query}</p>
-                        <p className="text-[10px] text-primary/70 truncate mt-0.5">from {s.owner.name}{s.owner.email ? ` · ${s.owner.email}` : ""}</p>
+                        <p className="text-[10px] text-primary/70 truncate mt-0.5">{s.direction === "by_you" ? `you shared it with ${s.with.join(", ")}` : `from ${s.owner.name}${s.owner.email ? ` · ${s.owner.email}` : ""}`}</p>
                       </div>
                       <div className="flex items-center gap-2.5 text-xs text-muted-foreground shrink-0">
                         <span className="flex items-center gap-1" title="People in the chat"><Users className="w-3 h-3" />{s.members}</span>

@@ -151,32 +151,46 @@ async def remove_share(session_id: str, user_id: str, user: AuthUser = Depends(g
 
 @router.get("/shared-sessions")
 async def shared_sessions(user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """The sessions colleagues have shared with the caller, newest share first, with the owner,
-    how many people are in the chat and when it last moved."""
-    shares = (await db.execute(select(SessionShare).where(SessionShare.user_id == user.id).order_by(SessionShare.created_at.desc()))).scalars().all()
-    if not shares:
+    """Every session with sharing on it that involves the caller, newest share first: the ones
+    colleagues shared with them (`direction: with_you`) and the ones they shared out
+    (`direction: by_you`), each with the owner, who is in the chat and when it last moved."""
+    mine = (await db.execute(select(SessionShare).where(SessionShare.user_id == user.id))).scalars().all()
+    own_sessions = [] if user.is_dev else (await db.execute(select(AnalysisSession.id).where(AnalysisSession.user_id == user.id))).scalars().all()
+    out_shares = (await db.execute(select(SessionShare).where(SessionShare.session_id.in_(own_sessions)))).scalars().all() if own_sessions else []
+    if not mine and not out_shares:
         return []
-    ids = [s.session_id for s in shares]
+    ids = list({s.session_id for s in mine} | {s.session_id for s in out_shares})
     sessions = {s.id: s for s in (await db.execute(select(AnalysisSession).where(AnalysisSession.id.in_(ids)))).scalars().all()}
-    owner_ids = [s.user_id for s in sessions.values() if s.user_id]
-    owners = {_uid(p.id): p for p in (await db.execute(select(Profile).where(Profile.id.in_(owner_ids)))).scalars().all()} if owner_ids else {}
-    member_counts = dict((await db.execute(select(SessionShare.session_id, func.count(SessionShare.id)).where(SessionShare.session_id.in_(ids)).group_by(SessionShare.session_id))).all())
+    all_shares = (await db.execute(select(SessionShare).where(SessionShare.session_id.in_(ids)).order_by(SessionShare.created_at))).scalars().all()
+    people_ids = list({s.user_id for s in all_shares} | {s.user_id for s in sessions.values() if s.user_id})
+    people = {_uid(p.id): p for p in (await db.execute(select(Profile).where(Profile.id.in_(people_ids)))).scalars().all()} if people_ids else {}
     stats = {sid: (n, last) for sid, n, last in (await db.execute(
         select(SharedMessage.session_id, func.count(SharedMessage.id), func.max(SharedMessage.created_at)).where(SharedMessage.session_id.in_(ids)).group_by(SharedMessage.session_id))).all()}
+    by_session: dict[str, list[SessionShare]] = {}
+    for sh in all_shares:
+        by_session.setdefault(sh.session_id, []).append(sh)
+    mine_by_session = {sh.session_id: sh for sh in mine}
     out = []
-    for sh in shares:
-        s = sessions.get(sh.session_id)
-        if s is None:
+    for sid, s in sessions.items():
+        shares = by_session.get(sid, [])
+        if not shares:
             continue
-        p = owners.get(_uid(s.user_id)) if s.user_id else None
-        n, last = stats.get(s.id, (0, None))
+        owner = people.get(_uid(s.user_id)) if s.user_id else None
+        is_owner = bool(s.user_id) and _uid(s.user_id) == _uid(user.id)
+        colleagues = [people.get(_uid(sh.user_id)) for sh in shares]
+        names = [_name(p, "colleague") for p in colleagues]
+        n, last = stats.get(sid, (0, None))
+        shared_at = mine_by_session[sid].created_at if sid in mine_by_session else max(sh.created_at for sh in shares)
         out.append({
             "id": s.id, "title": s.title, "query": s.query, "status": getattr(s.status, "value", s.status), "agent_count": s.agent_count,
             "created_at": s.created_at, "updated_at": s.updated_at,
-            "owner": {"id": s.user_id, "email": p.email if p else None, "name": _name(p, "owner")},
-            "shared_at": sh.created_at, "members": int(member_counts.get(s.id, 0) or 0) + (1 if s.user_id else 0),
+            "direction": "by_you" if is_owner else "with_you",
+            "owner": {"id": s.user_id, "email": owner.email if owner else None, "name": _name(owner, "owner")},
+            "with": names,
+            "shared_at": shared_at, "members": len(shares) + (1 if s.user_id else 0),
             "messages": int(n or 0), "last_message_at": last.isoformat() if isinstance(last, datetime) else last,
         })
+    out.sort(key=lambda x: str(x["shared_at"] or ""), reverse=True)
     return out
 
 

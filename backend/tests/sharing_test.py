@@ -54,6 +54,11 @@ def test_peers_sharing_and_the_shared_chat(auth_on, client, monkeypatch):
     # B now sees it under shared-with-me, and the chat; C still does not; B's own session list is unchanged
     shared = client.get("/api/v1/shared-sessions", headers=b).json()
     assert len(shared) == 1 and shared[0]["id"] == sid and shared[0]["owner"]["email"] == "ana@11-london.com" and shared[0]["members"] == 2
+    assert shared[0]["direction"] == "with_you" and shared[0]["with"] == ["ben"]
+    # the owner sees the session she shared out under Shared too, the other way round
+    mine = client.get("/api/v1/shared-sessions", headers=a).json()
+    assert len(mine) == 1 and mine[0]["id"] == sid and mine[0]["direction"] == "by_you" and mine[0]["with"] == ["ben"]
+    assert client.get("/api/v1/shared-sessions", headers=c).json() == []
     assert client.get("/api/v1/sessions", headers=b).json() == []
     assert client.get(f"/api/v1/sessions/{sid}", headers=b).status_code == 404          # sharing is the chat, not the owner's pages
     assert client.get(f"/api/v1/sessions/{sid}/shared-chat", headers=c).status_code == 404
@@ -103,6 +108,7 @@ def test_peers_sharing_and_the_shared_chat(auth_on, client, monkeypatch):
     assert client.delete(f"/api/v1/sessions/{sid}/shares/{B}", headers=b).json()["removed"] == 1
     assert client.get(f"/api/v1/sessions/{sid}/shared-chat", headers=b).status_code == 404
     assert client.get("/api/v1/shared-sessions", headers=b).json() == []
+    assert client.get("/api/v1/shared-sessions", headers=a).json() == []   # nothing shared out any more either
 
 
 def test_allowed_domains_rule(auth_on, client, monkeypatch):

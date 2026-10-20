@@ -228,7 +228,7 @@ export const api = {
       request<{ members: ShareMember[] }>(`/sessions/${sessionId}/shares`, { method: "PUT", body: JSON.stringify({ user_ids }) }),
     /** The owner removes a colleague, or a colleague leaves. */
     unshare: (sessionId: string, userId: string) => request<{ removed: number }>(`/sessions/${sessionId}/shares/${userId}`, { method: "DELETE" }),
-    /** Sessions colleagues have shared with the caller. */
+    /** Every session with sharing that involves the caller: shared with them, or shared out by them. */
     sharedSessions: () => request<SharedSession[]>("/shared-sessions"),
     chat: (sessionId: string) => request<SharedChat>(`/sessions/${sessionId}/shared-chat`),
     /** A message to the chat; `@report` anywhere in it asks the report agent, which replies in its own message. */
@@ -450,7 +450,10 @@ export type ShareMember = { user_id: string; email: string | null; name: string;
 /** A session a colleague shared with the caller, as the landing page lists it. */
 export type SharedSession = {
   id: string; title: string; query: string; status: string; agent_count: number; created_at: string; updated_at: string;
-  owner: Peer; shared_at: string; members: number; messages: number; last_message_at: string | null;
+  /** `with_you`: a colleague shared it with the caller; `by_you`: the caller shared it out. */
+  direction: "with_you" | "by_you";
+  owner: Peer; /** The colleagues it is shared with, by name. */ with: string[];
+  shared_at: string; members: number; messages: number; last_message_at: string | null;
 };
 /** One line of a shared chat: a person's message, or the report agent's reply (`kind: "report"`, `user_id` null). */
 export type SharedMessage = { id: string; session_id: string; user_id: string | null; author_name: string; kind: "user" | "report"; content: string; reply_to: string | null; created_at: string | null };

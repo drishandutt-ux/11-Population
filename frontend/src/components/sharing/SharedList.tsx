@@ -20,14 +20,14 @@ export default function SharedList({ variant = "pro" }: { variant?: "pro" | "lit
   if (variant === "lite") {
     return (
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-foreground mb-3">Shared with you</h2>
+        <h2 className="text-sm font-medium text-foreground mb-3">Shared sessions</h2>
         <div className="space-y-2">
           {items.map((s) => (
             <button key={s.id} type="button" onClick={() => router.push(`/shared/${s.id}`)} className="w-full text-left lite-card px-4 py-3.5 hover:border-foreground/20 transition-colors flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">{s.title}</div>
                 <div className="text-xs text-muted-foreground truncate">{s.query}</div>
-                <div className="text-[11px] text-muted-foreground/70 mt-0.5">from {s.owner.name}{s.owner.email ? ` · ${s.owner.email}` : ""}</div>
+                <div className="text-[11px] text-muted-foreground/70 mt-0.5">{s.direction === "by_you" ? `you shared it with ${s.with.join(", ")}` : `from ${s.owner.name}${s.owner.email ? ` · ${s.owner.email}` : ""}`}</div>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
                 <span className="inline-flex items-center gap-1" title="People in the chat"><Users className="w-3.5 h-3.5" />{s.members}</span>
@@ -58,7 +58,7 @@ export default function SharedList({ variant = "pro" }: { variant?: "pro" | "lit
                   <span className="text-[10px] text-muted-foreground">{s.status}</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground truncate">{s.query}</p>
-                <p className="text-[10px] text-primary/70 truncate mt-0.5">from {s.owner.name}{s.owner.email ? ` · ${s.owner.email}` : ""}</p>
+                <p className="text-[10px] text-primary/70 truncate mt-0.5">{s.direction === "by_you" ? `you shared it with ${s.with.join(", ")}` : `from ${s.owner.name}${s.owner.email ? ` · ${s.owner.email}` : ""}`}</p>
               </div>
               <div className="flex items-center gap-2.5 text-xs text-muted-foreground shrink-0">
                 <span className="flex items-center gap-1" title="People in the chat"><Users className="w-3 h-3" />{s.members}</span>
