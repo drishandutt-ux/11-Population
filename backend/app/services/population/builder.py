@@ -1032,7 +1032,7 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
         segments, rb = frame_mod.rebalance_to_frame(bld.frame, segments, fixed_ids=fixed)
         if rb.get("moved"):
             segments = normalise_segments(segments, bld.target_count, bld.constraints)
-            await log(build_id, "plan", "decision", f"Rebalanced to the sampling frame: worst cell {rb['before']} → {rb['after']} pts off the target across {', '.join(rb['rows'])} ({rb.get('exact_after')} pts on the exactly-matched rows)",
+            await log(build_id, "plan", "decision", f"Rebalanced to the sampling frame: exactly-matched rows now {rb.get('exact_after')} pts off at worst; all rows {rb['before']} → {rb['after']} pts ({', '.join(rb['rows'])})",
                       "; ".join(f"{c['name']} {c['from']}% → {c['to']}%" for c in rb["changes"]))
         elif rb.get("rows"):
             await log(build_id, "plan", "info", f"Plan already within {frame_mod.GOOD_DEVIATION:g} pts of the frame on {', '.join(rb['rows'])} (worst cell {rb['before']} pts)" if rb["before"] <= frame_mod.GOOD_DEVIATION
