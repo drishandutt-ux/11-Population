@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     #: Write the lay layer when tagging (2026-10-20): street-level versions of the professional and
     #: technical units, so a lay twin's scope is never empty. Off → tagging stores the chunks only.
     lay_layer: bool = True
+    #: Sign-in is limited to these email domains when set (comma-separated, e.g. "11-london.com";
+    #: 2026-10-20). Empty = any account Supabase lets in. Peers and sharing are always within a domain.
+    allowed_email_domains: str = ""
 
     def agent_model(self, mode: str) -> str:
         return self.model_pro_agents if mode == "pro" else self.model_agents

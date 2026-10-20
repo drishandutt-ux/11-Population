@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.database import create_tables
 from app.core.redis_client import subscribe, unsubscribe, session_channel
-from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement, population, scoping, archetypes, forms, kits, playbooks
+from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement, population, scoping, archetypes, forms, kits, playbooks, sharing
 
 
 #: Why the schema is not up to date, if it isn't. Surfaced on /health — a failed migration
@@ -76,6 +76,7 @@ app.include_router(scoping.router, prefix="/api/v1")
 app.include_router(archetypes.router, prefix="/api/v1")
 app.include_router(playbooks.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
+app.include_router(sharing.router, prefix="/api/v1")
 
 
 @app.websocket("/ws/{session_id}")
@@ -83,7 +84,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """Live events for one session. With auth on, the client passes its Supabase access
     token as `?token=`; the socket is refused (4401/4404) unless the token is valid and the
     session belongs to that user."""
-    from app.core.auth import user_from_ws_token, owns
+    from app.core.auth import user_from_ws_token, owns, is_shared_with
     from app.core.database import AsyncSessionLocal
     from app.models.session import AnalysisSession
     from sqlalchemy import select
@@ -94,7 +95,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         return
     async with AsyncSessionLocal() as db:
         sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
-    if sess is None or not owns(sess, user):
+        # the owner, or a colleague the session is shared with (the shared chat listens here too, 2026-10-20)
+        allowed = sess is not None and (owns(sess, user) or await is_shared_with(session_id, user, db))
+    if not allowed:
         await websocket.close(code=4404)
         return
 

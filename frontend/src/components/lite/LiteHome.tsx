@@ -12,6 +12,7 @@ import { Switch } from "@/components/population/controls";
 import { cn } from "@/lib/utils";
 import { useLiteRoot } from "@/lib/lite";
 import { ArrowRight, ArrowUpRight, FileText, Link2, Loader2, LogOut, Paperclip, Plus, Type, X, Youtube } from "lucide-react";
+import SharedList from "@/components/sharing/SharedList";
 
 type Props = {
   userEmail?: string | null;
@@ -209,6 +210,11 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
                   );
                 })}
               </div>
+            </section>
+          )}
+          {userEmail && (
+            <section className="min-w-0 xl:col-start-1 xl:row-start-3">
+              <SharedList variant="lite" />
             </section>
           )}
         </div>

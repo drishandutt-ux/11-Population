@@ -218,6 +218,23 @@ export const api = {
     retrievals: (sessionId: string, agentId?: string) =>
       request<{ retrievals: RetrievalRow[] }>(`/sessions/${sessionId}/scoping/retrievals${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ""}`),
   },
+  /** Peers, sharing and the shared chat (2026-10-20). */
+  sharing: {
+    /** Everyone on the caller's email domain, without the caller. */
+    peers: () => request<Peer[]>("/peers"),
+    shares: (sessionId: string) => request<{ members: ShareMember[] }>(`/sessions/${sessionId}/shares`),
+    /** Replace the set of colleagues the session is shared with (owner only; same-domain peers only). */
+    setShares: (sessionId: string, user_ids: string[]) =>
+      request<{ members: ShareMember[] }>(`/sessions/${sessionId}/shares`, { method: "PUT", body: JSON.stringify({ user_ids }) }),
+    /** The owner removes a colleague, or a colleague leaves. */
+    unshare: (sessionId: string, userId: string) => request<{ removed: number }>(`/sessions/${sessionId}/shares/${userId}`, { method: "DELETE" }),
+    /** Sessions colleagues have shared with the caller. */
+    sharedSessions: () => request<SharedSession[]>("/shared-sessions"),
+    chat: (sessionId: string) => request<SharedChat>(`/sessions/${sessionId}/shared-chat`),
+    /** A message to the chat; `@report` anywhere in it asks the report agent, which replies in its own message. */
+    send: (sessionId: string, content: string) =>
+      request<{ message: SharedMessage; report_pending: boolean }>(`/sessions/${sessionId}/shared-chat`, { method: "POST", body: JSON.stringify({ content }) }),
+  },
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
     /** The Journey tool (brief L7-01): propose the steps to the outcome from what the session knows. */
@@ -423,6 +440,28 @@ export type Session = {
   is_mine?: boolean | null;
   /** The question's own dials (brief L3-04) — chosen by the model for this session. */
   dynamic_dials?: DynamicDial[] | null;
+};
+
+// ── Peers, sharing and the shared chat (2026-10-20) ───────────────────────────
+/** A colleague on the caller's email domain. */
+export type Peer = { id: string; email: string | null; name: string };
+/** Someone in a shared session's chat: the owner, or a colleague it was shared with. */
+export type ShareMember = { user_id: string; email: string | null; name: string; is_owner: boolean; created_at: string | null };
+/** A session a colleague shared with the caller, as the landing page lists it. */
+export type SharedSession = {
+  id: string; title: string; query: string; status: string; agent_count: number; created_at: string; updated_at: string;
+  owner: Peer; shared_at: string; members: number; messages: number; last_message_at: string | null;
+};
+/** One line of a shared chat: a person's message, or the report agent's reply (`kind: "report"`, `user_id` null). */
+export type SharedMessage = { id: string; session_id: string; user_id: string | null; author_name: string; kind: "user" | "report"; content: string; reply_to: string | null; created_at: string | null };
+/** The shared chat page's load: the session summary, who is in it, the messages so far and the latest report. */
+export type SharedChat = {
+  session: { id: string; title: string; query: string; status: string; agent_count: number; created_at: string; updated_at: string };
+  owner: Peer;
+  you: { id: string; is_owner: boolean; can_open: boolean };
+  members: ShareMember[];
+  messages: SharedMessage[];
+  report: { id: string; question: string; answer: string; is_report: boolean; created_at: string | null } | null;
 };
 
 /** One dynamic dial: a question-specific 0-10 scale every twin in the session carries. */
@@ -883,6 +922,8 @@ export type AgentPreset = {
 };
 
 export type WSEvent =
+  | { type: "shared_message"; message: SharedMessage }
+  | { type: "shares_changed"; members: ShareMember[] }
   | { type: "agent_spawned"; agent: Partial<Agent>; index?: number; total?: number }
   | { type: "agents_spawned_batch"; agents: Partial<Agent>[]; spawned: number; total: number }
   | { type: "agents_ready"; count: number }

@@ -194,6 +194,27 @@ async def ensure_profile(user: AuthUser, db) -> None:
     forget_role(user.id)
 
 
+def email_domain(email: Optional[str]) -> str:
+    e = (email or "").strip().lower()
+    return e.rsplit("@", 1)[1] if "@" in e else ""
+
+
+def allowed_domains() -> list[str]:
+    from app.core.config import get_settings
+    return [d.strip().lower().lstrip("@") for d in (get_settings().allowed_email_domains or "").split(",") if d.strip()]
+
+
+def check_domain(user: AuthUser) -> None:
+    """The organisation rule (2026-10-20): when `ALLOWED_EMAIL_DOMAINS` is set, only accounts on
+    those domains may use the app, whatever Supabase let sign up. 403, never 401, so the client
+    does not loop back to the login page."""
+    allowed = allowed_domains()
+    if not allowed or user.is_dev:
+        return
+    if email_domain(user.email) not in allowed:
+        raise HTTPException(status_code=403, detail=f"Sign-in is limited to {', '.join('@' + d for d in allowed)} accounts")
+
+
 async def get_current_user(request: Request) -> AuthUser:
     """FastAPI dependency: the signed-in user (with role), or the fixed dev user when auth is off."""
     if not auth_enabled():
@@ -201,7 +222,9 @@ async def get_current_user(request: Request) -> AuthUser:
     token = _bearer(request)
     if not token:
         raise AuthError()
-    return await with_role(await verify_token(token))
+    user = await with_role(await verify_token(token))
+    check_domain(user)
+    return user
 
 
 async def require_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
@@ -217,7 +240,9 @@ async def user_from_ws_token(token: Optional[str]) -> Optional[AuthUser]:
     if not token:
         return None
     try:
-        return await with_role(await verify_token(token))
+        user = await with_role(await verify_token(token))
+        check_domain(user)
+        return user
     except HTTPException:
         return None
 
@@ -234,6 +259,29 @@ async def get_owned_session(session_id: str, user: AuthUser, db):
     if not session or not owns(session, user):
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+async def is_shared_with(session_id: str, user: AuthUser, db) -> bool:
+    """Has this session been shared with the caller (2026-10-20)?"""
+    from sqlalchemy import select
+    from app.models.share import SessionShare
+    row = (await db.execute(select(SessionShare.id).where(SessionShare.session_id == session_id, SessionShare.user_id == user.id))).first()
+    return row is not None
+
+
+async def get_accessible_session(session_id: str, user: AuthUser, db):
+    """Load a session the caller owns OR has had shared with them, or 404. Sharing grants the
+    shared chat and the read-only summary it shows — never the owner's controls, which keep
+    using `get_owned_session`."""
+    from sqlalchemy import select
+    from app.models.session import AnalysisSession
+
+    session = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if owns(session, user) or await is_shared_with(session_id, user, db):
+        return session
+    raise HTTPException(status_code=404, detail="Session not found")
 
 
 def owns(session, user: AuthUser) -> bool:

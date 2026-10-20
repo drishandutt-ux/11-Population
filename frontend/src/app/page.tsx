@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api, Session } from "@/lib/api";
-import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut, ShieldCheck } from "lucide-react";
+import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut, ShieldCheck, Share2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useUiMode } from "@/lib/lite";
 import LiteHome, { ModeSwitch } from "@/components/lite/LiteHome";
+import SharedList from "@/components/sharing/SharedList";
+import ShareDialog from "@/components/sharing/ShareDialog";
 
 export default function HomePage() {
   const router = useRouter();
@@ -22,6 +24,8 @@ export default function HomePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { user, me, enabled: authOn, signOut } = useAuth();
   const [scope, setScope] = useState<"mine" | "all">("mine");
+  // Sharing (2026-10-20): the session a Share button was pressed on; the dialog picks the colleagues.
+  const [sharing, setSharing] = useState<Session | null>(null);
 
   useEffect(() => {
     api.sessions.list(scope).then((s) => setSessions(s as Session[])).catch(() => {});
@@ -209,6 +213,9 @@ export default function HomePage() {
             </form>
           </div>
 
+          {/* Shared with you (2026-10-20): sessions colleagues shared; each opens the shared chat */}
+          {authOn && <SharedList />}
+
           {/* Recent sessions */}
           {sessions.length > 0 && (
             <div className="mt-6 flex-1 min-h-0 flex flex-col">
@@ -286,6 +293,15 @@ export default function HomePage() {
                                   {new Date(s.created_at).toLocaleDateString()}
                                 </span>
                               </div>
+                              {authOn && (s.is_mine ?? true) && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSharing(s); }}
+                                  title="Share with colleagues — they get a chat about this session and can ask the report"
+                                  className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/50 hover:text-primary hover:bg-primary/10 rounded transition-all"
+                                >
+                                  <Share2 className="w-3 h-3" />
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }}
                                 title="Delete this session"
@@ -305,6 +321,7 @@ export default function HomePage() {
           )}
         </div>
       </div>
+      {sharing && <ShareDialog sessionId={sharing.id} title={sharing.title} onClose={() => setSharing(null)} />}
     </div>
   );
 }
