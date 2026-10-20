@@ -9,6 +9,17 @@ import { ArrowLeft, AtSign, Bot, ChevronDown, ChevronRight, ExternalLink, FileTe
 
 /** The shared chat (2026-10-20): the owner and the colleagues a session was shared with talk
  *  about it here, and ask the report agent with `@report`. Live over the session's websocket. */
+
+/** The report's prose carries citation tokens (`[[record:…]]`, `[[fact:…#1]]`, `[[evidence:…]]`, `[[F1]]`)
+ *  that the pro report renders as chips; here they are dropped, and the markdown markers with them. */
+function clean(text: string): string {
+  return (text || "")
+    .replace(/\s*\[\[[^\]]*\]\]/g, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^#+\s*/gm, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 export default function SharedChatPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -84,7 +95,7 @@ export default function SharedChatPage() {
   }
 
   const members = chat?.members || [];
-  const reportParas = useMemo(() => (chat?.report?.answer || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean), [chat?.report?.answer]);
+  const reportParas = useMemo(() => clean(chat?.report?.answer || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean), [chat?.report?.answer]);
 
   if (error && !chat) {
     return (
@@ -144,7 +155,7 @@ export default function SharedChatPage() {
               ) : (
                 <>
                   {!chat.report.is_report && <p className="text-[11px] text-muted-foreground italic">Asked: {chat.report.question}</p>}
-                  {reportParas.map((p, i) => <p key={i} className={p.startsWith("#") ? "font-semibold text-foreground" : ""}>{p.replace(/^#+\s*/, "")}</p>)}
+                  {reportParas.map((p, i) => <p key={i} className={/^[A-Z][A-Z &]{3,}$/.test(p.split("\n")[0]) ? "font-semibold text-foreground" : ""}>{p}</p>)}
                 </>
               )}
             </div>
@@ -203,7 +214,7 @@ export default function SharedChatPage() {
 function MessageRow({ m, mine }: { m: SharedMessage; mine: boolean }) {
   const isReport = m.kind === "report";
   const when = m.created_at ? new Date(m.created_at).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
-  const paras = m.content.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const paras = (isReport ? clean(m.content) : m.content).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   return (
     <div className={`flex items-start gap-3 ${mine && !isReport ? "flex-row-reverse" : ""}`}>
       <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-semibold ${isReport ? "bg-primary/15 text-primary" : "bg-muted text-foreground/80"}`} title={m.author_name}>
