@@ -15,6 +15,8 @@ import { ArrowLeft, AtSign, Bot, ChevronDown, ChevronRight, ExternalLink, FileTe
 function clean(text: string): string {
   return (text || "")
     .replace(/\s*\[\[[^\]]*\]\]/g, "")
+    .replace(/\(\s*:\s*/g, "(")          // "(: "quote"" is what a bracketed citation leaves behind
+    .replace(/\(\s*\)/g, "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/^#+\s*/gm, "")
     .replace(/[ \t]{2,}/g, " ")
