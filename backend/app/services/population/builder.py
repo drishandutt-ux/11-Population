@@ -1648,6 +1648,7 @@ async def _spawn(build_id: str):
                     correlation=p.correlation, personality=p.personality, debate_style=p.debate_style, energy=p.energy,
                     avatar_color=p.avatar_color, dials=p.dials or {}, humanity=p.humanity or 0, segment=p.segment or None,
                     demographics=p.demographics or None, weight=w, character=getattr(p, "character", None) or None,
+                    standing=getattr(p, "standing", None) or None,
                 )
                 for p, w in zip(profiles, weights)
             ])

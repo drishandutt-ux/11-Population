@@ -28,6 +28,7 @@ async def create_post(
     content: Optional[str],
     parent_id: Optional[str],
     round_num: int,
+    footprint: Optional[dict] = None,
 ) -> SimulationPost:
     post = SimulationPost(
         id=str(uuid.uuid4()),
@@ -38,6 +39,7 @@ async def create_post(
         parent_id=parent_id,
         likes=0,
         round_num=round_num,
+        footprint=footprint,
     )
     db.add(post)
     await db.commit()

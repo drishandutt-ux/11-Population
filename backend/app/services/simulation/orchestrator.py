@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional
 import hashlib
 import random
 import traceback
@@ -99,7 +100,14 @@ def _agent_event_payload(agent) -> dict:
         "correlation": agent.correlation,
         "debate_style": agent.debate_style,
         "energy": agent.energy,
+        "standing": _standing_payload(agent),
     }
+
+
+def _standing_payload(agent) -> dict:
+    from app.services.scoping import standing as standing_mod
+    st = standing_mod.of(agent)
+    return {**st, "summary": standing_mod.summary(st), "spoke_from": standing_mod.spoke_from(st)}
 
 
 def _independent_ids(agents: list, share: float) -> set[str]:
@@ -127,6 +135,7 @@ async def _agent_action(
     watcher: _StatusWatcher,
     kg_sem: asyncio.Semaphore,
     kg_sample: float,
+    footprint: Optional[dict] = None,
 ):
     if watcher.stopped:
         return
@@ -181,6 +190,15 @@ async def _agent_action(
     if watcher.stopped:
         return
 
+    # The scope check (2026-10-20): did this post step outside its author's standing — a
+    # clinical claim without training, lived experience claimed, another place stated as fact?
+    # The flag lives on the post so the effect of scoping is visible where the words are.
+    if footprint is not None and get_settings().scope_check_posts:
+        from app.services.scoping import standing as standing_mod
+        check = await standing_mod.check_post(agent, content, query, session_id=session_id)
+        if check:
+            footprint["check"] = check
+
     async with AsyncSessionLocal() as db:
         new_post = await create_post(
             db=db,
@@ -190,6 +208,7 @@ async def _agent_action(
             content=content,
             parent_id=parent_id,
             round_num=round_num,
+            footprint=footprint,
         )
 
     # KG enrichment: sampled + concurrency-bounded so it never saturates the API mid-run
@@ -206,6 +225,7 @@ async def _agent_action(
             "parent_id": parent_id,
             "likes": 0,
             "round_num": round_num,
+            "footprint": footprint,
         },
         "agent": _agent_event_payload(agent),
     })
@@ -268,6 +288,7 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
         # gets what its own profile can reach, with a route per item, instead of one shared block.
         from app.services.scoping import service as scoping
         from app.services.scoping import auto as scoping_auto
+        from app.services.scoping import standing as standing_mod
         try:
             await scoping_auto.ensure_tagged(session_id, query, reason="debate")
         except Exception as e:  # noqa: BLE001
@@ -304,14 +325,21 @@ async def run_simulation(session_id: str, intensity: int = 1, mode: str = "fast"
                 async with sem:
                     try:
                         ctx = kg_context
+                        footprint = None
                         if scoped:
-                            ctx = (await scoping.context_for_agent(session_id, agent, query, purpose="post")) or kg_context
+                            got = await scoping.retrieval_for_agent(session_id, agent, query, purpose="post")
+                            if got is not None:
+                                _, res, snap, _ = got
+                                ctx = scoping.block_for(res, query)
+                                footprint = standing_mod.footprint(agent, res, scoped=True, snapshot_id=snap)
+                        if footprint is None:
+                            footprint = standing_mod.footprint(agent, None, scoped=False)
                         await _agent_action(
                             agent, action,
                             session_id=session_id, query=query,
                             thread_context="" if agent.id in independent else thread_context, kg_context=ctx,
                             posts=posts, round_num=round_num, mode=mode,
-                            watcher=watcher, kg_sem=kg_sem, kg_sample=kg_sample,
+                            watcher=watcher, kg_sem=kg_sem, kg_sample=kg_sample, footprint=footprint,
                         )
                     except Exception as e:
                         print(f"[orchestrator] {agent.name} action failed: {e}")

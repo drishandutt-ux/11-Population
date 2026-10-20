@@ -42,6 +42,7 @@ class _Agent:
         self.name = kw.pop("name", "A"); self.role = kw.pop("role", "Retail worker"); self.background = kw.pop("background", "")
         self.humanity = kw.pop("humanity", 60); self.segment = kw.pop("segment", None)
         self.demographics = kw.pop("demographics", None); self.exposure = kw.pop("exposure", None)
+        self.standing = kw.pop("standing", None); self.correlation = kw.pop("correlation", "")
 
 
 # ── engine ────────────────────────────────────────────────────────────────────
@@ -120,9 +121,21 @@ def test_profile_derivation_and_override():
     assert v["channel"] == ["Local press", "NHS app"]                                # public channels only
     assert v["segment"] == ["IMD 1-2 households"] and "demographics.region" in lay["basis"]["geography"]
 
+    # standing, not the emotion dial, sets the register (2026-10-20): a GP's record infers professional …
     gp = profiles.profile_for(_Agent(role="GP partner", humanity=5, demographics={"region": "Oxford"}), ONTO)
-    assert gp["values"]["role"] == ["GP", "public"] and gp["values"]["register"] == "technical"
+    assert gp["values"]["role"] == ["GP", "public"] and gp["values"]["register"] == "professional"
     assert set(gp["values"]["channel"]) == {"Local press", "Rep visits", "NHS app"}
+    assert "standing" in gp["basis"]["register"] and gp["standing"]["basis"] == "inferred"
+    # … a written standing can make the same GP technical, and a reactive one stays technical
+    gp2 = profiles.profile_for(_Agent(role="GP partner", humanity=85, demographics={"region": "Oxford"},
+                                      standing={"lived": "no", "professional": "GP", "expertise": "technical", "home": "Oxford", "known_places": ["Oxford", "Blackpool"], "basis": "written"}), ONTO)
+    assert gp2["values"]["register"] == "technical" and gp2["values"]["role"] == ["GP", "public"]
+    assert set(gp2["values"]["geography"]) == {"Oxford", "Blackpool"}            # places lived or worked in extend reach
+    # a composed labourer is still lay; a healthcare assistant is a professional, not a "patient"
+    lab = profiles.profile_for(_Agent(role="Casual construction labourer", humanity=5, demographics={"region": "Blackpool"}), ONTO)
+    assert lab["values"]["register"] == "lay" and lab["values"]["role"] == ["public"]
+    hca = profiles.profile_for(_Agent(role="Healthcare Assistant (Nursing Support)", humanity=38, demographics={"region": "Blackpool"}), ONTO)
+    assert hca["values"]["register"] == "professional" and "patient" not in hca["values"]["role"]
 
     over = profiles.profile_for(_Agent(role="GP partner", humanity=5, demographics={"region": "Oxford"}, exposure={"geography": ["Blackpool"], "register": "lay"}), ONTO)
     assert over["values"]["geography"] == ["Blackpool"] and over["values"]["register"] == "lay"
@@ -245,7 +258,8 @@ def test_http_scoping_round_trip(api_client):
             db.add(SpawnedAgent(id="pat", session_id=sid, name="Sandra", age=58, role="Retired cleaner living with obesity", background="b", stance=AgentStance.DIRECT,
                                 correlation="c", personality=[], debate_style="d", humanity=65, demographics={"region": "Blackpool"}))
             db.add(SpawnedAgent(id="gp", session_id=sid, name="Dr Nandakumar", age=44, role="GP partner", background="b", stance=AgentStance.DIRECT,
-                                correlation="c", personality=[], debate_style="d", humanity=5, demographics={"region": "Blackpool"}))
+                                correlation="c", personality=[], debate_style="d", humanity=5, demographics={"region": "Blackpool"},
+                                standing={"lived": "no", "professional": "GP", "expertise": "technical", "home": "Blackpool", "known_places": ["Blackpool"], "basis": "written"}))
             await db.commit()
     asyncio.run(seed_agents())
 
@@ -278,6 +292,16 @@ def test_http_scoping_round_trip(api_client):
     assert {v["unit"]["text"][:6] for v in pv["visible"]} == {"Gazett", "Oxford"}
     assert next(v for v in pv["visible"] if v["unit"]["text"].startswith("Oxford"))["route"] == "from people talking about it online"
     assert client.put(f"/api/v1/sessions/{sid}/scoping/policy", json={"rules": [{"dimension": "nope", "effect": "deny"}]}).status_code == 400
+
+    # standing is editable (2026-10-20): make the GP a layperson with no training and the audit disappears; clearing restores the record
+    r = client.put(f"/api/v1/sessions/{sid}/scoping/agents/gp/standing", json={"standing": {"lived": "no", "professional": "", "expertise": "lay"}})
+    assert r.status_code == 200 and r.json()["standing"]["basis"] == "set" and r.json()["standing"]["known_places"] == ["Blackpool"]
+    gp = client.get(f"/api/v1/sessions/{sid}/scoping/preview", params={"agent_id": "gp"}).json()
+    assert {v["unit"]["text"][:6] for v in gp["visible"]} == {"Gazett", "Oxford"} and gp["profile"]["values"]["register"] == "lay"   # the audit is gone; Oxford arrives through the public layer (policy v2)
+    r = client.put(f"/api/v1/sessions/{sid}/scoping/agents/gp/standing", json={"standing": None})
+    assert r.status_code == 200 and r.json()["standing"]["basis"] == "inferred" and r.json()["standing"]["professional"] == "GP partner"
+    assert client.put(f"/api/v1/sessions/{sid}/scoping/agents/gp/standing", json={"standing": "nope"}).status_code in (400, 422)
+    assert client.put(f"/api/v1/sessions/{sid}/scoping/agents/gp/standing", json={"standing": {"lived": "no", "professional": "GP", "expertise": "technical"}}).status_code == 200
 
     # an exposure override moves the patient to Oxford; the Gazette story is now the foreign one
     r = client.put(f"/api/v1/sessions/{sid}/scoping/agents/pat/exposure", json={"exposure": {"geography": ["Oxford"]}})

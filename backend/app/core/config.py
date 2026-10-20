@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     #: Share of twins who never read the thread (brief L3-06). They post from their own head every
     #: phase, so the room always contains voices that cannot have drifted toward the majority.
     independent_voice_share: float = 0.3
+    #: Run the scope check on every debate post (2026-10-20): one fast structured call per post that
+    #: flags where the author stepped outside its standing. Off → posts carry a footprint, no flags.
+    scope_check_posts: bool = True
 
     def agent_model(self, mode: str) -> str:
         return self.model_pro_agents if mode == "pro" else self.model_agents

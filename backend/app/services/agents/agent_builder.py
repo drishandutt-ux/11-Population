@@ -20,6 +20,7 @@ from app.core.config import get_settings
 from app.services.agents import dynamic_dials as dyn_mod
 from app.services.agents.agent_factory import DIALS_SCHEMA
 from app.services.agents.profiles import AVATAR_COLORS
+from app.services.scoping import standing as standing_mod
 from app.services.evidence.llm import analyze, clip, i, obj, s
 
 #: group → ordered dial keys, parsed from the same schema the spawn prompts use.
@@ -166,6 +167,7 @@ def normalise_authored_agent(d: dict, *, taken_colors: Optional[list[str]] = Non
         "segment": _text(d.get("segment"), 120) or None,
         "demographics": demographics,
         "character": clean_character(d.get("character")),
+        "standing": standing_mod.normalise(d.get("standing"), home=demographics.get("region", ""), basis="set") if isinstance(d.get("standing"), dict) else None,
         "authored": True,
     }
 

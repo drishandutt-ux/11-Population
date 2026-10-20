@@ -158,6 +158,7 @@ async def get_session_posts(session_id: str, user: AuthUser = Depends(get_curren
             "parent_id": p.parent_id,
             "likes": p.likes,
             "round_num": p.round_num,
+            "footprint": getattr(p, "footprint", None),
         }
         for p in posts
     ]
@@ -291,6 +292,7 @@ async def _apply_preset_task(session_id: str, agent_profiles: list[dict]):
                     segment=p.get("segment") or None,
                     demographics=p.get("demographics") or None,
                     character=p.get("character") or None,
+                    standing=p.get("standing") or None,
                 )
                 db.add(agent_row)
                 await db.commit()

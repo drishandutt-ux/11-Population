@@ -12,8 +12,6 @@ from typing import Any
 
 from .registry import REGISTER_LEVELS, is_public_channel
 
-_PATIENT_HINTS = ["patient", "lives with", "living with", "diagnosed", "carer", "caregiver", "service user", "on treatment", "mum", "dad", "parent", "resident", "unemployed", "retired", "student", "worker", "driver", "cleaner", "shop", "mother", "father"]
-_BAND_REGISTER = {"expert": "technical", "tempered": "professional", "balanced": "lay", "defensive": "lay", "reactive": "lay"}
 
 
 def nodes_by_class(onto: dict | None) -> dict[str, list[str]]:
@@ -61,21 +59,36 @@ def profile_for(agent: Any, onto: dict | None) -> dict:
     values["geography"] = geo
     basis["geography"] = f"demographics.region = {region!r}" + ("" if geo else " (no ontology place matched — only unscoped units)") if region else "no region on the agent — geography not applied"
 
-    role_text = f"{getattr(agent, 'role', '')} {getattr(agent, 'background', '')[:200]}"
-    roles = match_nodes(getattr(agent, "role", ""), classes.get("hcp_role", []))
-    if roles:
-        roles = roles + ["public"]   # a clinician is still a member of the public
-        basis["role"] = f"role {getattr(agent, 'role', '')!r} matched HCP node(s) + public"
+    # Standing (2026-10-20): who this person is to the topic decides role and register — not job
+    # words and not the emotion dial. Places they have lived or worked extend their geography.
+    from .standing import of as standing_of, register_for
+    st = standing_of(agent)
+    for place in st.get("known_places") or []:
+        for g in match_nodes(place, classes.get("geography", [])):
+            if g not in geo:
+                geo.append(g)
+    if len(geo) > len(match_nodes(region, classes.get("geography", []))):
+        basis["geography"] += " + places lived or worked in (standing)"
+
+    roles: list[str] = []
+    prof = st.get("professional") or ""
+    if prof:
+        roles = match_nodes(f"{prof} {getattr(agent, 'role', '')}", classes.get("hcp_role", []))
+        basis["role"] = (f"trained as {prof!r} → HCP node(s) {', '.join(roles[:3])}" if roles
+                         else f"trained as {prof!r} — no HCP node in the ontology matches it")
     else:
-        rl = role_text.lower()
-        roles = ["patient", "public"] if any(h in rl for h in _PATIENT_HINTS) else ["public"]
-        basis["role"] = f"role {getattr(agent, 'role', '')!r} is not an HCP node → {'patient + public' if 'patient' in roles else 'public'}"
+        basis["role"] = "no professional standing in this topic"
+    if st.get("lived") in ("yes", "past", "carer"):
+        roles.append("patient")
+        basis["role"] += f" · lived experience ({st['lived']}) → patient"
+    roles.append("public")
+    basis["role"] += " + public" + (f" [{st.get('basis')}]" if st.get("basis") else "")
     values["role"] = roles
 
     band = _band(getattr(agent, "humanity", 0))
-    register = _BAND_REGISTER.get(band, "lay")
+    register = register_for(st)
     values["register"] = register
-    basis["register"] = f"humanity band {band} → cap {register}"
+    basis["register"] = f"standing: working knowledge is {register} ({st.get('basis')}) — the emotion dial ({band}) sets tone, not expertise"
 
     channels_all = classes.get("channel", [])
     if register == "lay":
@@ -109,7 +122,7 @@ def profile_for(agent: Any, onto: dict | None) -> dict:
                 basis[k] = "set on the agent (exposure override)"
     if values.get("register") not in REGISTER_LEVELS:
         values["register"] = "lay"
-    return {"values": values, "basis": basis, "band": band}
+    return {"values": values, "basis": basis, "band": band, "standing": st}
 
 
 def profile_hash(profile: dict) -> str:

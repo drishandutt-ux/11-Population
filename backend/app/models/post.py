@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, Integer, DateTime, Enum as SAEnum
+from sqlalchemy import String, Text, Integer, DateTime, Enum as SAEnum, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 import enum
@@ -25,4 +25,7 @@ class SimulationPost(Base):
     parent_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     likes: Mapped[int] = mapped_column(Integer, default=0)
     round_num: Mapped[int] = mapped_column(Integer, default=0)
+    # What the post was spoken from (2026-10-20): the author's standing, items used / withheld by
+    # dimension, routes, and the scope check's breaches. None for posts before this or likes.
+    footprint: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

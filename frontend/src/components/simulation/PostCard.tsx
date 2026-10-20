@@ -5,6 +5,7 @@ import { stanceColor } from "@/lib/utils";
 import { ThumbsUp, Flame, MessageCircle } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 import PersonaAvatar from "@/components/PersonaAvatar";
+import { BreachFlags, FootprintChip } from "./ScopeFootprint";
 
 interface Props {
   post: Post;
@@ -59,6 +60,8 @@ export default function PostCard({ post, agent, replies, agentsMap, depth = 0, o
               </span>
             )}
             <ConfidenceBadge validation={agent?.validation} />
+            <FootprintChip fp={post.footprint} />
+            <BreachFlags fp={post.footprint} />
             {onTalk && agent && (
               <button
                 type="button"

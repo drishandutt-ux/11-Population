@@ -28,6 +28,10 @@ class ExposureBody(BaseModel):
     exposure: Optional[dict] = None
 
 
+class StandingBody(BaseModel):
+    standing: Optional[dict] = None
+
+
 @router.get("/{session_id}/scoping")
 async def get_scoping(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await get_owned_session(session_id, user, db)
@@ -91,6 +95,37 @@ async def put_exposure(session_id: str, agent_id: str, body: ExposureBody, user:
     await db.commit()
     service.forget(session_id)
     return {"agent_id": agent_id, "exposure": agent.exposure}
+
+
+@router.put("/{session_id}/scoping/agents/{agent_id}/standing")
+async def put_standing(session_id: str, agent_id: str, body: StandingBody, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Set a twin's standing toward the topic (lived experience, training, expertise, places
+    known first-hand); null clears it back to what the record implies. Re-annotates the twin."""
+    from app.services.scoping import auto as scoping_auto
+    from app.services.scoping import standing as standing_mod
+    await get_owned_session(session_id, user, db)
+    agent = (await db.execute(select(SpawnedAgent).where(SpawnedAgent.id == agent_id, SpawnedAgent.session_id == session_id))).scalar_one_or_none()
+    if agent is None:
+        raise HTTPException(status_code=404, detail="agent not found in this session")
+    if body.standing is None:
+        agent.standing = None
+    else:
+        home = str((agent.demographics or {}).get("region") or "") if isinstance(agent.demographics, dict) else ""
+        clean = standing_mod.normalise(body.standing, home=body.standing.get("home") or home, basis="set")
+        if clean is None:
+            raise HTTPException(status_code=400, detail="standing must be an object with lived, professional, expertise and known_places")
+        prior = agent.standing if isinstance(agent.standing, dict) else {}
+        if prior.get("elsewhere") and "elsewhere" not in clean:
+            clean["elsewhere"] = prior["elsewhere"]
+        agent.standing = clean
+    await db.commit()
+    service.forget(session_id)
+    try:
+        await scoping_auto.annotate_agents(session_id, reason="standing", agent_ids=[agent_id])
+    except Exception as e:  # noqa: BLE001
+        print(f"[scoping] re-annotate after standing change failed: {type(e).__name__}: {e}")
+    st = standing_mod.of(agent)
+    return {"agent_id": agent_id, "standing": {**st, "summary": standing_mod.summary(st), "spoke_from": standing_mod.spoke_from(st)}}
 
 
 @router.get("/{session_id}/scoping/retrievals")

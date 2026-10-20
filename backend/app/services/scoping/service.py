@@ -104,15 +104,20 @@ async def snapshot_of(session_id: str) -> Optional[str]:
     return bundle["snapshot_id"] if bundle else None
 
 
+def block_for(res: dict, query: str) -> str:
+    """The knowledge block for a retrieval result — the same text `context_for_agent` returns."""
+    if not res.get("visible"):
+        return f"Topic under discussion: {query}\n(You have not come across specifics on this yourself.)"
+    return knowledge_block(res["visible"])
+
+
 async def context_for_agent(session_id: str, agent: Any, query: str, *, purpose: str = "post", limit: int = 14, log: bool = True) -> Optional[str]:
     """The twin's knowledge block, or None when the session is not scoped (caller falls back)."""
     got = await retrieval_for_agent(session_id, agent, query, purpose=purpose, limit=limit, log=log)
     if got is None:
         return None
     _, res, _, _ = got
-    if not res["visible"]:
-        return f"Topic under discussion: {query}\n(You have not come across specifics on this yourself.)"
-    return knowledge_block(res["visible"])
+    return block_for(res, query)
 
 
 def numbered_block(visible: list[dict], max_chars: int = 3600) -> tuple[str, list[dict]]:

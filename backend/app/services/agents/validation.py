@@ -259,6 +259,8 @@ def persona_record(agent: Any) -> str:
         f"Relationship to the topic: {clip(getattr(agent, 'correlation', '') or '', 300)}",
         f"Debate style: {clip(getattr(agent, 'debate_style', '') or '', 200)}",
     ]
+    from app.services.scoping import standing as standing_mod
+    rows.append(f"Standing to the topic: {standing_mod.summary(standing_mod.of(agent))}")
     rows += [f"{CHARACTER_LABELS[k].title()}: {clip(str(ch[k]), 400)}" for k in CHARACTER_KEYS if str(ch.get(k) or "").strip()]
     arch = (ch or {}).get("archetype") or {}
     if arch.get("name"):

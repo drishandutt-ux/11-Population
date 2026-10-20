@@ -155,7 +155,10 @@ async def knowledge_for_agent(session_id: str, agent: Any, query: str, *, writte
         return None
     profile, out, snapshot_id, version = res
     visible = out.get("visible") or []
+    from . import standing as standing_mod
+    st = profile.get("standing") or standing_mod.of(agent)
     return {
+        "standing": standing_mod.summary(st), "spoke_from": standing_mod.spoke_from(st),
         "snapshot_id": snapshot_id, "policy_version": version,
         "visible": int(out.get("visible_total") or len(visible)), "total": int(out.get("visible_total") or len(visible)) + len(out.get("hidden") or []),
         "unit_ids": [r["unit"]["id"] for r in visible][:40], "routes": sorted({r["route"] for r in visible})[:12],
@@ -197,8 +200,14 @@ async def annotate_agents(session_id: str, query: Optional[str] = None, *, reaso
             if agent_ids:
                 q = q.where(SpawnedAgent.id.in_(agent_ids))
             agents = (await db.execute(q)).scalars().all()
+            onto = (await service._load_bundle(session_id) or {}).get("onto")
             n = 0
             for a in agents:
+                # Standing (2026-10-20): a twin written before standing existed gets the one its
+                # record implies, stored so it is visible and editable; every twin learns which of
+                # the session's places it knows only second-hand.
+                if settle_standing(a, onto):
+                    flag_modified(a, "standing")
                 prior = a.knowledge if isinstance(getattr(a, "knowledge", None), dict) else {}
                 rec = await knowledge_for_agent(session_id, a, query, written_from=prior.get("written_from") or ("scoped" if prior else "shared"))
                 if rec is None:
@@ -212,6 +221,46 @@ async def annotate_agents(session_id: str, query: Optional[str] = None, *, reaso
         return 0
     await _emit(session_id, {"type": "scoping_annotated", "reason": reason, "count": n})
     return n
+
+
+_ELSEWHERE_LEVELS = ("region", "icb", "local_authority", "place")
+
+
+def elsewhere_for(standing: dict, onto: Optional[dict], limit: int = 6) -> list[str]:
+    """The session's named places this twin has NOT lived or worked in — the ones its posts may
+    only speak about second-hand. From the ontology's geography nodes below nation level, most
+    mentioned first; a place the twin knows (or that contains one it knows) is left out."""
+    if not onto:
+        return []
+    from .engine import ancestors_map
+    from .profiles import match_nodes
+    names = [n["id"] for n in onto.get("nodes", []) if n.get("cls") == "geography"]
+    known = set()
+    for p in (standing or {}).get("known_places") or []:
+        known.update(match_nodes(p, names))
+    anc = ancestors_map(onto)
+    reach = set(known)
+    for k in known:
+        reach |= anc.get(k, set())
+    cands = [n for n in onto.get("nodes", []) if n.get("cls") == "geography" and n.get("level") in _ELSEWHERE_LEVELS and n["id"] not in reach]
+    # a place that contains a known place is not "elsewhere" either (Lancashire for a Blackpool twin)
+    cands = [n for n in cands if not any(n["id"] in anc.get(k, set()) for k in known)]
+    cands.sort(key=lambda n: -int(n.get("mentions") or 0))
+    return [n["id"] for n in cands[:limit]]
+
+
+def settle_standing(agent: Any, onto: Optional[dict]) -> bool:
+    """Store the twin's standing when it has none (inferred from its record) and refresh its
+    `elsewhere` list from the ontology. Returns True when the row changed."""
+    from . import standing as standing_mod
+    st = standing_mod.of(agent)
+    elsewhere = elsewhere_for(st, onto)
+    prior = agent.standing if isinstance(getattr(agent, "standing", None), dict) else None
+    new = {**st, "elsewhere": elsewhere}
+    if prior == new:
+        return False
+    agent.standing = new
+    return True
 
 
 async def coverage(session_id: str) -> dict:

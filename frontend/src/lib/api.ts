@@ -212,6 +212,9 @@ export const api = {
       request<{ version: number; rules: ScopeRule[] }>(`/sessions/${sessionId}/scoping/policy`, { method: "PUT", body: JSON.stringify({ rules, note }) }),
     setExposure: (sessionId: string, agentId: string, exposure: Record<string, unknown> | null) =>
       request<{ agent_id: string; exposure: Record<string, unknown> | null }>(`/sessions/${sessionId}/scoping/agents/${agentId}/exposure`, { method: "PUT", body: JSON.stringify({ exposure }) }),
+    /** Set a twin's standing toward the topic (lived, professional, expertise, known places); null clears it to what the record implies. */
+    setStanding: (sessionId: string, agentId: string, standing: Partial<AgentStanding> | null) =>
+      request<{ agent_id: string; standing: AgentStanding }>(`/sessions/${sessionId}/scoping/agents/${agentId}/standing`, { method: "PUT", body: JSON.stringify({ standing }) }),
     retrievals: (sessionId: string, agentId?: string) =>
       request<{ retrievals: RetrievalRow[] }>(`/sessions/${sessionId}/scoping/retrievals${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ""}`),
   },
@@ -512,6 +515,8 @@ export type Agent = {
   validation?: AgentValidation | null;
   /** Scoping (L1-04, wired end to end): what this twin was written from and can see — null until annotated. */
   knowledge?: AgentKnowledge | null;
+  /** Standing toward the topic (2026-10-20): lived experience, training, expertise, places known first-hand. */
+  standing?: AgentStanding | null;
 };
 
 export type AgentKnowledge = { snapshot_id: string | null; visible: number; total: number; routes: string[]; provenance: Record<string, number>; written_from: string | null; profile: Record<string, unknown>; at: string | null };
@@ -832,6 +837,40 @@ export type Post = {
   parent_id: string | null;
   likes: number;
   round_num: number;
+  /** What the post was spoken from (standing-based scoping, 2026-10-20); null for older posts and likes. */
+  footprint?: PostFootprint | null;
+};
+
+/** One breach the scope check found in a post: where the author stepped outside its standing. */
+export type ScopeBreach = { kind: "clinical_claim" | "lived_claim" | "place_as_fact" | "beyond_training"; label: string; quote: string; why: string };
+
+/** The footprint a debate post carries: who spoke, from what, how much was kept back, and the scope check. */
+export type PostFootprint = {
+  spoke_from: "lived" | "carer" | "professional" | "public";
+  standing: { lived: string; professional: string; expertise: string; home: string; basis?: string };
+  scoped: boolean;
+  used: number;
+  withheld: number;
+  withheld_by: Record<string, number>;
+  routes: string[];
+  snapshot_id?: string | null;
+  check?: { ok: boolean; breaches: ScopeBreach[]; model?: string } | null;
+};
+
+/** Who a twin is to the topic (services/scoping/standing.py): set when written, editable, else inferred. */
+export type AgentStanding = {
+  lived: "yes" | "no" | "carer" | "past";
+  lived_detail?: string;
+  professional: string;
+  professional_field?: string;
+  expertise: "lay" | "professional" | "technical";
+  home: string;
+  known_places: string[];
+  basis: "written" | "inferred" | "set";
+  /** The session's places this twin knows only second-hand (filled when the twin is annotated). */
+  elsewhere?: string[];
+  summary?: string;
+  spoke_from?: string;
 };
 
 export type AgentPreset = {

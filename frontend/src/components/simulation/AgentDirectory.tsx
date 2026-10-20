@@ -211,6 +211,14 @@ function AgentCard({ agent, animate = false, dynamicDials = [], onShowKnowledge 
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{agent.role}</p>
+          {agent.standing?.summary && (
+            <p
+              className="text-[10.5px] text-muted-foreground/60 truncate"
+              title={`Standing to the topic (${agent.standing.basis === "inferred" ? "inferred from the record" : agent.standing.basis === "set" ? "set by the analyst" : "written with the persona"}): ${agent.standing.summary}${agent.standing.elsewhere?.length ? `. Knows only second-hand: ${agent.standing.elsewhere.join(", ")}` : ""}. Decides what this twin can speak to; edit it on the Graph tab's Scoping view.`}
+            >
+              {agent.standing.summary}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0" title="Energy: how readily this twin speaks up in the debate (100% posts and replies often, 20% mostly listens)">
           <Zap className="w-3 h-3" />

@@ -85,6 +85,7 @@ def _agent_payload(p) -> dict:
         "segment": getattr(p, "segment", None) or None, "demographics": getattr(p, "demographics", None) or {},
         "weight": getattr(p, "weight", None) or 1.0,
         "character": getattr(p, "character", None) or None,
+        "standing": getattr(p, "standing", None) or None,
         "validation": (lambda v: {"score": v["score"], "band": v.get("band"), "parts": v.get("parts") or {}, "at": v.get("at")}
                        if isinstance(v, dict) and v.get("score") is not None else None)(getattr(p, "validation", None)),
         # Scoping (L1-04): what this twin was written from and can see — visible / total units, routes, snapshot.
@@ -164,6 +165,7 @@ async def _spawn_agents_task(
                     avatar_color=p.avatar_color, dials=p.dials or {},
                     humanity=getattr(p, "humanity", 0) or 0,
                     demographics=getattr(p, "demographics", None) or None,
+                    standing=getattr(p, "standing", None) or None,
                 )
                 for p in profiles
             ])

@@ -360,6 +360,7 @@ def _limits_block(agent: SpawnedAgent) -> str:
     escape hatch. A panel of shruggers is worse than a panel of guessers, because it looks
     rigorous while saying nothing — so the same block insists they DO have a view on their own
     ground, and that a guess is allowed as long as it is labelled as one."""
+    from app.services.scoping import standing as standing_mod
     demo = getattr(agent, "demographics", None) or {}
     ch = getattr(agent, "character", None) or {}
     have = [f"your own life and work as {agent.role}"]
@@ -368,7 +369,10 @@ def _limits_block(agent: SpawnedAgent) -> str:
     if str(ch.get("information_diet") or "").strip():
         have.append(f"what reaches you: {str(ch['information_diet']).strip()}")
     have.append("what you have read, heard and been told by people around you")
-    return (
+    # Standing (2026-10-20): who this person is to the topic — lived experience, training, places
+    # known first-hand — and, in the same breath, who they are NOT. A patient never explains dosing;
+    # a clinician never claims the feeling of it; an Oxford twin knows Blackpool second-hand.
+    return standing_mod.block(agent) + (
         "\n\nWHAT YOU ACTUALLY KNOW — and what to do when you do not:\n"
         "- You know: " + "; ".join(have) + ".\n"
         "- Anything outside that — another area's internal figures, a decision nobody has taken yet, "

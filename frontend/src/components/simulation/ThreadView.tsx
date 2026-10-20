@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Agent, Post } from "@/lib/api";
 import PostCard from "./PostCard";
+import { ScopeEffects } from "./ScopeFootprint";
 import PersonaAvatar from "@/components/PersonaAvatar";
 import { stanceColor } from "@/lib/utils";
 import { MessageSquare, FileText, Loader2, Clock, ArrowDown, RefreshCw, AlertCircle, MessageCircle } from "lucide-react";
@@ -124,6 +125,9 @@ export default function ThreadView({
           </button>
         )}
       </div>
+
+      {/* Scoping effects (2026-10-20): what each kind of voice knew and how often it stepped outside its standing */}
+      <ScopeEffects posts={posts} />
 
       {/* Body: thread left + opinions right */}
       <div className="flex-1 flex overflow-hidden min-h-0">

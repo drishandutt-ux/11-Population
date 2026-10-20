@@ -7,6 +7,7 @@ from typing import Optional
 from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 from app.services.agents.profiles import AgentProfile, AVATAR_COLORS
+from app.services.scoping import standing as standing_mod
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
 import anthropic
 
@@ -275,12 +276,15 @@ Return a JSON array with exactly {batch_count} objects. Each object MUST have AL
   "frame": {{"<sampling-frame dimension key>": "<the category this persona falls in>", ...}} — one entry per frame dimension listed above; {{}} when no frame was given,
   "facets": {{"<population facet key>": "<one of its labels>", ...}} — one entry per POPULATION FACET listed above; {{}} when none were given,
   "humanity": <integer 0-100>,
+  {standing_mod.SCHEMA_TEXT},
 {dyn_mod.schema_block(dynamic)}  "dials": {DIALS_SCHEMA}
 }}
 
 {_DIALS_INSTRUCTIONS}
 
 {_GEO_INSTRUCTIONS}
+
+{standing_mod.INSTRUCTIONS}
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -401,6 +405,7 @@ name, a different job title, a different angle. Do not produce a variation of an
                     dials=d.get("dials", {}) or {},
                     humanity=int(d.get("humanity", 0) or 0),
                     demographics=demographics,
+                    standing=standing_mod.normalise(d.get("standing"), home=demographics.get("region", "")),
                 )
             )
         except Exception as e:
@@ -690,12 +695,15 @@ Return a JSON array with exactly {n} objects. Each object MUST have ALL of these
   "debate_style": "1 sentence describing how they argue",
   "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
   "humanity": <integer 0-100>,
+  {standing_mod.SCHEMA_TEXT},
 {dyn_schema}  "dials": {DIALS_SCHEMA}
 }}
 
 {_DIALS_INSTRUCTIONS}
 
 {_GEO_INSTRUCTIONS}
+
+{standing_mod.INSTRUCTIONS}
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -741,6 +749,7 @@ def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -
             segment=segment,
             demographics=demographics,
             character=d.get("character") if isinstance(d.get("character"), dict) and d.get("character") else None,
+            standing=standing_mod.normalise(d.get("standing"), home=demographics.get("region", "")),
         )
     except Exception as e:  # noqa: BLE001
         print(f"[agent_factory] skipping malformed agent: {type(e).__name__}: {e}")

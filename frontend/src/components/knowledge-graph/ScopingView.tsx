@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Eye, EyeOff, Filter, RefreshCw, Sparkles, User } from "lucide-react";
-import { api, type Agent, type KnowledgeUnit, type ScopeRule, type ScopingPreview, type ScopingState } from "@/lib/api";
+import { api, type Agent, type AgentStanding, type KnowledgeUnit, type ScopeRule, type ScopingPreview, type ScopingState } from "@/lib/api";
 
 interface Props {
   sessionId: string;
@@ -72,6 +72,11 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
   const [policyText, setPolicyText] = useState("");
   const [policySaving, setPolicySaving] = useState(false);
   const [policyMsg, setPolicyMsg] = useState<string | null>(null);
+  // Standing (2026-10-20): who the twin is to the topic — shown with its basis, editable here.
+  const [standingEdits, setStandingEdits] = useState<Record<string, AgentStanding>>({});
+  const [standingDraft, setStandingDraft] = useState<Partial<AgentStanding> & { known_places_text?: string } | null>(null);
+  const [standingSaving, setStandingSaving] = useState(false);
+  const [standingMsg, setStandingMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -115,6 +120,28 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
       setError(e?.message || "Tagging failed.");
     } finally {
       setTagging(false);
+    }
+  }
+
+  async function saveStanding(clear = false) {
+    if (!agentId) return;
+    setStandingSaving(true);
+    setStandingMsg(null);
+    try {
+      const body = clear || !standingDraft ? null : {
+        lived: standingDraft.lived, lived_detail: standingDraft.lived_detail, professional: standingDraft.professional,
+        professional_field: standingDraft.professional_field, expertise: standingDraft.expertise, home: standingDraft.home,
+        known_places: (standingDraft.known_places_text ?? (standingDraft.known_places || []).join(", ")).split(",").map((x) => x.trim()).filter(Boolean),
+      };
+      const r = await api.scoping.setStanding(sessionId, agentId, body);
+      setStandingEdits((prev) => ({ ...prev, [agentId]: r.standing }));
+      setStandingDraft(null);
+      setStandingMsg(clear ? "Back to what the record implies." : "Saved — this twin now sees and speaks from this standing.");
+      await loadPreview();
+    } catch (e: any) {
+      setStandingMsg(e?.message || "Could not save.");
+    } finally {
+      setStandingSaving(false);
     }
   }
 
@@ -240,6 +267,58 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
           <p className="text-xs text-muted-foreground px-4 py-6">Spawn a population, then pick a twin.</p>
         ) : (
           <div className="flex-1 overflow-y-auto">
+            {/* standing */}
+            {(() => {
+              const st = standingEdits[agent.id] || agent.standing;
+              const basisWord = st?.basis === "inferred" ? "inferred from the record" : st?.basis === "set" ? "set by you" : "written with the persona";
+              return (
+                <div className="px-4 py-3 border-b border-border/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground" title="Who this twin is to the topic. It decides the role and register it can reach and the 'who you are, and who you are not' rules in its prompt.">Standing to the topic{st ? ` · ${basisWord}` : ""}</div>
+                    {!standingDraft && (
+                      <button onClick={() => setStandingDraft({ ...(st || { lived: "no", professional: "", expertise: "lay", home: agent.demographics?.region || "", known_places: [], basis: "set" }), known_places_text: (st?.known_places || []).join(", ") })} className="text-[10.5px] text-primary hover:underline">Edit</button>
+                    )}
+                  </div>
+                  {!standingDraft ? (
+                    st ? (
+                      <div className="text-xs text-foreground/85 space-y-0.5">
+                        <div>{st.summary || `${st.lived} · ${st.professional || "no training"} · ${st.home}`}</div>
+                        {st.lived !== "no" && st.lived_detail && <div className="text-[10.5px] text-muted-foreground/70">Lived: {st.lived_detail}</div>}
+                        {st.professional && st.professional_field && <div className="text-[10.5px] text-muted-foreground/70">Training covers: {st.professional_field}</div>}
+                        <div className="text-[10.5px] text-muted-foreground/70">Working knowledge: {st.expertise} · knows first-hand: {(st.known_places || []).join(", ") || "—"}</div>
+                        {st.elsewhere && st.elsewhere.length > 0 && <div className="text-[10.5px] text-muted-foreground/70">Knows only second-hand: {st.elsewhere.join(", ")}</div>}
+                      </div>
+                    ) : <p className="text-xs text-muted-foreground">Not recorded yet — it is inferred from the record until the twin is annotated.</p>
+                  ) : (
+                    <div className="space-y-1.5 text-xs">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <label className="space-y-0.5"><span className="text-[10.5px] text-muted-foreground">Lived experience</span>
+                          <select value={standingDraft.lived || "no"} onChange={(e) => setStandingDraft({ ...standingDraft, lived: e.target.value as AgentStanding["lived"] })} className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs">
+                            <option value="no">no</option><option value="yes">yes — lives with it</option><option value="past">past — went through it</option><option value="carer">carer</option>
+                          </select></label>
+                        <label className="space-y-0.5"><span className="text-[10.5px] text-muted-foreground">Working knowledge</span>
+                          <select value={standingDraft.expertise || "lay"} onChange={(e) => setStandingDraft({ ...standingDraft, expertise: e.target.value as AgentStanding["expertise"] })} className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs">
+                            <option value="lay">lay</option><option value="professional">professional</option><option value="technical">technical</option>
+                          </select></label>
+                      </div>
+                      {standingDraft.lived !== "no" && <input value={standingDraft.lived_detail || ""} onChange={(e) => setStandingDraft({ ...standingDraft, lived_detail: e.target.value })} placeholder="What exactly (e.g. type 2 diabetes for nine years)" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />}
+                      <input value={standingDraft.professional || ""} onChange={(e) => setStandingDraft({ ...standingDraft, professional: e.target.value })} placeholder="Trained as (e.g. GP) — blank for none" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />
+                      {standingDraft.professional && <input value={standingDraft.professional_field || ""} onChange={(e) => setStandingDraft({ ...standingDraft, professional_field: e.target.value })} placeholder="What that training covers" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />}
+                      <input value={standingDraft.known_places_text ?? ""} onChange={(e) => setStandingDraft({ ...standingDraft, known_places_text: e.target.value })} placeholder="Places lived or worked in, comma-separated (home first)" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => saveStanding(false)} disabled={standingSaving} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-40">
+                          {standingSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+                        </button>
+                        <button onClick={() => saveStanding(true)} disabled={standingSaving} className="text-[11px] text-muted-foreground hover:text-foreground">Clear to record</button>
+                        <button onClick={() => setStandingDraft(null)} className="text-[11px] text-muted-foreground hover:text-foreground">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                  {standingMsg && <div className="text-[10.5px] text-muted-foreground">{standingMsg}</div>}
+                </div>
+              );
+            })()}
+
             {/* profile */}
             <div className="px-4 py-3 border-b border-border/60 space-y-1.5">
               <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Exposure profile{preview?.profile ? ` · ${preview.profile.band}` : ""}</div>

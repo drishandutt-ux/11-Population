@@ -52,4 +52,7 @@ class SpawnedAgent(Base):
     # What this twin was written from and can see now (scoping, L1-04 wired end to end): snapshot,
     # visible / total units, routes, provenance mix, the exposure profile's basis. NULL until annotated.
     knowledge: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    # Standing toward the topic (2026-10-20): {lived, lived_detail, professional, professional_field,
+    # expertise, home, known_places, basis, elsewhere?} — set by the persona writer, editable; None → inferred.
+    standing: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
