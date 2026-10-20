@@ -159,3 +159,20 @@ def test_debate_posts_carry_no_channel(monkeypatch, tmp_path):
     st = asyncio.run(tagger.tag_session("s9", "GP waits"))
     by_ref = {u["source_ref"][:7]: u["facets"]["channel"] for u in st["units"]}
     assert by_ref["debate:"] == [] and by_ref["[SOURCE"] == ["Word of mouth"]
+
+
+def test_the_discussion_never_crowds_out_real_sources():
+    def r(k, prov, score):
+        return {"unit": {"id": f"x{k}", "provenance_class": prov}, "score": score, "order": k}
+    debate = [r(k, "model_inference", 10 - k * 0.1) for k in range(20)]
+    real = [r(100 + k, "official_statistic", 2 - k * 0.1) for k in range(5)]
+    out = engine.compose(debate + real, 14)
+    assert len(out) == 14 and sum(1 for x in out if x["unit"]["provenance_class"] != "model_inference") == 5   # all five real ones, nine posts
+    assert [x["score"] for x in out] == sorted((x["score"] for x in out), reverse=True)
+    out = engine.compose(debate + real[:1], 4)
+    assert sum(1 for x in out if x["unit"]["provenance_class"] != "model_inference") == 1 and len(out) == 4
+    assert engine.compose(debate, 3) == debate[:3] and engine.compose(real, 3) == real[:3]
+    # plenty of real sources: at most half the block is the debate
+    many_real = [r(200 + k, "grey_literature", 1.0) for k in range(20)]
+    out = engine.compose(debate + many_real, 14)
+    assert sum(1 for x in out if x["unit"]["provenance_class"] == "model_inference") == 7

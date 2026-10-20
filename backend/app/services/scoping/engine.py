@@ -232,7 +232,29 @@ def retrieve(units: list[dict], onto: dict | None, profile: dict, rules: list[di
         else:
             hidden.append({"unit": u, "failed": ev["failed"]})
     visible.sort(key=lambda r: (-r["score"], -r["order"]))
-    return {"visible": visible[:limit], "visible_total": len(visible), "hidden": hidden, "profile_values": pv}
+    return {"visible": compose(visible, limit), "visible_total": len(visible), "hidden": hidden, "profile_values": pv}
+
+
+#: At most this share of a served block may be the debate's own posts when real sources can reach the
+#: twin (2026-10-20): term hits reward long text, so a thread of 300-word posts outscored every short
+#: lay-layer line and the Blackpool labourer was served fourteen posts and no fact.
+MAX_DEBATE_SHARE = 0.5
+
+
+def compose(ranked: list[dict], limit: int) -> list[dict]:
+    """The served block from the ranked visible units: the discussion never crowds out what the twin
+    actually knows. Real sources fill at least half the slots when there are enough of them; the
+    remainder is the best of the debate; the block stays in score order."""
+    real = [r for r in ranked if (r["unit"].get("provenance_class") or "") != "model_inference"]
+    debate = [r for r in ranked if (r["unit"].get("provenance_class") or "") == "model_inference"]
+    if not real or not debate:
+        return ranked[:limit]
+    n_debate = min(len(debate), int(limit * MAX_DEBATE_SHARE))
+    n_real = min(len(real), limit - n_debate)
+    n_debate = min(len(debate), limit - n_real)   # top up with the debate when real sources run short
+    chosen = real[:n_real] + debate[:n_debate]
+    chosen.sort(key=lambda r: (-r["score"], -r["order"]))
+    return chosen
 
 
 def when_tag(source_ref: str) -> str:
