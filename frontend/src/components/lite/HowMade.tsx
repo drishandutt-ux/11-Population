@@ -69,7 +69,7 @@ function standing(t: FrameTarget | undefined): Standing {
 function standingWord(s: Standing, t?: FrameTarget): string {
   if (s === "none") return "No figure found";
   if (s === "assumed") return "Assumed";
-  if (s === "worked") return "Worked out";
+  if (s === "worked") return "Worked out (assumption)";
   if (t?.status === "uploaded") return "Your upload";
   if (t?.status === "proxy") return "Closest figure";
   return "Published figure";
@@ -145,7 +145,10 @@ export default function HowMade({ sessionId, question, build, agents, research, 
   const reportDims: Record<string, FrameReportDim> = Object.fromEntries((frame?.report?.dimensions || []).map((d) => [d.key, d]));
 
   const assumed: string[] = [...(plan.assumptions || [])];
-  dims.forEach((d, i) => { if (standings[i] === "assumed") assumed.push(`${d.label}: no published figure for this place, so a spread was assumed.`); });
+  dims.forEach((d, i) => {
+    if (standings[i] === "assumed") assumed.push(`${d.label}: no published figure for this place, so a spread was assumed.`);
+    if (standings[i] === "worked") { const t = frame?.targets?.[d.key]; assumed.push(`${d.label}: worked out from published figures as an educated assumption${t?.assumptions?.length ? ` — ${t.assumptions.join("; ")}` : ""}.`); }
+  });
   const unevidenced = segments.filter((s) => !s.evidence?.length).length;
   if (unevidenced) assumed.push(`${unevidenced} of the ${segments.length} groups ${unevidenced === 1 ? "is" : "are"} sized from general knowledge, not a published figure.`);
   const gaps = det?.gaps || [];
@@ -176,6 +179,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
   const matchLine = dims.length
     ? [
         matchedLabels.length ? `Matched on ${list(matchedLabels, 2)}` : "Nothing matched to a published figure",
+        worked ? `${worked} worked out (assumption${worked === 1 ? "" : "s"})` : "",
         assumedLabels.length ? `${assumedLabels.length} assumed` : "",
         unmatchedCount ? `${unmatchedCount} with no figure` : "",
         frame?.report?.level && frame.report.level !== "none" ? `overall ${frame.report.level}` : "",
@@ -272,7 +276,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
         {dims.length > 0 && (
           <Detail href={studioHref}>
             <Fold title="Matched to published figures" line={matchLine}>
-              <p className="lite-help">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.{worked ? " A figure marked Worked out was computed from published parts; hover it, or open Published statistics above, for the working." : ""}</p>
+              <p className="lite-help">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.{worked ? " A figure marked Worked out is an educated assumption computed from published parts; hover it, or open Published statistics above, for the working and what was assumed." : ""}</p>
               <div className="mt-3 space-y-2">
                 {dims.map((d, i) => {
                   const t = frame?.targets?.[d.key];

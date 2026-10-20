@@ -436,7 +436,7 @@ function StatisticsBody(p: Props) {
       <Para>
         <Num>{publishers.length}</Num> {publishers.length === 1 ? "publisher was" : "publishers were"} searched for base rates about {det?.target_population ? <strong className="font-medium text-foreground">{det.target_population}</strong> : "these people"}{inPlace(det?.target_population, frame?.geography || det?.geography)}{src.quant_auto ? ", picked for that place automatically" : ""}.
         {usable.length ? <> <Num>{usable.length}</Num> {usable.length === 1 ? "page" : "pages"} carried usable figures — <Num>{facts.length}</Num> {facts.length === 1 ? "statistic" : "statistics"} in all, from <Num>{byPublisher.size}</Num> {byPublisher.size === 1 ? "publisher" : "publishers"}.</> : " No page read so far carried a usable figure."}
-        {dims.length ? <> Figures were found for <Num>{matched}</Num> of the <Num>{dims.length}</Num> things the people should match{workedOut ? <>, <Num>{workedOut}</Num> of them worked out from published parts rather than read off one page</> : null}.</> : null}
+        {dims.length ? <> Figures were found for <Num>{matched}</Num> of the <Num>{dims.length}</Num> things the people should match{workedOut ? <>, <Num>{workedOut}</Num> of them worked out from published parts as educated assumptions, flagged as such</> : null}.</> : null}
       </Para>
       <Stats items={[
         { value: String(publishers.length), label: "publishers searched" },
@@ -502,7 +502,7 @@ function standing(t: FrameTarget | undefined): Standing {
 function standingWord(s: Standing, t?: FrameTarget): string {
   if (s === "none") return "No figure found";
   if (s === "assumed") return "Assumed";
-  if (s === "worked") return "Worked out from published figures";
+  if (s === "worked") return "Worked out — educated assumption";
   if (t?.status === "uploaded") return "Your upload";
   if (t?.status === "proxy") return "Closest figure";
   return "Published figure";
@@ -512,8 +512,11 @@ function Working({ t }: { t: FrameTarget }) {
   const comps = t.components || [];
   return (
     <span className="block mt-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-2">
-      <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">How it was worked out</span>
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">How it was worked out · an educated assumption{t.basis ? ` (${t.basis.replace(/_/g, " ")})` : ""}</span>
       {t.working ? <span className="block text-[12px] text-foreground leading-snug mt-1">{t.working}</span> : null}
+      {(t.assumptions || []).length > 0 && (
+        <span className="block mt-1.5 text-[11.5px] text-amber-700 leading-snug"><AlertTriangle className="w-3 h-3 inline -mt-0.5 mr-1" />Assumed, not published: {(t.assumptions || []).join("; ")}</span>
+      )}
       {comps.length > 0 && (
         <span className="block mt-1.5 space-y-0.5">
           {comps.map((c, i) => (

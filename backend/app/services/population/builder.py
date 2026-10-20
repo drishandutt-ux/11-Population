@@ -1284,22 +1284,8 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
     if not dim:
         raise ValueError(f"unknown frame dimension {key!r}")
     targets = dict(fr.get("targets") or {})
-    if action == "work_out":
-        research = await _research_material(bld)
-        try:
-            facts_rows = await load_quant_facts(bld.session_id)
-        except Exception:  # noqa: BLE001
-            facts_rows = []
-        async with dbm.AsyncSessionLocal() as db:
-            sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == bld.session_id))).scalar_one_or_none()
-        keys = list((bld.sources or {}).get("quant_sources") or []) or default_sources(fr.get("geography") or "")
-        tg = await workout_mod.work_out_target(bld.session_id, sess.query if sess else "", dim, fr.get("geography") or "", keys, facts_rows, build_id=build_id,
-                                               log=_frame_logger(build_id), region=_region_of(fr.get("geography") or ""), should_stop=lambda: _stopped(build_id),
-                                               extra_material=research.for_dim(dim, 3000))
-        if tg["status"] != "worked_out":
-            raise ValueError(tg.get("note") or "could not be worked out from published figures")
-    elif action == "estimate":
-        # The estimate is shown what is on file (published facts + the analyst's research and uploads) so it is
+    if action in ("work_out", "estimate"):
+        # Both are shown what is on file (published facts + the analyst's research and uploads) so they are
         # anchored to this audience; none of it stated the distribution, or the target would already be found.
         research = await _research_material(bld)
         try:
@@ -1307,9 +1293,23 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
         except Exception:  # noqa: BLE001
             facts_rows = []
         material = "\n".join(x for x in (frame_mod.material_text(facts_rows, 8000), research.for_dim(dim, 4000)) if x.strip())
-        tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "", material)
+        tg = None
+        if action == "work_out":
+            async with dbm.AsyncSessionLocal() as db:
+                sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == bld.session_id))).scalar_one_or_none()
+            keys = list((bld.sources or {}).get("quant_sources") or []) or default_sources(fr.get("geography") or "")
+            tg = await workout_mod.work_out_target(bld.session_id, sess.query if sess else "", dim, fr.get("geography") or "", keys, facts_rows, build_id=build_id,
+                                                   log=_frame_logger(build_id), region=_region_of(fr.get("geography") or ""), should_stop=lambda: _stopped(build_id),
+                                                   extra_material=research.for_dim(dim, 3000))
+            if tg["status"] != "worked_out":
+                # No published part to build on (2026-10-20: a 400 here left the row empty and the reader with an
+                # error banner): fall back to the ladder's labelled estimate so the gap is filled and flagged Assumed.
+                await log(build_id, "frame", "warn", f"Could not work out {dim['label']} from published figures — falling back to a labelled model estimate", tg.get("note"))
+                tg = None
+        if tg is None:
+            tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "", material)
         if tg["status"] == "worked_out":
-            await log(build_id, "frame", "ok", f"Worked out · {dim['label']}: {len(tg['categories'])} cells from {len(tg.get('components') or [])} published figure(s)", tg.get("working"))
+            await log(build_id, "frame", "ok", f"Worked out · {dim['label']}: {len(tg['categories'])} cells from {len(tg.get('components') or [])} published figure(s) — an educated assumption, flagged as one", tg.get("working"))
         elif tg["status"] == "estimated":
             await log(build_id, "frame", "decision", f"Estimated · {dim['label']} — labelled model_inference, lowers confidence" + (", anchored to what is on file" if material.strip() else "; nothing on file to anchor it"), tg.get("note"))
         else:

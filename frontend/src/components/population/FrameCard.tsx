@@ -23,7 +23,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   found: { label: "found", cls: "chip-ok" },
   proxy: { label: "proxy", cls: "chip-info" },
   uploaded: { label: "uploaded", cls: "chip-warn" },
-  worked_out: { label: "worked out from published figures", cls: "chip-info" },
+  worked_out: { label: "worked out · educated assumption", cls: "chip-warn" },
   estimated: { label: "model estimate", cls: "chip-warn" },
   skipped: { label: "skipped", cls: "" },
   missing: { label: "no distribution", cls: "chip-bad" },
@@ -190,8 +190,13 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                   )}
                   {t.status === "worked_out" && (
                     <div className="mt-1.5 rounded-md bg-sky-500/[0.06] ring-1 ring-sky-500/15 px-2.5 py-2 text-[11.5px] space-y-1">
-                      <p className="text-sky-200/90"><Calculator className="w-3 h-3 inline -mt-0.5 mr-1" />How it was worked out</p>
+                      <p className="text-sky-200/90"><Calculator className="w-3 h-3 inline -mt-0.5 mr-1" />How it was worked out — an educated assumption{t.basis ? ` (${t.basis.replace(/_/g, " ")})` : ""}</p>
                       {t.working && <p className="text-foreground/85 leading-snug">{t.working}</p>}
+                      {(t.assumptions || []).length > 0 && (
+                        <div className="text-amber-200/85"><AlertTriangle className="w-3 h-3 inline -mt-0.5 mr-1" />Assumed, not published:
+                          <ul className="list-disc pl-4 mt-0.5 space-y-0.5">{(t.assumptions || []).map((a, i) => <li key={i}>{a}</li>)}</ul>
+                        </div>
+                      )}
                       {(t.components || []).length > 0 && (
                         <ul className="space-y-0.5 text-muted-foreground">
                           {(t.components || []).map((c, i) => <li key={i}><span className="text-foreground/90 tabular-nums">{c.value}</span> {c.statistic}{c.source ? <> · {c.url ? <a href={c.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground">{c.source}</a> : c.source}</> : null}{c.year ? ` · ${c.year}` : ""}</li>)}

@@ -82,7 +82,8 @@ def test_search_route_gathers_the_components_then_computes_a_worked_out_target(m
                "working": "Nomis puts Blackpool at 64,000 households (2023). HBAI gives the North West bands as 45 / 38 / 17 (2023), applied to Blackpool.",
                "components": [{"statistic": "households", "value": "64,000", "source": "Nomis Labour Market Profile", "year": "2023", "url": "https://nomis/x"},
                               {"statistic": "income bands North West", "value": "45% / 38% / 17%", "source": "HBAI", "year": "2023", "url": "https://gov/y"}],
-               "geography": "Blackpool (North West pattern applied)", "year": "2023", "confidence": 55, "caveat": "regional bands, not the town's own", "refusal": ""}
+               "geography": "Blackpool (North West pattern applied)", "year": "2023", "confidence": 55, "caveat": "regional bands, not the town's own", "refusal": "",
+               "assumptions": ["Blackpool's income bands follow the North West pattern"], "basis": "mostly_published"}
     rows = [_Row("https://nomis/x", [{"statistic": "households", "value": "64,000", "group": "households", "geography": "Blackpool", "year": "2023"}], label="Nomis")]
     calls = _stub(monkeypatch, plan=plan, compute=compute, rows=rows)
     logged = []
@@ -94,6 +95,9 @@ def test_search_route_gathers_the_components_then_computes_a_worked_out_target(m
     assert tg["status"] == "worked_out" and tg["provenance"] == "derived_statistic" and len(tg["categories"]) == 3
     assert tg["working"].startswith("Nomis puts") and tg["components"][1]["url"] == "https://gov/y" and tg["confidence"] == 55
     assert tg["source"] == "worked out from Nomis Labour Market Profile; HBAI" and tg["note"] == "regional bands, not the town's own"
+    # Flagged as an educated assumption: the assumptions it rests on and how much of it is published travel with it.
+    assert tg["assumptions"] == ["Blackpool's income bands follow the North West pattern"] and tg["basis"] == "mostly_published"
+    assert any("educated assumption" in m for _, m in logged)
     # The components became fact targets routed to the named publishers plus those covering the dimension, capped.
     targets, keys, kw = calls["gather"][0]
     assert [t["fact"] for t in targets] == ["households in Blackpool", "household income bands North West"] and all(t["rounds"] == 1 for t in targets)
@@ -124,6 +128,10 @@ def test_attitudes_are_never_worked_out_and_a_refusal_or_thin_answer_stays_missi
     assert refused["status"] == "missing" and "denominator" in refused["note"]
     thin = workout.target_from_compute({"ok": True, "categories": [{"label": "only one", "share_pct": 100}], "working": "w", "components": []}, INCOME, "Blackpool", "m")
     assert thin["status"] == "missing"
+    # Leniency is in the prompt: partial parts are enough, refusal only when nothing bears on the dimension.
+    assert "BE LENIENT" in workout.COMPUTE_SYSTEM and "ONLY when not one figure" in workout.COMPUTE_SYSTEM
+    bare = workout.target_from_compute({"ok": True, "categories": [{"label": "A", "share_pct": 50}, {"label": "B", "share_pct": 50}], "working": "w", "components": []}, INCOME, "Blackpool", "m")
+    assert bare["assumptions"] == [] and bare["basis"] == "published"
 
 
 def test_a_worked_out_target_is_matched_weighted_and_named_in_the_report():
@@ -133,7 +141,7 @@ def test_a_worked_out_target_is_matched_weighted_and_named_in_the_report():
     assert frame.active_targets(fr) == [(INCOME, worked)]
     rep = frame.build_report(fr, [{"id": "s1", "share_pct": 100, "income_band": "low", "frame_values": [{"dimension": "income", "value": "Low"}]}], 10)
     assert rep["worked_out"] == ["income"] and rep["matched_exactly"] == ["income"] and rep["level"] != "none"
-    assert "worked out from published figures: Household income" in frame.summary_line(rep)
+    assert "worked out from published figures as educated assumptions: Household income" in frame.summary_line(rep)
     assert frame.proxy_target(fr, "income")["status"] == "proxy"
 
 

@@ -488,7 +488,7 @@ def summary_line(report: Optional[dict]) -> str:
     ess = report.get("ess")
     parts = [f"Frame match {report['level']} (worst cell {report['worst_deviation_pts']} pts off)", f"matched exactly on {exact}", f"weighted on {weighted}"]
     if worked:
-        parts.append(f"worked out from published figures: {', '.join(worked)}")
+        parts.append(f"worked out from published figures as educated assumptions: {', '.join(worked)}")
     if est:
         parts.append(f"model-estimated: {', '.join(est)}")
     if ess is not None and report.get("n"):

@@ -82,7 +82,8 @@ async def _context(session_id: str, question: str, db: AsyncSession, records: Op
             for d in (bld.frame.get("dimensions") or []):
                 tg = (bld.frame.get("targets") or {}).get(d["key"]) or {}
                 lines.append(f"- {d['label']}: {tg.get('status', 'missing').replace('_', ' ')}" + (f" — {tg.get('source')} ({tg.get('geography') or ''} {tg.get('year') or ''})".rstrip() if tg.get("source") else "")
-                             + (f"; working: {tg.get('working')}" if tg.get("status") == "worked_out" and tg.get("working") else ""))
+                             + (f" — an educated assumption worked out from published figures; working: {tg.get('working')}" if tg.get("status") == "worked_out" and tg.get("working") else "")
+                             + (f"; assumptions: {'; '.join(tg.get('assumptions') or [])}" if tg.get("status") == "worked_out" and tg.get("assumptions") else ""))
             if lines:
                 frame_text += "\n" + "\n".join(lines)
         if bld and (bld.plan or {}).get("playbook"):
