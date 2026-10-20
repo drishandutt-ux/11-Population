@@ -103,6 +103,13 @@ def test_check_parsing_and_prompt():
     ]})
     assert out["ok"] is False and [b["kind"] for b in out["breaches"]] == ["clinical_claim"] and out["breaches"][0]["label"] == "clinical claim without training"
     assert standing.parse_check({}) == {"ok": True, "breaches": []}
+    # the judge's over-eager habits on prod: a hedged place remark, and a breach it itself calls appropriate
+    out = standing.parse_check({"breaches": [
+        {"kind": "place_as_fact", "quote": "From what I've heard about Blackpool surgeries being rammed", "why": "states conditions as fact"},
+        {"kind": "place_as_fact", "quote": "I'd get a half-decent service from my surgery on Elms Road", "why": "this is a general claim about their own known area (Oxford), which is appropriate, but"},
+        {"kind": "place_as_fact", "quote": "the surgery on Dickson Road is a different locum every week", "why": "the author lives in Oxford"},
+    ]})
+    assert [b["quote"][:12] for b in out["breaches"]] == ["the surgery "]
     prompt = standing.check_prompt({"lived": "carer", "lived_detail": "her mum", "professional": "GP", "professional_field": "primary care", "expertise": "professional", "known_places": ["Oxford"]}, "post text", "the question")
     assert "AS A CARER — her mum" in prompt and "GP — primary care" in prompt and "places known first-hand: Oxford" in prompt and "THE POST\npost text" in prompt
 

@@ -338,16 +338,29 @@ def check_prompt(standing: dict, post: str, query: str) -> str:
             f"- places known first-hand: {known}\n\nTHE POST\n{post[:2400]}")
 
 
+_HEDGED = re.compile(r"^\W*(from what i('ve| have)? (heard|read|seen)|i('ve| have)? (heard|read)|i hear|apparently|they say|people say|so i('m| am)? told|i gather|reportedly)\b", re.I)
+_OWN_GROUND = re.compile(r"\b(appropriate|their own (known )?(area|place|surgery|town|geography|experience)|own lived|within their|is fine|not a breach)\b", re.I)
+
+
 def parse_check(res: Any) -> dict:
-    """The judge's output → {ok, breaches: [{kind, label, quote, why}]} with unknown kinds dropped."""
+    """The judge's output → {ok, breaches: [{kind, label, quote, why}]} with unknown kinds dropped.
+    Two over-eager habits of the judge are filtered here (seen on prod 2026-10-20): a place
+    breach whose quote is already hedged ("From what I've heard about Blackpool…") and a breach
+    whose own reasoning says the words were on the author's own ground ("appropriate to their
+    own area, but…")."""
     out = []
     for b in (res or {}).get("breaches") or []:
         if not isinstance(b, dict) or b.get("kind") not in BREACH_KINDS:
             continue
         q = _text(b.get("quote"), 160)
+        why = _text(b.get("why"), 160)
         if not q:
             continue
-        out.append({"kind": b["kind"], "label": BREACH_LABELS[b["kind"]], "quote": q, "why": _text(b.get("why"), 160)})
+        if b["kind"] == "place_as_fact" and _HEDGED.search(q):
+            continue
+        if _OWN_GROUND.search(why):
+            continue
+        out.append({"kind": b["kind"], "label": BREACH_LABELS[b["kind"]], "quote": q, "why": why})
     return {"ok": not out, "breaches": out[:4]}
 
 
