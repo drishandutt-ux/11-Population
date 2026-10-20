@@ -1039,13 +1039,23 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
                       else f"Could not rebalance the plan to the frame within bounds (worst cell stays {rb['before']} pts off on {', '.join(rb['rows'])})", None)
     archetypes_mod.assign_archetypes(segments, await load_archetypes(bld.session_id))
     auto, v_set = voice_setting(bld.constraints)
-    try:
-        v_used = max(0, min(100, int(p.get("voice_value") if auto else v_set)))
-    except (TypeError, ValueError):
+    voice_reason = str(p.get("voice_reason") or "").strip()[:300]
+    # coerce() fills a field the planner left out with 0 — which is the Expert end of this dial, so a
+    # long plan that ran out of room before voice_value would write every ordinary person as a measured
+    # expert (2026-10-20, a patient population). A 0 with no reason attached is "not chosen": the
+    # population keeps its natural voices at 50 and the log says so.
+    raw_v = p.get("voice_value")
+    chosen = isinstance(raw_v, (int, float)) and not isinstance(raw_v, bool) and (int(raw_v) != 0 or bool(voice_reason))
+    if not auto:
         v_used = v_set
+    elif chosen:
+        v_used = max(0, min(100, int(raw_v)))
+    else:
+        v_used = 50
+        voice_reason = "The planner did not choose a value, so the population keeps each group's natural voice."
     plan = {"segments": segments, "rationale": p.get("rationale", ""), "assumptions": p.get("assumptions") or [], "evidence_coverage": p.get("evidence_coverage", ""),
-            "voice": {"auto": auto, "value": v_used, "reason": str(p.get("voice_reason") or "")[:300]}}
-    await log(build_id, "plan", "decision", f"Expert ↔ Reactive: {v_used}/100" + (" — chosen by the system" if auto else " — set by you") + (" (natural voices; the population is composed as the real demographic)" if 40 <= v_used <= 60 else " (voices lean measured and evidence-led)" if v_used < 40 else " (voices lean feeling-led, from their own lives)") + " — shapes how personas speak, not who they are", plan["voice"]["reason"] or None)
+            "voice": {"auto": auto, "value": v_used, "reason": voice_reason}}
+    await log(build_id, "plan", "decision", f"Expert ↔ Reactive: {v_used}/100" + (" — chosen by the system" if auto and chosen else " — not chosen by the system; natural voices kept" if auto else " — set by you") + (" (natural voices; the population is composed as the real demographic)" if 40 <= v_used <= 60 else " (voices lean measured and evidence-led)" if v_used < 40 else " (voices lean feeling-led, from their own lives)") + " — shapes how personas speak, not who they are", plan["voice"]["reason"] or None)
     # The population facets: the 5–15 cell types the analyst reads the population by (the Studio's map).
     facets = (bld.plan or {}).get("facets") if keep and (bld.plan or {}).get("facets") else None
     if not facets:
