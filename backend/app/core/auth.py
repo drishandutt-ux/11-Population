@@ -249,16 +249,23 @@ async def user_from_ws_token(token: Optional[str]) -> Optional[AuthUser]:
 
 # ── Ownership helpers ────────────────────────────────────────────────────────
 
-async def get_owned_session(session_id: str, user: AuthUser, db):
-    """Load a session the caller owns, or 404 (never reveal other users' ids)."""
+async def get_owned_session(session_id: str, user: AuthUser, db, *, strict: bool = False):
+    """Load a session the caller may work in, or 404 (never reveal other users' ids): the owner,
+    an admin, or — since 2026-10-20 — a colleague the session was shared with, who gets the whole
+    session (every tab, every tool, the chat). `strict=True` keeps it to the owner and admins:
+    deleting the session and deciding who it is shared with."""
     from sqlalchemy import select
     from app.models.session import AnalysisSession
 
     result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
     session = result.scalar_one_or_none()
-    if not session or not owns(session, user):
+    if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return session
+    if owns(session, user):
+        return session
+    if not strict and await is_shared_with(session_id, user, db):
+        return session
+    raise HTTPException(status_code=404, detail="Session not found")
 
 
 async def is_shared_with(session_id: str, user: AuthUser, db) -> bool:
@@ -270,18 +277,9 @@ async def is_shared_with(session_id: str, user: AuthUser, db) -> bool:
 
 
 async def get_accessible_session(session_id: str, user: AuthUser, db):
-    """Load a session the caller owns OR has had shared with them, or 404. Sharing grants the
-    shared chat and the read-only summary it shows — never the owner's controls, which keep
-    using `get_owned_session`."""
-    from sqlalchemy import select
-    from app.models.session import AnalysisSession
-
-    session = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if owns(session, user) or await is_shared_with(session_id, user, db):
-        return session
-    raise HTTPException(status_code=404, detail="Session not found")
+    """The owner, an admin, or a colleague the session was shared with — the same gate as
+    `get_owned_session` without `strict` (kept as a name for the sharing endpoints)."""
+    return await get_owned_session(session_id, user, db)
 
 
 def owns(session, user: AuthUser) -> bool:

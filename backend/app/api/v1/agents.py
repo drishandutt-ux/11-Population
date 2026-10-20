@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.agent import SpawnedAgent
 from app.models.session import AnalysisSession
-from app.core.auth import AuthUser, get_current_user, get_owned_session, owns
+from app.core.auth import is_shared_with, AuthUser, get_current_user, get_owned_session, owns
 
 router = APIRouter(tags=["agents"])
 
@@ -47,7 +47,7 @@ async def _owned_agent(agent_id: str, user: AuthUser, db: AsyncSession) -> Spawn
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == agent.session_id))).scalar_one_or_none()
-    if not sess or not owns(sess, user):
+    if not sess or not (owns(sess, user) or await is_shared_with(sess.id, user, db)):   # a colleague the session was shared with works in it too (2026-10-20)
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 

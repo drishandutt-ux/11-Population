@@ -23,7 +23,7 @@ export default function SharedList({ variant = "pro" }: { variant?: "pro" | "lit
         <h2 className="text-sm font-medium text-foreground mb-3">Shared sessions</h2>
         <div className="space-y-2">
           {items.map((s) => (
-            <button key={s.id} type="button" onClick={() => router.push(`/shared/${s.id}`)} className="w-full text-left lite-card px-4 py-3.5 hover:border-foreground/20 transition-colors flex items-center gap-4">
+            <button key={s.id} type="button" onClick={() => router.push(`/lite/${s.id}`)} className="w-full text-left lite-card px-4 py-3.5 hover:border-foreground/20 transition-colors flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">{s.title}</div>
                 <div className="text-xs text-muted-foreground truncate">{s.query}</div>
@@ -48,8 +48,8 @@ export default function SharedList({ variant = "pro" }: { variant?: "pro" | "lit
           <div
             key={s.id}
             className="w-full border border-border/60 rounded-md px-3.5 py-3 text-left transition-all cursor-pointer hover:border-primary/30 hover:bg-muted/30"
-            onClick={() => router.push(`/shared/${s.id}`)}
-            title="Open the shared chat"
+            onClick={() => router.push(`/session/${s.id}`)}
+            title="Open the session"
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">

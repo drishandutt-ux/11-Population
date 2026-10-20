@@ -223,7 +223,7 @@ async def generate_agent_opinions(
 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    session = await get_owned_session(session_id, user, db)
+    session = await get_owned_session(session_id, user, db, strict=True)   # a colleague it was shared with cannot delete it
     await db.delete(session)
     await db.commit()
     from app.services.knowledge_graph.lightrag_service import forget

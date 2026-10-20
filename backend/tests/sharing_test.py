@@ -60,10 +60,13 @@ def test_peers_sharing_and_the_shared_chat(auth_on, client, monkeypatch):
     assert len(mine) == 1 and mine[0]["id"] == sid and mine[0]["direction"] == "by_you" and mine[0]["with"] == ["ben"]
     assert client.get("/api/v1/shared-sessions", headers=c).json() == []
     assert client.get("/api/v1/sessions", headers=b).json() == []
-    assert client.get(f"/api/v1/sessions/{sid}", headers=b).status_code == 404          # sharing is the chat, not the owner's pages
+    assert client.get(f"/api/v1/sessions/{sid}", headers=b).status_code == 200          # sharing opens the whole session …
+    assert client.get(f"/api/v1/sessions/{sid}/posts", headers=b).status_code == 200
+    assert client.delete(f"/api/v1/sessions/{sid}", headers=b).status_code == 404       # … but not deleting it, nor the share list
+    assert client.get(f"/api/v1/sessions/{sid}/shares", headers=b).status_code == 404
     assert client.get(f"/api/v1/sessions/{sid}/shared-chat", headers=c).status_code == 404
     chat = client.get(f"/api/v1/sessions/{sid}/shared-chat", headers=b).json()
-    assert chat["you"]["is_owner"] is False and chat["you"]["can_open"] is False and chat["messages"] == [] and chat["report"] is None
+    assert chat["you"]["is_owner"] is False and chat["you"]["can_open"] is True and chat["messages"] == [] and chat["report"] is None
     assert client.get(f"/api/v1/sessions/{sid}/shared-chat", headers=a).json()["you"]["is_owner"] is True
 
     # people talk; the report agent answers an @report mention in a message of its own
@@ -107,6 +110,7 @@ def test_peers_sharing_and_the_shared_chat(auth_on, client, monkeypatch):
     # a colleague leaves; the owner can also remove; the chat closes for them
     assert client.delete(f"/api/v1/sessions/{sid}/shares/{B}", headers=b).json()["removed"] == 1
     assert client.get(f"/api/v1/sessions/{sid}/shared-chat", headers=b).status_code == 404
+    assert client.get(f"/api/v1/sessions/{sid}", headers=b).status_code == 404            # and the session is closed to them again
     assert client.get("/api/v1/shared-sessions", headers=b).json() == []
     assert client.get("/api/v1/shared-sessions", headers=a).json() == []   # nothing shared out any more either
 

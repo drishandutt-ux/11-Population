@@ -62,7 +62,7 @@ export default function ShareDialog({ sessionId, title, onClose, onChanged }: { 
           <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Close"><X className="w-4 h-4" /></button>
         </div>
         <p className="text-[11px] text-muted-foreground mb-3">
-          Colleagues you pick see it under <span className="text-foreground">Shared with you</span> and open a chat where you can all talk about it and ask the report with <code className="text-primary">@report</code>. They do not get your controls.
+          Colleagues you pick see it under <span className="text-foreground">Shared</span> and open the whole session — every tab and tool, and the Chat tab where you can all talk about it and ask the report with <code className="text-primary">@report</code>. Only you can delete it or change who it is shared with.
         </p>
         {owner && <p className="text-[11px] text-muted-foreground mb-2">Owner: <span className="text-foreground">{owner.name}</span>{owner.email ? ` · ${owner.email}` : ""}</p>}
         <div className="relative mb-2">

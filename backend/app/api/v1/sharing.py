@@ -4,8 +4,9 @@ Everyone signed in on the same email domain is a peer. A session's owner shares 
 more peers; for them it appears under *Shared with you* on the landing page and opens as a chat
 page where the owner and the people it is shared with talk to each other and, with `@report`,
 to the report agent — the same Ask-Report that answers from the session's records, evidence and
-transcript. Sharing grants exactly that: the chat and the read-only summary it shows. The
-session's own pages and every control stay the owner's (`get_owned_session`).
+transcript. Sharing (since the follow-up the same day) grants the whole session — every tab, every tool and
+the chat — through `get_owned_session`; only deleting it and deciding who it is shared with stay
+the owner's (`strict=True`).
 """
 from __future__ import annotations
 
@@ -95,7 +96,7 @@ async def _members(session: AnalysisSession, db: AsyncSession) -> list[dict]:
 
 @router.get("/sessions/{session_id}/shares")
 async def get_shares(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    session = await get_owned_session(session_id, user, db)
+    session = await get_owned_session(session_id, user, db, strict=True)
     return {"members": await _members(session, db)}
 
 
@@ -103,7 +104,7 @@ async def get_shares(session_id: str, user: AuthUser = Depends(get_current_user)
 async def set_shares(session_id: str, body: SharesBody, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Replace the set of colleagues this session is shared with. Only peers on the owner's
     domain can be named (400 otherwise); the owner is never a share."""
-    session = await get_owned_session(session_id, user, db)
+    session = await get_owned_session(session_id, user, db, strict=True)
     await ensure_profile(user, db)
     peers = {_uid(p.id): p for p in await _domain_profiles(user, db)}
     wanted: list[str] = []
@@ -218,7 +219,7 @@ async def get_shared_chat(session_id: str, user: AuthUser = Depends(get_current_
         "session": {"id": session.id, "title": session.title, "query": session.query, "status": getattr(session.status, "value", session.status),
                     "agent_count": session.agent_count, "created_at": session.created_at, "updated_at": session.updated_at},
         "owner": {"id": session.user_id, "email": owner["email"] if owner else None, "name": owner["name"] if owner else "owner"},
-        "you": {"id": user.id, "is_owner": owns(session, user) and (user.is_dev or _uid(session.user_id) == _uid(user.id)), "can_open": owns(session, user)},
+        "you": {"id": user.id, "is_owner": owns(session, user) and (user.is_dev or _uid(session.user_id) == _uid(user.id)), "can_open": True},
         "members": members,
         "messages": [_msg(m) for m in reversed(msgs)],
         "report": await _latest_report(session_id, db),

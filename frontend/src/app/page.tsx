@@ -241,14 +241,14 @@ export default function HomePage() {
               </div>
               <div className="space-y-1.5 overflow-y-auto flex-1">
                 {scope === "shared" && shared.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-1 py-4">No shared sessions yet. Share one of yours with the share icon on its card, or wait for a colleague to share one with you — either way it appears here and opens as a chat.</p>
+                  <p className="text-xs text-muted-foreground px-1 py-4">No shared sessions yet. Share one of yours with the share icon on its card, or wait for a colleague to share one with you — either way it appears here and opens as the full session, with a Chat tab.</p>
                 )}
                 {scope === "shared" && shared.map((s) => (
                   <div
                     key={s.id}
                     className="w-full border border-border/60 rounded-md px-3.5 py-3 text-left transition-all cursor-pointer hover:border-primary/30 hover:bg-muted/30"
-                    onClick={() => router.push(`/shared/${s.id}`)}
-                    title="Open the chat"
+                    onClick={() => router.push(`/session/${s.id}`)}
+                    title="Open the session — every tab, and the Chat tab"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1 min-w-0">
