@@ -110,7 +110,7 @@ async def decide_segment(session_id: str, build_id: str, segment_id: str, body: 
 
 
 class FrameActionRequest(BaseModel):
-    action: str                                   # estimate | upload | proxy | skip
+    action: str                                   # work_out | estimate | upload | proxy | skip
     categories: Optional[list[dict]] = None       # upload: [{label, share_pct, age_min?, age_max?}]
     source: Optional[str] = ""
     proxy_of: Optional[str] = None                # proxy: the dimension key whose distribution stands in
@@ -131,7 +131,7 @@ async def frame_estimate_all(session_id: str, build_id: str, user: AuthUser = De
 
 @router.post("/sessions/{session_id}/population/builds/{build_id}/frame/{dim_key}")
 async def frame_action(session_id: str, build_id: str, dim_key: str, body: FrameActionRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """The ladder for one frame dimension: estimate · upload · proxy · skip."""
+    """The ladder for one frame dimension: work_out (from published parts, with the working shown) · estimate · upload · proxy · skip."""
     bld = await _owned_build(session_id, build_id, user, db)
     if bld.status in ("spawning", "detecting", "gathering", "planning"):
         raise HTTPException(status_code=409, detail=f"Build is {bld.status}")

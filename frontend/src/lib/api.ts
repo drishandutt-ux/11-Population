@@ -342,7 +342,7 @@ export const api = {
     get: (sessionId: string, buildId: string) => request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}`),
     answer: (sessionId: string, buildId: string, answers: Record<string, string>, skip = false) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/answers`, { method: "POST", body: JSON.stringify({ answers, skip }) }),
-    frameAction: (sessionId: string, buildId: string, dimKey: string, body: { action: "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) =>
+    frameAction: (sessionId: string, buildId: string, dimKey: string, body: { action: "work_out" | "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/frame/${encodeURIComponent(dimKey)}`, { method: "POST", body: JSON.stringify(body) }),
     frameEstimateAll: (sessionId: string, buildId: string) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/frame/estimate-all`, { method: "POST" }),
@@ -1499,7 +1499,9 @@ export type PopulationDetected = {
 // ── The sampling frame (Studio; brief L2-01…L2-05) ───────────────────────────
 export type FrameCategory = { label: string; share_pct: number; age_min?: number; age_max?: number };
 export type FrameDimension = { key: string; label: string; attribute: string; kind: "demographic" | "behavioural" | "attitudinal"; why: string; matchable: boolean; proxy_attribute: string; equity?: boolean; level?: "quintile" | "decile" };
-export type FrameTarget = { status: "found" | "proxy" | "uploaded" | "estimated" | "skipped" | "missing"; categories: FrameCategory[]; source: string; year: string; geography: string; proxy_attribute: string; note: string; provenance?: string; confidence?: number };
+export type FrameComponent = { statistic: string; value: string; source: string; year?: string; url?: string };
+// worked_out (2026-10-20): computed from published parts; `working` is the calculation in words, `components` the figures it used.
+export type FrameTarget = { status: "found" | "proxy" | "uploaded" | "worked_out" | "estimated" | "skipped" | "missing"; categories: FrameCategory[]; source: string; year: string; geography: string; proxy_attribute: string; note: string; provenance?: string; confidence?: number; working?: string; method?: string; components?: FrameComponent[] };
 export type FrameReportCell = { label: string; target_pct: number; planned_pct: number; achieved_pct: number | null; achieved_n: number | null; expected_n: number; thin: boolean };
 export type FrameReportDim = { key: string; label: string; attribute: string; status: string; source: string; year: string; geography: string; provenance: string; priority: number; mode: "exact" | "weighted" | "unmatched"; cells?: FrameReportCell[]; max_deviation_planned?: number; max_deviation_achieved?: number | null; unplaced?: number | null };
 export type FrameReport = { level: "good" | "fair" | "poor" | "none"; worst_deviation_pts: number; matched_exactly: string[]; weighted_only: string[]; unmatched: string[]; estimated: string[]; dimensions: FrameReportDim[]; thin_cells: string[]; stage: "planned" | "achieved"; n: number | null; ess: number | null };

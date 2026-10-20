@@ -13,7 +13,7 @@ import Detail, { DetailLink } from "@/components/lite/Detail";
 import InputDialog, { InputKind } from "@/components/lite/InputDialog";
 import { proLinks, stanceWords } from "@/lib/lite";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, BookOpen, Check, ChevronDown, Circle, FileText, Globe, Layers, Loader2, MessageSquare, Minus, Paperclip, ScrollText, Search, Sparkles, User, Users } from "lucide-react";
+import { AlertTriangle, BookOpen, Calculator, Check, ChevronDown, Circle, FileText, Globe, Layers, Loader2, MessageSquare, Minus, Paperclip, ScrollText, Search, Sparkles, User, Users } from "lucide-react";
 
 type Props = {
   sessionId: string;
@@ -58,15 +58,18 @@ function list(items: string[], max = 3): string {
   return `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
 }
 
-type Standing = "matched" | "assumed" | "none";
+type Standing = "matched" | "worked" | "assumed" | "none";
+const WORKED = "#0e7490";
 function standing(t: FrameTarget | undefined): Standing {
   if (!t || t.status === "skipped" || t.status === "missing") return "none";
   if (t.status === "estimated") return "assumed";
+  if (t.status === "worked_out") return "worked";
   return "matched";
 }
 function standingWord(s: Standing, t?: FrameTarget): string {
   if (s === "none") return "No figure found";
   if (s === "assumed") return "Assumed";
+  if (s === "worked") return "Worked out";
   if (t?.status === "uploaded") return "Your upload";
   if (t?.status === "proxy") return "Closest figure";
   return "Published figure";
@@ -137,7 +140,8 @@ export default function HowMade({ sessionId, question, build, agents, research, 
 
   const dims = frame?.dimensions || [];
   const standings = dims.map((d) => standing(frame?.targets?.[d.key]));
-  const matched = standings.filter((s) => s === "matched").length;
+  const matched = standings.filter((s) => s === "matched" || s === "worked").length;
+  const worked = standings.filter((s) => s === "worked").length;
   const reportDims: Record<string, FrameReportDim> = Object.fromEntries((frame?.report?.dimensions || []).map((d) => [d.key, d]));
 
   const assumed: string[] = [...(plan.assumptions || [])];
@@ -268,7 +272,7 @@ export default function HowMade({ sessionId, question, build, agents, research, 
         {dims.length > 0 && (
           <Detail href={studioHref}>
             <Fold title="Matched to published figures" line={matchLine}>
-              <p className="lite-help">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.</p>
+              <p className="lite-help">Each row is one thing the mix of people should match. The cells show how far the people sit from the published share — paler is closer.{worked ? " A figure marked Worked out was computed from published parts; hover it, or open Published statistics above, for the working." : ""}</p>
               <div className="mt-3 space-y-2">
                 {dims.map((d, i) => {
                   const t = frame?.targets?.[d.key];
@@ -278,15 +282,16 @@ export default function HowMade({ sessionId, question, build, agents, research, 
                   // Nobody placed on this scale yet (every cell empty): the heat strip would read as "0%" everywhere, which is not what happened.
                   const unplaced = allCells.length > 0 && allCells.every((cc) => !(cc.achieved_n || 0) && !(cc.achieved_pct || 0) && !(cc.planned_pct || 0));
                   const cells = unplaced ? [] : allCells;
-                  const colour = st === "matched" ? GOOD : st === "assumed" ? WARN : NONE;
+                  const colour = st === "matched" ? GOOD : st === "worked" ? WORKED : st === "assumed" ? WARN : NONE;
                   const src = t && st !== "none" ? [t.source, t.year].filter(Boolean).join(", ") : "";
+                  const tip = st === "worked" ? [t?.working, src].filter(Boolean).join("\n") : (src || t?.note || "");
                   return (
                     <div key={d.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:grid-cols-[170px_minmax(0,1fr)] gap-x-3 items-center">
                       <div className="min-w-0">
                         <p className="text-[13px] font-medium text-foreground truncate" title={d.why}>{d.label}</p>
-                        <p className="text-[11.5px] text-muted-foreground inline-flex items-center gap-1 truncate max-w-full" title={src || t?.note || ""}>
+                        <p className="text-[11.5px] text-muted-foreground inline-flex items-center gap-1 truncate max-w-full" title={tip}>
                           <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: colour }} aria-hidden />
-                          {st === "matched" ? <Check className="w-3 h-3 shrink-0" style={{ color: GOOD }} /> : st === "assumed" ? <AlertTriangle className="w-3 h-3 shrink-0" style={{ color: WARN }} /> : <Minus className="w-3 h-3 shrink-0" />}
+                          {st === "matched" ? <Check className="w-3 h-3 shrink-0" style={{ color: GOOD }} /> : st === "worked" ? <Calculator className="w-3 h-3 shrink-0" style={{ color: WORKED }} /> : st === "assumed" ? <AlertTriangle className="w-3 h-3 shrink-0" style={{ color: WARN }} /> : <Minus className="w-3 h-3 shrink-0" />}
                           <span className="truncate">{standingWord(st, t)}{src ? ` · ${src}` : ""}</span>
                         </p>
                       </div>

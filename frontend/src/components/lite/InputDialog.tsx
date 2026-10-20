@@ -13,7 +13,7 @@ import Link from "next/link";
 import { api, DynamicDial, EvidenceItem, FrameTarget, KgSources, PopulationBuild, ResearchState } from "@/lib/api";
 import { proLinks } from "@/lib/lite";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ArrowUpRight, Check, ChevronDown, FileText, Globe, Layers, Loader2, Minus, Paperclip, Search, User, X } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Calculator, Check, ChevronDown, FileText, Globe, Layers, Loader2, Minus, Paperclip, Search, User, X } from "lucide-react";
 
 export type InputKind = "question" | "profile" | "survey" | "added" | "research" | "statistics";
 
@@ -418,7 +418,8 @@ function StatisticsBody(p: Props) {
   const usable = p.facts.filter((e) => (e.structured?.facts || []).length > 0 && !e.excluded);
   const facts = usable.flatMap((e) => ((e.structured?.facts || []) as any[]).map((f) => ({ ...f, page: e, rel: e.relevance || 0, label: e.structured?.source_label || e.author || host(e.source_ref) })))
     .sort((a, b) => b.rel - a.rel);
-  const matched = dims.filter((d) => { const t = frame?.targets?.[d.key]; return t && (t.status === "found" || t.status === "proxy" || t.status === "uploaded"); }).length;
+  const matched = dims.filter((d) => { const t = frame?.targets?.[d.key]; return t && (t.status === "found" || t.status === "proxy" || t.status === "uploaded" || t.status === "worked_out"); }).length;
+  const workedOut = dims.filter((d) => frame?.targets?.[d.key]?.status === "worked_out").length;
   const byPublisher = new Map<string, number>();
   for (const e of usable) { const k = e.structured?.source_label || e.author || host(e.source_ref); byPublisher.set(k, (byPublisher.get(k) || 0) + (e.structured?.facts || []).length); }
 
@@ -435,7 +436,7 @@ function StatisticsBody(p: Props) {
       <Para>
         <Num>{publishers.length}</Num> {publishers.length === 1 ? "publisher was" : "publishers were"} searched for base rates about {det?.target_population ? <strong className="font-medium text-foreground">{det.target_population}</strong> : "these people"}{inPlace(det?.target_population, frame?.geography || det?.geography)}{src.quant_auto ? ", picked for that place automatically" : ""}.
         {usable.length ? <> <Num>{usable.length}</Num> {usable.length === 1 ? "page" : "pages"} carried usable figures — <Num>{facts.length}</Num> {facts.length === 1 ? "statistic" : "statistics"} in all, from <Num>{byPublisher.size}</Num> {byPublisher.size === 1 ? "publisher" : "publishers"}.</> : " No page read so far carried a usable figure."}
-        {dims.length ? <> Figures were found for <Num>{matched}</Num> of the <Num>{dims.length}</Num> things the people should match.</> : null}
+        {dims.length ? <> Figures were found for <Num>{matched}</Num> of the <Num>{dims.length}</Num> things the people should match{workedOut ? <>, <Num>{workedOut}</Num> of them worked out from published parts rather than read off one page</> : null}.</> : null}
       </Para>
       <Stats items={[
         { value: String(publishers.length), label: "publishers searched" },
@@ -448,17 +449,17 @@ function StatisticsBody(p: Props) {
         {byPublisher.size > 0 && <p className="lite-help mt-2">A number on a chip is how many statistics that publisher gave.</p>}
       </Section>
       {dims.length > 0 && (
-        <Section title="What the people had to match" help="One row per thing the mix of people should match, and where its figure came from.">
+        <Section title="What the people had to match" help="One row per thing the mix of people should match, and where its figure came from. A figure no page states outright is worked out from published parts, and the working is shown so you can check it.">
           <Table cols={["Thing to match", "Standing", "Figure"]} rows={dims.map((d) => {
             const t = frame?.targets?.[d.key];
             const st = standing(t);
             return [
               <span key="l" className="block"><strong className="font-medium text-foreground">{d.label}</strong>{d.why ? <span className="block text-[11.5px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">{d.why}</span> : null}</span>,
               <span key="s" className="inline-flex items-center gap-1 whitespace-nowrap">
-                {st === "matched" ? <Check className="w-3.5 h-3.5" style={{ color: GOOD }} /> : st === "assumed" ? <AlertTriangle className="w-3.5 h-3.5" style={{ color: WARN }} /> : <Minus className="w-3.5 h-3.5 text-muted-foreground" />}
+                {st === "matched" ? <Check className="w-3.5 h-3.5" style={{ color: GOOD }} /> : st === "worked" ? <Calculator className="w-3.5 h-3.5" style={{ color: WORKED }} /> : st === "assumed" ? <AlertTriangle className="w-3.5 h-3.5" style={{ color: WARN }} /> : <Minus className="w-3.5 h-3.5 text-muted-foreground" />}
                 <span className={st === "assumed" ? "text-amber-700" : st === "none" ? "text-muted-foreground" : "text-foreground"}>{standingWord(st, t)}</span>
               </span>,
-              t && st !== "none" ? <span key="f" className="block"><Shares t={t} /><span className="block text-[11.5px] text-muted-foreground mt-0.5">{[t.source, t.year, t.geography].filter(Boolean).join(" · ")}</span></span> : <span key="f" className="text-muted-foreground">{t?.note || "—"}</span>,
+              t && st !== "none" ? <span key="f" className="block"><Shares t={t} /><span className="block text-[11.5px] text-muted-foreground mt-0.5">{[t.source, t.year, t.geography].filter(Boolean).join(" · ")}{st === "worked" && typeof t.confidence === "number" ? ` · ${t.confidence}% sure` : ""}</span>{st === "worked" ? <Working t={t} /> : null}</span> : <span key="f" className="text-muted-foreground">{t?.note || "—"}</span>,
             ];
           })} />
         </Section>
@@ -490,18 +491,41 @@ function StatisticsBody(p: Props) {
 
 // ── Pieces ─────────────────────────────────────────────────────────────────────
 
-type Standing = "matched" | "assumed" | "none";
+type Standing = "matched" | "worked" | "assumed" | "none";
+const WORKED = "#0e7490";
 function standing(t: FrameTarget | undefined): Standing {
   if (!t || t.status === "skipped" || t.status === "missing") return "none";
   if (t.status === "estimated") return "assumed";
+  if (t.status === "worked_out") return "worked";
   return "matched";
 }
 function standingWord(s: Standing, t?: FrameTarget): string {
   if (s === "none") return "No figure found";
   if (s === "assumed") return "Assumed";
+  if (s === "worked") return "Worked out from published figures";
   if (t?.status === "uploaded") return "Your upload";
   if (t?.status === "proxy") return "Closest figure";
   return "Published figure";
+}
+/** How a worked-out figure was reached: the calculation in words, then the published figures it used, each linking to its page. */
+function Working({ t }: { t: FrameTarget }) {
+  const comps = t.components || [];
+  return (
+    <span className="block mt-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-2">
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">How it was worked out</span>
+      {t.working ? <span className="block text-[12px] text-foreground leading-snug mt-1">{t.working}</span> : null}
+      {comps.length > 0 && (
+        <span className="block mt-1.5 space-y-0.5">
+          {comps.map((c, i) => (
+            <span key={i} className="block text-[11.5px] text-muted-foreground leading-snug">
+              <strong className="font-medium text-foreground tabular-nums">{c.value}</strong> {c.statistic}{c.source ? <> · {c.url ? <a href={c.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground">{c.source}</a> : c.source}</> : null}{c.year ? ` · ${c.year}` : ""}
+            </span>
+          ))}
+        </span>
+      )}
+      {t.note ? <span className="block text-[11px] text-amber-700 mt-1">{t.note}</span> : null}
+    </span>
+  );
 }
 function kindWord(k: string): string {
   switch (k) {

@@ -81,7 +81,8 @@ async def _context(session_id: str, question: str, db: AsyncSession, records: Op
             lines = []
             for d in (bld.frame.get("dimensions") or []):
                 tg = (bld.frame.get("targets") or {}).get(d["key"]) or {}
-                lines.append(f"- {d['label']}: {tg.get('status', 'missing')}" + (f" — {tg.get('source')} ({tg.get('geography') or ''} {tg.get('year') or ''})".rstrip() if tg.get("source") else ""))
+                lines.append(f"- {d['label']}: {tg.get('status', 'missing').replace('_', ' ')}" + (f" — {tg.get('source')} ({tg.get('geography') or ''} {tg.get('year') or ''})".rstrip() if tg.get("source") else "")
+                             + (f"; working: {tg.get('working')}" if tg.get("status") == "worked_out" and tg.get("working") else ""))
             if lines:
                 frame_text += "\n" + "\n".join(lines)
         if bld and (bld.plan or {}).get("playbook"):

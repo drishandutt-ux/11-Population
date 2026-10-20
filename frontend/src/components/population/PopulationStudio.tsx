@@ -224,7 +224,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   const replan = () => guard(async () => { if (build) setBuild(await api.population.replan(id, build.id, { constraints: fullConstraints, count, keep_accepted: true })); });
   const approve = () => guard(async () => { if (build) { setSpawn({ current: 0, total: keptCount }); setLiveAgents([]); setBuild(await api.population.approve(id, build.id, { count, mode })); } });
   const stop = () => guard(async () => { if (build) await api.population.stop(id, build.id); });
-  const frameAction = async (dimKey: string, body: { action: "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) => {
+  const frameAction = async (dimKey: string, body: { action: "work_out" | "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) => {
     await guard(async () => { if (build) setBuild(await api.population.frameAction(id, build.id, dimKey, body)); });
   };
   const estimateAll = () => guard(async () => { if (build) setBuild(await api.population.frameEstimateAll(id, build.id)); });

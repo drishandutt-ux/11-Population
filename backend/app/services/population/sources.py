@@ -214,6 +214,11 @@ QUANT_SOURCES: list[dict] = [
      "phrasing": ["Our World in Data topic page", "share of population", "by country"],
      "description": "Long-run, sourced charts on population, technology, health and economy, with the values explained in prose.",
      "note": "Topic pages state the figures in text under each chart."},
+    {"key": "fingertips", "label": "OHID health profiles", "domain": "fingertips.phe.org.uk", "regions": ["england"], "kind": "official statistics", "fit": 2,
+     "covers": ["health", "habit", "deprivation", "age", "region"],
+     "phrasing": ["Public Health Profiles", "Local Authority Health Profile", "obesity prevalence local authority", "Fingertips indicator"],
+     "description": "Office for Health Improvement and Disparities' Fingertips: every public-health indicator by local authority, ICB and region — adult and child obesity, smoking, alcohol, diabetes and hypertension prevalence, life expectancy, deprivation score.",
+     "note": "The profile tool is JavaScript; the figures reach a reader through the search snippet, the printable Local Authority Health Profile and the API (fingertips.phe.org.uk/api). Take the local-authority value and the England value together."},
     # ── Opt-in ─────────────────────────────────────────────────────────────
     {"key": "statista", "label": "Statista", "domain": "statista.com", "regions": ["global"], "kind": "market data", "fit": 1,
      "covers": ["consumer", "tech", "price", "size"],
@@ -223,6 +228,166 @@ QUANT_SOURCES: list[dict] = [
 ]
 
 _BY_KEY = {src["key"]: src for src in QUANT_SOURCES}
+
+#: THE REGISTRY (2026-10-20). What each publisher actually holds, so the planners choose the publisher
+#: and the dataset *before* searching instead of discovering by trial what a site has: `holds` is the
+#: list of datasets or series the publisher stores — each with what it gives, the geographies it
+#: reaches, the years and how the number is reachable to an automated reader (prose in a bulletin,
+#: a static HTML table, a PDF, a spreadsheet the reader cannot open, an API) — and `cannot` is what
+#: it does not hold, so no search is spent there. The gather planners, the frame's search planner,
+#: the refine step and the work-it-out step are all shown it (`registry_for_prompt`).
+_HOLDINGS: dict[str, dict] = {
+    "ons": {"geographies": "UK · GB · England and Wales · England · regions · local authorities · MSOA/LSOA (census and small-area series)",
+            "holds": [
+                {"name": "Mid-year population estimates", "gives": "residents by single year of age and sex for every local authority, region and nation; annual", "geo": "nation → local authority", "how": "bulletin prose for the headlines; the local-authority numbers are in an xlsx the reader cannot open — Nomis holds the same table as HTML"},
+                {"name": "Census 2021 topic summaries (TS003 household composition, TS007 age, TS008 sex, TS011 deprivation dimensions, TS021 ethnic group, TS037 general health, TS054 tenure, TS062 NS-SeC, TS063 occupation, TS066 economic activity, TS067 highest qualification)", "gives": "the full distribution of each attribute for England and Wales, every local authority, MSOA and LSOA, 2021", "geo": "England and Wales → LSOA", "how": "ONS 'census maps' and dataset pages are JavaScript — the England and Wales totals are in the bulletin prose; for a named place use the same TS table on Nomis"},
+                {"name": "Annual Survey of Hours and Earnings (ASHE)", "gives": "median and decile weekly / hourly / annual pay by local authority, region, occupation (SOC) and sex; annual", "geo": "UK → local authority", "how": "bulletin prose for national and regional medians; place-level medians via Nomis Labour Market Profile"},
+                {"name": "Small area income estimates", "gives": "mean household income (total and after housing costs) for every MSOA; every two years", "geo": "England and Wales → MSOA", "how": "bulletin and article prose state regional and local-authority ranges; the MSOA table is xlsx"},
+                {"name": "Households below average income / Family Resources Survey (ONS republishes DWP)", "gives": "income quintile and poverty shares by region and household type", "geo": "UK → region", "how": "see gov.uk statistics"},
+                {"name": "Families and households; Households by tenure; Living costs and food survey", "gives": "household composition, tenure and spending by region and age", "geo": "UK → region", "how": "bulletin prose and tables"},
+                {"name": "Internet access – households and individuals; Internet users", "gives": "internet use, online shopping, device use by age, sex, region, disability; annual", "geo": "GB / UK → region", "how": "bulletin prose with the shares"},
+                {"name": "Personal well-being in the UK; Opinions and Lifestyle Survey (OPN) — Public opinions and social trends", "gives": "life satisfaction, anxiety and worthwhile scores by local authority; fortnightly shares on cost of living, NHS, worries, behaviours by age and sex", "geo": "UK → local authority (well-being); GB (OPN)", "how": "bulletin prose with the shares; the local-authority well-being table is xlsx"},
+                {"name": "Labour market overview / Annual Population Survey; Business demography", "gives": "employment, unemployment, inactivity rates by region and age; business births and deaths by local authority", "geo": "UK → region (local authority on Nomis)", "how": "bulletin prose"},
+                {"name": "Health state life expectancy; Deaths; Health index for England", "gives": "life expectancy and healthy life expectancy by local authority and deprivation decile; cause of death", "geo": "England → local authority", "how": "bulletin prose and articles"},
+                {"name": "Consumer price inflation; Retail sales; Household spending", "gives": "price indices, retail volumes and spending categories; monthly", "geo": "UK", "how": "bulletin prose"},
+            ],
+            "cannot": "brand or product usage, market shares, attitudes to companies, individual-level IMD deciles (the IMD itself is on gov.uk), anything local below region for surveys other than census, well-being and population"},
+    "nomis": {"geographies": "UK · nations · regions · local authorities · wards · MSOA/LSOA · constituencies",
+              "holds": [
+                  {"name": "Labour Market Profile (one per local authority, region, nation)", "gives": "total and working-age population; economic activity, employment and unemployment rates; employment by occupation (SOC major group) and industry; qualifications (NVQ levels / Level 1–4+); earnings by residence and workplace; claimant count; jobs density; businesses by size — each with the region and GB figure alongside", "geo": "nation → local authority", "how": "a static HTML report page with the tables in it: the best single page for a named town or council"},
+                  {"name": "Local Area Report / Census 2021 area profile", "gives": "age bands, sex, ethnic group, household composition, tenure, car availability, NS-SeC, economic activity, qualifications, health and disability for a named area, with the England and Wales share beside each", "geo": "nation → ward / MSOA", "how": "static HTML tables"},
+                  {"name": "Census 2021 TS tables (TS007A age, TS067 qualifications, TS054 tenure, TS062 NS-SeC, TS063 occupation, TS066 economic activity, TS003 household composition, TS021 ethnic group, TS037 general health, TS011 deprivation dimensions)", "gives": "the same census distributions as ONS for any named geography", "geo": "England and Wales → LSOA", "how": "query pages and 'ready made tables'; the dataset landing page describes the table, the numbers come from the query or the API (api/v01/dataset/<id>.data.csv)"},
+                  {"name": "Annual Population Survey; Claimant count; DWP benefit claimants; Jobseeker's Allowance; Workforce jobs; Business Register and Employment Survey", "gives": "labour-market rates and counts by local authority, quarterly / monthly", "geo": "UK → local authority", "how": "query pages; the Labour Market Profile summarises them"},
+              ],
+              "cannot": "income distributions (only earnings of employees), health conditions other than census general health, attitudes, anything after 2021 for census-only attributes"},
+    "govuk": {"geographies": "UK · England · regions · local authorities · LSOA (deprivation, low-income families, fuel poverty, schools)",
+              "holds": [
+                  {"name": "English Indices of Deprivation 2019 (IMD)", "gives": "every LSOA's IMD rank and decile and the seven domains; local-authority summaries — share of a council's neighbourhoods in the most deprived 10% and in each decile, average rank, rank of average score", "geo": "England → LSOA", "how": "the statistical release prose states the national picture and names the most deprived councils (Blackpool, Jaywick); the local-authority summary is 'File 10' xlsx — a council's own IMD profile is often restated in prose on its JSNA or on the ONS 'exploring local income deprivation' article"},
+                  {"name": "Households below average income (HBAI) and Family Resources Survey (DWP)", "gives": "household income quintiles and deciles, relative and absolute low income before and after housing costs, by region, age, family type, tenure, disability, ethnicity; annual", "geo": "UK → region", "how": "the summary page states the headline shares; the regional tables are ODS"},
+                  {"name": "Children in low income families: local area statistics (DWP)", "gives": "the share and number of children in relative and absolute low income for every local authority and ward; annual", "geo": "UK → ward", "how": "release prose for the national and regional lines; the local table is xlsx"},
+                  {"name": "National Travel Survey (DfT)", "gives": "trips, distance, car access and licence holding, cycling and walking frequency, mode share by region, age, sex, income quintile, urban/rural", "geo": "England → region", "how": "release prose and factsheets with the shares; tables ODS"},
+                  {"name": "English Housing Survey (DHLUC)", "gives": "tenure, housing costs, overcrowding, energy efficiency, satisfaction by region, age, income, household type", "geo": "England → region", "how": "headline report prose"},
+                  {"name": "Community Life Survey (DCMS)", "gives": "volunteering, charitable giving, neighbourliness, trust in people and institutions, belonging, loneliness by region, age, sex, ethnicity, deprivation quintile", "geo": "England → region", "how": "release prose with the shares"},
+                  {"name": "Participation Survey (DCMS); Taking Part", "gives": "arts, heritage, sport, digital and library participation by region and demographic", "geo": "England → region", "how": "release prose"},
+                  {"name": "Fuel poverty statistics (DESNZ); Sub-regional fuel poverty", "gives": "fuel-poor households by local authority and LSOA", "geo": "England → LSOA", "how": "release prose; local table xlsx"},
+                  {"name": "Schools, pupils and their characteristics; Key stage 4 performance (DfE, explore-education-statistics)", "gives": "pupil numbers, free-school-meal eligibility, attainment by local authority", "geo": "England → local authority", "how": "release prose and HTML tables"},
+                  {"name": "Universal Credit and benefit statistics (DWP Stat-Xplore); Personal Independence Payment", "gives": "claimants by local authority, age, sex, condition", "geo": "GB → local authority", "how": "release prose; detail behind Stat-Xplore (not readable)"},
+                  {"name": "Public attitudes trackers (DESNZ energy, DfT transport, DSIT AI and data)", "gives": "quarterly attitude shares by age, region, SEG", "geo": "UK", "how": "release prose with the shares"},
+              ],
+              "cannot": "a council's full IMD decile profile in prose (it is in the xlsx), individual local-authority income distributions (HBAI stops at region), anything about brands"},
+    "scot_census": {"geographies": "Scotland · council areas · data zones",
+                    "holds": [{"name": "Scotland's Census 2022", "gives": "age, sex, households, ethnic group, religion, language, housing, work for every council area", "geo": "Scotland → data zone", "how": "results pages state the headlines; tables are csv"}],
+                    "cannot": "attitudes, income, anything outside Scotland"},
+    "nisra": {"geographies": "Northern Ireland · local government districts",
+              "holds": [{"name": "Census 2021 Main Statistics; Mid-year population estimates; Labour Force Survey", "gives": "age, sex, households, religion, qualifications, economic activity for every district", "geo": "Northern Ireland → district", "how": "main-statistics pages carry the figures; detailed tables are csv"}],
+              "cannot": "attitudes, income distributions, anything outside Northern Ireland"},
+    "fca": {"geographies": "UK · nations · regions",
+            "holds": [{"name": "Financial Lives survey (2017, 2020, 2022, 2024) and cost-of-living recontacts", "gives": "shares of UK adults with low financial resilience, in problem debt, with savings under £1,000, using BNPL, holding crypto, unbanked, showing characteristics of vulnerability, holding products (current accounts, credit cards, mortgages, pensions, investments) — by age, sex, income, region, tenure, ethnicity, disability", "geo": "UK → region", "how": "the key-findings and report pages state the shares in prose; the crossbreak data tables are xlsx"}],
+            "cannot": "anything below region, non-financial behaviour"},
+    "ofcom": {"geographies": "UK · nations · regions (coverage data to local authority)",
+              "holds": [
+                  {"name": "Adults' Media Use and Attitudes", "gives": "internet use, device ownership, social media and video platform use, online activities, media literacy, attitudes to harm and AI — UK adults 16+ by age, sex, socio-economic group, nation", "geo": "UK → nation", "how": "report landing page summarises the key findings with numbers; the interactive dashboard is empty to a reader; the PDF is readable"},
+                  {"name": "Online Nation", "gives": "time online, reach of each platform (YouTube, Facebook, TikTok, Instagram, WhatsApp…) by age and sex, generative-AI use", "geo": "UK", "how": "report page prose and PDF"},
+                  {"name": "Media Nations", "gives": "TV, streaming, radio and podcast consumption by age and nation", "geo": "UK → nation", "how": "report page prose and PDF"},
+                  {"name": "Technology Tracker", "gives": "ownership of smartphone, smart speaker, broadband; mobile and fixed take-up by age and SEG", "geo": "UK", "how": "data tables PDF; summary prose"},
+                  {"name": "Children and parents: media use and attitudes", "gives": "children's device and platform use by age", "geo": "UK", "how": "report prose"},
+                  {"name": "Connected Nations", "gives": "broadband and mobile coverage by local authority", "geo": "UK → local authority", "how": "report prose; interactive map"},
+              ],
+              "cannot": "anything below nation for behaviour and attitudes, brand preference beyond platform reach"},
+    "moreincommon": {"geographies": "GB · nations · regions · constituencies (MRP)",
+                     "holds": [
+                         {"name": "British Seven segmentation", "gives": "the seven values segments and each one's share of the population, demographics and attitudes", "geo": "GB", "how": "research pages state the shares"},
+                         {"name": "Issue polls and reports (cost of living, NHS, immigration, net zero, trust, culture)", "gives": "shares agreeing or prioritising, with crossbreaks by age, sex, region, education, 2024 vote and segment", "geo": "GB → region", "how": "research page prose; full tables PDF"},
+                         {"name": "MRP constituency estimates", "gives": "vote and issue estimates per constituency", "geo": "constituency", "how": "HTML and PDF"},
+                     ],
+                     "cannot": "official demographics, anything local except MRP"},
+    "opinium": {"geographies": "UK · GB · nations",
+                "holds": [{"name": "Political polling, consumer and issue polls (Observer tracker, cost of living, brands and sectors)", "gives": "topline shares with age, sex, region, social grade and vote crossbreaks", "geo": "GB → region", "how": "resource-centre pages state the topline; tables are PDF / xlsx"}],
+                "cannot": "official demographics, local areas"},
+    "focaldata": {"geographies": "GB · constituencies (MRP)",
+                  "holds": [{"name": "MRP voting intention and issue salience", "gives": "shares by constituency type, education, density, age", "geo": "GB → constituency", "how": "blog posts with structured HTML tables — the easiest polling source to read"}],
+                  "cannot": "official demographics, consumer behaviour"},
+    "savanta": {"geographies": "UK · GB · London",
+                "holds": [{"name": "Voting intention, London Polling Tracker, consumer and brand polls", "gives": "topline shares with demographic crossbreaks; London-specific attitudes", "geo": "GB → London", "how": "press-and-polls pages state headline shares; tables PDF"}],
+                "cannot": "official demographics, places other than London below nation"},
+    "ipsos": {"geographies": "UK · GB · nations · regions",
+              "holds": [
+                  {"name": "Veracity Index", "gives": "trust in each profession (doctors, nurses, scientists, journalists, politicians…) annually since 1983", "geo": "GB", "how": "article prose states the shares"},
+                  {"name": "Issues Index", "gives": "the most important issues facing Britain, monthly, by age and region", "geo": "GB → region", "how": "article prose and charts with values"},
+                  {"name": "NHS and health surveys; Global Trends; consumer and sector surveys", "gives": "attitude shares by age, sex, region, social grade", "geo": "GB → region", "how": "article prose; tables PDF"},
+              ],
+              "cannot": "official demographics, local authorities"},
+    "yougov": {"geographies": "GB",
+               "holds": [{"name": "Topical polls and trackers", "gives": "a headline share per question; crossbreaks behind the paywall", "geo": "GB", "how": "public article carries the headline; tables sometimes PDF"}],
+               "cannot": "crossbreaks for free, official demographics, local areas"},
+    "edelman": {"geographies": "UK · global",
+                "holds": [{"name": "Edelman Trust Barometer (UK report)", "gives": "trust in business, government, media and NGOs, by income (the trust gap), age; annual", "geo": "UK", "how": "figures in surrounding text; slides are PDF"}],
+                "cannot": "demographics, local areas"},
+    "nhs": {"geographies": "England · regions · ICBs · local authorities (NCMP, QOF) · GP practices (prescribing, QOF)",
+            "holds": [
+                {"name": "Health Survey for England", "gives": "adult obesity, overweight, smoking, drinking, hypertension, diabetes, physical activity, mental health by age, sex, region and area deprivation quintile; annual", "geo": "England → region and deprivation quintile", "how": "publication pages state the key findings with shares; digital.nhs.uk returns HTTP 403 to the reader, so the search snippet and the ODS/xlsx tables carry the rest — the headline shares in the snippet are usable"},
+                {"name": "Statistics on Obesity, Physical Activity and Diet; Statistics on Smoking; Statistics on Alcohol", "gives": "prevalence, hospital admissions and prescribing related to obesity, smoking and alcohol by local authority and deprivation", "geo": "England → local authority", "how": "publication summary prose; tables xlsx"},
+                {"name": "National Child Measurement Programme (NCMP)", "gives": "child obesity and overweight at reception and year 6 by local authority and deprivation decile; annual", "geo": "England → local authority", "how": "publication summary prose; tables xlsx"},
+                {"name": "Quality and Outcomes Framework (QOF) prevalence", "gives": "registered prevalence of obesity, diabetes, hypertension, asthma, depression, CHD and other conditions by GP practice, PCN, sub-ICB and ICB", "geo": "England → GP practice", "how": "publication summary prose; csv"},
+                {"name": "Prescription Cost Analysis; English Prescribing Dataset; Practice-level prescribing", "gives": "items and cost dispensed by drug (BNF) by practice and ICB; monthly", "geo": "England → practice", "how": "summary prose; csv via the Open Data Portal API"},
+                {"name": "Adult Psychiatric Morbidity Survey; Mental Health Services Monthly; GP Patient Survey (gp-patient.co.uk)", "gives": "prevalence of common mental disorders by age, sex, region; patients' experience by practice and ICB", "geo": "England → practice", "how": "summary prose; tables"},
+            ],
+            "cannot": "attitudes beyond patient experience, anything outside England, individual IMD deciles for a named local authority (use deprivation quintiles)"},
+    "fingertips": {"geographies": "England · regions · ICBs · local authorities (upper and lower tier) · wards and MSOAs for some indicators",
+                   "holds": [
+                       {"name": "Public Health Profiles / Local Authority Health Profile", "gives": "for every local authority: adult obesity and overweight prevalence (Active Lives), smoking prevalence, alcohol admissions, diabetes and hypertension prevalence (QOF), physical activity, life expectancy and healthy life expectancy, deprivation score, child poverty, fuel poverty, each beside the England value", "geo": "England → local authority", "how": "the tool is JavaScript — read the search snippet, the printable Local Authority Health Profile PDF/HTML and the API (fingertips.phe.org.uk/api/...)"},
+                       {"name": "Inequality tools (Segment Tool, Health Inequalities Dashboard)", "gives": "life-expectancy gaps between the most and least deprived deciles within a local authority", "geo": "England → local authority", "how": "JavaScript; the snippet and PDF carry the figures"},
+                   ],
+                   "cannot": "attitudes, income, anything outside England"},
+    "sportengland": {"geographies": "England · regions · local authorities",
+                     "holds": [{"name": "Active Lives Adult Survey; Active Lives Children and Young People", "gives": "share active, fairly active and inactive; sport and activity participation; by local authority, age, sex, disability, socio-economic group (NS-SeC), ethnicity; twice a year", "geo": "England → local authority", "how": "report pages give the headline levels; the local-authority figures are in the JavaScript query tool and the xlsx — the OHID profile restates the local-authority activity and obesity figures"}],
+                     "cannot": "anything outside England, attitudes beyond activity"},
+    "smmt": {"geographies": "UK",
+             "holds": [{"name": "New car and van registrations; Motorparc", "gives": "registrations by fuel type (petrol, diesel, BEV, PHEV, hybrid), private vs fleet, by month and year; vehicles in use by age and region", "geo": "UK → region (Motorparc)", "how": "press releases hold clean static HTML tables"}],
+             "cannot": "driver demographics, attitudes"},
+    "brc": {"geographies": "UK",
+            "holds": [{"name": "BRC-KPMG Retail Sales Monitor; Shop Price Index; Footfall Monitor", "gives": "monthly retail sales growth, shop-price inflation and footfall change by region", "geo": "UK → region (footfall)", "how": "press release prose with the headline percentages"}],
+            "cannot": "shopper demographics, store counts, anything below the headline"},
+    "london": {"geographies": "London · boroughs · wards · LSOAs",
+               "holds": [{"name": "GLA population projections; Ward and borough profiles; Children in low-income families; House prices; London Datastore datasets", "gives": "population by age and borough, housing costs, poverty, deprivation, employment, travel and infrastructure by borough and ward", "geo": "London → ward", "how": "dataset pages describe the data and give some headline numbers; detail is csv"}],
+               "cannot": "anything outside London, attitudes"},
+    "ukhls": {"geographies": "UK · regions",
+              "holds": [{"name": "Understanding Society Insights and findings", "gives": "life satisfaction, household change, mobility, income dynamics, health and loneliness over 10+ waves", "geo": "UK → region", "how": "Insights and findings pages state the figures; the microdata is safeguarded"}],
+              "cannot": "local areas, recent cross-sections (reports lag the data)"},
+    "datagovuk": {"geographies": "UK",
+                  "holds": [{"name": "Directory of government datasets", "gives": "pointers to the publishing department's csv", "geo": "any", "how": "metadata pages — the number itself is rarely on the page"}],
+                  "cannot": "the figure itself; use it to find which department publishes a dataset"},
+    "census": {"geographies": "US · states · counties · places",
+               "holds": [{"name": "American Community Survey; QuickFacts; Population Estimates; Income and Poverty", "gives": "population, age, sex, race, households, income, education, housing by state, county and place", "geo": "US → place", "how": "QuickFacts and topic pages carry the figures in HTML"}],
+               "cannot": "attitudes, anything outside the US"},
+    "pew": {"geographies": "US · global (including UK waves)",
+            "holds": [{"name": "Global Attitudes Survey; US surveys on technology, religion, politics and media", "gives": "attitude and adoption shares by age, sex, education, party; country comparisons", "geo": "US and country level", "how": "report pages state the numbers in text under HTML charts"}],
+            "cannot": "sub-national UK figures"},
+    "gallup": {"geographies": "US · global (World Poll)",
+               "holds": [{"name": "Gallup polls and World Poll; State of the Global Workplace; Confidence in Institutions", "gives": "trust, wellbeing, engagement and consumer-mood shares by country and demographics", "geo": "country", "how": "article text states the shares"}],
+               "cannot": "sub-national UK figures"},
+    "eurostat": {"geographies": "EU · member states · NUTS regions (UK series end in 2020)",
+                 "holds": [{"name": "Statistics Explained (population, income and living conditions, digital economy and society, education)", "gives": "country and regional values with EU comparisons", "geo": "EU → NUTS2", "how": "Statistics Explained articles hold the figures"}],
+                 "cannot": "UK values after 2020"},
+    "oecd": {"geographies": "OECD countries · UK",
+             "holds": [{"name": "OECD Data Explorer; How's Life?; Education at a Glance; Trust Survey; Income Distribution Database; Health at a Glance", "gives": "country values on income inequality, education, health, trust in government, digital adoption", "geo": "country", "how": "indicator pages and 'at a glance' reports state the values"}],
+             "cannot": "sub-national figures"},
+    "worldbank": {"geographies": "every country",
+                  "holds": [{"name": "World Development Indicators; Global Findex", "gives": "population, income, internet use, education, health, financial inclusion by country and year", "geo": "country", "how": "indicator pages show the latest value"}],
+                  "cannot": "sub-national figures"},
+    "owid": {"geographies": "every country",
+             "holds": [{"name": "Topic pages (population, health, technology, energy, economy)", "gives": "long-run, sourced series by country with the values stated in prose", "geo": "country", "how": "topic pages state the figures in text under each chart"}],
+             "cannot": "sub-national figures"},
+    "statista": {"geographies": "global",
+                 "holds": [{"name": "Market sizes and consumer survey teasers", "gives": "a chart whose number is hidden behind a canvas and a bot wall", "geo": "country", "how": "usually nothing usable"}],
+                 "cannot": "the number, for a reader"},
+}
+for _src in QUANT_SOURCES:
+    _h = _HOLDINGS.get(_src["key"]) or {}
+    _src["holds"] = list(_h.get("holds") or [])
+    _src["cannot"] = _h.get("cannot") or ""
+    _src["geographies"] = _h.get("geographies") or ""
+
 
 #: Publishers whose pages carry the number in readable form for most fact targets; the
 #: defaults are drawn from here and the report's "default set of six".
@@ -276,6 +441,29 @@ def catalogue_for_prompt(keys: list[str]) -> str:
             continue
         lines.append(f"- {k} ({src['label']}, {src['kind']}, readability {src.get('fit', 3)}/5): covers {', '.join(src.get('covers') or [])}. "
                      f"Titles its pages like: {'; '.join(repr(p) for p in (src.get('phrasing') or [])[:4])}. {src.get('note') or ''}")
+    return "\n".join(lines)
+
+
+
+def registry_for_prompt(keys: list[str], dimension: str = "", full: bool = True) -> str:
+    """The registry as the planners read it: for each ticked publisher, the geographies it reaches,
+    every dataset it holds (what it gives, where, how the number is reachable) and what it does not
+    hold. Publishers that cover `dimension` come first and in full; the rest are one line each when
+    `full` is false, so a dimension-specific planner is not shown thirty full entries."""
+    ordered = sorted([k for k in keys if k in _BY_KEY], key=lambda k: (0 if dimension and dimension in (_BY_KEY[k].get("covers") or []) else 1, -int(_BY_KEY[k].get("fit") or 0)))
+    lines = []
+    for k in ordered:
+        src = _BY_KEY[k]
+        head = f"- {k} ({src['label']}, {src['kind']}, readability {src.get('fit', 3)}/5; reaches {src.get('geographies') or 'n/a'}): covers {', '.join(src.get('covers') or [])}."
+        detailed = full or not dimension or dimension in (src.get("covers") or [])
+        if not detailed:
+            lines.append(head + f" {src.get('description') or ''}")
+            continue
+        lines.append(head)
+        for h in src.get("holds") or []:
+            lines.append(f"    • {h['name']} — gives {h['gives']}; geography {h['geo']}; how: {h['how']}")
+        if src.get("cannot"):
+            lines.append(f"    ✗ does not hold: {src['cannot']}")
     return "\n".join(lines)
 
 
@@ -535,7 +723,7 @@ async def _refine(session_id: str, question: str, target: dict, tried: list[dict
         out = await analyze(REFINE_SCHEMA, REFINE_SYSTEM,
                             f"FACT TARGET (the new searches must still hunt this): {target.get('fact')} (dimension: {target.get('dimension')})\n"
                             f"Context — the study's question, NOT what to search for: {question}\nWhy the target matters (context only — not what to search for): {target.get('why') or ''}\n\n"
-                            f"Tried so far:\n{tried_text}\n\nPublishers available:\n{catalogue_for_prompt(keys)}",
+                            f"Tried so far:\n{tried_text}\n\nPublishers available (the registry says what each holds, where and how it is read):\n{registry_for_prompt(keys, target.get('dimension') or '', full=False)}",
                             session_id=session_id, label="population_refine", max_tokens=500)
     except Exception as e:  # noqa: BLE001
         await log("warn", "Could not plan a second attempt", str(e)[:120])

@@ -31,7 +31,8 @@ from . import facets as facets_mod
 from . import playbook as pb_mod
 from app.services.agents import dynamic_dials as dyn_mod
 from . import frame as frame_mod
-from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts, load_research_rows
+from . import workout as workout_mod
+from .sources import DIMENSIONS, catalogue_for_prompt, default_sources, facts_for_prompt, gather_targets, keyword_target, load_quant_facts, load_research_rows, registry_for_prompt
 
 _tasks: dict[str, asyncio.Task] = {}
 _stop: dict[str, bool] = {}
@@ -161,7 +162,7 @@ def targets_context(question: str, keys: list[str], *, constraints: Optional[dic
         parts.append(facts_text)
     if brief_text:
         parts.append(brief_text)
-    parts.append("PUBLISHERS TICKED (route queries only to these):\n" + catalogue_for_prompt(keys))
+    parts.append("PUBLISHERS TICKED (route queries only to these; the registry says what each holds, where and how it is read):\n" + registry_for_prompt(keys))
     return "\n\n".join(parts)
 
 
@@ -815,7 +816,7 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                 # TAM / SAM / SOM sizing trio — ahead of the planner's own gap targets.
                 if frame_dims:
                     try:
-                        ftargets = await frame_mod.search_targets(bld.session_id, frame_dims, geography, detected.get("topic") or question, keys, catalogue_for_prompt(keys))
+                        ftargets = await frame_mod.search_targets(bld.session_id, frame_dims, geography, detected.get("topic") or question, keys, registry_for_prompt(keys))
                         for ft in ftargets:
                             await log(build_id, "frame", "info", f"Frame search · {ft.get('frame_key', '').upper() if ft.get('frame_key') in ('tam', 'sam', 'som') else ft.get('frame_key')}: {ft['fact']}",
                                       " | ".join(f"“{q['query']}” → {', '.join(q.get('sources') or keys)}" for q in ft["queries"]))
@@ -890,6 +891,15 @@ async def _run_to_review(build_id: str, *, from_stage: str = "detect"):
                     else:
                         await log(build_id, "frame", "warn", f"Nothing on file states the distribution of {d['label']} — your call: estimate (anchored to what is on file), upload, use a proxy, or skip", tg.get("note"))
                 frame_now = {"dimensions": dims, "targets": targets, "report": None, "geography": detected.get("geography") or "", "sizing": sizing}
+                bld = await _save(build_id, frame=frame_now)
+                # ── sampling frame, step 3: work the open gaps out from published parts (2026-10-20) ──
+                # Before anything is assumed or the analyst is asked, every missing demographic / behavioural
+                # dimension gets the hunt: decompose into component figures the registry says are published,
+                # search for them, compute the distribution and show the working. Runs ahead of the equity
+                # reference so a real deprivation profile beats the equal-fifths default.
+                if not _stopped(build_id):
+                    bld = await _work_out_open_gaps(build_id, question, detected.get("geography") or "", inp.get("facts_rows") or [], research)
+                frame_now = dict(bld.frame or frame_now)
                 from app.services.population import equity as equity_mod
                 frame_now, eq_note = equity_mod.ensure_target(frame_now, equity_mod.level_for(bld.target_count))
                 if eq_note:
@@ -1173,6 +1183,48 @@ async def _estimate_open_gaps(build_id: str) -> Optional[PopulationBuild]:
                                  note="no published figure on file, and the model will not estimate an attitude — not weighted; upload a distribution in the Studio to change that")
 
 
+def _region_of(geography: str) -> Optional[str]:
+    gl = (geography or "").lower()
+    return "uk-en" if any(k in gl for k in ("uk", "united kingdom", "britain", "england", "scotland", "wales", "northern ireland", "london")) else None
+
+
+def _frame_logger(build_id: str):
+    async def _lg(level: str, message: str, detail: Optional[str]):
+        await log(build_id, "frame", level, message, detail)
+    return _lg
+
+
+async def _work_out_open_gaps(build_id: str, question: str, geography: str, facts_rows: list, research) -> Optional[PopulationBuild]:
+    """The hunt for every open gap that has published parts: `workout.work_out_target` per missing demographic /
+    behavioural dimension, saving each worked-out distribution as it lands. Attitudes are left for the ladder."""
+    bld = await _load(build_id)
+    if not bld or not bld.frame:
+        return bld
+    open_dims = [d for d in frame_mod.gaps(bld.frame) if d.get("kind") != "attitudinal" and d.get("attribute") != "attitude"]
+    if not open_dims:
+        return bld
+    keys = list((bld.sources or {}).get("quant_sources") or []) or default_sources(geography)
+    await log(build_id, "frame", "info", f"Nothing on file states {len(open_dims)} dimension(s) outright — working them out from published parts: " + ", ".join(d["label"] for d in open_dims),
+              "Each is decomposed into figures the publisher registry says are published, those are searched for, and the distribution is computed with its working shown")
+    for d in open_dims:
+        if _stopped(build_id):
+            break
+        try:
+            tg = await workout_mod.work_out_target(bld.session_id, question, d, geography, keys, facts_rows, build_id=build_id, log=_frame_logger(build_id),
+                                                   region=_region_of(geography), should_stop=lambda: _stopped(build_id), extra_material=research.for_dim(d, 3000) if research else "")
+        except Exception as e:  # noqa: BLE001
+            await log(build_id, "frame", "warn", f"Work-out failed for {d['label']}", str(e)[:120])
+            continue
+        if tg.get("status") == "worked_out":
+            bld = await _load(build_id)
+            fr = dict(bld.frame)
+            targets = dict(fr.get("targets") or {})
+            targets[d["key"]] = tg
+            fr["targets"] = targets
+            bld = await _save(build_id, frame=fr)
+    return await _load(build_id)
+
+
 async def refresh_frame_report(build_id: str) -> Optional[PopulationBuild]:
     """Recompute target vs planned for the current plan (called after plan / re-plan / segment edits)."""
     bld = await _load(build_id)
@@ -1199,7 +1251,21 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
     if not dim:
         raise ValueError(f"unknown frame dimension {key!r}")
     targets = dict(fr.get("targets") or {})
-    if action == "estimate":
+    if action == "work_out":
+        research = await _research_material(bld)
+        try:
+            facts_rows = await load_quant_facts(bld.session_id)
+        except Exception:  # noqa: BLE001
+            facts_rows = []
+        async with dbm.AsyncSessionLocal() as db:
+            sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == bld.session_id))).scalar_one_or_none()
+        keys = list((bld.sources or {}).get("quant_sources") or []) or default_sources(fr.get("geography") or "")
+        tg = await workout_mod.work_out_target(bld.session_id, sess.query if sess else "", dim, fr.get("geography") or "", keys, facts_rows, build_id=build_id,
+                                               log=_frame_logger(build_id), region=_region_of(fr.get("geography") or ""), should_stop=lambda: _stopped(build_id),
+                                               extra_material=research.for_dim(dim, 3000))
+        if tg["status"] != "worked_out":
+            raise ValueError(tg.get("note") or "could not be worked out from published figures")
+    elif action == "estimate":
         # The estimate is shown what is on file (published facts + the analyst's research and uploads) so it is
         # anchored to this audience; none of it stated the distribution, or the target would already be found.
         research = await _research_material(bld)
@@ -1209,7 +1275,9 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
             facts_rows = []
         material = "\n".join(x for x in (frame_mod.material_text(facts_rows, 8000), research.for_dim(dim, 4000)) if x.strip())
         tg = await frame_mod.estimate_target(bld.session_id, dim, fr.get("geography") or "", material)
-        if tg["status"] == "estimated":
+        if tg["status"] == "worked_out":
+            await log(build_id, "frame", "ok", f"Worked out · {dim['label']}: {len(tg['categories'])} cells from {len(tg.get('components') or [])} published figure(s)", tg.get("working"))
+        elif tg["status"] == "estimated":
             await log(build_id, "frame", "decision", f"Estimated · {dim['label']} — labelled model_inference, lowers confidence" + (", anchored to what is on file" if material.strip() else "; nothing on file to anchor it"), tg.get("note"))
         else:
             await log(build_id, "frame", "warn", f"The model declined to estimate {dim['label']}", tg.get("note"))
@@ -1225,7 +1293,7 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
         tg = frame_mod.skipped_target()
         await log(build_id, "frame", "decision", f"Skipped · {dim['label']}: not matched", None)
     else:
-        raise ValueError("action must be estimate, upload, proxy or skip")
+        raise ValueError("action must be work_out, estimate, upload, proxy or skip")
     targets[key] = tg
     fr["targets"] = targets
     bld = await _save(build_id, frame=fr)

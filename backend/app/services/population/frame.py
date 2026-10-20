@@ -34,8 +34,11 @@ from app.services.population import equity
 
 ATTRIBUTES = ["region", "age", "gender", "income", "education", "occupation", "household", "ethnicity", "employment", "tenure", "condition", "deprivation", "attitude", "other"]
 KINDS = ["demographic", "behavioural", "attitudinal"]
-STATUSES = ["found", "proxy", "uploaded", "estimated", "skipped", "missing"]
+STATUSES = ["found", "proxy", "uploaded", "worked_out", "estimated", "skipped", "missing"]
 PROVENANCES = ["official_statistic", "client_data", "research_web"]   # where a found distribution was read from
+#: Statuses that carry a distribution the frame can match and weight on. `worked_out` (2026-10-20) is a
+#: distribution computed from published parts (`workout.py`): matched like a found one, labelled as derived.
+ACTIVE_STATUSES = ("found", "proxy", "uploaded", "worked_out", "estimated")
 MATCH_EXACTLY = 3          # the top-priority dimensions are quota'd; the rest are weighted only
 THIN_CELL = 3              # a cell with fewer agents than this is flagged as unsafe to cut by
 GOOD_DEVIATION = 5.0       # percentage points of max deviation for a "good" match
@@ -379,7 +382,7 @@ def active_targets(frame: dict) -> list[tuple[dict, dict]]:
     targets = frame.get("targets") or {}
     for dim in frame.get("dimensions") or []:
         t = targets.get(dim["key"]) or {}
-        if t.get("status") in ("found", "proxy", "uploaded", "estimated") and t.get("categories"):
+        if t.get("status") in ACTIVE_STATUSES and t.get("categories"):
             out.append((dim, t))
     return out
 
@@ -417,7 +420,7 @@ def build_report(frame: dict, segments: list[dict], total: int, agents: Optional
         row: dict[str, Any] = {"key": dim["key"], "label": dim["label"], "attribute": dim.get("attribute"), "status": status,
                                "source": t.get("source", ""), "year": t.get("year", ""), "geography": t.get("geography", ""),
                                "provenance": t.get("provenance", ""), "priority": k + 1, "mode": "unmatched"}
-        if status not in ("found", "proxy", "uploaded", "estimated") or not t.get("categories"):
+        if status not in ACTIVE_STATUSES or not t.get("categories"):
             unmatched.append(dim["key"])
             dims_out.append(row)
             continue
@@ -451,6 +454,7 @@ def build_report(frame: dict, segments: list[dict], total: int, agents: Optional
         "worst_deviation_pts": round(worst, 1),
         "matched_exactly": matched_exactly, "weighted_only": weighted_only, "unmatched": unmatched,
         "estimated": [d["key"] for d in dims_out if d["status"] == "estimated"],
+        "worked_out": [d["key"] for d in dims_out if d["status"] == "worked_out"],
         "dimensions": dims_out,
         "thin_cells": thin,
         "stage": "achieved" if agents else "planned",
@@ -480,8 +484,11 @@ def summary_line(report: Optional[dict]) -> str:
     exact = ", ".join(names(report.get("matched_exactly") or [])) or "none"
     weighted = ", ".join(names(report.get("weighted_only") or [])) or "none"
     est = names(report.get("estimated") or [])
+    worked = names(report.get("worked_out") or [])
     ess = report.get("ess")
     parts = [f"Frame match {report['level']} (worst cell {report['worst_deviation_pts']} pts off)", f"matched exactly on {exact}", f"weighted on {weighted}"]
+    if worked:
+        parts.append(f"worked out from published figures: {', '.join(worked)}")
     if est:
         parts.append(f"model-estimated: {', '.join(est)}")
     if ess is not None and report.get("n"):
@@ -862,7 +869,8 @@ def target_from_answer(res: dict, dim: dict) -> dict:
     }
 
 
-PROVENANCE_LABELS = {"official_statistic": "published statistic", "client_data": "your upload", "research_web": "a research page", "model_inference": "model estimate"}
+PROVENANCE_LABELS = {"official_statistic": "published statistic", "client_data": "your upload", "research_web": "a research page", "model_inference": "model estimate",
+                     "derived_statistic": "worked out from published figures"}
 
 
 async def estimate_target(session_id: str, dim: dict, geography: str, material: str = "") -> dict:
@@ -892,7 +900,7 @@ def uploaded_target(categories: list[dict], source: str, geography: str) -> dict
 def proxy_target(frame: dict, proxy_of: str) -> dict:
     src = (frame.get("targets") or {}).get(proxy_of) or {}
     dim = next((d for d in frame.get("dimensions") or [] if d["key"] == proxy_of), None)
-    if not dim or src.get("status") not in ("found", "proxy", "uploaded", "estimated") or not src.get("categories"):
+    if not dim or src.get("status") not in ACTIVE_STATUSES or not src.get("categories"):
         raise ValueError("that dimension has no distribution to stand in")
     attr = src.get("proxy_attribute") if src.get("status") == "proxy" else dim.get("attribute")
     return {**src, "status": "proxy", "proxy_attribute": attr, "note": f"matched via {dim['label']} ({src.get('source') or src.get('status')})"}

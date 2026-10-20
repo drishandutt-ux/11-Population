@@ -203,7 +203,7 @@ def ensure_target(frame: dict, level: str) -> tuple[dict, Optional[str]]:
         return frame, None
     tg = targets.get(KEY) or {}
     note = None
-    if tg.get("status") in ("found", "proxy", "uploaded", "estimated") and tg.get("categories"):
+    if tg.get("status") in ("found", "proxy", "uploaded", "worked_out", "estimated") and tg.get("categories"):
         norm = normalise_target(tg, level)
         if norm is not tg:
             note = f"Deprivation profile read as {size_of(level)} cells from {tg.get('source') or tg.get('status')}"

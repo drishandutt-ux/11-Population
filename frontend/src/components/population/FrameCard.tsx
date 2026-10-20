@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, Check, Loader2, Sparkles, Upload, ChevronDown } from "lucide-react";
+import { AlertTriangle, Calculator, Check, Loader2, Sparkles, Upload, ChevronDown } from "lucide-react";
 import type { FrameCategory, FrameReportCell, PopulationBuild } from "@/lib/api";
 
 /**
  * The sampling frame: the dimensions this population must match, where each distribution
- * came from (found · proxy · uploaded · estimated · skipped · missing), the ladder for every
+ * came from (found · proxy · uploaded · worked_out · estimated · skipped · missing), the ladder for every
  * gap, and the representativeness report — target vs planned vs achieved per cell, which
  * dimensions are matched exactly and which only weighted, thin cells, effective sample size.
  */
@@ -15,7 +15,7 @@ interface Props {
   build: PopulationBuild;
   busy: boolean;
   readOnly: boolean;
-  onAction: (dimKey: string, body: { action: "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) => Promise<void>;
+  onAction: (dimKey: string, body: { action: "work_out" | "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) => Promise<void>;
   onEstimateAll: () => Promise<void>;
 }
 
@@ -23,6 +23,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   found: { label: "found", cls: "chip-ok" },
   proxy: { label: "proxy", cls: "chip-info" },
   uploaded: { label: "uploaded", cls: "chip-warn" },
+  worked_out: { label: "worked out from published figures", cls: "chip-info" },
   estimated: { label: "model estimate", cls: "chip-warn" },
   skipped: { label: "skipped", cls: "" },
   missing: { label: "no distribution", cls: "chip-bad" },
@@ -93,7 +94,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
   const dims = frame.dimensions || [];
   const targets = frame.targets || {};
   const gaps = dims.filter((d) => (targets[d.key]?.status || "missing") === "missing");
-  const withData = dims.filter((d) => ["found", "proxy", "uploaded", "estimated"].includes(targets[d.key]?.status || ""));
+  const withData = dims.filter((d) => ["found", "proxy", "uploaded", "worked_out", "estimated"].includes(targets[d.key]?.status || ""));
 
   async function act(key: string, body: Parameters<typeof onAction>[1]) {
     setWorking(key);
@@ -183,9 +184,21 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                   {t.status !== "missing" && t.status !== "skipped" && (
                     <p className="text-[11px] text-muted-foreground/80 mt-0.5">
                       <span className="text-foreground/70">{t.source || "—"}</span>{t.geography ? ` · ${t.geography}` : ""}{t.year ? ` · ${t.year}` : ""}
-                      {t.status === "estimated" && typeof t.confidence === "number" ? ` · confidence ${t.confidence}%` : ""}
+                      {(t.status === "estimated" || t.status === "worked_out") && typeof t.confidence === "number" ? ` · confidence ${t.confidence}%` : ""}
                       {t.note && t.status === "estimated" ? <span className="block italic text-amber-300/70">{t.note}</span> : null}
                     </p>
+                  )}
+                  {t.status === "worked_out" && (
+                    <div className="mt-1.5 rounded-md bg-sky-500/[0.06] ring-1 ring-sky-500/15 px-2.5 py-2 text-[11.5px] space-y-1">
+                      <p className="text-sky-200/90"><Calculator className="w-3 h-3 inline -mt-0.5 mr-1" />How it was worked out</p>
+                      {t.working && <p className="text-foreground/85 leading-snug">{t.working}</p>}
+                      {(t.components || []).length > 0 && (
+                        <ul className="space-y-0.5 text-muted-foreground">
+                          {(t.components || []).map((c, i) => <li key={i}><span className="text-foreground/90 tabular-nums">{c.value}</span> {c.statistic}{c.source ? <> · {c.url ? <a href={c.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground">{c.source}</a> : c.source}</> : null}{c.year ? ` · ${c.year}` : ""}</li>)}
+                        </ul>
+                      )}
+                      {t.note && <p className="italic text-amber-300/70">{t.note}</p>}
+                    </div>
                   )}
                   {t.status === "skipped" && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{t.note}</p>}
                 </div>
@@ -208,8 +221,13 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
               {/* the ladder */}
               {isGap && !readOnly && (
                 <div className="pl-6 space-y-2">
-                  <p className="text-xs text-red-200/80">Nothing on file states this distribution for {frame.geography || "this place"} — not the statistics gathered, your research pages, uploads or survey. Choose how to fill it:</p>
+                  <p className="text-xs text-red-200/80">Nothing on file states this distribution for {frame.geography || "this place"} — not the statistics gathered, your research pages, uploads or survey{t.note ? ` (${t.note})` : ""}. Choose how to fill it:</p>
                   <div className="flex flex-wrap gap-1.5 items-center">
+                    {d.kind !== "attitudinal" && (
+                      <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "work_out" })} className="btn btn-xs btn-secondary" title="Decompose it into figures the publisher registry says are published, search for them, and compute the distribution with the working shown — labelled as worked out from published figures">
+                        {working === d.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Calculator className="w-3 h-3" />} Work it out from published figures
+                      </button>
+                    )}
                     <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "estimate" })} className="btn btn-xs btn-secondary" title="The model states a distribution from what it knows, anchored to what is on file about this audience — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
                       {working === d.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Model estimate
                     </button>
