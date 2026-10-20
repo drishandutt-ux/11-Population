@@ -642,7 +642,7 @@ async def _triage(session_id: str, question: str, target: dict, found: list[tupl
     if len(found) <= limit and len(found) <= 2:
         return found
     listing = "\n".join(f"[{n}] {src['label']} · {r.title[:110]} · {r.url}\n    {(r.snippet or '')[:220]}" for n, (src, r) in enumerate(found))
-    notes = "\n".join(f"- {src['label']}: {src['note']}" for src in {s["key"]: s for s, _ in found}.values() if src.get("note"))
+    notes = "\n".join(f"- {src.get('label')}: {src['note']}" for src in {(s.get("key") or s.get("label")): s for s, _ in found}.values() if src.get("note"))
     order: list[int]
     try:
         out = await analyze(TRIAGE_SCHEMA, TRIAGE_SYSTEM,
