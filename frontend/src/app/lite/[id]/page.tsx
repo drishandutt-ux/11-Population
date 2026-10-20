@@ -13,6 +13,7 @@ import TalkBox from "@/components/lite/TalkBox";
 import ConjureGrid from "@/components/lite/ConjureGrid";
 import HowMade from "@/components/lite/HowMade";
 import LiteTools from "@/components/lite/LiteTools";
+import SharedChatPanel from "@/components/sharing/SharedChatPanel";
 import PersonaAvatar from "@/components/PersonaAvatar";
 import ThreadView from "@/components/simulation/ThreadView";
 import ReportChat from "@/components/report/ReportChat";
@@ -22,7 +23,7 @@ import { api, Agent, ResearchState } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Beaker, Check, FileText, Link2, Loader2, MessageCircle, Paperclip, Play, Plus, Search, Square, X } from "lucide-react";
 
-type View = "flow" | "ask" | "people" | "report" | "lab";
+type View = "flow" | "ask" | "people" | "report" | "lab" | "chat";
 const SURVEY_CHAR_LIMIT = 40000;   // matches SURVEY_CHAR_LIMIT in agent_factory.py; the card says when a file was trimmed
 const TEXT_LIKE = /\.(txt|csv|tsv|md|json)$/i;
 
@@ -60,10 +61,10 @@ function LiteSession() {
     : s.agents.length > 0 ? "ready"
     : !s.buildLoaded || !s.session ? "checking"
     : "people";
-  const step: LiteStep = view === "lab" ? "tools" : view === "report" ? "report" : view === "ask" ? "ask" : view === "people" ? "people" : stage === "debate" ? "debate" : "people";
+  const step: LiteStep = view === "lab" ? "tools" : view === "chat" ? "chat" : view === "report" ? "report" : view === "ask" ? "ask" : view === "people" ? "people" : stage === "debate" ? "debate" : "people";
   const title = s.session?.title || "";
   // The step rail is navigation: Ask (the question and what was added), People, the Conversation, the Report, the Tools (Forms).
-  const goStep = (st: LiteStep) => setView(st === "ask" ? "ask" : st === "people" ? "people" : st === "report" ? "report" : st === "tools" ? "lab" : "flow");
+  const goStep = (st: LiteStep) => setView(st === "ask" ? "ask" : st === "people" ? "people" : st === "report" ? "report" : st === "tools" ? "lab" : st === "chat" ? "chat" : "flow");
   const shell = { title, onStep: goStep };
 
   if (s.notFound) {
@@ -74,6 +75,21 @@ function LiteSession() {
           <p className="lite-lead mt-3">It no longer exists on the server. Start a new one.</p>
           <button type="button" onClick={() => router.push("/")} className="lite-btn mt-6">Start again</button>
         </div>
+      </LiteShell>
+    );
+  }
+
+  // ── Chat (2026-10-20): colleagues and the report agent, with sharing ──
+  if (view === "chat") {
+    return (
+      <LiteShell {...shell} step="chat" proHref={`/session/${id}?tab=chat`} backHref={`/lite/${id}`} layout="app">
+        <ErrorBoundary label="Chat">
+          <div className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 pb-4">
+            <div className="flex-1 min-h-0 lite-card overflow-hidden">
+              <SharedChatPanel sessionId={id} hideOpen />
+            </div>
+          </div>
+        </ErrorBoundary>
       </LiteShell>
     );
   }

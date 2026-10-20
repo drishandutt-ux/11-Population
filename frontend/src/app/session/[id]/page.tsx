@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord, ReportStructure } from "@/lib/api";
 import { isCutOff, snapshotReportIds, waitForNewReport } from "@/lib/reportWait";
 import { getSessionWS } from "@/lib/websocket";
-import { Brain, MessageSquare, Network, FileText, Users, ArrowLeft, Beaker, Sparkles } from "lucide-react";
+import { Brain, MessageSquare, MessagesSquare, Network, FileText, Users, ArrowLeft, Beaker, Sparkles } from "lucide-react";
 import { setUiMode } from "@/lib/lite";
 import InputPanel from "@/components/ingestion/InputPanel";
 import ThreadView from "@/components/simulation/ThreadView";
@@ -14,9 +14,10 @@ import KGPanel from "@/components/knowledge-graph/KGPanel";
 import ReportChat from "@/components/report/ReportChat";
 import AgentDirectory from "@/components/simulation/AgentDirectory";
 import LabPanel from "@/components/lab/LabPanel";
+import SharedChatPanel from "@/components/sharing/SharedChatPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
-type Tab = "ingest" | "agents" | "simulation" | "lab" | "kg" | "report";
+type Tab = "ingest" | "agents" | "simulation" | "lab" | "kg" | "report" | "chat";
 type OpinionsStatus = "idle" | "loading" | "done" | "error";
 
 // The report's section spec lives server-side since L6-02 (`services/simulation/structure.REPORT_PROMPT`).
@@ -144,7 +145,7 @@ export default function SessionPage() {
   // `?tab=agents` etc. opens straight on that tab (the Population Studio links back this way).
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
-    if (t && ["ingest", "agents", "simulation", "lab", "kg", "report"].includes(t)) setActiveTab(t);
+    if (t && ["ingest", "agents", "simulation", "lab", "kg", "report", "chat"].includes(t)) setActiveTab(t);
   }, []);
 
   // Auto-start simulation once ingestion completes (if user queued a start)
@@ -465,7 +466,7 @@ export default function SessionPage() {
   // Each step shows whether it is done, and the header says what comes next.
   const hasSources = kgEntities.length > 0 || evidence.some((e) => !e.excluded) || (research?.run?.status === "complete");
   const done: Record<Tab, boolean> = {
-    ingest: hasSources, agents: agents.length > 0, simulation: posts.length > 0, lab: false, kg: kgEntities.length > 0, report: !!reportContent,
+    ingest: hasSources, agents: agents.length > 0, simulation: posts.length > 0, lab: false, kg: kgEntities.length > 0, report: !!reportContent, chat: false,
   };
   const tabs: { key: Tab; label: string; icon: React.ReactNode; step?: number; title: string }[] = [
     { key: "ingest", step: 1, label: "Sources", icon: <Brain className="w-3.5 h-3.5" />, title: "What the twins will know: research, pasted text, files" },
@@ -474,6 +475,7 @@ export default function SessionPage() {
     { key: "lab", step: 4, label: "Lab", icon: <Beaker className="w-3.5 h-3.5" />, title: "Structured tests on the population: barriers, the journey, purchase intent, surveys, A/B" },
     { key: "kg", label: "What they know", icon: <Network className="w-3.5 h-3.5" />, title: "Everything the twins were given, as a map — and what each twin could see" },
     { key: "report", step: 5, label: "Report", icon: <FileText className="w-3.5 h-3.5" />, title: "The briefing, with every figure counted from the twins" },
+    { key: "chat", label: "Chat", icon: <MessagesSquare className="w-3.5 h-3.5" />, title: "Talk this session through with colleagues and the report agent (@report); share it from here" },
   ];
   const nextStep: { tab: Tab; text: string } | null =
     !hasSources && agents.length === 0 ? { tab: "ingest", text: "Add sources or research the question" }
@@ -514,7 +516,7 @@ export default function SessionPage() {
         <div className="shrink-0 ml-auto flex items-center gap-2">
           <button
             type="button"
-            onClick={() => { setUiMode("simple"); router.push(`/lite/${id}${activeTab === "report" ? "?view=report" : activeTab === "lab" ? "?view=lab" : ""}`); }}
+            onClick={() => { setUiMode("simple"); router.push(`/lite/${id}${activeTab === "report" ? "?view=report" : activeTab === "lab" ? "?view=lab" : activeTab === "chat" ? "?view=chat" : ""}`); }}
             className="btn btn-xs btn-accent"
             title="Back to the simple view of this session: one step at a time, only what matters"
           >
@@ -604,6 +606,9 @@ export default function SessionPage() {
         )}
         {activeTab === "kg" && (
           <KGPanel sessionId={id} agents={agents} entities={kgEntities} relations={kgRelations} activity={kgActivity} focus={graphFocus} />
+        )}
+        {activeTab === "chat" && (
+          <SharedChatPanel sessionId={id} hideOpen />
         )}
         {activeTab === "report" && session && (
           <ReportChat
