@@ -380,6 +380,117 @@ def achieved_distribution(dim: dict, target: dict, agents: list[Any]) -> tuple[d
     return counts, unplaced
 
 
+# ── rebalancing the plan to the frame ─────────────────────────────────────────
+#
+# The planner is shown the frame and asked to land near the published shares, but it is prose
+# advice: on 2026-10-20 a Blackpool-vs-Oxford plan put 30 / 10 / 60 across a 21 / 29 / 50 target and
+# the forty people, written group by group, inherited the 19-point gap ("poorly matched"). This step
+# makes the frame binding at plan time: it nudges the proposed segments' shares, by iterative
+# proportional fitting over the exactly-matched rows, until the plan implies the targets, within
+# bounds that keep every group recognisably the planner's (a share moves at most ×/÷ REBALANCE_MAX_FACTOR
+# and never below REBALANCE_MIN_SHARE). Accepted, playbook and kit segments are never moved.
+REBALANCE_MAX_FACTOR = 2.5
+REBALANCE_MIN_SHARE = 2.0
+REBALANCE_ITERS = 40
+
+
+def segment_cell_split(dim: dict, target: dict, seg: dict) -> dict[str, float]:
+    """The fraction of one segment that falls in each of the target's cells (0–1; cells sum to ≤ 1)."""
+    one = dict(seg)
+    one["count"] = 100.0
+    one["decision"] = "proposed"
+    dist = planned_distribution(dim, target, [one], 100)
+    return {k: max(0.0, float(v)) / 100.0 for k, v in dist.items()}
+
+
+def _worst_deviation(pairs: list[tuple[dict, dict]], shares: dict[str, float], splits: dict[str, dict[str, dict[str, float]]]) -> float:
+    worst = 0.0
+    for dim, t in pairs:
+        for c in t.get("categories") or []:
+            planned = sum(shares[sid] * splits[dim["key"]].get(sid, {}).get(c["label"], 0.0) for sid in shares)
+            worst = max(worst, abs(planned - float(c.get("share_pct") or 0)))
+    return worst
+
+
+def _fit_to_room(shares: dict[str, float], ids: list[str], bounds: dict[str, tuple[float, float]], room: float) -> None:
+    """Scale the movable shares to sum to `room` without leaving their bounds: a share pinned at a bound stays
+    there and the rest absorb the difference, a few rounds until it closes."""
+    for _ in range(6):
+        tot = sum(shares[sid] for sid in ids)
+        if abs(tot - room) < 0.05 or tot <= 0:
+            return
+        free = [sid for sid in ids if (shares[sid] < bounds[sid][1] - 1e-9 if tot < room else shares[sid] > bounds[sid][0] + 1e-9)]
+        if not free:
+            return
+        free_tot = sum(shares[sid] for sid in free) or 1.0
+        scale = (room - (tot - free_tot)) / free_tot
+        for sid in free:
+            shares[sid] = max(bounds[sid][0], min(bounds[sid][1], shares[sid] * scale))
+
+
+def rebalance_to_frame(frame: Optional[dict], segments: list[dict], *, fixed_ids: Optional[set] = None, tolerance: float = GOOD_DEVIATION) -> tuple[list[dict], dict]:
+    """Nudge the movable segments' shares so the plan implies the frame's exactly-matched rows. Returns the
+    segments (shares updated, counts untouched — call `normalise_segments` after) and a report:
+    {moved, before, after, changes[{id, name, from, to}], rows[labels]}. Nothing moves when there is no frame,
+    fewer than two movable segments, or the plan already sits within `tolerance` of every cell."""
+    report = {"moved": False, "before": 0.0, "after": 0.0, "changes": [], "rows": []}
+    if not frame or not segments:
+        return segments, report
+    pairs = active_targets(frame)[:MATCH_EXACTLY]
+    if not pairs:
+        return segments, report
+    fixed_ids = set(fixed_ids or ())
+    kept = [s for s in segments if s.get("decision") != "rejected"]
+    movable = [s for s in kept if s.get("id") not in fixed_ids and s.get("decision") != "accepted" and not s.get("kit_cards") and s.get("share_source") != "analyst"]
+    if len(movable) < 2:
+        return segments, report
+    shares = {s["id"]: float(s.get("share_pct") or 0) for s in kept}
+    orig = dict(shares)
+    splits = {dim["key"]: {s["id"]: segment_cell_split(dim, t, s) for s in kept} for dim, t in pairs}
+    report["rows"] = [dim["label"] for dim, _ in pairs]
+    report["before"] = round(_worst_deviation(pairs, shares, splits), 1)
+    if report["before"] <= tolerance:
+        report["after"] = report["before"]
+        return segments, report
+    fixed_total = sum(shares[s["id"]] for s in kept if s not in movable)
+    movable_ids = [s["id"] for s in movable]
+    bounds = {}
+    for sid in movable_ids:
+        lo = max(REBALANCE_MIN_SHARE, orig[sid] / REBALANCE_MAX_FACTOR)
+        bounds[sid] = (lo, max(lo, orig[sid] * REBALANCE_MAX_FACTOR))
+    for _ in range(REBALANCE_ITERS):
+        for dim, t in pairs:
+            sp = splits[dim["key"]]
+            ratio: dict[str, float] = {}
+            for c in t.get("categories") or []:
+                planned = sum(shares[sid] * sp.get(sid, {}).get(c["label"], 0.0) for sid in shares)
+                tgt = float(c.get("share_pct") or 0)
+                ratio[c["label"]] = (tgt / planned) if planned > 1e-9 else (1.0 if tgt <= 0 else 1.5)
+            for sid in movable_ids:
+                split = sp.get(sid, {})
+                placed = sum(split.values())
+                # the factor is the cell ratios weighted by where the segment sits; its unplaced part moves by 1
+                factor = sum(f * ratio.get(lab, 1.0) for lab, f in split.items()) + (1.0 - min(1.0, placed))
+                factor = max(0.25, min(4.0, factor)) ** 0.5          # damped
+                shares[sid] = max(bounds[sid][0], min(bounds[sid][1], shares[sid] * factor))
+            _fit_to_room(shares, movable_ids, bounds, max(0.0, 100.0 - fixed_total))
+    report["after"] = round(_worst_deviation(pairs, shares, splits), 1)
+    if report["after"] >= report["before"] - 0.5:
+        report["after"] = report["before"]
+        return segments, report
+    out = []
+    for s in segments:
+        s = dict(s)
+        if s.get("id") in movable_ids:
+            new = round(shares[s["id"]], 1)
+            if abs(new - orig[s["id"]]) >= 0.5:
+                report["changes"].append({"id": s["id"], "name": s.get("name", s["id"]), "from": round(orig[s["id"]], 1), "to": new})
+            s["share_pct"] = new
+        out.append(s)
+    report["moved"] = bool(report["changes"])
+    return out, report
+
+
 def active_targets(frame: dict) -> list[tuple[dict, dict]]:
     """(dimension, target) pairs that carry a usable distribution, in priority order."""
     out = []

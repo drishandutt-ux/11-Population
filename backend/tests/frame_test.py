@@ -372,3 +372,35 @@ def test_matcher_is_told_the_named_proxy(monkeypatch):
     out = asyncio.run(frame.derive_targets("s", [dim], "Manchester", [], rm))["price_tenure"]
     assert "PUBLISHED PROXY named by the planner" in seen["user"] and seen["user"].count("tenure") >= 2
     assert out["status"] == "proxy" and out["proxy_attribute"] == "tenure"
+
+
+# ── rebalancing the plan to the frame (2026-10-20) ───────────────────────────
+
+def _seg(id, share, place, **kw):
+    return {"id": id, "name": id, "share_pct": share, "count": 0, "decision": kw.get("decision", "proposed"), "demographics": {"regions": [place]},
+            "frame_values": [{"dimension": "place", "value": place}] and {"place": place}, **{k: v for k, v in kw.items() if k != "decision"}}
+
+
+def test_rebalance_moves_shares_toward_the_exact_rows_and_leaves_the_rest_alone():
+    target = {"status": "worked_out", "categories": [{"label": "Blackpool deprived", "share_pct": 21}, {"label": "Blackpool other", "share_pct": 29}, {"label": "Oxford", "share_pct": 50}],
+              "source": "w", "year": "", "geography": "", "proxy_attribute": "other", "note": "", "provenance": "derived_statistic"}
+    fr = {"dimensions": [PLACE], "targets": {"place": target}, "geography": "England"}
+    segs = [_seg("a", 30, "Blackpool deprived"), _seg("b", 10, "Blackpool other"), _seg("c", 60, "Oxford")]
+    out, rb = frame.rebalance_to_frame(fr, segs)
+    # Segment b may grow at most ×2.5 (10% → 25%) against a 29% target, so a few points remain: the bound keeps the group the planner's.
+    assert rb["moved"] and rb["before"] == 19.0 and rb["after"] <= 4.5 and rb["rows"] == ["Place"]
+    assert {c["id"]: (c["from"], c["to"]) for c in rb["changes"]}["b"][1] >= 24
+    assert abs(sum(s["share_pct"] for s in out) - 100) < 0.6
+    # Already within tolerance: nothing moves.
+    same, rb2 = frame.rebalance_to_frame(fr, out)
+    assert not rb2["moved"] and rb2["after"] <= frame.GOOD_DEVIATION
+    # An accepted segment keeps its share; a kit segment too; a single movable segment means no rebalance.
+    segs2 = [_seg("a", 30, "Blackpool deprived", decision="accepted"), _seg("b", 10, "Blackpool other"), _seg("c", 60, "Oxford")]
+    out2, rb3 = frame.rebalance_to_frame(fr, segs2)
+    assert next(s for s in out2 if s["id"] == "a")["share_pct"] == 30 and rb3["moved"]
+    assert not frame.rebalance_to_frame(fr, [_seg("a", 40, "Oxford"), _seg("b", 60, "Oxford", kit_cards=[{"place": "Oxford"}])])[1]["moved"]
+    # Bounds: a share never moves more than ×2.5 or below 2%.
+    segs3 = [_seg("a", 2, "Blackpool other"), _seg("b", 98, "Oxford")]
+    out3, _ = frame.rebalance_to_frame(fr, segs3)
+    assert next(s for s in out3 if s["id"] == "a")["share_pct"] <= 5.0
+    assert not frame.rebalance_to_frame(None, segs)[1]["moved"]

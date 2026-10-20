@@ -1025,6 +1025,18 @@ async def _plan(build_id: str, question: str, *, keep: Optional[list[dict]] = No
         for note in pb_notes:
             await log(build_id, "plan", "decision", note)
     segments = normalise_segments(segments, bld.target_count, bld.constraints)
+    if not pb and bld.frame:
+        # Rebalance to the frame (2026-10-20): the planner's shares are nudged so the plan implies the exactly-
+        # matched rows; accepted segments keep their share, so a re-plan around kept segments only moves the rest.
+        fixed = {k.get("id") for k in (keep or [])} | {sg.get("id") for sg in segments if sg.get("decision") == "accepted"}
+        segments, rb = frame_mod.rebalance_to_frame(bld.frame, segments, fixed_ids=fixed)
+        if rb.get("moved"):
+            segments = normalise_segments(segments, bld.target_count, bld.constraints)
+            await log(build_id, "plan", "decision", f"Rebalanced to the sampling frame: worst cell {rb['before']} → {rb['after']} pts off the target on {', '.join(rb['rows'])}",
+                      "; ".join(f"{c['name']} {c['from']}% → {c['to']}%" for c in rb["changes"]))
+        elif rb.get("rows"):
+            await log(build_id, "plan", "info", f"Plan already within {frame_mod.GOOD_DEVIATION:g} pts of the frame on {', '.join(rb['rows'])} (worst cell {rb['before']} pts)" if rb["before"] <= frame_mod.GOOD_DEVIATION
+                      else f"Could not rebalance the plan to the frame within bounds (worst cell stays {rb['before']} pts off on {', '.join(rb['rows'])})", None)
     archetypes_mod.assign_archetypes(segments, await load_archetypes(bld.session_id))
     auto, v_set = voice_setting(bld.constraints)
     try:
