@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { api, Session } from "@/lib/api";
-import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut, ShieldCheck, Share2 } from "lucide-react";
+import { api, Session, SharedSession } from "@/lib/api";
+import { ArrowRight, Clock, Users, Plus, Trash2, Loader2, FlaskConical, TrendingUp, Brain, Lightbulb, LogOut, ShieldCheck, Share2, MessageSquare } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useUiMode } from "@/lib/lite";
 import LiteHome, { ModeSwitch } from "@/components/lite/LiteHome";
-import SharedList from "@/components/sharing/SharedList";
 import ShareDialog from "@/components/sharing/ShareDialog";
 
 export default function HomePage() {
@@ -23,13 +22,20 @@ export default function HomePage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { user, me, enabled: authOn, signOut } = useAuth();
-  const [scope, setScope] = useState<"mine" | "all">("mine");
+  // Mine · Shared · All users (2026-10-20: *Shared* is the sessions colleagues shared, each opening the shared chat).
+  const [scope, setScope] = useState<"mine" | "shared" | "all">("mine");
+  const [shared, setShared] = useState<SharedSession[]>([]);
   // Sharing (2026-10-20): the session a Share button was pressed on; the dialog picks the colleagues.
   const [sharing, setSharing] = useState<Session | null>(null);
 
   useEffect(() => {
+    if (scope === "shared") return;
     api.sessions.list(scope).then((s) => setSessions(s as Session[])).catch(() => {});
   }, [scope]);
+  useEffect(() => {
+    if (!authOn) return;
+    api.sharing.sharedSessions().then(setShared).catch(() => setShared([]));
+  }, [authOn, scope]);
 
   async function handleDelete(id: string) {
     setDeletingId(id);
@@ -213,30 +219,54 @@ export default function HomePage() {
             </form>
           </div>
 
-          {/* Shared with you (2026-10-20): sessions colleagues shared; each opens the shared chat */}
-          {authOn && <SharedList />}
-
-          {/* Recent sessions */}
-          {sessions.length > 0 && (
+          {/* Recent sessions — Mine · Shared · All users */}
+          {(sessions.length > 0 || shared.length > 0 || scope !== "mine") && (
             <div className="mt-6 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between mb-3 shrink-0">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Recent sessions</p>
-                {me?.is_admin && (
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{scope === "shared" ? "Shared with you" : "Recent sessions"}</p>
+                {authOn && (
                   <div className="flex bg-muted rounded p-0.5 gap-0.5">
-                    {(["mine", "all"] as const).map((sc) => (
+                    {(["mine", "shared", ...(me?.is_admin ? ["all" as const] : [])] as ("mine" | "shared" | "all")[]).map((sc) => (
                       <button
                         key={sc}
                         onClick={() => setScope(sc)}
                         className={`text-[10px] px-2 py-0.5 rounded ${scope === sc ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        title={sc === "shared" ? "Sessions colleagues shared with you — each opens the chat" : sc === "all" ? "Every user's sessions (admin)" : "Your own sessions"}
                       >
-                        {sc === "mine" ? "Mine" : "All users"}
+                        {sc === "mine" ? "Mine" : sc === "shared" ? `Shared${shared.length ? ` (${shared.length})` : ""}` : "All users"}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
               <div className="space-y-1.5 overflow-y-auto flex-1">
-                {sessions.map((s) => {
+                {scope === "shared" && shared.length === 0 && (
+                  <p className="text-xs text-muted-foreground px-1 py-4">Nothing has been shared with you yet. When a colleague shares a session, it appears here and opens as a chat.</p>
+                )}
+                {scope === "shared" && shared.map((s) => (
+                  <div
+                    key={s.id}
+                    className="w-full border border-border/60 rounded-md px-3.5 py-3 text-left transition-all cursor-pointer hover:border-primary/30 hover:bg-muted/30"
+                    onClick={() => router.push(`/shared/${s.id}`)}
+                    title="Open the chat"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-medium text-foreground text-xs truncate">{s.title}</span>
+                          <StatusDot status={s.status} />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate">{s.query}</p>
+                        <p className="text-[10px] text-primary/70 truncate mt-0.5">from {s.owner.name}{s.owner.email ? ` · ${s.owner.email}` : ""}</p>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-xs text-muted-foreground shrink-0">
+                        <span className="flex items-center gap-1" title="People in the chat"><Users className="w-3 h-3" />{s.members}</span>
+                        <span className="flex items-center gap-1" title="Messages"><MessageSquare className="w-3 h-3" />{s.messages}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {scope !== "shared" && sessions.map((s) => {
                   const isConfirming = confirmDeleteId === s.id;
                   const isDeleting = deletingId === s.id;
                   return (
