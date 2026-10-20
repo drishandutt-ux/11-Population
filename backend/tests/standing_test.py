@@ -46,6 +46,15 @@ def test_infer_reads_the_record_not_job_words():
     assert carer["lived"] == "carer"
     past = standing.of(_agent(role="Chef", background="Used to struggle with his weight years ago; recovered after a long programme."))
     assert past["lived"] == "past"
+    # the prod misses: "lives with his wife", "patient flow", a clinician's "patients", "years ago" elsewhere in the record
+    assert standing.of(_agent(role="Self-Employed Electrician", background="He lives with his partner in a rented flat in Bispham."))["lived"] == "no"
+    assert standing.of(_agent(role="College Student", background="Lives with her mum and younger brother; mum has fibromyalgia."))["lived"] == "no"   # living with someone is not living with it
+    assert standing.of(_agent(role="NHS Practice Manager", background="Manages a busy GP surgery, overseeing budgets, staffing and patient flow. Hypertensive, BMI 29."))["lived"] == "no"
+    card2 = standing.of(_agent(role="NHS Consultant Cardiologist", background="James trained in London and took a consultant post five years ago. He prescribes GLP-1 agonists for diabetic patients who have heart failure.",
+                               correlation="He views oral GLP-1 through the lens of his patient caseload."))
+    assert card2["lived"] == "no" and card2["expertise"] == "technical"
+    acct = standing.of(_agent(role="Senior Accountant", background="Mild type 2 diabetes diagnosed eighteen months ago; on metformin."))
+    assert acct["lived"] == "yes" and acct["professional"] == ""
     assert standing.of(_agent(role="Patient advocate"))["lived"] == "no"
     assert standing.of(_agent(role="Patient"))["lived"] == "yes"
     # a stored standing wins, and its home lands in known places

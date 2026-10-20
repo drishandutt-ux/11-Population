@@ -40,15 +40,25 @@ _PROFESSIONAL_HINTS = ("gp", "doctor", "dr ", "physician", "nurse", "pharmacist"
                        "paramedic", "healthcare assistant", "health care assistant", "nursing", "practice manager", "commissioner", "nhs manager",
                        "public health", "health visitor", "occupational therap", "psycholog", "therapist", "optometrist", "dentist", "care manager",
                        "social worker", "medical", "clinical")
-_LIVED_PATTERNS = [
-    r"\b(lives?|living|lived) with\b", r"\bdiagnos(ed|is)\b", r"\bon (metformin|insulin|medication|treatment|a waiting list|the jab|the injection)s?\b",
-    r"\b(her|his|their|my) own (weight|condition|diagnosis|health|illness|experience of)\b", r"\bstruggl\w* with (her|his|their|my) (weight|health)\b",
-    r"\b(has|had|have) (type ?2|type ?1|diabetes|obesity|asthma|copd|cancer|depression|arthritis|fibromyalgia|hypertension)\b",
-    r"\b(uses?|used|tried|trying|takes?|taking|prescribed) (it|the drug|the pill|the jab|the medication|wegovy|mounjaro|ozempic|a glp)\b",
-    r"\bservice user\b", r"\bpatient\b", r"\bsurviv(or|ed)\b", r"\bin recovery\b", r"\bwas treated for\b", r"\bbeen through (it|this)\b",
-    r"\b(herself|himself|themselves|myself)\b.*\b(weight|condition|diagnos|treatment|patient)",
+_CONDITION = r"(obesity|overweight|diabetes|type ?[12]|weight|chronic|pain|asthma|copd|depression|anxiety|arthritis|fibromyalgia|hypertension|cancer|heart|dementia|ms|multiple sclerosis|a condition|the condition|this condition|it|this)"
+#: Signs the record is about the person's OWN body or life with the topic — never "lives with his wife",
+#: never a clinician's "patients who have diabetes" (the bare word "patient" used to count, so a practice
+#: manager "overseeing patient flow" was a patient).
+_SELF_PATTERNS = [
+    r"\b(her|his|their|my) own (weight|condition|diagnosis|health|illness|experience of)\b",
+    r"\b(herself|himself|themselves|myself)\b.{0,40}\b(weight|condition|diagnos|treatment)",
+    r"\b(lives?|living|lived) with " + _CONDITION + r"\b",
+    r"\b(was|been|recently|newly|since being) diagnosed\b", r"\bdiagnosed (with|in|at|eighteen|two|three|last)\b",
+    r"\bon (metformin|insulin|statins|a waiting list|the jab|the injection)s?\b",
+    r"\b(uses?|used|tried|trying|takes?|taking|was prescribed|been prescribed) (it|the drug|the pill|the jab|the medication|wegovy|mounjaro|ozempic|a glp)\b",
+    r"\bservice user\b", r"\bsurviv(or|ed)\b", r"\bin recovery\b", r"\bwas treated for\b", r"\bbeen through (it|this)\b",
 ]
-_PAST_PATTERNS = [r"\b(used to|formerly|years ago|in the past|recovered|no longer)\b.*\b(weight|condition|treatment|patient|diagnos)"]
+#: Broader signs, trusted only for a record with no clinical training (a clinician's record talks about conditions all day).
+_LAY_LIVED_PATTERNS = [
+    r"\bstruggl\w* with (her|his|their|my) (weight|health)\b",
+    r"\b(has|had|have) (type ?2|type ?1|diabetes|obesity|asthma|copd|cancer|depression|arthritis|fibromyalgia|hypertension|a heart attack)\b",
+]
+_PAST_MARKERS = r"\b(used to|formerly|years ago|in the past|recovered|no longer|back in|before)\b"
 _CARER_PATTERNS = [r"\bcarer\b", r"\bcares? for (her|his|their|my) (mum|mother|dad|father|husband|wife|partner|son|daughter|parent)", r"\blooks? after (her|his|their|my) (mum|mother|dad|father|husband|wife|partner|son|daughter|parent)",
                    r"\bcaregiver\b", r"\b(her|his|their|my) (mum|mother|dad|father|husband|wife|partner|son|daughter) (has|had|lives with|was diagnosed)"]
 
@@ -120,15 +130,18 @@ def infer(agent: Any) -> dict:
     expertise = "lay"
     if any(h in rl for h in _TECHNICAL_HINTS):
         prof, expertise = _head(role), "technical"
-    elif any(h in rl for h in _PROFESSIONAL_HINTS):
+    elif any(h in rl for h in _PROFESSIONAL_HINTS) or re.search(r"\bOT\b", role):
         prof, expertise = _head(role), "professional"
     lived = "no"
+    patterns = _SELF_PATTERNS + ([] if prof else _LAY_LIVED_PATTERNS)
+    hit = next((m for m in (re.search(p, text) for p in patterns) if m), None)
     if any(re.search(p, text) for p in _CARER_PATTERNS):
         lived = "carer"   # "looks after her mum, who has type 2" is the mum's condition, not hers
     elif re.search(r"\bpatient\b", rl) and not re.search(r"patient (group|advocate|liaison|safety|experience|flow|access)", rl):
         lived = "yes"
-    elif any(re.search(p, text) for p in _LIVED_PATTERNS) and not re.search(r"\bpatient", rl):
-        lived = "past" if any(re.search(p, text) for p in _PAST_PATTERNS) else "yes"
+    elif hit and not re.search(r"\bpatient", rl):
+        # "past" only when a past marker sits next to the sign, not anywhere in the record
+        lived = "past" if re.search(_PAST_MARKERS, text[max(0, hit.start() - 60):hit.end() + 30]) else "yes"
     demo = getattr(agent, "demographics", None) or {}
     home = str(demo.get("region") or "") if isinstance(demo, dict) else ""
     return normalise({"lived": lived, "professional": prof, "expertise": expertise, "home": home}, home=home, basis="inferred") or {}
