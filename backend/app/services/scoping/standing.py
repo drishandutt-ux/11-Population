@@ -58,6 +58,7 @@ _LAY_LIVED_PATTERNS = [
     r"\bstruggl\w* with (her|his|their|my) (weight|health)\b",
     r"\b(has|had|have) (type ?2|type ?1|diabetes|obesity|asthma|copd|cancer|depression|arthritis|fibromyalgia|hypertension|a heart attack)\b",
 ]
+_RELATIVES = {"mum", "mother", "dad", "father", "husband", "wife", "partner", "son", "daughter", "parent", "parents", "brother", "sister", "friend", "gran", "grandmother", "grandfather", "nan", "child", "kids", "who"}
 _PAST_MARKERS = r"\b(used to|formerly|years ago|in the past|recovered|no longer|back in|before)\b"
 _CARER_PATTERNS = [r"\bcarer\b", r"\bcares? for (her|his|their|my) (mum|mother|dad|father|husband|wife|partner|son|daughter|parent)", r"\blooks? after (her|his|their|my) (mum|mother|dad|father|husband|wife|partner|son|daughter|parent)",
                    r"\bcaregiver\b", r"\b(her|his|their|my) (mum|mother|dad|father|husband|wife|partner|son|daughter) (has|had|lives with|was diagnosed)"]
@@ -134,7 +135,17 @@ def infer(agent: Any) -> dict:
         prof, expertise = _head(role), "professional"
     lived = "no"
     patterns = _SELF_PATTERNS + ([] if prof else _LAY_LIVED_PATTERNS)
-    hit = next((m for m in (re.search(p, text) for p in patterns) if m), None)
+    hit = None
+    for p in patterns:
+        for m in re.finditer(p, text):
+            # "mum has fibromyalgia" is the mum's condition: skip a sign whose subject is a relative
+            before = text[max(0, m.start() - 24):m.start()].split()
+            if before and before[-1] in _RELATIVES:
+                continue
+            hit = m
+            break
+        if hit:
+            break
     if any(re.search(p, text) for p in _CARER_PATTERNS):
         lived = "carer"   # "looks after her mum, who has type 2" is the mum's condition, not hers
     elif re.search(r"\bpatient\b", rl) and not re.search(r"patient (group|advocate|liaison|safety|experience|flow|access)", rl):
