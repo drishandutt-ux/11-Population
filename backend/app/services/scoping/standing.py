@@ -69,8 +69,8 @@ def _text(v: Any, limit: int) -> str:
 
 
 def _places(v: Any, limit: int = 8) -> list[str]:
-    if isinstance(v, str):
-        v = [p for p in re.split(r"[;,\n]| and ", v)]
+    if isinstance(v, str):   # places carry commas ("Botley, Oxford, England"): a string splits on ; and newlines only
+        v = [p for p in re.split(r"[;\n]", v)]
     out: list[str] = []
     for p in (v or []):
         t = _text(p, 60)

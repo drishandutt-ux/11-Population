@@ -131,7 +131,8 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
       const body = clear || !standingDraft ? null : {
         lived: standingDraft.lived, lived_detail: standingDraft.lived_detail, professional: standingDraft.professional,
         professional_field: standingDraft.professional_field, expertise: standingDraft.expertise, home: standingDraft.home,
-        known_places: (standingDraft.known_places_text ?? (standingDraft.known_places || []).join(", ")).split(",").map((x) => x.trim()).filter(Boolean),
+        // places carry commas ("Botley, Oxford, England"), so the list is separated by semicolons or new lines
+        known_places: (standingDraft.known_places_text ?? (standingDraft.known_places || []).join("; ")).split(/[;\n]/).map((x) => x.trim()).filter(Boolean),
       };
       const r = await api.scoping.setStanding(sessionId, agentId, body);
       setStandingEdits((prev) => ({ ...prev, [agentId]: r.standing }));
@@ -276,7 +277,7 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
                   <div className="flex items-center justify-between">
                     <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground" title="Who this twin is to the topic. It decides the role and register it can reach and the 'who you are, and who you are not' rules in its prompt.">Standing to the topic{st ? ` · ${basisWord}` : ""}</div>
                     {!standingDraft && (
-                      <button onClick={() => setStandingDraft({ ...(st || { lived: "no", professional: "", expertise: "lay", home: agent.demographics?.region || "", known_places: [], basis: "set" }), known_places_text: (st?.known_places || []).join(", ") })} className="text-[10.5px] text-primary hover:underline">Edit</button>
+                      <button onClick={() => setStandingDraft({ ...(st || { lived: "no", professional: "", expertise: "lay", home: agent.demographics?.region || "", known_places: [], basis: "set" }), known_places_text: (st?.known_places || []).join("; ") })} className="text-[10.5px] text-primary hover:underline">Edit</button>
                     )}
                   </div>
                   {!standingDraft ? (
@@ -285,8 +286,8 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
                         <div>{st.summary || `${st.lived} · ${st.professional || "no training"} · ${st.home}`}</div>
                         {st.lived !== "no" && st.lived_detail && <div className="text-[10.5px] text-muted-foreground/70">Lived: {st.lived_detail}</div>}
                         {st.professional && st.professional_field && <div className="text-[10.5px] text-muted-foreground/70">Training covers: {st.professional_field}</div>}
-                        <div className="text-[10.5px] text-muted-foreground/70">Working knowledge: {st.expertise} · knows first-hand: {(st.known_places || []).join(", ") || "—"}</div>
-                        {st.elsewhere && st.elsewhere.length > 0 && <div className="text-[10.5px] text-muted-foreground/70">Knows only second-hand: {st.elsewhere.join(", ")}</div>}
+                        <div className="text-[10.5px] text-muted-foreground/70">Working knowledge: {st.expertise} · knows first-hand: {(st.known_places || []).join("; ") || "—"}</div>
+                        {st.elsewhere && st.elsewhere.length > 0 && <div className="text-[10.5px] text-muted-foreground/70">Knows only second-hand: {st.elsewhere.join("; ")}</div>}
                       </div>
                     ) : <p className="text-xs text-muted-foreground">Not recorded yet — it is inferred from the record until the twin is annotated.</p>
                   ) : (
@@ -304,7 +305,7 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
                       {standingDraft.lived !== "no" && <input value={standingDraft.lived_detail || ""} onChange={(e) => setStandingDraft({ ...standingDraft, lived_detail: e.target.value })} placeholder="What exactly (e.g. type 2 diabetes for nine years)" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />}
                       <input value={standingDraft.professional || ""} onChange={(e) => setStandingDraft({ ...standingDraft, professional: e.target.value })} placeholder="Trained as (e.g. GP) — blank for none" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />
                       {standingDraft.professional && <input value={standingDraft.professional_field || ""} onChange={(e) => setStandingDraft({ ...standingDraft, professional_field: e.target.value })} placeholder="What that training covers" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />}
-                      <input value={standingDraft.known_places_text ?? ""} onChange={(e) => setStandingDraft({ ...standingDraft, known_places_text: e.target.value })} placeholder="Places lived or worked in, comma-separated (home first)" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />
+                      <input value={standingDraft.known_places_text ?? ""} onChange={(e) => setStandingDraft({ ...standingDraft, known_places_text: e.target.value })} placeholder="Places lived or worked in, separated by semicolons (home first)" className="w-full bg-input border border-border rounded px-1.5 py-1 text-xs" />
                       <div className="flex items-center gap-2">
                         <button onClick={() => saveStanding(false)} disabled={standingSaving} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-40">
                           {standingSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
