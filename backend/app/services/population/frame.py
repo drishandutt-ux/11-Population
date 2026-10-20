@@ -433,10 +433,11 @@ def rebalance_to_frame(frame: Optional[dict], segments: list[dict], *, fixed_ids
     segments (shares updated, counts untouched — call `normalise_segments` after) and a report:
     {moved, before, after, changes[{id, name, from, to}], rows[labels]}. Nothing moves when there is no frame,
     fewer than two movable segments, or the plan already sits within `tolerance` of every cell."""
-    report = {"moved": False, "before": 0.0, "after": 0.0, "changes": [], "rows": []}
+    report = {"moved": False, "before": 0.0, "after": 0.0, "changes": [], "rows": [], "exact_after": 0.0}
     if not frame or not segments:
         return segments, report
-    pairs = active_targets(frame)[:MATCH_EXACTLY]
+    all_pairs = active_targets(frame)
+    pairs = all_pairs[:MATCH_EXACTLY]
     if not pairs:
         return segments, report
     fixed_ids = set(fixed_ids or ())
@@ -446,11 +447,14 @@ def rebalance_to_frame(frame: Optional[dict], segments: list[dict], *, fixed_ids
         return segments, report
     shares = {s["id"]: float(s.get("share_pct") or 0) for s in kept}
     orig = dict(shares)
-    splits = {dim["key"]: {s["id"]: segment_cell_split(dim, t, s) for s in kept} for dim, t in pairs}
-    report["rows"] = [dim["label"] for dim, _ in pairs]
-    report["before"] = round(_worst_deviation(pairs, shares, splits), 1)
+    splits = {dim["key"]: {s["id"]: segment_cell_split(dim, t, s) for s in kept} for dim, t in all_pairs}
+    report["rows"] = [dim["label"] for dim, _ in all_pairs]
+    # The exact rows decide the level; the weighted rows are fitted too so the weights have less to do.
+    report["before"] = round(_worst_deviation(all_pairs, shares, splits), 1)
+    exact_before = _worst_deviation(pairs, shares, splits)
     if report["before"] <= tolerance:
         report["after"] = report["before"]
+        report["exact_after"] = round(exact_before, 1)
         return segments, report
     fixed_total = sum(shares[s["id"]] for s in kept if s not in movable)
     movable_ids = [s["id"] for s in movable]
@@ -458,8 +462,12 @@ def rebalance_to_frame(frame: Optional[dict], segments: list[dict], *, fixed_ids
     for sid in movable_ids:
         lo = max(REBALANCE_MIN_SHARE, orig[sid] / REBALANCE_MAX_FACTOR)
         bounds[sid] = (lo, max(lo, orig[sid] * REBALANCE_MAX_FACTOR))
-    for _ in range(REBALANCE_ITERS):
-        for dim, t in pairs:
+    def _fit(rows: list) -> None:
+        for _ in range(REBALANCE_ITERS):
+            _round(rows)
+
+    def _round(rows: list) -> None:
+        for dim, t in rows:
             sp = splits[dim["key"]]
             ratio: dict[str, float] = {}
             for c in t.get("categories") or []:
@@ -474,9 +482,22 @@ def rebalance_to_frame(frame: Optional[dict], segments: list[dict], *, fixed_ids
                 factor = max(0.25, min(4.0, factor)) ** 0.5          # damped
                 shares[sid] = max(bounds[sid][0], min(bounds[sid][1], shares[sid] * factor))
             _fit_to_room(shares, movable_ids, bounds, max(0.0, 100.0 - fixed_total))
-    report["after"] = round(_worst_deviation(pairs, shares, splits), 1)
-    if report["after"] >= report["before"] - 0.5:
+
+    # Pass 1: the exact rows alone. Pass 2: every active row from there, kept only if the exact rows stay
+    # as well fitted (within tolerance, or no worse than pass 1 by more than half a point).
+    _fit(pairs)
+    exact_only = dict(shares)
+    exact_only_dev = _worst_deviation(pairs, shares, splits)
+    if len(all_pairs) > len(pairs):
+        _fit(all_pairs)
+        exact_dev = _worst_deviation(pairs, shares, splits)
+        if exact_dev > max(tolerance, exact_only_dev + 0.5):
+            shares.update(exact_only)
+    report["after"] = round(_worst_deviation(all_pairs, shares, splits), 1)
+    report["exact_after"] = round(_worst_deviation(pairs, shares, splits), 1)
+    if report["after"] >= report["before"] - 0.5 and report["exact_after"] >= exact_before - 0.5:
         report["after"] = report["before"]
+        report["exact_after"] = round(exact_before, 1)
         return segments, report
     out = []
     for s in segments:
@@ -528,6 +549,7 @@ def build_report(frame: dict, segments: list[dict], total: int, agents: Optional
     """Target vs planned vs achieved per dimension, thin cells, exact-vs-weighted split, ESS."""
     dims_out = []
     worst = 0.0
+    worst_by_mode: dict[str, float] = {}
     matched_exactly, weighted_only, unmatched = [], [], []
     for k, dim in enumerate(frame.get("dimensions") or []):
         t = (frame.get("targets") or {}).get(dim["key"]) or {}
@@ -560,13 +582,20 @@ def build_report(frame: dict, segments: list[dict], total: int, agents: Optional
                 dev_achieved = max(dev_achieved, abs(ach - tgt))
         row.update({"cells": cells, "max_deviation_planned": round(dev_planned, 1), "max_deviation_achieved": round(dev_achieved, 1) if agents else None,
                     "unplaced": unplaced if agents else None})
-        worst = max(worst, dev_achieved if agents else dev_planned)
+        worst_by_mode[row["mode"]] = max(worst_by_mode.get(row["mode"], 0.0), dev_achieved if agents else dev_planned)
         dims_out.append(row)
+    # The level is judged on the exactly-matched rows (2026-10-20): the weighted-only rows are corrected by the
+    # raking weights, so a 20-point gap there is what the weights are for, not a poorly matched panel. Their
+    # own worst cell is reported beside it.
+    worst_exact = max([worst_by_mode.get("exact", 0.0)] + ([worst_by_mode.get("weighted", 0.0)] if not matched_exactly else []))
+    worst_weighted = worst_by_mode.get("weighted", 0.0)
+    worst = worst_exact
     level = "good" if worst <= GOOD_DEVIATION else "fair" if worst <= FAIR_DEVIATION else "poor"
     thin = [f"{d['label']}: {c['label']} ({c['achieved_n']} of {c['expected_n']:g} expected)" for d in dims_out for c in d.get("cells", []) if c.get("thin")]
     report = {
         "level": level if (matched_exactly or weighted_only) else "none",
         "worst_deviation_pts": round(worst, 1),
+        "worst_weighted_pts": round(worst_weighted, 1),
         "matched_exactly": matched_exactly, "weighted_only": weighted_only, "unmatched": unmatched,
         "estimated": [d["key"] for d in dims_out if d["status"] == "estimated"],
         "worked_out": [d["key"] for d in dims_out if d["status"] == "worked_out"],

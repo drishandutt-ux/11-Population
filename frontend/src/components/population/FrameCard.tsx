@@ -114,7 +114,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
       <div className="flex items-center gap-2 flex-wrap">
         <h3 className="text-[15px] font-semibold text-foreground tracking-tight">Sampling frame</h3>
         {report && report.level !== "none" && (
-          <span className={`chip ${LEVEL_CLS[report.level]}`} title={`The furthest any cell sits from its published share: ${report.worst_deviation_pts} percentage points. Good ≤ 10, fair ≤ 20, poor above.`}>
+          <span className={`chip ${LEVEL_CLS[report.level]}`} title={`The furthest any cell on the exactly-matched rows sits from its published share: ${report.worst_deviation_pts} percentage points (good ≤ 5, fair ≤ 12, poor above)${typeof report.worst_weighted_pts === "number" ? `; on the weighted-only rows ${report.worst_weighted_pts} points, corrected by the weights` : ""}.`}>
             {report.stage === "achieved" ? "built" : "plan"} · {report.level} match
           </span>
         )}
