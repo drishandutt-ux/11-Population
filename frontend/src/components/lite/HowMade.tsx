@@ -175,10 +175,10 @@ export default function HowMade({ sessionId, question, build, agents, research, 
     : "";
   const matchedLabels = dims.filter((_, i) => standings[i] === "matched").map((d) => d.label);
   const assumedLabels = dims.filter((_, i) => standings[i] === "assumed").map((d) => d.label);
-  const unmatchedCount = dims.length - matchedLabels.length - assumedLabels.length;
+  const unmatchedCount = dims.length - matchedLabels.length - assumedLabels.length - worked;
   const matchLine = dims.length
     ? [
-        matchedLabels.length ? `Matched on ${list(matchedLabels, 2)}` : "Nothing matched to a published figure",
+        matchedLabels.length ? `Matched on ${list(matchedLabels, 2)}` : worked ? "" : "Nothing matched to a published figure",
         worked ? `${worked} worked out (assumption${worked === 1 ? "" : "s"})` : "",
         assumedLabels.length ? `${assumedLabels.length} assumed` : "",
         unmatchedCount ? `${unmatchedCount} with no figure` : "",
