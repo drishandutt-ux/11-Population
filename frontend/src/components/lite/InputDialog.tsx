@@ -653,7 +653,8 @@ function Shares({ t }: { t: FrameTarget }) {
   if (!cats.length) return <span className="text-muted-foreground">{t.note || "—"}</span>;
   return (
     <span className="flex flex-wrap gap-x-2 gap-y-0.5">
-      {cats.slice(0, 8).map((c, i) => <span key={i} className="whitespace-nowrap"><span className="text-muted-foreground">{c.label}</span> <Num>{Math.round(c.share_pct)}%</Num></span>)}
+      {/* Labels may wrap (2026-10-20: nowrap income bands pushed the table past the dialog's edge); the number stays on the label's last line. */}
+      {cats.slice(0, 8).map((c, i) => <span key={i}><span className="text-muted-foreground">{c.label}</span>&nbsp;<Num>{Math.round(c.share_pct)}%</Num></span>)}
       {cats.length > 8 && <span className="text-muted-foreground">+{cats.length - 8}</span>}
     </span>
   );
