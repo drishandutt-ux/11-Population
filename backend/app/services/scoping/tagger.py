@@ -210,6 +210,11 @@ async def tag_session(session_id: str, query: str, *, model: Optional[str] = Non
         if not body:
             continue
         f["project"] = session_id   # units belong to the session's project (L1-07 isolation is a hard dimension)
+        if prov == "model_inference" and ref.startswith("debate:"):
+            # a debate post is "from the discussion so far", not something that travelled on a channel: with the
+            # base vocabulary the tagger called every post "Word of mouth", and the own-channel boost then ranked
+            # the debate above the real sources and the lay layer (prod, 2026-10-20)
+            f["channel"] = []
         units.append({"id": str(uuid.uuid4()), "session_id": session_id, "snapshot_id": snapshot_id, "text": body[:2000], "source_ref": ref,
                       "provenance_class": prov, "trust_tier": trust, "facets": f, "created_at": now})
     # The lay layer (2026-10-20): a street-level version of every professional / technical unit the

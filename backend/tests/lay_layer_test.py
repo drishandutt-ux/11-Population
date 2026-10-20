@@ -127,3 +127,35 @@ def test_stale_ignores_the_lay_layer(monkeypatch):
     st = asyncio.run(service.state("s1"))
     assert st["unit_count"] == 4 and st["lay_count"] == 2 and st["stale"] is False
     assert "derived_from" not in st["counts"] and st["counts"]["layer"] == {"lay": 2}
+
+
+def test_debate_posts_carry_no_channel(monkeypatch, tmp_path):
+    """A post from the discussion is not word of mouth: its channel facet is dropped at tagging so the
+    own-channel boost cannot rank the debate above real sources and the lay layer."""
+    import app.core.database as dbm
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from app.core.config import get_settings
+    from app.services.knowledge_graph import lightrag_service, ontology as onto_svc
+    import app.models.kg, app.models.scoping  # noqa: F401
+    monkeypatch.setattr(get_settings(), "lay_layer", False)
+    eng = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/t.db")
+    monkeypatch.setattr(dbm, "engine", eng)
+    monkeypatch.setattr(dbm, "AsyncSessionLocal", async_sessionmaker(eng, expire_on_commit=False))
+
+    async def prep():
+        async with eng.begin() as c:
+            await c.run_sync(dbm.Base.metadata.create_all)
+        await lightrag_service._save_kg("s9", {"entities": ["Blackpool"], "chunks": ["[Jordan | Labourer]: round here you wait weeks for the GP",
+                                                                                     "[SOURCE web | Gazette | https://blackpoolgazette.co.uk/a | 2026] GP waits are three weeks"], "relations": []})
+        await onto_svc.save("s9", {**ONTO, "entity_count": 1})
+    asyncio.run(prep())
+    lightrag_service._kg_cache.pop("s9", None)
+
+    async def fake_analyze(schema, system, user, **kw):
+        return {"units": [{"index": k, "geography": ["Blackpool"], "roles": ["public"], "channels": ["Word of mouth"], "conditions": [], "stages": [], "segments": [], "register": "lay", "date": ""} for k in (0, 1)]}
+    monkeypatch.setattr(tagger, "analyze", fake_analyze)
+    from app.services.scoping import service
+    service._bundles.clear()
+    st = asyncio.run(tagger.tag_session("s9", "GP waits"))
+    by_ref = {u["source_ref"][:7]: u["facets"]["channel"] for u in st["units"]}
+    assert by_ref["debate:"] == [] and by_ref["[SOURCE"] == ["Word of mouth"]
