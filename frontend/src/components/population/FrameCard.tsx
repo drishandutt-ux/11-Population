@@ -88,7 +88,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [proxyPick, setProxyPick] = useState<Record<string, string>>({});
   const [uploadSource, setUploadSource] = useState<Record<string, string>>({});
-  const [working, setWorking] = useState<string | null>(null);
+  const [working, setWorking] = useState<Set<string>>(new Set());   // dimensions with a ladder action in flight — each row is gated on its own
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const dims = frame.dimensions || [];
@@ -97,8 +97,8 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
   const withData = dims.filter((d) => ["found", "proxy", "uploaded", "worked_out", "estimated"].includes(targets[d.key]?.status || ""));
 
   async function act(key: string, body: Parameters<typeof onAction>[1]) {
-    setWorking(key);
-    try { await onAction(key, body); } finally { setWorking(null); }
+    setWorking((w) => new Set(w).add(key));
+    try { await onAction(key, body); } finally { setWorking((w) => { const n = new Set(w); n.delete(key); return n; }); }
   }
 
   async function onFile(key: string, file: File | null) {
@@ -224,15 +224,15 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                   <p className="text-xs text-red-200/80">Nothing on file states this distribution for {frame.geography || "this place"} — not the statistics gathered, your research pages, uploads or survey{t.note ? ` (${t.note})` : ""}. Choose how to fill it:</p>
                   <div className="flex flex-wrap gap-1.5 items-center">
                     {d.kind !== "attitudinal" && (
-                      <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "work_out" })} className="btn btn-xs btn-secondary" title="Decompose it into figures the publisher registry says are published, search for them, and compute the distribution with the working shown — labelled as worked out from published figures">
-                        {working === d.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Calculator className="w-3 h-3" />} Work it out from published figures
+                      <button disabled={working.has(d.key)} onClick={() => act(d.key, { action: "work_out" })} className="btn btn-xs btn-secondary" title="Decompose it into figures the publisher registry says are published, search for them, and compute the distribution with the working shown — labelled as worked out from published figures">
+                        {working.has(d.key) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Calculator className="w-3 h-3" />} Work it out from published figures
                       </button>
                     )}
-                    <button disabled={busy || working === d.key} onClick={() => act(d.key, { action: "estimate" })} className="btn btn-xs btn-secondary" title="The model states a distribution from what it knows, anchored to what is on file about this audience — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
-                      {working === d.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Model estimate
+                    <button disabled={working.has(d.key)} onClick={() => act(d.key, { action: "estimate" })} className="btn btn-xs btn-secondary" title="The model states a distribution from what it knows, anchored to what is on file about this audience — labelled as a model estimate everywhere, lowers confidence; it will decline attitudinal dimensions">
+                      {working.has(d.key) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Model estimate
                     </button>
                     <input ref={(el) => { fileRefs.current[d.key] = el; }} type="file" accept=".csv,.txt,.tsv" className="hidden" onChange={(e) => onFile(d.key, e.target.files?.[0] || null)} />
-                    <button disabled={busy || working === d.key} onClick={() => fileRefs.current[d.key]?.click()} className="btn btn-xs btn-secondary" title="A CSV of `category, share` — a client panel, a crosstab, a spreadsheet">
+                    <button disabled={working.has(d.key)} onClick={() => fileRefs.current[d.key]?.click()} className="btn btn-xs btn-secondary" title="A CSV of `category, share` — a client panel, a crosstab, a spreadsheet">
                       <Upload className="w-3 h-3" /> Upload a table
                     </button>
                     <input value={uploadSource[d.key] || ""} onChange={(e) => setUploadSource((s) => ({ ...s, [d.key]: e.target.value }))} placeholder="source of the upload (optional)" className="field field-sm w-44 py-1" />
@@ -242,10 +242,10 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
                           <option value="">use a proxy…</option>
                           {withData.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                         </select>
-                        <button disabled={busy || !proxyPick[d.key]} onClick={() => act(d.key, { action: "proxy", proxy_of: proxyPick[d.key] })} className="btn btn-xs btn-secondary">Use</button>
+                        <button disabled={working.has(d.key) || !proxyPick[d.key]} onClick={() => act(d.key, { action: "proxy", proxy_of: proxyPick[d.key] })} className="btn btn-xs btn-secondary">Use</button>
                       </span>
                     )}
-                    <button disabled={busy} onClick={() => act(d.key, { action: "skip" })} className="btn btn-xs btn-ghost" title="Don't match or weight on it; estimate or upload a distribution later to change that">Skip</button>
+                    <button disabled={working.has(d.key)} onClick={() => act(d.key, { action: "skip" })} className="btn btn-xs btn-ghost" title="Don't match or weight on it; estimate or upload a distribution later to change that">Skip</button>
                   </div>
                 </div>
               )}
@@ -256,7 +256,7 @@ export default function FrameCard({ build, busy, readOnly, onAction, onEstimateA
 
       {gaps.length > 0 && !readOnly && (
         <div className="flex items-center gap-3 flex-wrap">
-          <button disabled={busy} onClick={onEstimateAll} className="btn btn-sm btn-secondary">
+          <button disabled={busy || working.size > 0} onClick={onEstimateAll} className="btn btn-sm btn-secondary">
             <Sparkles className="w-3 h-3" /> Use the model&apos;s estimate for all {gaps.length} gap{gaps.length === 1 ? "" : "s"}
           </button>
           <span className="hint">Each will be labelled as a model estimate; the model declines attitudinal ones.</span>

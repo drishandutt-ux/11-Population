@@ -9,12 +9,13 @@ segment plan — segment by segment, with a reason when they reject one.
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import re
 import traceback
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import select
 
@@ -1183,6 +1184,36 @@ async def _estimate_open_gaps(build_id: str) -> Optional[PopulationBuild]:
                                  note="no published figure on file, and the model will not estimate an attitude — not weighted; upload a distribution in the Studio to change that")
 
 
+#: One lock per build around the read-modify-write of a frame target: two ladder actions (or the pipeline's
+#: concurrent work-outs) each load the frame, set one target and save the whole dict, so without the lock
+#: the later save silently dropped the earlier result (2026-10-20).
+_frame_locks: dict[str, tuple[Any, asyncio.Lock]] = {}   # build id → (event loop, lock); a lock is bound to the loop it was made on
+WORKOUT_CONCURRENCY = int(os.environ.get("WORKOUT_CONCURRENCY", 3))
+
+
+async def _set_frame_target(build_id: str, key: str, tg: dict) -> Optional[PopulationBuild]:
+    """Save one dimension's target onto the build's current frame (reloaded under the lock) and refresh the
+    plan-vs-frame report when a plan exists."""
+    loop = asyncio.get_running_loop()
+    held = _frame_locks.get(build_id)
+    if not held or held[0] is not loop:
+        held = (loop, asyncio.Lock())
+        _frame_locks[build_id] = held
+    lock = held[1]
+    async with lock:
+        bld = await _load(build_id)
+        if not bld or not bld.frame:
+            return bld
+        fr = dict(bld.frame)
+        targets = dict(fr.get("targets") or {})
+        targets[key] = tg
+        fr["targets"] = targets
+        bld = await _save(build_id, frame=fr)
+        if getattr(bld, "plan", None):
+            bld = await refresh_frame_report(build_id)
+    return bld
+
+
 def _region_of(geography: str) -> Optional[str]:
     gl = (geography or "").lower()
     return "uk-en" if any(k in gl for k in ("uk", "united kingdom", "britain", "england", "scotland", "wales", "northern ireland", "london")) else None
@@ -1206,22 +1237,24 @@ async def _work_out_open_gaps(build_id: str, question: str, geography: str, fact
     keys = list((bld.sources or {}).get("quant_sources") or []) or default_sources(geography)
     await log(build_id, "frame", "info", f"Nothing on file states {len(open_dims)} dimension(s) outright — working them out from published parts: " + ", ".join(d["label"] for d in open_dims),
               "Each is decomposed into figures the publisher registry says are published, those are searched for, and the distribution is computed with its working shown")
-    for d in open_dims:
-        if _stopped(build_id):
-            break
-        try:
-            tg = await workout_mod.work_out_target(bld.session_id, question, d, geography, keys, facts_rows, build_id=build_id, log=_frame_logger(build_id),
-                                                   region=_region_of(geography), should_stop=lambda: _stopped(build_id), extra_material=research.for_dim(d, 3000) if research else "")
-        except Exception as e:  # noqa: BLE001
-            await log(build_id, "frame", "warn", f"Work-out failed for {d['label']}", str(e)[:120])
-            continue
-        if tg.get("status") == "worked_out":
-            bld = await _load(build_id)
-            fr = dict(bld.frame)
-            targets = dict(fr.get("targets") or {})
-            targets[d["key"]] = tg
-            fr["targets"] = targets
-            bld = await _save(build_id, frame=fr)
+    gate = asyncio.Semaphore(max(1, WORKOUT_CONCURRENCY))
+
+    async def one(d: dict) -> None:
+        async with gate:
+            if _stopped(build_id):
+                return
+            try:
+                tg = await workout_mod.work_out_target(bld.session_id, question, d, geography, keys, facts_rows, build_id=build_id, log=_frame_logger(build_id),
+                                                       region=_region_of(geography), should_stop=lambda: _stopped(build_id), extra_material=research.for_dim(d, 3000) if research else "")
+            except Exception as e:  # noqa: BLE001
+                await log(build_id, "frame", "warn", f"Work-out failed for {d['label']}", str(e)[:120])
+                return
+            if tg.get("status") == "worked_out":
+                await _set_frame_target(build_id, d["key"], tg)
+
+    # The dimensions are worked out `WORKOUT_CONCURRENCY` at a time (2026-10-20: one after another took the
+    # gather stage minutes per gap); each result is saved under the build's frame lock as it lands.
+    await asyncio.gather(*(one(d) for d in open_dims))
     return await _load(build_id)
 
 
@@ -1294,12 +1327,9 @@ async def resolve_frame_gap(build_id: str, key: str, action: str, *, categories:
         await log(build_id, "frame", "decision", f"Skipped · {dim['label']}: not matched", None)
     else:
         raise ValueError("action must be work_out, estimate, upload, proxy or skip")
-    targets[key] = tg
-    fr["targets"] = targets
-    bld = await _save(build_id, frame=fr)
-    if bld.plan:
-        bld = await refresh_frame_report(build_id)
-    return bld
+    # Saved onto the frame as it is NOW, under the build's lock: another ladder action may have landed while
+    # this one was searching, and `fr` above is a snapshot from before it started.
+    return await _set_frame_target(build_id, key, tg)
 
 
 async def frame_estimate_all(build_id: str) -> Optional[PopulationBuild]:

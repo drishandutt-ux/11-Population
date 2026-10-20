@@ -176,3 +176,49 @@ def test_the_pipeline_works_out_open_gaps_and_saves_what_lands(monkeypatch):
     assert out.frame["targets"]["income"]["status"] == "worked_out" and out.frame["targets"]["age"]["status"] == "missing"
     assert [d["key"] for d in frame.gaps(out.frame)] == ["age", "stance"]
     assert any("working them out from published parts" in m for _, _, m in logged)
+
+
+def test_concurrent_ladder_saves_keep_both_results_and_the_pipeline_runs_dimensions_in_parallel(monkeypatch):
+    """Two actions that each snapshot the frame and save one key must not clobber each other (2026-10-20)."""
+    bld = SimpleNamespace(id="b2", session_id="s", plan=None,
+                          frame={"dimensions": [INCOME, dict(INCOME, key="age", label="Age", attribute="age")], "targets": {"income": {"status": "missing", "categories": []}, "age": {"status": "missing", "categories": []}}, "geography": "Blackpool"},
+                          sources={"quant_sources": ["ons"]}, constraints={})
+
+    async def fake_load(build_id):
+        return SimpleNamespace(**{**bld.__dict__, "frame": {**bld.frame, "targets": dict(bld.frame["targets"])}})
+
+    async def fake_save(build_id, **fields):
+        await asyncio.sleep(0)            # yield, as the real commit does
+        for k, v in fields.items():
+            setattr(bld, k, v)
+        return bld
+
+    monkeypatch.setattr(builder, "_load", fake_load)
+    monkeypatch.setattr(builder, "_save", fake_save)
+    monkeypatch.setattr(builder, "_stopped", lambda build_id: False)
+
+    async def fake_log(build_id, stage, level, message, detail=None):
+        return None
+
+    monkeypatch.setattr(builder, "log", fake_log)
+    started = []
+
+    async def fake_work_out(session_id, question, dim, geography, keys, facts_rows, **kw):
+        started.append(dim["key"])
+        await asyncio.sleep(0.01)
+        return {"status": "worked_out", "categories": [{"label": "A", "share_pct": 50}, {"label": "B", "share_pct": 50}], "source": "w", "year": "", "geography": "Blackpool",
+                "proxy_attribute": "other", "note": "", "provenance": "derived_statistic", "working": "w", "components": [], "confidence": 50}
+
+    monkeypatch.setattr(builder.workout_mod, "work_out_target", fake_work_out)
+
+    async def both():
+        a = builder._set_frame_target("b2", "income", {"status": "found", "categories": [{"label": "x", "share_pct": 100}]})
+        b = builder._set_frame_target("b2", "age", {"status": "found", "categories": [{"label": "y", "share_pct": 100}]})
+        await asyncio.gather(a, b)
+        return bld.frame["targets"]
+
+    t = _run(both())
+    assert t["income"]["status"] == "found" and t["age"]["status"] == "found"
+    bld.frame["targets"] = {"income": {"status": "missing", "categories": []}, "age": {"status": "missing", "categories": []}}
+    out = _run(builder._work_out_open_gaps("b2", "Q?", "Blackpool", [], None))
+    assert sorted(started) == ["age", "income"] and all(v["status"] == "worked_out" for v in out.frame["targets"].values())

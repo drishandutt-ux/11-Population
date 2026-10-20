@@ -224,8 +224,13 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   const replan = () => guard(async () => { if (build) setBuild(await api.population.replan(id, build.id, { constraints: fullConstraints, count, keep_accepted: true })); });
   const approve = () => guard(async () => { if (build) { setSpawn({ current: 0, total: keptCount }); setLiveAgents([]); setBuild(await api.population.approve(id, build.id, { count, mode })); } });
   const stop = () => guard(async () => { if (build) await api.population.stop(id, build.id); });
+  // Not `guard`ed: a ladder action on one dimension must not grey out the rest of the page — several gaps are
+  // worked out at once, each row showing its own spinner (2026-10-20). Errors still surface in the banner.
   const frameAction = async (dimKey: string, body: { action: "work_out" | "estimate" | "upload" | "proxy" | "skip"; categories?: FrameCategory[]; source?: string; proxy_of?: string }) => {
-    await guard(async () => { if (build) setBuild(await api.population.frameAction(id, build.id, dimKey, body)); });
+    if (!build) return;
+    setError(null);
+    try { setBuild(await api.population.frameAction(id, build.id, dimKey, body)); }
+    catch (e: any) { setError(e?.message || "Something went wrong"); }
   };
   const estimateAll = () => guard(async () => { if (build) setBuild(await api.population.frameEstimateAll(id, build.id)); });
   const search = async () => {
