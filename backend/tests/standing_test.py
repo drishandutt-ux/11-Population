@@ -122,6 +122,15 @@ def test_elsewhere_and_settle():
     assert auto.elsewhere_for(st, ONTO) == ["Oxford"]
     assert auto.elsewhere_for({"known_places": ["Oxford"]}, ONTO) == ["Blackpool", "North West", "Lancashire", "Claremont"]
     assert auto.elsewhere_for(st, None) == []
+    # the ontology as prod builds it: unnamed nodes, a district named after its city, an inferred "Oxford City"
+    messy = {"nodes": [
+        {"id": "Blackpool", "cls": "geography", "level": "local_authority", "mentions": 62}, {"id": "Oxford", "cls": "geography", "level": "place", "mentions": 59},
+        {"id": "deprived areas", "cls": "geography", "level": "place", "mentions": 22}, {"id": "London", "cls": "geography", "level": "region", "mentions": 8},
+        {"id": "Cowley", "cls": "geography", "level": "place", "mentions": 7}, {"id": "East Oxford", "cls": "geography", "level": "place", "mentions": 1},
+        {"id": "Oxford City", "cls": "geography", "level": "local_authority", "mentions": 0}, {"id": "<UNKNOWN>", "cls": "geography", "level": "local_authority", "mentions": 0},
+        {"id": "local areas (MSOAs)", "cls": "geography", "level": "lsoa", "mentions": 3}, {"id": "Claremont", "cls": "geography", "level": "place", "mentions": 4}],
+        "edges": [{"head": "Cowley", "predicate": "within", "tail": "Oxford City"}, {"head": "East Oxford", "predicate": "within", "tail": "Oxford"}]}
+    assert auto.elsewhere_for({"known_places": ["Botley, Oxford, England", "London"]}, messy) == ["Blackpool", "Claremont"]
     a = _agent(role="Delivery Driver", demographics={"region": "Claremont, Blackpool, England"})
     assert auto.settle_standing(a, ONTO) is True
     assert a.standing["basis"] == "inferred" and a.standing["elsewhere"] == ["Oxford"] and a.standing["known_places"] == ["Claremont, Blackpool, England"]

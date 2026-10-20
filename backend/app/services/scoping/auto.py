@@ -226,27 +226,49 @@ async def annotate_agents(session_id: str, query: Optional[str] = None, *, reaso
 _ELSEWHERE_LEVELS = ("region", "icb", "local_authority", "place")
 
 
+def _named_place(n: dict) -> bool:
+    """A real, named place — not the ontology's "deprived areas", "neighbourhoods", "<UNKNOWN>" or "local areas (MSOAs)"."""
+    name = str(n.get("id") or "").strip()
+    return bool(name) and name[0].isupper() and "(" not in name and "<" not in name and n.get("level") in _ELSEWHERE_LEVELS
+
+
 def elsewhere_for(standing: dict, onto: Optional[dict], limit: int = 6) -> list[str]:
     """The session's named places this twin has NOT lived or worked in — the ones its posts may
     only speak about second-hand. From the ontology's geography nodes below nation level, most
-    mentioned first; a place the twin knows (or that contains one it knows) is left out."""
+    mentioned first. Left out: a place the twin knows, anything that contains it or sits inside it
+    (by `within` edges or by name — "East Oxford" for an Oxford twin), and the ontology's unnamed
+    nodes."""
     if not onto:
         return []
     from .engine import ancestors_map
     from .profiles import match_nodes
-    names = [n["id"] for n in onto.get("nodes", []) if n.get("cls") == "geography"]
+    nodes = [n for n in onto.get("nodes", []) if n.get("cls") == "geography"]
+    names = [n["id"] for n in nodes]
+    known_strings = [str(p).lower() for p in (standing or {}).get("known_places") or [] if p]
     known = set()
-    for p in (standing or {}).get("known_places") or []:
+    for p in known_strings:
         known.update(match_nodes(p, names))
+    # a node named after a known place is the same place to a resident ("Oxford City", "East Oxford" for Oxford)
+    known_l = {k.lower() for k in known}
+    for nid in names:
+        nl = nid.lower()
+        if nid not in known and any(nl in k or k in nl for k in known_l):
+            known.add(nid)
     anc = ancestors_map(onto)
     reach = set(known)
     for k in known:
         reach |= anc.get(k, set())
-    cands = [n for n in onto.get("nodes", []) if n.get("cls") == "geography" and n.get("level") in _ELSEWHERE_LEVELS and n["id"] not in reach]
-    # a place that contains a known place is not "elsewhere" either (Lancashire for a Blackpool twin)
-    cands = [n for n in cands if not any(n["id"] in anc.get(k, set()) for k in known)]
-    cands.sort(key=lambda n: -int(n.get("mentions") or 0))
-    return [n["id"] for n in cands[:limit]]
+    out = []
+    for n in sorted((n for n in nodes if _named_place(n)), key=lambda n: -int(n.get("mentions") or 0)):
+        nid = n["id"]
+        if nid in reach or anc.get(nid, set()) & known:
+            continue   # known, contains a known place, or sits inside one
+        if any(nid.lower() in ks for ks in known_strings):
+            continue   # named inside the twin's own place string
+        out.append(nid)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def settle_standing(agent: Any, onto: Optional[dict]) -> bool:

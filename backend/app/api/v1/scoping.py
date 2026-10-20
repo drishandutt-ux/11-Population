@@ -124,6 +124,7 @@ async def put_standing(session_id: str, agent_id: str, body: StandingBody, user:
         await scoping_auto.annotate_agents(session_id, reason="standing", agent_ids=[agent_id])
     except Exception as e:  # noqa: BLE001
         print(f"[scoping] re-annotate after standing change failed: {type(e).__name__}: {e}")
+    await db.refresh(agent)   # the annotation wrote `elsewhere` in its own session
     st = standing_mod.of(agent)
     return {"agent_id": agent_id, "standing": {**st, "summary": standing_mod.summary(st), "spoke_from": standing_mod.spoke_from(st)}}
 
