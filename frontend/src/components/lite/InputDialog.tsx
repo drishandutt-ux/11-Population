@@ -459,9 +459,16 @@ function StatisticsBody(p: Props) {
                 {st === "matched" ? <Check className="w-3.5 h-3.5" style={{ color: GOOD }} /> : st === "worked" ? <Calculator className="w-3.5 h-3.5" style={{ color: WORKED }} /> : st === "assumed" ? <AlertTriangle className="w-3.5 h-3.5" style={{ color: WARN }} /> : <Minus className="w-3.5 h-3.5 text-muted-foreground" />}
                 <span className={st === "assumed" ? "text-amber-700" : st === "none" ? "text-muted-foreground" : "text-foreground"}>{standingWord(st, t)}</span>
               </span>,
-              t && st !== "none" ? <span key="f" className="block"><Shares t={t} /><span className="block text-[11.5px] text-muted-foreground mt-0.5">{[t.source, t.year, t.geography].filter(Boolean).join(" · ")}{st === "worked" && typeof t.confidence === "number" ? ` · ${t.confidence}% sure` : ""}</span>{st === "worked" ? <Working t={t} /> : null}</span> : <span key="f" className="text-muted-foreground">{t?.note || "—"}</span>,
+              t && st !== "none" ? <span key="f" className="block"><Shares t={t} /><span className="block text-[11.5px] text-muted-foreground mt-0.5">{[t.source, t.year, t.geography].filter(Boolean).join(" · ")}{st === "worked" && typeof t.confidence === "number" ? ` · ${t.confidence}% sure` : ""}{st === "worked" ? " · how it was worked out is below" : ""}</span></span> : <span key="f" className="text-muted-foreground">{t?.note || "—"}</span>,
             ];
           })} />
+          {/* The working sits under the table at full width (2026-10-20: inside the figure cell it pushed the table past the dialog's edge). */}
+          {dims.filter((d) => standing(frame?.targets?.[d.key]) === "worked").map((d) => (
+            <div key={d.key} className="mt-3">
+              <p className="text-[12.5px] font-medium text-foreground">{d.label}</p>
+              <Working t={frame!.targets![d.key]} />
+            </div>
+          ))}
         </Section>
       )}
       {facts.length > 0 && (
