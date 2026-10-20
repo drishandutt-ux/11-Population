@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     #: Run the scope check on every debate post (2026-10-20): one fast structured call per post that
     #: flags where the author stepped outside its standing. Off → posts carry a footprint, no flags.
     scope_check_posts: bool = True
+    #: Write the lay layer when tagging (2026-10-20): street-level versions of the professional and
+    #: technical units, so a lay twin's scope is never empty. Off → tagging stores the chunks only.
+    lay_layer: bool = True
 
     def agent_model(self, mode: str) -> str:
         return self.model_pro_agents if mode == "pro" else self.model_agents

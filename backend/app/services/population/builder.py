@@ -1618,6 +1618,7 @@ async def _spawn(build_id: str):
                 await log(build_id, "spawn", "info", f"Casting {sum(int(sg.get('count') or 0) for sg in cast)} personas from archetypes", " · ".join(f"{sg['name']} ← {sg.get('archetype_name')}" for sg in cast))
         # Scoping before writing (L1-04): the knowledge is tagged now if it never was or has grown,
         # so every persona is written from what a twin of its segment could actually reach.
+        sc: dict = {}
         try:
             from app.services.scoping import auto as scoping_auto
             sc = await scoping_auto.ensure_tagged(session_id, question, reason="build")
@@ -1649,6 +1650,10 @@ async def _spawn(build_id: str):
                     avatar_color=p.avatar_color, dials=p.dials or {}, humanity=p.humanity or 0, segment=p.segment or None,
                     demographics=p.demographics or None, weight=w, character=getattr(p, "character", None) or None,
                     standing=getattr(p, "standing", None) or None,
+                    # what this persona was written from, and how much knowledge there was at the time (item 6, 2026-10-20);
+                    # the annotation keeps both, so a graph that grows afterwards shows as "written from 11 of 91"
+                    knowledge={"written_from": getattr(p, "written_from", "") or ("scoped" if sc.get("tagged") else "shared"),
+                               "written_units": int(sc.get("unit_count") or 0), "written_snapshot": sc.get("snapshot_id")},
                 )
                 for p, w in zip(profiles, weights)
             ])

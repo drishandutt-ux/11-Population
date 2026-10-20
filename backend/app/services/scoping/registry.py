@@ -36,8 +36,8 @@ DIMENSIONS: list[dict] = [
      "description": "Conditions the unit is about. A twin with a condition profile sees units about those conditions."},
     {"key": "stage", "label": "Journey stage", "ontology_class": "journey_stage", "semantics": "overlap", "default": "public",
      "description": "Journey stages or barriers the unit is about."},
-    {"key": "segment", "label": "Attitude segment", "ontology_class": "attitude_segment", "semantics": "overlap", "default": "public",
-     "description": "Cohorts the unit is about or addressed to."},
+    {"key": "segment", "label": "Attitude segment", "ontology_class": "attitude_segment", "semantics": "overlap", "default": "public", "on_miss": "demote",
+     "description": "Cohorts the unit is about or addressed to. A miss demotes rather than hides (2026-10-20): a unit about another group is still knowable, it just ranks lower — until then a twin whose segment matched one ontology node lost 86 of 91 units as 'about another group'."},
     {"key": "register", "label": "Register", "semantics": "ordinal", "values": REGISTER_LEVELS, "default": "lay",
      "description": "How specialist the unit is: lay (anyone could read it), professional (clinical or policy), technical (methods, statistics). A twin has a cap."},
     {"key": "time", "label": "Time", "semantics": "temporal", "default": "unknown",
@@ -53,6 +53,9 @@ DIMENSIONS: list[dict] = [
      "description": "A unit tagged with an arm is a stimulus only that arm's twins see (L7-06 message testing)."},
 ]
 
+#: What a base-match miss costs on a dimension whose `on_miss` is `demote` (the unit stays visible, ranked lower).
+DEMOTE_WEIGHT = 0.5
+
 DIMENSION_KEYS = [d["key"] for d in DIMENSIONS]
 BY_KEY = {d["key"]: d for d in DIMENSIONS}
 
@@ -64,6 +67,41 @@ PUBLIC_CHANNEL_HINTS = [
     "website", "leaflet", "poster", "gp letter", "letter", "text message", "sms", "forum", "patient group", "charity", "school",
 ]
 PROFESSIONAL_CHANNEL_HINTS = ["rep", "journal", "guideline", "nice", "conference", "mdt", "cpd", "formulary", "bulletin", "webinar", "training", "peer"]
+
+
+#: A fixed base vocabulary under whatever the ontology extracted (2026-10-20): the tagger may use these
+#: roles and channels even when the model's ontology has none, or has "oral route" as a channel. Twins'
+#: professional standing is matched against the roles, and lay twins draw their channels from the public
+#: ones here as well as the ontology's.
+BASE_ROLES = ["GP", "practice nurse", "nurse", "community pharmacist", "pharmacist", "consultant", "hospital doctor", "dietitian",
+              "physiotherapist", "health visitor", "midwife", "paramedic", "healthcare assistant", "care worker", "social worker",
+              "commissioner", "practice manager", "public health"]
+BASE_CHANNELS = ["Local press", "National news", "Social media", "Word of mouth", "GP appointment", "Pharmacy counter", "NHS website",
+                 "NHS app", "Leaflet", "Workplace", "Patient group", "Professional journal", "Clinical guideline", "Rep visit",
+                 "Conference", "Team meeting"]
+
+
+def _merge(names: list[str], base: list[str]) -> list[str]:
+    seen = {n.lower().strip() for n in names}
+    out = list(names)
+    for b in base:
+        if b.lower() not in seen:
+            out.append(b)
+            seen.add(b.lower())
+    return out
+
+
+def vocab(classes: dict[str, list[str]]) -> dict[str, list[str]]:
+    """The tagging and profile vocabulary: the ontology's nodes per class with the base roles and
+    channels merged in (ontology spelling wins on a clash)."""
+    return {
+        "geography": list(classes.get("geography", [])),
+        "hcp_role": _merge(list(classes.get("hcp_role", [])), BASE_ROLES),
+        "channel": _merge(list(classes.get("channel", [])), BASE_CHANNELS),
+        "condition": list(classes.get("condition", [])),
+        "journey_stage": list(classes.get("journey_stage", [])),
+        "attitude_segment": list(classes.get("attitude_segment", [])),
+    }
 
 
 def is_public_channel(name: str) -> bool:

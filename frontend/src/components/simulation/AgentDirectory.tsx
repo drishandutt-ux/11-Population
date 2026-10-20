@@ -203,10 +203,11 @@ function AgentCard({ agent, animate = false, dynamicDials = [], onShowKnowledge 
               <button
                 type="button"
                 onClick={() => onShowKnowledge?.(agent.id)}
-                title={`Scoped knowledge: this twin sees ${agent.knowledge.visible} of ${agent.knowledge.total} units its profile can reach${agent.knowledge.routes.length ? ` — ${agent.knowledge.routes.slice(0, 3).join(", ")}` : ""}${agent.knowledge.written_from === "scoped" ? " · written from that knowledge" : ""}. Click to see what, and what is hidden.`}
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-sky-500/30 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20"
+                title={`Scoped knowledge: this twin sees ${agent.knowledge.visible} of ${agent.knowledge.total} units its profile can reach${agent.knowledge.routes.length ? ` — ${agent.knowledge.routes.slice(0, 3).join(", ")}` : ""}${agent.knowledge.written_from === "scoped" ? " · the persona was written from that knowledge" : agent.knowledge.written_from === "shared" ? " · the persona was written from the shared summary" : ""}${typeof agent.knowledge.written_units === "number" && agent.knowledge.written_units < agent.knowledge.total ? ` · only ${agent.knowledge.written_units} unit${agent.knowledge.written_units === 1 ? "" : "s"} existed when it was written; the knowledge has grown since, so what it knows now is wider than what it was written to be` : ""}. Click to see what, and what is hidden.`}
+                className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${typeof agent.knowledge.written_units === "number" && agent.knowledge.written_units * 2 < agent.knowledge.total ? "border-amber-500/30 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20" : "border-sky-500/30 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20"}`}
               >
                 <Filter className="w-2.5 h-2.5" /> sees {agent.knowledge.visible}/{agent.knowledge.total}
+                {typeof agent.knowledge.written_units === "number" && agent.knowledge.written_units < agent.knowledge.total && <span className="opacity-70">· written from {agent.knowledge.written_units}</span>}
               </button>
             )}
           </div>

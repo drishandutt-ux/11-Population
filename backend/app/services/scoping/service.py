@@ -156,6 +156,8 @@ def _facet_counts(units: list[dict]) -> dict[str, dict[str, int]]:
     counts: dict[str, dict[str, int]] = {}
     for u in units:
         for k, v in (u.get("facets") or {}).items():
+            if k == "derived_from":
+                continue
             vals = v if isinstance(v, list) else [v]
             for x in vals:
                 counts.setdefault(k, {})[str(x)] = counts.setdefault(k, {}).get(str(x), 0) + 1
@@ -173,14 +175,17 @@ async def state(session_id: str) -> dict:
     if bundle is None:
         return {**base, "units": [], "unit_count": 0, "counts": {}, "policy": None, "snapshot_id": None, "stale": False}
     units = bundle["units"]
+    lay = [u for u in units if (u.get("facets") or {}).get("layer") == "lay"]
     return {
         **base,
         "units": units[:300],
         "unit_count": len(units),
+        "lay_count": len(lay),
         "counts": _facet_counts(units),
         "policy": {"version": bundle["policy_version"], "rules": bundle["rules"]},
         "snapshot_id": bundle["snapshot_id"],
-        "stale": len(units) != chunk_count,
+        # the lay layer's units are derived, not chunks: staleness compares the tagged chunks only
+        "stale": (len(units) - len(lay)) != chunk_count,
     }
 
 

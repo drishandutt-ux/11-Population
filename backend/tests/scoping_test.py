@@ -118,13 +118,13 @@ def test_profile_derivation_and_override():
     lay = profiles.profile_for(_Agent(role="Cleaner living with obesity", humanity=65, demographics={"region": "Blackpool, Lancashire"}, segment="IMD 1-2 households"), ONTO)
     v = lay["values"]
     assert v["geography"] == ["Blackpool"] and v["register"] == "lay" and v["role"] == ["patient", "public"]
-    assert v["channel"] == ["Local press", "NHS app"]                                # public channels only
+    assert {"Local press", "NHS app", "Word of mouth"} <= set(v["channel"]) and "Rep visits" not in v["channel"]   # public channels only, base ones included
     assert v["segment"] == ["IMD 1-2 households"] and "demographics.region" in lay["basis"]["geography"]
 
     # standing, not the emotion dial, sets the register (2026-10-20): a GP's record infers professional …
     gp = profiles.profile_for(_Agent(role="GP partner", humanity=5, demographics={"region": "Oxford"}), ONTO)
     assert gp["values"]["role"] == ["GP", "public"] and gp["values"]["register"] == "professional"
-    assert set(gp["values"]["channel"]) == {"Local press", "Rep visits", "NHS app"}
+    assert {"Local press", "Rep visits", "NHS app", "Professional journal"} <= set(gp["values"]["channel"])
     assert "standing" in gp["basis"]["register"] and gp["standing"]["basis"] == "inferred"
     # … a written standing can make the same GP technical, and a reactive one stays technical
     gp2 = profiles.profile_for(_Agent(role="GP partner", humanity=85, demographics={"region": "Oxford"},
@@ -161,7 +161,7 @@ def test_classify_chunk_maps_headers_to_provenance():
 
 def test_tag_batch_keeps_only_vocabulary(monkeypatch):
     async def fake_analyze(schema, system, user, **kw):
-        assert "geography: England, North West, Blackpool, Oxford" in system and "roles: GP, Community pharmacist, patient, public" in system
+        assert "geography: England, North West, Blackpool, Oxford" in system and "roles: GP, Community pharmacist, practice nurse" in system and ", patient, public" in system
         return {"units": [
             {"index": 0, "geography": ["Blackpool", "Atlantis"], "roles": ["GP", "wizard"], "channels": ["Local press"], "conditions": ["Obesity"], "stages": [], "segments": [], "register": "professional", "date": "March 2024"},
             {"index": 5, "geography": [], "roles": [], "channels": [], "conditions": [], "stages": [], "segments": [], "register": "lay", "date": ""},
@@ -192,6 +192,7 @@ def api_client(tmp_path, monkeypatch):
     from app.services.scoping import service
 
     monkeypatch.setattr(get_settings(), "app_supabase_url", "")
+    monkeypatch.setattr(get_settings(), "lay_layer", False)   # the lay layer has its own tests; the round trip counts chunks
     eng = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/scoping.db")
     Session = async_sessionmaker(eng, expire_on_commit=False)
     monkeypatch.setattr(dbm, "engine", eng)

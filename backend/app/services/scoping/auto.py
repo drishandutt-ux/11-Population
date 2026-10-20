@@ -212,6 +212,9 @@ async def annotate_agents(session_id: str, query: Optional[str] = None, *, reaso
                 rec = await knowledge_for_agent(session_id, a, query, written_from=prior.get("written_from") or ("scoped" if prior else "shared"))
                 if rec is None:
                     continue
+                for k in ("written_units", "written_snapshot"):   # what there was when the persona was written (item 6)
+                    if prior.get(k) is not None:
+                        rec[k] = prior[k]
                 a.knowledge = rec
                 flag_modified(a, "knowledge")
                 n += 1

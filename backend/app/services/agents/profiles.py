@@ -29,3 +29,4 @@ class AgentProfile:
     demographics: dict = field(default_factory=dict)  # gender, region, income_band, education, occupation
     character: Optional[dict] = None  # hand-authored / archetype character (Agent Builder, §7.10; cast twins carry character.archetype)
     standing: Optional[dict] = None  # who this person is to the topic (services/scoping/standing.py); None → inferred from the record
+    written_from: str = ""  # "scoped" when the persona was written from the scoped knowledge block, "shared" from the whole-graph summary, "" unknown

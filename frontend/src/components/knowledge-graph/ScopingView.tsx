@@ -47,6 +47,7 @@ function UnitCard({ unit, highlight, extra }: { unit: KnowledgeUnit; highlight?:
     <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 space-y-1.5">
       <div className="flex flex-wrap items-center gap-1">
         <Chip text={prov.replace(/_/g, " ")} color={PROV_COLORS[prov] || "#94a3b8"} />
+        {unit.facets.layer === "lay" && <span title="The lay layer: a street-level version of a specialist unit, written so a twin with no training still knows the substance in its own words. Its source, provenance and place are the original's." className="inline-block px-1.5 py-0.5 rounded text-[10.5px] font-medium leading-tight bg-emerald-500/15 text-emerald-300">lay layer</span>}
         <Chip text={String(unit.facets.register || "lay")} color={DIM_COLORS.register} />
         {FACET_ORDER.filter((k) => k !== "register").flatMap((k) => facetList(unit.facets[k]).map((v) => (
           <Chip key={k + v} text={v} color={DIM_COLORS[k]} dim={highlight ? !highlight.includes(k) : false} />
@@ -178,7 +179,7 @@ export default function ScopingView({ sessionId, agents, initialAgentId }: Props
         <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0">
           {state?.tagged ? (
             <span className="text-sm text-muted-foreground">
-              <span className="text-foreground font-semibold">{state.unit_count}</span> knowledge units tagged
+              <span className="text-foreground font-semibold">{state.unit_count}</span> knowledge units tagged{state.lay_count ? <span title="The lay layer: street-level versions of the specialist units, so a twin with no training still knows the substance in its own words."> · {state.lay_count} of them street-level</span> : null}
               {state.stale && (
                 <span className="ml-3 inline-flex items-center gap-1 text-xs text-amber-400"><AlertTriangle className="w-3 h-3" /> the graph has {state.chunk_count} chunks now — re-tag</span>
               )}

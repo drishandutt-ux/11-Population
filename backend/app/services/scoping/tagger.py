@@ -20,7 +20,7 @@ from app.core.config import get_settings
 from app.services.evidence.llm import analyze, arr, enum, i, obj, s
 
 from .profiles import looks_like_date, nodes_by_class
-from .registry import DEFAULT_SESSION_RULES, REGISTER_LEVELS
+from .registry import DEFAULT_SESSION_RULES, REGISTER_LEVELS, vocab
 
 TAG_BATCH = 12
 TAG_CONCURRENCY = 4
@@ -99,6 +99,8 @@ _TAG_SCHEMA = obj({
 
 
 def _vocab_text(classes: dict[str, list[str]]) -> str:
+    classes = vocab(classes)   # the ontology's nodes plus the base roles and channels (2026-10-20)
+
     def line(label, key, extra=None):
         names = list(classes.get(key, [])) + (extra or [])
         return f"{label}: {', '.join(names) if names else '(none)'}"
@@ -125,10 +127,11 @@ async def tag_batch(bodies: list[str], classes: dict[str, list[str]], *, session
     system = _TAG_SYSTEM.format(vocab=_vocab_text(classes))
     user = "UNITS:\n" + "\n\n".join(f"{k}. {b[:900]}" for k, b in enumerate(bodies))
     res = await analyze(_TAG_SCHEMA, system, user, session_id=session_id, label="scoping_tag", model=model, max_tokens=6000)
+    voc = vocab(classes)
     allowed = {
-        "geography": set(classes.get("geography", [])),
-        "role": set(classes.get("hcp_role", [])) | {"patient", "public"},
-        "channel": set(classes.get("channel", [])),
+        "geography": set(voc.get("geography", [])),
+        "role": set(voc.get("hcp_role", [])) | {"patient", "public"},
+        "channel": set(voc.get("channel", [])),
         "condition": set(classes.get("condition", [])),
         "stage": set(classes.get("journey_stage", [])),
         "segment": set(classes.get("attitude_segment", [])),
@@ -202,13 +205,26 @@ async def tag_session(session_id: str, query: str, *, model: Optional[str] = Non
 
     snapshot_id = str(uuid.uuid4())
     now = datetime.utcnow()
-    rows = []
+    units: list[dict] = []
     for (prov, trust, ref, body), f in zip(parsed, facets_all):
         if not body:
             continue
         f["project"] = session_id   # units belong to the session's project (L1-07 isolation is a hard dimension)
-        rows.append(KnowledgeUnit(session_id=session_id, snapshot_id=snapshot_id, text=body[:2000], source_ref=ref,
-                                  provenance_class=prov, trust_tier=trust, facets=f, created_at=now))
+        units.append({"id": str(uuid.uuid4()), "session_id": session_id, "snapshot_id": snapshot_id, "text": body[:2000], "source_ref": ref,
+                      "provenance_class": prov, "trust_tier": trust, "facets": f, "created_at": now})
+    # The lay layer (2026-10-20): a street-level version of every professional / technical unit the
+    # public could plausibly know, so a lay twin's scope is never empty.
+    if settings.lay_layer:
+        from . import lay_layer
+        try:
+            lay_rows = await lay_layer.derive(units, session_id=session_id, snapshot_id=snapshot_id, now=now, model=model)
+        except Exception as e:  # noqa: BLE001 — no lay layer is a thinner scope, never a failed tag
+            print(f"[scoping] lay layer failed: {type(e).__name__}: {e}")
+            lay_rows = []
+        if lay_rows:
+            print(f"[scoping] lay layer: {len(lay_rows)} street-level units from {len(lay_layer.candidates(units))} specialist ones")
+        units.extend(lay_rows)
+    rows = [KnowledgeUnit(**u) for u in units]
 
     async with AsyncSessionLocal() as db:
         await db.execute(delete(KnowledgeUnit).where(KnowledgeUnit.session_id == session_id))

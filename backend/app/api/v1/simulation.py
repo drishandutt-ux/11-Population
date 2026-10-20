@@ -90,7 +90,7 @@ def _agent_payload(p) -> dict:
                        if isinstance(v, dict) and v.get("score") is not None else None)(getattr(p, "validation", None)),
         # Scoping (L1-04): what this twin was written from and can see — visible / total units, routes, snapshot.
         "knowledge": (lambda k: {"snapshot_id": k.get("snapshot_id"), "visible": k.get("visible", 0), "total": k.get("total", 0), "routes": k.get("routes") or [],
-                                 "provenance": k.get("provenance") or {}, "written_from": k.get("written_from"), "profile": k.get("profile") or {}, "at": k.get("at")}
+                                 "provenance": k.get("provenance") or {}, "written_from": k.get("written_from"), "written_units": k.get("written_units"), "profile": k.get("profile") or {}, "at": k.get("at")}
                       if isinstance(k, dict) else None)(getattr(p, "knowledge", None)),
     }
 

@@ -750,6 +750,7 @@ def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -
             demographics=demographics,
             character=d.get("character") if isinstance(d.get("character"), dict) and d.get("character") else None,
             standing=standing_mod.normalise(d.get("standing"), home=demographics.get("region", "")),
+            written_from=str(d.get("_written_from") or ""),
         )
     except Exception as e:  # noqa: BLE001
         print(f"[agent_factory] skipping malformed agent: {type(e).__name__}: {e}")
@@ -812,7 +813,8 @@ async def generate_agents_from_plan(
     async def _batch(seg: dict, n: int, taken: list[dict], label: str, seed: str = "0") -> list[dict]:
         if should_stop and should_stop():
             return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
-        seg_knowledge = (await _segment_knowledge(seg)) or kg_summary
+        scoped_block = await _segment_knowledge(seg)
+        seg_knowledge = scoped_block or kg_summary
         slots = pb_mod.draw_slots(playbook, seg, n, f"{label}:{seed}") if playbook else []
         async with sem:
             try:
@@ -824,6 +826,9 @@ async def generate_agents_from_plan(
                 )
                 out = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
                 pb_mod.pin(playbook, seg, slots, out)
+                for d in out:
+                    if isinstance(d, dict):
+                        d["_written_from"] = "scoped" if scoped_block else "shared"   # recorded on the twin (item 6, 2026-10-20)
                 return out
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
@@ -835,11 +840,14 @@ async def generate_agents_from_plan(
         if should_stop and should_stop():
             return []
         contexts: dict[str, str] = {}
+        cast_written_from: dict[str, str] = {}
         for r in {s_.get("region") or "" for s_ in slots}:
             if not r:
                 continue
             # Scoped first (what a twin of this segment in this place can reach), the place-keyword slice otherwise.
-            contexts[r] = (await _segment_knowledge(seg, role=arch.get("role", ""), region=r)) or arch_mod.local_context(session_id, r, arch.get("role", ""))
+            scoped_ctx = await _segment_knowledge(seg, role=arch.get("role", ""), region=r)
+            cast_written_from[r] = "scoped" if scoped_ctx else "shared"
+            contexts[r] = scoped_ctx or arch_mod.local_context(session_id, r, arch.get("role", ""))
         pb_slots = pb_mod.draw_slots(playbook, seg, len(slots), f"{label}:{seed}") if playbook else []
         prompt = arch_mod.cast_prompt(query, seg, arch, slots, contexts, _constraints_block(constraints), _taken_block_text(taken),
                                       ((constraints or {}).get("facets_prompt") or "") + pb_mod.context_block(playbook, seg) + pb_mod.slots_block(playbook, pb_slots),
@@ -856,6 +864,9 @@ async def generate_agents_from_plan(
                 return []
         cast = [arch_mod.enforce_archetype(arch, slot, d) for slot, d in arch_mod.pair_slots(slots, raw)]
         pb_mod.pin(playbook, seg, pb_slots, cast)
+        for d in cast:
+            if isinstance(d, dict):
+                d["_written_from"] = cast_written_from.get(str(d.get("region") or ""), "scoped" if "scoped" in cast_written_from.values() else "shared")
         return cast
 
     progress_lock = asyncio.Lock()

@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .registry import REGISTER_LEVELS, is_public_channel
+from .registry import REGISTER_LEVELS, is_public_channel, vocab
 
 
 
@@ -49,7 +49,7 @@ def _band(humanity: int) -> str:
 
 def profile_for(agent: Any, onto: dict | None) -> dict:
     """{values: {dimension: …}, basis: {dimension: str}, band: str}"""
-    classes = nodes_by_class(onto)
+    classes = vocab(nodes_by_class(onto))   # the ontology's nodes plus the base roles and channels (2026-10-20)
     demo = getattr(agent, "demographics", None) or {}
     values: dict[str, Any] = {}
     basis: dict[str, str] = {}
@@ -74,8 +74,8 @@ def profile_for(agent: Any, onto: dict | None) -> dict:
     prof = st.get("professional") or ""
     if prof:
         roles = match_nodes(f"{prof} {getattr(agent, 'role', '')}", classes.get("hcp_role", []))
-        basis["role"] = (f"trained as {prof!r} → HCP node(s) {', '.join(roles[:3])}" if roles
-                         else f"trained as {prof!r} — no HCP node in the ontology matches it")
+        basis["role"] = (f"trained as {prof!r} → role(s) {', '.join(roles[:3])}" if roles
+                         else f"trained as {prof!r} — no role in the vocabulary matches it")
     else:
         basis["role"] = "no professional standing in this topic"
     if st.get("lived") in ("yes", "past", "carer"):

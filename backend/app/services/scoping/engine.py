@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .registry import BY_KEY, DIMENSIONS, REGISTER_LEVELS
+from .registry import BY_KEY, DEMOTE_WEIGHT, DIMENSIONS, REGISTER_LEVELS
 
 _STOP = set("the a an and or of to in on for with is are was were be by at as it its this that from into about over under than then will would could should not no".split())
 
@@ -121,7 +121,12 @@ _PROVENANCE_ROUTE = {
 }
 
 
+LAY_ROUTE = "from what people say round here"
+
+
 def route_for(unit: dict, profile_values: dict) -> str:
+    if (unit.get("facets") or {}).get("layer") == "lay":
+        return LAY_ROUTE   # the lay layer: a street-level version of a specialist item (2026-10-20)
     chans = [c for c in _as_list(unit.get("facets", {}).get("channel")) if c in set(_as_list(profile_values.get("channel")))]
     prov = _PROVENANCE_ROUTE.get(unit.get("provenance_class", ""), "from something you came across")
     if chans:
@@ -165,14 +170,18 @@ def evaluate(unit: dict, profile_values: dict, rules: list[dict], anc: dict[str,
     unit_view["provenance"] = unit.get("provenance_class")
     failed: list[tuple[str, str]] = []
     checks: dict[str, tuple[bool, str]] = {}
+    demoted: list[tuple[str, str]] = []
     for dim in DIMENSIONS:
         k = dim["key"]
         ok, why = base_match(dim, unit_view.get(k), profile_values.get(k), anc)
         checks[k] = (ok, why)
         if not ok:
-            failed.append((k, why))
+            if dim.get("on_miss") == "demote":
+                demoted.append((k, why))   # still visible, ranked lower (segment)
+            else:
+                failed.append((k, why))
 
-    boost = 0.0
+    boost = -DEMOTE_WEIGHT * len(demoted)
     route = None
     applied: list[str] = []
     denied = False
@@ -206,7 +215,8 @@ def evaluate(unit: dict, profile_values: dict, rules: list[dict], anc: dict[str,
             route = str(r.get("route", "")).replace("{value}", ", ".join(str(x) for x in _as_list(unit_view.get(k))[:2]))
             applied.append(f"route:{k}")
     visible = not failed and not denied
-    return {"visible": visible, "failed": failed, "boost": boost, "route": route, "applied": applied, "checks": checks}
+    applied = [f"demote:{k}" for k, _ in demoted] + applied
+    return {"visible": visible, "failed": failed, "boost": boost, "route": route, "applied": applied, "checks": checks, "demoted": demoted}
 
 
 def retrieve(units: list[dict], onto: dict | None, profile: dict, rules: list[dict], query: str, limit: int = 14) -> dict:

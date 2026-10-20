@@ -77,7 +77,7 @@ async def list_agents(session_id: str, user: AuthUser = Depends(get_current_user
             "validation": _validation_summary(a),
             # Scoping (L1-04 wired end to end): what this twin was written from and can see; None until annotated.
             "knowledge": (lambda k: {"snapshot_id": k.get("snapshot_id"), "visible": k.get("visible", 0), "total": k.get("total", 0), "routes": k.get("routes") or [],
-                                     "provenance": k.get("provenance") or {}, "written_from": k.get("written_from"), "profile": k.get("profile") or {}, "at": k.get("at")}
+                                     "provenance": k.get("provenance") or {}, "written_from": k.get("written_from"), "written_units": k.get("written_units"), "profile": k.get("profile") or {}, "at": k.get("at")}
                           if isinstance(k, dict) else None)(getattr(a, "knowledge", None)),
         }
         for a in agents

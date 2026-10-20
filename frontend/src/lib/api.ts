@@ -519,7 +519,9 @@ export type Agent = {
   standing?: AgentStanding | null;
 };
 
-export type AgentKnowledge = { snapshot_id: string | null; visible: number; total: number; routes: string[]; provenance: Record<string, number>; written_from: string | null; profile: Record<string, unknown>; at: string | null };
+export type AgentKnowledge = { snapshot_id: string | null; visible: number; total: number; routes: string[]; provenance: Record<string, number>; written_from: string | null;
+  /** How many knowledge units existed when the persona was written (item 6, 2026-10-20); the twin reads as "written from N of M" when the graph has grown since. */
+  written_units?: number | null; profile: Record<string, unknown>; at: string | null };
 export type ScopingCoverage = { tagged: boolean; stale: boolean; unit_count: number; chunk_count: number; snapshot_id: string | null; annotated: number; total: number;
   agents: Record<string, { visible: number; total: number; snapshot_id: string | null; written_from: string | null; routes: string[]; provenance: Record<string, number> }> };
 
@@ -1602,6 +1604,8 @@ export interface ScopingState {
   tagged: boolean;
   units: KnowledgeUnit[];
   unit_count: number;
+  /** Units of the lay layer (2026-10-20): street-level versions of the specialist units, counted inside unit_count. */
+  lay_count?: number;
   counts: Record<string, Record<string, number>>;
   policy: { version: number; rules: ScopeRule[] } | null;
   snapshot_id: string | null;
