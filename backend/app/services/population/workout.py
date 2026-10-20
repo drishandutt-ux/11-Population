@@ -244,6 +244,23 @@ async def work_out_target(
         await log("warn", f"Could not compute {dim['label']} from the parts", str(e)[:120])
         return missing_target(dim, geography, f"computation failed: {str(e)[:80]}")
     tg = target_from_compute(res, dim, geography, method)
+    if tg["status"] != "worked_out" and (found.strip() or material.strip()):
+        # The first pass refused although something is on file (2026-10-20: it refused the age band for Blackpool
+        # with the England and Wales census age table in front of it). A refusal is not an answer: the second
+        # pass is told so and must state the best educated assumption from the closest figures, flagged mostly assumed.
+        await log("info", f"First pass declined to work out {dim['label']} — asking for the best educated assumption from the closest figures", tg.get("note"))
+        forced = (f"SECOND PASS. The first pass refused with: {str(res.get('refusal') or '')[:300]}\n"
+                  "That refusal is not acceptable. Produce the best EDUCATED ASSUMPTION now from the closest figures in the material — the national or\n"
+                  "regional pattern for the place, a comparator area, a known ratio, the shape the dimension has in England as a whole — and set basis to\n"
+                  "mostly_assumed, listing every assumption with its value. Return ok=false only if the material is literally empty.\n\n") + user
+        try:
+            res2 = await analyze(COMPUTE_SCHEMA, COMPUTE_SYSTEM, forced, session_id=session_id, label="population_workout", max_tokens=1800)
+            tg2 = target_from_compute(res2, dim, geography, method)
+            if tg2["status"] == "worked_out":
+                tg2["basis"] = "mostly_assumed"
+                tg = tg2
+        except Exception as e:  # noqa: BLE001
+            await log("warn", f"Second pass failed for {dim['label']}", str(e)[:120])
     if tg["status"] == "worked_out":
         await log("ok", f"Worked out · {dim['label']}: {len(tg['categories'])} cells from {len(tg['components'])} published figure(s) — an educated assumption ({tg['basis'].replace('_', ' ')}, {len(tg['assumptions'])} assumption(s), confidence {tg['confidence']}%)", tg["working"][:400])
     else:

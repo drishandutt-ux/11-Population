@@ -230,3 +230,53 @@ def test_concurrent_ladder_saves_keep_both_results_and_the_pipeline_runs_dimensi
     bld.frame["targets"] = {"income": {"status": "missing", "categories": []}, "age": {"status": "missing", "categories": []}}
     out = _run(builder._work_out_open_gaps("b2", "Q?", "Blackpool", [], None))
     assert sorted(started) == ["age", "income"] and all(v["status"] == "worked_out" for v in out.frame["targets"].values())
+
+
+def test_a_refused_work_out_gets_a_forced_second_pass_flagged_mostly_assumed(monkeypatch):
+    """The first compute refuses; the second is told the refusal is not acceptable and answers; both refusing stays missing."""
+    answers = iter([
+        {"ok": False, "refusal": "not one figure bears on age", "categories": []},
+        {"ok": True, "categories": [{"label": "18-34", "share_pct": 40, "age_min": 18, "age_max": 34}, {"label": "35+", "share_pct": 60, "age_min": 35, "age_max": 120}], "working": "England and Wales 2021 bands applied",
+         "components": [{"statistic": "age bands", "value": "40/60", "source": "ONS Census 2021", "year": "2021", "url": ""}], "assumptions": ["Blackpool follows the England and Wales age shape"], "basis": "mostly_published", "confidence": 35, "caveat": "c", "refusal": ""},
+    ])
+    users = []
+
+    async def fake_analyze(schema, system, user, **kw):
+        if kw.get("label") == "population_workout_plan":
+            return {"route": "on_file", "method": "apply the national bands", "components": [], "verdict": "v"}
+        users.append(user)
+        return next(answers)
+
+    monkeypatch.setattr(workout, "analyze", fake_analyze)
+    rows = [_Row("https://ons/age", [{"statistic": "age bands", "value": "40/60", "group": "residents", "geography": "England and Wales", "year": "2021"}])]
+    tg = _run(workout.work_out_target("s", "Q?", dict(INCOME, key="age", label="Age", attribute="age"), "Blackpool", KEYS, rows))
+    assert tg["status"] == "worked_out" and tg["basis"] == "mostly_assumed" and tg["assumptions"] == ["Blackpool follows the England and Wales age shape"]
+    assert users[1].startswith("SECOND PASS") and "not one figure bears on age" in users[1]
+
+    answers = iter([{"ok": False, "refusal": "nothing", "categories": []}, {"ok": False, "refusal": "still nothing", "categories": []}])
+    tg = _run(workout.work_out_target("s", "Q?", INCOME, "Blackpool", KEYS, rows))
+    assert tg["status"] == "missing" and "nothing" in tg["note"]
+
+
+def test_triage_is_shown_the_publisher_notes(monkeypatch):
+    seen = {}
+
+    async def fake_analyze(schema, system, user, **kw):
+        seen["user"], seen["system"] = user, system
+        return {"picks": [1], "why": "the bulletin"}
+
+    monkeypatch.setattr(sources, "analyze", fake_analyze)
+
+    async def log(level, message, detail=None):
+        return None
+
+    class R:
+        def __init__(self, url, title):
+            self.url, self.title, self.snippet, self.domain = url, title, "", url.split("/")[2]
+
+    ons = sources._BY_KEY["ons"]
+    found = [(ons, R("https://www.ons.gov.uk/datasets/TS007", "Age by single year - dataset")), (ons, R("https://www.ons.gov.uk/bulletins/age", "Age bulletin")), (ons, R("https://www.ons.gov.uk/x", "x"))]
+    picked = _run(sources._triage("s", "Q?", {"fact": "age bands Blackpool", "dimension": "age"}, found, 2, log))
+    assert [r.url for _, r in picked] == ["https://www.ons.gov.uk/bulletins/age"]
+    assert "PUBLISHER NOTES" in seen["user"] and "dataset pages are JavaScript-rendered" in seen["user"] and "PUBLISHER NOTES" in seen["system"]
+    assert "PREVALENCE-BY-GROUP table is not a distribution" in frame.TARGET_SYSTEM
