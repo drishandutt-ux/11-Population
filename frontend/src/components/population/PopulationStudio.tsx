@@ -223,6 +223,12 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   };
   const replan = () => guard(async () => { if (build) setBuild(await api.population.replan(id, build.id, { constraints: fullConstraints, count, keep_accepted: true })); });
   const approve = () => guard(async () => { if (build) { setSpawn({ current: 0, total: keptCount }); setLiveAgents([]); setBuild(await api.population.approve(id, build.id, { count, mode })); } });
+  const setMix = async (shares: Record<string, number>) => {
+    if (!build) return;
+    setError(null);
+    try { setBuild(await api.population.setMix(id, build.id, shares)); }
+    catch (e: any) { setError(e?.message || "Could not set the mix"); throw e; }
+  };
   const stop = () => guard(async () => { if (build) await api.population.stop(id, build.id); });
   // Not `guard`ed: a ladder action on one dimension must not grey out the rest of the page — several gaps are
   // worked out at once, each row showing its own spinner (2026-10-20). Errors still surface in the banner.
@@ -400,7 +406,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
 
             {build?.plan && (
               <ErrorBoundary label="The plan">
-                <PlanReview build={build} onDecide={decide} busyIds={new Set([...busySegs, ...regenerating])} readOnly={status === "spawning"} archetypes={archetypes}
+                <PlanReview build={build} onDecide={decide} onSetMix={setMix} busyIds={new Set([...busySegs, ...regenerating])} readOnly={status === "spawning"} archetypes={archetypes}
                   onRemoveArchetype={async (aid) => { await api.archetypes.delete(aid); setArchetypes((prev) => prev.filter((a) => a.id !== aid)); }} />
               </ErrorBoundary>
             )}

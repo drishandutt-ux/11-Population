@@ -370,6 +370,8 @@ export const api = {
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/frame/estimate-all`, { method: "POST" }),
     decide: (sessionId: string, buildId: string, segmentId: string, body: { decision: "accept" | "reject" | "edit"; edits?: Partial<PopulationSegment>; reason?: string }) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/segments/${segmentId}`, { method: "POST", body: JSON.stringify(body) }),
+    setMix: (sessionId: string, buildId: string, shares: Record<string, number>) =>
+      request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/mix`, { method: "POST", body: JSON.stringify({ shares }) }),
     replan: (sessionId: string, buildId: string, body: { constraints?: PopulationConstraints; count?: number; keep_accepted?: boolean }) =>
       request<PopulationBuild>(`/sessions/${sessionId}/population/builds/${buildId}/replan`, { method: "POST", body: JSON.stringify(body) }),
     approve: (sessionId: string, buildId: string, body: { count?: number; mode?: SimMode }) =>

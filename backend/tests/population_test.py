@@ -1037,3 +1037,34 @@ def test_triage_reader_and_refine_judge_against_the_target_not_the_question(monk
     assert "TO THE SAME FACT" in system and "not what to search for" in user
     assert "wards are not MSOAs" in sources.FACTS_SYSTEM and "Judged against the TARGET" in sources.FACTS_SCHEMA["properties"]["relevance"]["description"]
     assert "a 'by ward' target needs wards" in sources.FACTS_SCHEMA["properties"]["answers_target"]["description"]
+
+
+def test_set_mix_scales_to_100_marks_changed_segments_and_keeps_decisions(monkeypatch):
+    """The mix dials: every kept share is set at once, scaled to 100, counts follow; a changed
+    segment is marked as the analyst's share (so a re-plan's rebalance leaves it) and no review
+    decision moves. Rejected segments are ignored."""
+    class B:
+        id = "b1"; target_count = 40; constraints = {}
+        plan = {"segments": [_seg("a", 50, "accepted"), _seg("b", 30), _seg("c", 20), _seg("r", 10, "rejected")]}
+
+    saved = {}
+
+    async def fake_load(build_id):
+        return B()
+
+    async def fake_save(build_id, **fields):
+        saved.update(fields)
+        return B()
+
+    async def fake_log(*a, **k):
+        return None
+
+    monkeypatch.setattr(builder, "_load", fake_load)
+    monkeypatch.setattr(builder, "_save", fake_save)
+    monkeypatch.setattr(builder, "log", fake_log)
+    asyncio.run(builder.set_mix("b1", {"a": 25, "b": 50, "c": 50, "r": 90}))
+    segs = {s["id"]: s for s in saved["plan"]["segments"]}
+    assert [segs[k]["share_pct"] for k in "abc"] == [20.0, 40.0, 40.0]
+    assert [segs[k]["count"] for k in "abc"] == [8, 16, 16] and segs["r"]["count"] == 0
+    assert segs["a"]["decision"] == "accepted" and segs["b"]["decision"] == "proposed"
+    assert all(segs[k].get("share_source") == "analyst" for k in "abc") and segs["r"]["share_pct"] == 10

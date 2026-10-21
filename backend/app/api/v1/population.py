@@ -109,6 +109,23 @@ async def decide_segment(session_id: str, build_id: str, segment_id: str, body: 
     return builder.build_payload(out)
 
 
+class MixRequest(BaseModel):
+    shares: dict[str, float]                      # {segment_id: share_pct} for the kept segments
+
+
+@router.post("/sessions/{session_id}/population/builds/{build_id}/mix")
+async def set_mix(session_id: str, build_id: str, body: MixRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Set every segment's share at once (the mix dials); counts follow from the shares."""
+    bld = await _owned_build(session_id, build_id, user, db)
+    if bld.status not in ("awaiting_review", "stopped", "complete", "error"):
+        raise HTTPException(status_code=409, detail=f"Build is {bld.status}; the mix can be changed once the plan is ready for review")
+    if not any(v > 0 for v in body.shares.values()):
+        raise HTTPException(status_code=400, detail="At least one segment needs a share above zero")
+    out = await builder.set_mix(build_id, body.shares)
+    out = (await builder.refresh_frame_report(build_id)) or out
+    return builder.build_payload(out)
+
+
 class FrameActionRequest(BaseModel):
     action: str                                   # work_out | estimate | upload | proxy | skip
     categories: Optional[list[dict]] = None       # upload: [{label, share_pct, age_min?, age_max?}]

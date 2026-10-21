@@ -1420,6 +1420,32 @@ async def decide_segment(build_id: str, segment_id: str, decision: str, edits: O
     return bld
 
 
+async def set_mix(build_id: str, shares: dict) -> Optional[PopulationBuild]:
+    """The analyst set the whole mix by hand: {segment_id: share_pct} for the kept segments. Shares
+    are scaled to sum to 100 and the counts follow; each changed segment is marked as the analyst's
+    share, so a re-plan's frame rebalance leaves it where it was put. Review decisions are untouched."""
+    bld = await _load(build_id)
+    if not bld or not bld.plan:
+        return None
+    segments = [dict(sg) for sg in (bld.plan.get("segments") or [])]
+    changed = []
+    for sg in segments:
+        if sg.get("decision") == "rejected" or sg.get("id") not in shares:
+            continue
+        new = max(0.0, min(100.0, float(shares[sg["id"]] or 0)))
+        if abs(new - float(sg.get("share_pct") or 0)) >= 0.05:
+            sg["share_pct"] = new
+            sg["share_source"] = "analyst"
+            changed.append(sg)
+    if not changed:
+        return bld
+    segments = normalise_segments(segments, bld.target_count, bld.constraints)
+    bld = await _save(build_id, plan={**bld.plan, "segments": segments})
+    await log(build_id, "review", "decision", f"Mix set by hand · {len(changed)} segment(s) changed",
+              "; ".join(f"{sg['name']} {sg['share_pct']}% ({sg.get('count', 0)} agents)" for sg in segments if sg.get("decision") != "rejected"))
+    return bld
+
+
 async def _replace_segment(build_id: str, segment_id: str, reason: str):
     bld = await _load(build_id)
     if not bld or not bld.plan:
