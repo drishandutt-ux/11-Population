@@ -97,6 +97,11 @@ def segments_for(agent: SpawnedAgent) -> dict:
         for key in ("gender", "region", "income_band", "education"):
             if demo.get(key):
                 out[key] = str(demo[key])
+        # The sampling-frame region is the coarse geography ("North West"); `region` is often
+        # the town the writer placed the twin in, so both are kept.
+        frame = demo.get("frame") if isinstance(demo.get("frame"), dict) else {}
+        if frame.get("region"):
+            out["area"] = str(frame["region"])
         # Equity by default (brief L6-04): the deprivation cell the writer placed the twin in, in
         # one canonical spelling, so every result splits by it.
         from app.services.population import equity
@@ -104,6 +109,44 @@ def segments_for(agent: SpawnedAgent) -> dict:
         cell = equity.canonical(raw, equity.explicit_level(raw))
         if cell:
             out[equity.KEY] = cell
+    return out
+
+
+#: The demographic and geographic "who answers" filters every Lab tool offers, in display
+#: order. Options are read off the population itself, since they differ per build.
+FILTER_KEYS: tuple[tuple[str, str, str], ...] = (
+    ("gender", "Gender", "demographics"),
+    ("income_band", "Income", "demographics"),
+    ("education", "Education", "demographics"),
+    ("deprivation", "Deprivation", "demographics"),
+    ("segment", "Segment", "demographics"),
+    ("area", "Region", "geography"),
+    ("region", "Place", "geography"),
+)
+MAX_FILTER_OPTIONS = 40
+
+
+def filter_options(agents: Sequence[SpawnedAgent]) -> list[dict]:
+    """The demographic and geography filters this population can actually be narrowed by:
+    one per key that at least two of its twins differ on, each value with its head count,
+    commonest first. A key nobody carries (a quick-spawn population has no gender) is left out
+    rather than shown with nothing to pick."""
+    counts: dict[str, dict[str, int]] = {k: {} for k, _, _ in FILTER_KEYS}
+    for a in agents:
+        segs = segments_for(a)
+        for key in counts:
+            v = segs.get(key)
+            if v not in (None, ""):
+                counts[key][str(v)] = counts[key].get(str(v), 0) + 1
+    out = []
+    for key, label, group in FILTER_KEYS:
+        values = sorted(counts[key].items(), key=lambda kv: (-kv[1], kv[0].lower()))
+        if len(values) < 2:
+            continue
+        out.append({
+            "key": key, "label": label, "group": group,
+            "options": [{"value": v, "n": n} for v, n in values[:MAX_FILTER_OPTIONS]],
+        })
     return out
 
 

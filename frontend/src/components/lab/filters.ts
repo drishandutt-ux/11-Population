@@ -1,4 +1,4 @@
-import { DynamicDial } from "@/lib/api";
+import { DynamicDial, PopulationFilter } from "@/lib/api";
 
 /** "Who answers" filters shared by every Lab tool. Values are the runner's segment keys. */
 export const SEGMENT_FILTERS: { key: string; label: string; options: string[] }[] = [
@@ -19,4 +19,18 @@ export function segmentLabel(key: string, dials: DynamicDial[] = []): string {
   if (!key.startsWith(DYNAMIC_PREFIX)) return key.replace(/_/g, " ");
   const k = key.slice(DYNAMIC_PREFIX.length);
   return dials.find((d) => d.key === k)?.label || k.replace(/_/g, " ");
+}
+
+export type FilterDef = { key: string; label: string; options: string[]; title?: string; counts?: Record<string, number> };
+
+/** The population's own demographic and geography filters, split into their two groups. */
+export function populationFilters(filters: PopulationFilter[] = []): { demographics: FilterDef[]; geography: FilterDef[] } {
+  const def = (f: PopulationFilter): FilterDef => ({
+    key: f.key, label: f.label, options: f.options.map((o) => o.value),
+    counts: Object.fromEntries(f.options.map((o) => [o.value, o.n])),
+  });
+  return {
+    demographics: filters.filter((f) => f.group === "demographics").map(def),
+    geography: filters.filter((f) => f.group === "geography").map(def),
+  };
 }

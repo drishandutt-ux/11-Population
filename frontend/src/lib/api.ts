@@ -237,6 +237,8 @@ export const api = {
   },
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
+    /** The demographic and geography "who answers" filters this session's population offers. */
+    filters: (sessionId: string) => request<{ filters: PopulationFilter[] }>(`/sessions/${sessionId}/lab/filters`),
     /** The Journey tool (brief L7-01): propose the steps to the outcome from what the session knows. */
     // Calibration rules (brief L4-02) and lever runs (brief L7-04).
     rules: (sessionId: string) => request<{ rules: CalibrationRule[]; dials: Record<string, string[]>; bound_max: number; bound_default: number }>(`/sessions/${sessionId}/rules`),
@@ -468,6 +470,14 @@ export type SharedChat = {
 };
 
 /** One dynamic dial: a question-specific 0-10 scale every twin in the session carries. */
+/** A "who answers" filter read off the population (gender, income, region …), with head counts. */
+export type PopulationFilter = {
+  key: string;
+  label: string;
+  group: "demographics" | "geography";
+  options: { value: string; n: number }[];
+};
+
 export type DynamicDial = {
   key: string;
   label: string;

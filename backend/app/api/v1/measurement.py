@@ -608,6 +608,20 @@ async def create_probe(
     return _probe_payload(p)
 
 
+@router.get("/sessions/{session_id}/lab/filters")
+async def lab_filters(
+    session_id: str,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The demographic and geography "who answers" filters this session's population offers."""
+    await get_owned_session(session_id, user, db)
+    agents = (await db.execute(
+        select(SpawnedAgent).where(SpawnedAgent.session_id == session_id)
+    )).scalars().all()
+    return {"filters": probe_svc.filter_options(list(agents))}
+
+
 @router.get("/sessions/{session_id}/probes")
 async def list_probes(
     session_id: str,

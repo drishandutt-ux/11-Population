@@ -14,7 +14,7 @@ import {
 import { AlertTriangle, ChevronLeft, Download, FlaskConical, History, Loader2, Play, Plus, RefreshCw, Square, X } from "lucide-react";
 import { PairedDots, DotGrid, optionColor } from "./Charts";
 import InstrumentForm, { initialValues, toSpec } from "./InstrumentForm";
-import { SEGMENT_FILTERS, dynamicFilters } from "./filters";
+import WhoAnswers from "./WhoAnswers";
 import ExperimentPage from "./pages/ExperimentPage";
 
 type LiveAnswer = { agent_id: string; agent_name: string; avatar_color: string; answer: Record<string, any> };
@@ -302,19 +302,7 @@ export default function ExperimentPanel({
           </div>
         )}
 
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1.5">Who answers</label>
-          <div className="space-y-2">
-            {[...SEGMENT_FILTERS, ...dynamicFilters(dynamicDials)].map((f) => (
-              <select key={f.key} value={filters[f.key] || ""} onChange={(e) => setFilters((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                title={(f as { title?: string }).title}
-                className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs">
-                <option value="">{f.label}: everyone</option>
-                {f.options.map((o) => <option key={o} value={o}>{f.label}: {o}</option>)}
-              </select>
-            ))}
-          </div>
-        </div>
+        <WhoAnswers sessionId={sessionId} filters={filters} setFilters={setFilters} dynamicDials={dynamicDials} agentCount={agents.length} hint={false} />
 
         <div>
           <label className="text-xs text-muted-foreground block mb-1.5">Model</label>
