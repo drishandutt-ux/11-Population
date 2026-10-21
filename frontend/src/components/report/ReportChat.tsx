@@ -1010,7 +1010,7 @@ function ReportDocument({ content, agentsById, records = [], structure = null, o
                 dangerouslySetInnerHTML={{ __html: renderInline(block.text, agentsById) }} />
             </div>
             {i === firstAnswer && structure?.coverage && <CoverageLine cov={structure.coverage} onGoToLab={onGoToLab} />}
-            {i === firstAnswer && records.length > 0 && <SummaryStrip records={records} />}
+            {i === firstAnswer && records.length > 0 && <SummaryStrip records={records} shape={structure?.direct_answer?.shape} />}
             {i === firstAnswer && !isError && <FigureKey structure={structure} records={records} />}
             </div>
           );
@@ -1116,11 +1116,16 @@ function CoverageLine({ cov, onGoToLab }: { cov: NonNullable<ReportStructure["co
 
 type Tile = { key: string; title: string; value: string; reading: string; recordId: string; tone?: "flat" | "good" | "warn"; runs?: number };
 
-function tilesFor(records: OutcomeRecord[]): Tile[] {
+function tilesFor(records: OutcomeRecord[], shape: "yes_no" | "open" = "yes_no"): Tile[] {
   const out: Tile[] = [];
   const head = records.find((r) => r.kind === "headline");
   const direct = records.find((r) => r.direct);
-  if (head && head.torn && direct) {
+  if (head && shape === "open" && !head.torn) {
+    // A how / why / what question (2026-10-21): the poll could only ask whether the twins agree with
+    // the question read as a proposition, so its share is not the answer — the answer is the
+    // sentence above, translated from the panel's own reasoning. Say what the tile measures.
+    out.push({ key: "verdict", title: "Agree with the premise", value: fmtEstimate(head), tone: "flat", reading: `share who agreed with the question read as a proposition · ${fmtIntervalText(head)} · ${head.estimate.n} twins · the answer itself is written above`, recordId: head.id, runs: head.runs?.count });
+  } else if (head && head.torn && direct) {
     // A torn verdict is neither a yes nor a no: the answer tile is the record that asked directly,
     // and the verdict tile says what the panel actually did.
     out.push({ key: "answer", title: "The answer (asked directly)", value: fmtEstimate(direct), reading: `${direct.estimate.label || direct.label} · ${fmtIntervalText(direct)} · ${direct.estimate.n} twins`, recordId: direct.id, runs: direct.runs?.count });
@@ -1181,8 +1186,8 @@ function tilesFor(records: OutcomeRecord[]): Tile[] {
   return out;
 }
 
-function SummaryStrip({ records }: { records: OutcomeRecord[] }) {
-  const tiles = tilesFor(records);
+function SummaryStrip({ records, shape }: { records: OutcomeRecord[]; shape?: "yes_no" | "open" }) {
+  const tiles = tilesFor(records, shape || "yes_no");
   if (!tiles.length) return null;
   const toneCls = (t?: Tile["tone"]) => t === "good" ? "text-emerald-300" : t === "warn" ? "text-amber-300" : t === "flat" ? "text-muted-foreground/80" : "text-teal-300";
   return (

@@ -97,7 +97,7 @@ def test_build_structure_wires_every_section():
     s = st.build_structure(session_query="Q?", records=[headline], headline=headline, positions=pos, evidence=[], frame={"level": "none"},
                            cited_record_ids=["h1"], claimed_band="LOW")
     assert s["direct_answer"] == {"record_id": "h1", "confidence": {"band": "HIGH", "score": 72, "drivers": ["5 twins answered"]}, "claimed_band": "LOW",
-                                  "torn": False, "direct_read_record_id": None}
+                                  "torn": False, "direct_read_record_id": None, "shape": "yes_no"}
     assert s["question"] == {"session_query": "Q?", "instrument": "verdict", "asked": 6, "answered": 5}
     assert s["discussion"]["majority"] == "for" and s["discussion"]["n"] == 5
     assert s["discussion"]["positions"][0] == {"value": "for", "count": 3, "share": 0.6}
@@ -183,3 +183,40 @@ def test_an_empty_social_pull_is_named_as_a_gap_when_research_ran():
     assert [x["class"] for x in s] == ["quant", "web", "social"] and s[2]["count"] == 0 and "not on file" in s[2]["gap"]
     assert "Social & forum posts: none gathered" in st.evidence_block(s)
     assert [x["class"] for x in st.evidence_summary([])] == []          # no research at all: nothing to name
+
+
+# ── the question's shape (2026-10-21): a how / why / what question is not answered by a share ──
+
+def test_question_shape_reads_yes_no_from_open_without_a_model():
+    assert st.question_shape("Will GPs prescribe it to patients who ask?") == "yes_no"
+    assert st.question_shape("Should the NHS fund oral GLP-1 for IMD decile 1-2 first?") == "yes_no"
+    assert st.question_shape("Oral GLP-1 at £120/month for Blackpool") == "yes_no"          # a proposition
+    assert st.question_shape("Would it work in places like Blackpool, which are deprived?") == "yes_no"  # relative clause
+    assert st.question_shape("") == "yes_no"
+    assert st.question_shape("How would the populations of Blackpool and Oxford differ in uptake, adherence, and outcomes?") == "open"
+    assert st.question_shape("Would Londoners pay £15/month, and what would stop them?") == "open"  # two-part
+    assert st.question_shape("Would uptake differ between Blackpool and Oxford?") == "open"
+    assert st.question_shape("Why do people stop taking it after three months?") == "open"
+    assert st.question_shape("Which message lands best with carers?") == "open"
+
+
+def test_open_shape_tells_the_model_the_share_is_not_the_answer_and_the_structure_carries_it():
+    assert "NOT the answer" in st.REPORT_PROMPT and "WHAT THE PANEL SAID" in st.REPORT_PROMPT
+    assert "agreement with the premise" in st.shape_block("open") and "[[R1]]" in st.shape_block("yes_no")
+    s = st.build_structure(session_query="How would Blackpool and Oxford differ?", records=[], headline=None, positions=[], evidence=[],
+                           frame={"level": "none"}, cited_record_ids=[], claimed_band=None)
+    assert s["direct_answer"]["shape"] == "open"
+
+
+def test_panel_reasoning_is_handed_over_by_handle_most_confident_first_without_a_new_poll():
+    rows = [SimpleNamespace(agent_id="a1", answer={"position": "for", "confidence": 40, "verdict": "Yes.", "reasoning": "Oxford has the GPs and the gyms."}),
+            SimpleNamespace(agent_id="a2", answer={"position": "against", "confidence": 90, "verdict": "No.", "reasoning": "In Blackpool the pharmacy is the only door."}),
+            SimpleNamespace(agent_id="a3", answer={"position": "mixed", "confidence": 60, "verdict": "Depends on cost."}),   # no reasoning: the line stands in
+            SimpleNamespace(agent_id="a4", answer={"position": "for", "confidence": 99, "can_answer": "no", "reasoning": "not mine to say"})]
+    pos = st.positions_from_answers(rows)
+    assert [p["agent_id"] for p in pos] == ["a1", "a2", "a3"] and pos[0]["reasoning"] == "Oxford has the GPs and the gyms."
+    block = st.reasoning_block(pos, {"a1": "A1", "a2": "A2", "a3": "A3"})
+    lines = block.split("\n")
+    assert lines[0].startswith("- [[A2]] (against, 90/100): In Blackpool") and lines[1].startswith("- [[A3]] (mixed, 60/100): Depends on cost.")
+    assert lines[2].startswith("- [[A1]] (for, 40/100): Oxford has")
+    assert st.reasoning_block([], {}).startswith("(no verdict reasoning on file")

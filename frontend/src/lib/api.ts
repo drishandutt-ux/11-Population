@@ -663,7 +663,8 @@ export type OutcomeRecord = {
 /** The report's wired parts (brief L6-02): what the rendered report reads from data, not prose. */
 export type ReportStructure = {
   version: number;
-  direct_answer: { record_id: string | null; confidence: { band: "HIGH" | "MEDIUM" | "LOW" | null; score: number | null; drivers: string[] }; claimed_band: string | null };
+  /** `shape` (2026-10-21): yes_no | open — on an open question (how / why / how A and B differ) the headline share is agreement with the premise, not the answer. */
+  direct_answer: { record_id: string | null; confidence: { band: "HIGH" | "MEDIUM" | "LOW" | null; score: number | null; drivers: string[] }; claimed_band: string | null; torn?: boolean; direct_read_record_id?: string | null; shape?: "yes_no" | "open" };
   question: { session_query: string; instrument: string | null; asked: number | null; answered: number | null };
   /** What was run in the session and what was not (2026-09-30): the line under the direct answer, and the "not run" offers. */
   coverage?: { ran: { key: string; label: string; count: number; phrase: string; record_ids: string[] }[]; not_run: { key: string; label: string; adds: string; instrument: string | null; needs: string | null }[] };

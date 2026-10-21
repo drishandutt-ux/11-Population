@@ -43,7 +43,7 @@ REPORT_PROMPT = """You are a senior analyst. Produce a structured executive brie
 CRITICAL: Your VERY FIRST line must be "## DIRECT ANSWER" — no preamble, no intro. Use exactly these five sections in this order:
 
 ## DIRECT ANSWER
-One precise sentence directly answering the user's question, leading with the headline record ([[R1]]) — or, when R1 is marked TORN, with the record marked DIRECT READ if there is one, followed by what the verdict depends on (a torn panel is neither a yes nor a no, and never "against"). Do NOT write a confidence level — it is computed from the record and shown beside your sentence.
+Answer the question exactly as it was asked, in one to three sentences, translated from everything above: the twins' own reasoning under == WHAT THE PANEL SAID ==, the transcript, the records and the evidence. Follow == THE QUESTION'S SHAPE ==. For a yes/no question lead with the headline record ([[R1]]) — or, when R1 is marked TORN, with the record marked DIRECT READ if there is one, followed by what the verdict depends on (a torn panel is neither a yes nor a no, and never "against"). For any other question (how, why, what would happen, how A and B differ) the headline share is NOT the answer: it only measures agreement with the question read as a proposition. Give the substance instead — one clause per part or dimension the question names, each with its direction and the reason the panel gave — citing the twins whose reasoning it rests on ([[A7]]) and a record only where it carries that figure. Never answer a how / why / what question with "X% agreed". Do NOT write a confidence level — it is computed from the record and shown beside your sentence.
 
 ## QUESTION
 Restate the question being investigated and why it matters.
@@ -129,8 +129,70 @@ def positions_from_answers(rows: Iterable[Any]) -> list[dict]:
         except (TypeError, ValueError):
             conf = 0
         out.append({"agent_id": agent_id, "position": pos, "confidence": max(0, min(100, conf)),
-                    "verdict": str(ans.get("verdict") or "").strip()[:300]})
+                    "verdict": str(ans.get("verdict") or "").strip()[:300],
+                    # The 2-3 sentences behind the position: the panel's own analysis, which the direct
+                    # answer to a how / why / what question is translated from (2026-10-21).
+                    "reasoning": str(ans.get("reasoning") or "").strip()[:320]})
     return out
+
+
+# ── the question's shape ─────────────────────────────────────────────────────
+
+#: A how / why / what / which clause at the start of the question or of a later clause ("…, and
+#: what would stop them?"); "who" and "which" mid-sentence are relative pronouns, not questions.
+_OPEN_WORDS = r"how|why|what|where|when|compare|contrast|describe|explain|in what ways"
+_OPEN_CLAUSE_RE = re.compile(
+    # at the start, or after a conjunction: every question word, "which" and "who" included
+    rf"(?:^\s*|\b(?:and|or|but|then)\s+)(?:{_OPEN_WORDS}|which|who|whom)\b"
+    # after a bare comma or semicolon: not "which" / "who" — "…Blackpool, which are deprived" is a relative clause
+    rf"|[,;:?]\s*(?:{_OPEN_WORDS})\b", re.IGNORECASE)
+#: A comparison asked anywhere in the question.
+_OPEN_ANY_RE = re.compile(r"\b(?:differ\w*|differen\w*|compar\w*|contrast\w*|versus|vs\.?)\b", re.IGNORECASE)
+
+SHAPES = ("yes_no", "open")
+
+
+def question_shape(question: str) -> str:
+    """Whether the session question can be answered by the verdict poll's share (`yes_no`: will /
+    should / would X, or a proposition) or asks for substance the share cannot carry (`open`:
+    how, why, what would happen, how A and B differ). The verdict poll asks for / against / mixed
+    on the question as written, so on an open question its share only says how many twins
+    agree with the premise — 92% "agreed Blackpool and Oxford would differ" answered nothing
+    about how (2026-10-21). Deterministic: no model call, so the same question always reads the
+    same way; anything without an open cue keeps the yes/no reading the report always had."""
+    q = (question or "").strip()
+    if not q:
+        return "yes_no"
+    if _OPEN_CLAUSE_RE.search(q) or _OPEN_ANY_RE.search(q):
+        return "open"
+    return "yes_no"
+
+
+def shape_block(shape: str) -> str:
+    """== THE QUESTION'S SHAPE == as the model sees it."""
+    if shape == "open":
+        return ("OPEN — the question asks how, why, what would happen or how two things differ. It cannot be answered by a share. "
+                "The verdict poll could only ask the twins whether they agree with the question read as a proposition, so the headline "
+                "share ([[R1]]) measures agreement with the premise, not the answer; mention it at most as supporting evidence, never as the answer. "
+                "Write the direct answer from the twins' own reasoning under == WHAT THE PANEL SAID == and the transcript: one clause per part "
+                "or dimension the question names, each with its direction and the reason the panel gave, cited by handle.")
+    return ("YES/NO — the question asks whether something will, should or would happen (or states a proposition). "
+            "The headline record ([[R1]]) answers it directly; lead with it as the rules above say.")
+
+
+def reasoning_block(positions: list[dict], handle_of_agent: dict[str, str], limit: int = 80) -> str:
+    """== WHAT THE PANEL SAID == : every twin's private reasoning on the question, by handle, with
+    their position and confidence — the analysis already on file, so the direct answer can be
+    written from it without asking the twins anything new (they are never re-polled, so they
+    can never contradict what they said)."""
+    if not positions:
+        return "(no verdict reasoning on file — write the direct answer from the transcript and the records)"
+    lines = []
+    for p in sorted(positions, key=lambda p: (-int(p.get("confidence") or 0), p.get("agent_id") or ""))[:limit]:
+        h = handle_of_agent.get(p.get("agent_id") or "", "?")
+        why = str(p.get("reasoning") or "").strip() or str(p.get("verdict") or "").strip()
+        lines.append(f"- [[{h}]] ({p['position']}, {p['confidence']}/100): {why}")
+    return "\n".join(lines)
 
 
 def majority_of(positions: list[dict]) -> Optional[str]:
@@ -485,6 +547,9 @@ def build_structure(*, session_query: str, records: list[dict], headline: Option
             # that asked the question directly — the page leads its yes/no with that one.
             "torn": bool((headline or {}).get("torn")) if headline else False,
             "direct_read_record_id": next((r.get("id") for r in records if r.get("direct")), None),
+            # yes_no | open (2026-10-21): on an open question the headline share is agreement with the
+            # premise, not the answer — the page labels the verdict tile accordingly.
+            "shape": question_shape(session_query),
             "confidence": {"band": confidence_band(score) if headline else None, "score": score, "drivers": list(conf.get("drivers") or [])},
             "claimed_band": claimed_band,
         },

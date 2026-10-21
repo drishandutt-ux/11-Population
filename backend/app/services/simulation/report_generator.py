@@ -229,8 +229,12 @@ async def generate_report(
     extra = (
         f"\n== EVIDENCE BY CLASS (what grounds this population — SOURCE MATERIALS follows this order) ==\n"
         f"{structure_mod.evidence_block(evidence)}\n\n"
+        f"== THE QUESTION'S SHAPE (whether the headline share can answer it) ==\n"
+        f"{structure_mod.shape_block(structure_mod.question_shape(original_query))}\n\n"
         f"== POSITIONS (every twin's verdict on the question, from the headline record — the named dissent under DISCUSSION comes from here) ==\n"
         f"{structure_mod.positions_block(positions, ctx.handles.handle_of_agent, names)}\n\n"
+        f"== WHAT THE PANEL SAID (every twin's private reasoning on the question, most confident first — the direct answer is translated from this and the transcript) ==\n"
+        f"{structure_mod.reasoning_block(positions, ctx.handles.handle_of_agent)}\n\n"
         f"== WHAT WAS RUN (the tools that produced records, and the tools that were not run in this session) ==\n"
         f"{structure_mod.coverage_block(cov)}\n"
     )
