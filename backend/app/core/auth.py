@@ -261,9 +261,13 @@ async def get_owned_session(session_id: str, user: AuthUser, db, *, strict: bool
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if owns(session, user):
-        return session
-    if not strict and await is_shared_with(session_id, user, db):
+    if owns(session, user) or (not strict and await is_shared_with(session_id, user, db)):
+        # End the read transaction so the pooled connection goes back while the handler works:
+        # many handlers then call services that open a session of their own, and a burst of
+        # page-load requests each holding one connection while waiting for a second exhausted
+        # the pool and hung every signed-in request (2026-10-21). expire_on_commit=False keeps
+        # `session` loaded and attached.
+        await db.commit()
         return session
     raise HTTPException(status_code=404, detail="Session not found")
 

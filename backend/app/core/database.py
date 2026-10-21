@@ -35,7 +35,7 @@ _sqlite = DATABASE_URL.startswith("sqlite")
 def _engine_kwargs() -> dict:
     if _sqlite:
         return {"connect_args": {"check_same_thread": False}}
-    kw: dict = {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 5, "pool_recycle": 1800}
+    kw: dict = {"pool_pre_ping": True, "pool_size": 8, "max_overflow": 12, "pool_timeout": 15, "pool_recycle": 1800}
     # Supabase shared pooler in TRANSACTION mode (port 6543) cannot use prepared statements.
     if ":6543/" in DATABASE_URL:
         from sqlalchemy.pool import NullPool
