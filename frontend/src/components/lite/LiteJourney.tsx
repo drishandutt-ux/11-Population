@@ -11,7 +11,8 @@
  *  - Rules are a chat box: the reader types a change in plain English (or taps a recommended
  *    one), the system drafts the rule — who it applies to, what it moves, how far, on what
  *    evidence — reads it back in plain words, and "Add it" signs it in the reader's name. "See
- *    what changes" re-asks the same people with the rules in place and shows the growth per step.
+ *    what changes" re-asks the same people with the rules in place and shows the growth per step,
+ *    with the whole-journey result as a picture (GrowthInfographic) rather than a paragraph.
  *  Everything else (levers one at a time, behaviour ranking, message tests, commitments) stays
  *  in the pro Lab, one "See in detail" away. */
 
@@ -21,6 +22,7 @@ import { LITE_DEFAULTS, proLinks } from "@/lib/lite";
 import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronLeft, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import Detail from "./Detail";
+import GrowthInfographic from "./GrowthInfographic";
 import { ago } from "@/components/lab/forms/formUtils";
 
 type Stage = "compose" | "running" | "results";
@@ -420,14 +422,7 @@ export default function LiteJourney({ sessionId, agents, onBack }: Props) {
           </ol>
         </Detail>
       )}
-      {growth && (
-        <div className="lite-card p-5 space-y-2">
-          <div className="text-[13px] text-muted-foreground">With the rules in place</div>
-          <div className="flex flex-wrap gap-1.5">{growth.rules.map((r) => <span key={r.rule_id} className="lite-pill-quiet cursor-default">{r.lever}{r.basis_class === "assumption" ? " · assumed" : ""}</span>)}</div>
-          <p className="text-[14px] leading-relaxed">{growth.sentence}</p>
-          {growth.why && growth.why.through?.length > 0 && <p className="text-[13px] text-muted-foreground">In their words: “{growth.why.through[0].quote}” — {growth.why.through[0].who || "one of them"}</p>}
-        </div>
-      )}
+      {growth && <GrowthInfographic growth={growth} />}
     </div>
   ) : null;
 
