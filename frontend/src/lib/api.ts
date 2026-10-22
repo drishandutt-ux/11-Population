@@ -52,6 +52,9 @@ export const api = {
     users: () => request<AdminUser[]>("/admin/users"),
     setRole: (userId: string, role: "admin" | "member") =>
       request(`/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
+    usage: (days = 0) => request<UsageOverview>(`/admin/usage?days=${days}`),
+    usageSession: (sessionId: string, days = 0) =>
+      request<UsageSessionDetail>(`/admin/usage/sessions/${sessionId}?days=${days}`),
   },
   research: {
     state: (sessionId: string) => request<ResearchState>(`/sessions/${sessionId}/research`),
@@ -522,6 +525,47 @@ export type AdminUser = {
   created_at: string;
   sessions: number;
   is_you: boolean;
+};
+
+// Admin · Tokens & cost — from the local llm_usage ledger (one row per Anthropic call)
+export type UsageCounts = {
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
+  web_search_requests: number;
+  total_tokens: number;
+  cost_usd: number;
+  errors: number;
+  unpriced: number;
+};
+export type UsageModel = { model: string; calls: number; total_tokens: number; cost_usd: number; input_tokens?: number; output_tokens?: number };
+export type UsageSessionRow = UsageCounts & {
+  session_id: string; // "none" → calls not tied to a session
+  title: string;
+  exists: boolean;
+  owner_email: string | null;
+  session_created_at: string | null;
+  first_at: string | null;
+  last_at: string | null;
+  models: UsageModel[];
+};
+export type UsageOverview = {
+  days: number;
+  totals: UsageCounts & { sessions: number };
+  models: UsageModel[];
+  sessions: UsageSessionRow[];
+};
+export type UsageCall = {
+  created_at: string; label: string; model: string;
+  input_tokens: number; output_tokens: number; cache_creation_tokens: number; cache_read_tokens: number;
+  web_search_requests: number; cost_usd: number; elapsed_sec: number; status: string; priced: boolean;
+};
+export type UsageSessionDetail = {
+  session_id: string;
+  executions: (UsageCounts & { label: string; model: string; first_at: string | null; last_at: string | null })[];
+  recent: UsageCall[];
 };
 
 export type DialCategory = {

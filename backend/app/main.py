@@ -33,10 +33,16 @@ async def lifespan(app: FastAPI):
         SCHEMA_ERROR = f"{type(e).__name__}: {str(e)[:300]}"
         print(f"[startup] WARNING: create_tables() failed: {e}")
         print("[startup] App will start anyway — DB errors will surface per-request.")
+    from app.core.monitoring import start_usage_writer, stop_usage_writer
+    start_usage_writer()
     yield
+    await stop_usage_writer()
 
 
 app = FastAPI(title="11 Minds Army", version="1.0.0", lifespan=lifespan)
+
+from app.core.monitoring import SessionContextMiddleware  # noqa: E402
+app.add_middleware(SessionContextMiddleware)   # tags LLM usage with the session in the request path
 
 app.add_middleware(
     CORSMiddleware,

@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Coins, Loader2, ShieldCheck, Users } from "lucide-react";
 import { api, AdminUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import UsageAnalyser from "@/components/admin/UsageAnalyser";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { me, loading } = useAuth();
+  const { me, loading, enabled } = useAuth();
+  // Auth off (local dev): the backend treats the dev user as admin, so the page opens too.
+  const isAdmin = !!me?.is_admin || (!loading && !enabled);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"users" | "usage">("users");
 
   async function load() {
     try {
@@ -22,8 +26,8 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!loading && me?.is_admin) load();
-  }, [loading, me?.is_admin]);
+    if (isAdmin) load();
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function setRole(u: AdminUser, role: "admin" | "member") {
     setBusy(u.id);
@@ -39,7 +43,7 @@ export default function AdminPage() {
   }
 
   if (loading) return null;
-  if (!me?.is_admin) {
+  if (!isAdmin) {
     return (
       <div className="h-screen bg-background flex items-center justify-center text-sm text-muted-foreground">
         Admins only.&nbsp;<button onClick={() => router.push("/")} className="text-primary">Back to sessions</button>
@@ -56,11 +60,22 @@ export default function AdminPage() {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <ShieldCheck className="w-4 h-4 text-primary" />
-        <span className="text-sm font-medium text-foreground">Admin · Users</span>
-        <span className="ml-auto text-xs text-muted-foreground">{users.length} account{users.length === 1 ? "" : "s"} · {admins} admin{admins === 1 ? "" : "s"}</span>
+        <span className="text-sm font-medium text-foreground">Admin</span>
+        <nav className="flex items-center gap-1 ml-3">
+          <button onClick={() => setTab("users")} className={`text-xs px-2.5 py-1 rounded flex items-center gap-1.5 ${tab === "users" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            <Users className="w-3.5 h-3.5" /> Users
+          </button>
+          <button onClick={() => setTab("usage")} className={`text-xs px-2.5 py-1 rounded flex items-center gap-1.5 ${tab === "usage" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            <Coins className="w-3.5 h-3.5" /> Tokens &amp; cost
+          </button>
+        </nav>
+        {tab === "users" && <span className="ml-auto text-xs text-muted-foreground">{users.length} account{users.length === 1 ? "" : "s"} · {admins} admin{admins === 1 ? "" : "s"}</span>}
       </header>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
+        {tab === "usage" ? (
+          <div className="max-w-6xl mx-auto"><UsageAnalyser /></div>
+        ) : (
         <div className="max-w-3xl mx-auto space-y-4">
           <p className="text-xs text-muted-foreground">
             The first account that registered is the admin. Admins see every user&apos;s sessions (toggle on the home page) and can promote or demote accounts here. The last admin cannot be demoted.
@@ -119,6 +134,7 @@ export default function AdminPage() {
             </table>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
