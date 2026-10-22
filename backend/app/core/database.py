@@ -35,7 +35,12 @@ _sqlite = DATABASE_URL.startswith("sqlite")
 def _engine_kwargs() -> dict:
     if _sqlite:
         return {"connect_args": {"check_same_thread": False}}
-    kw: dict = {"pool_pre_ping": True, "pool_size": 8, "max_overflow": 12, "pool_timeout": 15, "pool_recycle": 1800}
+    # The Supabase pooler in SESSION mode (port 5432) refuses a client's 16th connection outright
+    # (EMAXCONNSESSION, pool_size 15), so the pool's ceiling stays under it: past 14, requests wait
+    # here for a free connection instead of failing. DB_POOL_SIZE / DB_MAX_OVERFLOW override.
+    size = int(os.environ.get("DB_POOL_SIZE", "6"))
+    overflow = int(os.environ.get("DB_MAX_OVERFLOW", "8"))
+    kw: dict = {"pool_pre_ping": True, "pool_size": size, "max_overflow": overflow, "pool_timeout": 30, "pool_recycle": 1800}
     # Supabase shared pooler in TRANSACTION mode (port 6543) cannot use prepared statements.
     if ":6543/" in DATABASE_URL:
         from sqlalchemy.pool import NullPool

@@ -640,15 +640,21 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
                     return
                 ctx = kg_context
                 served = None
-                if scoped:
-                    got = await scoping.sources_for_agent(session_id, agent, query, purpose="probe")
-                    if got:
-                        ctx, served = got
-                row = await answer_one(
-                    agent, instrument=instrument, spec=spec, probe_id=probe_id,
-                    session_id=session_id, query=query, kg_context=ctx, model=model,
-                    experiment_id=experiment_id, served=served,
-                )
+                try:
+                    if scoped:
+                        got = await scoping.sources_for_agent(session_id, agent, query, purpose="probe")
+                        if got:
+                            ctx, served = got
+                    row = await answer_one(
+                        agent, instrument=instrument, spec=spec, probe_id=probe_id,
+                        session_id=session_id, query=query, kg_context=ctx, model=model,
+                        experiment_id=experiment_id, served=served,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    # One twin's failure (a database hiccup saving its answer) counts as one
+                    # missing answer; it must not take the whole run down with it.
+                    print(f"[probe] {probe_id} agent {agent.id} failed: {type(e).__name__}: {e}")
+                    row = None
             async with lock:
                 if row:
                     rows.append(row)
