@@ -810,6 +810,25 @@ async def generate_agents_from_plan(
             print(f"[agent_factory] scoped context unavailable ({seg.get('name')}): {type(e).__name__}: {e}")
             return None
 
+    async def _call(**kw):
+        """One model call that the analyst's Stop abandons at once. A Pro batch of ten personas
+        can run for minutes, so waiting for in-flight calls made Stop look dead; the call is
+        cancelled instead and None comes back (the batch is skipped, finished batches are kept)."""
+        if should_stop and should_stop():
+            return None
+        task = asyncio.ensure_future(tracked_messages_create(client, session_id=session_id, **kw))
+        try:
+            while not task.done():
+                if should_stop and should_stop():
+                    task.cancel()
+                    await asyncio.wait({task})
+                    return None
+                await asyncio.wait({task}, timeout=0.5)
+        except asyncio.CancelledError:
+            task.cancel()
+            raise
+        return task.result()
+
     async def _batch(seg: dict, n: int, taken: list[dict], label: str, seed: str = "0") -> list[dict]:
         if should_stop and should_stop():
             return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
@@ -818,12 +837,14 @@ async def generate_agents_from_plan(
         slots = pb_mod.draw_slots(playbook, seg, n, f"{label}:{seed}") if playbook else []
         async with sem:
             try:
-                response = await tracked_messages_create(
-                    client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
+                response = await _call(
+                    label=label, model=gen_model, max_tokens=12000,
                     system=_spawn_system(),
                     messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic,
                                                                        extra=pb_mod.context_block(playbook, seg) + pb_mod.slots_block(playbook, slots))}],
                 )
+                if response is None:
+                    return []
                 out = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
                 pb_mod.pin(playbook, seg, slots, out)
                 for d in out:
@@ -854,10 +875,12 @@ async def generate_agents_from_plan(
                                       dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))
         async with sem:
             try:
-                response = await tracked_messages_create(
-                    client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
+                response = await _call(
+                    label=label, model=gen_model, max_tokens=12000,
                     system=_spawn_system(), messages=[{"role": "user", "content": prompt}],
                 )
+                if response is None:
+                    return []
                 raw = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] cast batch failed ({seg.get('name')}, {len(slots)}): {type(e).__name__}: {e}")
@@ -881,10 +904,12 @@ async def generate_agents_from_plan(
                                       dyn_mod.prompt_block(dynamic), dyn_mod.schema_block(dynamic))
         async with sem:
             try:
-                response = await tracked_messages_create(
-                    client, session_id=session_id, label=label, model=gen_model, max_tokens=12000,
+                response = await _call(
+                    label=label, model=gen_model, max_tokens=12000,
                     system=_spawn_system(), messages=[{"role": "user", "content": prompt}],
                 )
+                if response is None:
+                    return []
                 raw = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] kit batch failed ({seg.get('name')}, {len(cards)}): {type(e).__name__}: {e}")

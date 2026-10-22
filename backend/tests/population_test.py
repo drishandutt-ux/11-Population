@@ -135,6 +135,43 @@ def test_profile_from_dict_keeps_demographics_and_segment():
     assert agent_factory.profile_from_dict({"role": "no name"}, "s", "#fff") is None
 
 
+def test_stop_drops_calls_in_flight_and_keeps_finished_batches(monkeypatch):
+    """Stop must not wait for a slow model call: the first batch is kept, the hung ones are dropped."""
+    import json
+    import re
+
+    async def fake_rag(session_id):
+        return "rag"
+
+    async def fake_query(rag, q, mode="hybrid"):
+        return "summary"
+
+    calls = []
+    stop = {"now": False}
+
+    async def fake_create(client, *, session_id=None, label="", **kw):
+        calls.append(label)
+        n = int(re.search(r"Create (\d+) distinct personas", kw["messages"][0]["content"]).group(1))
+        if len(calls) > 1:
+            stop["now"] = True          # the analyst presses Stop while the later batches are running
+            await asyncio.sleep(60)     # a Pro batch that would otherwise take minutes
+        out = [{"name": f"Person {len(calls)}-{k}", "age": 30 + k, "role": f"Job {k}", "background": "b", "stance": "direct", "humanity": 50} for k in range(n)]
+
+        class R:  # noqa: D401
+            content = [type("T", (), {"text": json.dumps(out)})()]
+        return R()
+
+    monkeypatch.setattr(agent_factory, "get_lightrag", fake_rag)
+    monkeypatch.setattr(agent_factory, "query_rag", fake_query)
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", fake_create)
+    seg = dict(_seg("s1", 100), count=30)
+    started = time.time()
+    profiles = asyncio.new_event_loop().run_until_complete(
+        agent_factory.generate_agents_from_plan("s", "q", [seg], {}, mode="fast", should_stop=lambda: stop["now"]))
+    assert time.time() - started < 5
+    assert len(profiles) == 10
+
+
 def test_quant_chunk_and_prompt_carry_the_source():
     class E:
         session_id = "s"; source_ref = "https://ons.gov.uk/x"; author = "ons.gov.uk"; published_at = "2025-03-01"; title = "Cycling in England"

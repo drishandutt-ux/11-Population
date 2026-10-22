@@ -696,6 +696,15 @@ async def stop_build(session_id: str) -> Optional[str]:
     bld = await latest_build(session_id)
     if not bld or bld.status not in ACTIVE:
         return None
+    task = _tasks.get(bld.id)
+    if bld.status in ("planning", "spawning") and (task is None or task.done()):
+        # Nothing is running this build any more (the worker was restarted or the task died):
+        # a flag would never be read, so the build is closed here instead of looking stuck.
+        _stop[bld.id] = True
+        await log(bld.id, "spawn" if bld.status == "spawning" else "plan", "warn", "Stopped — no build was still running; nothing more will be written")
+        await _save(bld.id, status="stopped")
+        return bld.id
+    already = _stopped(bld.id)
     _stop[bld.id] = True
     if bld.status in ("queued", "detecting", "gathering", "clarifying"):
         task = _tasks.pop(bld.id, None)
@@ -718,8 +727,8 @@ async def stop_build(session_id: str) -> Optional[str]:
         _tasks[bld.id] = asyncio.create_task(_go())
     elif bld.status == "planning":
         await log(bld.id, "plan", "decision", "Stop noted — the plan already being composed will be shown when it lands")
-    elif bld.status == "spawning":
-        await log(bld.id, "spawn", "decision", "Stopping the build — the personas already written are kept")
+    elif bld.status == "spawning" and not already:
+        await log(bld.id, "spawn", "decision", "Stopping the build — calls in flight are dropped, the personas already written are kept")
     return bld.id
 
 
