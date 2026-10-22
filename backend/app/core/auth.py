@@ -249,17 +249,18 @@ async def user_from_ws_token(token: Optional[str]) -> Optional[AuthUser]:
 
 # ── Ownership helpers ────────────────────────────────────────────────────────
 
-async def get_owned_session(session_id: str, user: AuthUser, db, *, strict: bool = False):
+async def get_owned_session(session_id: str, user: AuthUser, db, *, strict: bool = False, deleted: bool = False):
     """Load a session the caller may work in, or 404 (never reveal other users' ids): the owner,
     an admin, or — since 2026-10-20 — a colleague the session was shared with, who gets the whole
     session (every tab, every tool, the chat). `strict=True` keeps it to the owner and admins:
-    deleting the session and deciding who it is shared with."""
+    deleting the session and deciding who it is shared with. A session in the bin (2026-10-22)
+    is 404 to everyone unless `deleted=True` (restore, delete forever)."""
     from sqlalchemy import select
     from app.models.session import AnalysisSession
 
     result = await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))
     session = result.scalar_one_or_none()
-    if not session:
+    if not session or (session.deleted_at is not None) != deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     if owns(session, user) or (not strict and await is_shared_with(session_id, user, db)):
         # End the read transaction so the pooled connection goes back while the handler works:

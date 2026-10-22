@@ -11,7 +11,7 @@ type Props = {
   href: string;
   label?: string;
   /** Where the pill sits relative to the wrapped content. */
-  at?: "top-right" | "top-left" | "bottom-right" | "inline";
+  at?: "top-right" | "top-left" | "bottom-right" | "bottom-edge" | "inline";
   className?: string;
   children: React.ReactNode;
 };
@@ -20,6 +20,7 @@ const POS: Record<NonNullable<Props["at"]>, string> = {
   "top-right": "top-2 right-2",
   "top-left": "top-2 left-2",
   "bottom-right": "bottom-2 right-2",
+  "bottom-edge": "-bottom-3 right-4",   // straddles the bottom border, clear of a row of controls
   inline: "top-1/2 -translate-y-1/2 right-0",
 };
 

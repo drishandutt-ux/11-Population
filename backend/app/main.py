@@ -35,7 +35,10 @@ async def lifespan(app: FastAPI):
         print("[startup] App will start anyway — DB errors will surface per-request.")
     from app.core.monitoring import start_usage_writer, stop_usage_writer
     start_usage_writer()
+    from app.core.trash import purge_loop
+    purge_task = asyncio.create_task(purge_loop())   # the bin: sessions deleted 30+ days ago go for good
     yield
+    purge_task.cancel()
     await stop_usage_writer()
 
 
@@ -102,7 +105,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     async with AsyncSessionLocal() as db:
         sess = (await db.execute(select(AnalysisSession).where(AnalysisSession.id == session_id))).scalar_one_or_none()
         # the owner, or a colleague the session is shared with (the shared chat listens here too, 2026-10-20)
-        allowed = sess is not None and (owns(sess, user) or await is_shared_with(session_id, user, db))
+        allowed = sess is not None and sess.deleted_at is None and (owns(sess, user) or await is_shared_with(session_id, user, db))
     if not allowed:
         await websocket.close(code=4404)
         return

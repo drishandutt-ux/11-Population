@@ -11,8 +11,10 @@ import Detail from "./Detail";
 import { Switch } from "@/components/population/controls";
 import { cn } from "@/lib/utils";
 import { useLiteRoot } from "@/lib/lite";
-import { ArrowRight, ArrowUpRight, FileText, Link2, Loader2, LogOut, Paperclip, Plus, Type, X, Youtube } from "lucide-react";
+import { ArrowRight, ArrowUpRight, FileText, Link2, Loader2, LogOut, Paperclip, Plus, Share2, Trash2, Type, X, Youtube } from "lucide-react";
 import SharedList from "@/components/sharing/SharedList";
+import ShareDialog from "@/components/sharing/ShareDialog";
+import RecentlyDeleted from "@/components/sessions/RecentlyDeleted";
 
 type Props = {
   userEmail?: string | null;
@@ -34,6 +36,12 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
   const [sessions, setSessions] = useState<Session[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [research, setResearch] = useState(true);
+  // Share / delete on each question (2026-10-22). Delete moves it to *Recently deleted* for 30 days.
+  const [sharing, setSharing] = useState<Session | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [binned, setBinned] = useState<Session | null>(null);     // the last one deleted, for Undo
+  const [binKey, setBinKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { api.sessions.list("mine").then((s) => setSessions(s as Session[])).catch(() => {}); }, []);
@@ -69,6 +77,30 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
       setError(err?.message || "Could not start. Is the server awake?");
       setCreating(null);
     }
+  }
+
+  async function remove(s: Session) {
+    setDeleting(s.id);
+    try {
+      await api.sessions.delete(s.id);
+      setSessions((prev) => prev.filter((x) => x.id !== s.id));
+      setBinned(s);
+      setBinKey((k) => k + 1);
+    } catch (err: any) {
+      setError(err?.message || "Could not delete it.");
+    } finally {
+      setDeleting(null);
+      setConfirmDelete(null);
+    }
+  }
+  async function undo() {
+    if (!binned) return;
+    const s = binned;
+    setBinned(null);
+    try { await api.sessions.restore(s.id); putBack(s); setBinKey((k) => k + 1); } catch { /* still in Recently deleted */ }
+  }
+  function putBack(s: Session) {
+    setSessions((prev) => [...prev.filter((x) => x.id !== s.id), s].sort((a, b) => b.created_at.localeCompare(a.created_at)));
   }
 
   const visible = showAll ? sessions : sessions.slice(0, 6);
@@ -182,7 +214,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
           </form>
           </div>
 
-          {sessions.length > 0 && (
+          {(sessions.length > 0 || binned) && (
             <section className="min-w-0 mt-14 xl:mt-0 xl:col-start-1 xl:row-start-2 animate-rise" style={{ animationDelay: "180ms" }}>
               <div className="flex items-baseline justify-between">
                 <h2 className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider">Your questions</h2>
@@ -190,22 +222,57 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
                   <button type="button" onClick={() => setShowAll((v) => !v)} className="text-[12.5px] text-muted-foreground hover:text-foreground">{showAll ? "Show fewer" : `Show all ${sessions.length}`}</button>
                 )}
               </div>
+              {binned && (
+                <div className="mt-3 flex items-center gap-3 rounded-2xl bg-foreground/5 px-4 py-2.5 text-[13px] animate-fade-in">
+                  <span className="min-w-0 flex-1 truncate">&ldquo;{binned.title}&rdquo; moved to Recently deleted.</span>
+                  <button type="button" onClick={undo} className="font-medium text-primary hover:underline shrink-0">Undo</button>
+                  <button type="button" onClick={() => setBinned(null)} className="text-muted-foreground hover:text-foreground shrink-0" title="Dismiss"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              )}
               <div className="mt-3 space-y-2">
                 {visible.map((s) => {
                   const st = friendlyStatus(s);
                   return (
-                    <Detail key={s.id} href={proLinks.session(s.id)}>
-                      <button type="button" onClick={() => router.push(`/lite/${s.id}`)} className="w-full text-left lite-card px-4 py-3.5 hover:border-foreground/20 transition-colors flex items-center gap-4">
+                    <Detail key={s.id} href={proLinks.session(s.id)} at="bottom-edge">
+                      <div
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => { if (confirmDelete !== s.id) router.push(`/lite/${s.id}`); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) router.push(`/lite/${s.id}`); }}
+                        className="w-full text-left lite-card px-4 py-3.5 hover:border-foreground/20 transition-colors flex items-center gap-4 cursor-pointer"
+                      >
                         <div className="min-w-0 flex-1">
                           <p className="text-[14.5px] font-medium text-foreground truncate">{s.title}</p>
                           <p className="text-[13px] text-muted-foreground truncate mt-0.5">{s.query}</p>
                         </div>
-                        <span className="shrink-0 inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
-                          <span className={cn("w-1.5 h-1.5 rounded-full", st.tone === "live" ? "bg-sky-500 animate-pulse" : st.tone === "done" ? "bg-primary" : "bg-muted-foreground/40")} />
-                          {st.text}
-                        </span>
-                        <ArrowRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
-                      </button>
+                        {confirmDelete === s.id ? (
+                          <span className="shrink-0 flex items-center gap-2 text-[12.5px]" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-muted-foreground hidden sm:inline">Delete? You can restore it for 30 days.</span>
+                            <button type="button" disabled={deleting === s.id} onClick={() => remove(s)} className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-red-600 text-white disabled:opacity-50">
+                              {deleting === s.id && <Loader2 className="w-3 h-3 animate-spin" />} Delete
+                            </button>
+                            <button type="button" onClick={() => setConfirmDelete(null)} className="h-8 px-2 text-muted-foreground hover:text-foreground">Cancel</button>
+                          </span>
+                        ) : (
+                          <>
+                            <span className="shrink-0 flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                              {userEmail && (
+                                <button type="button" onClick={() => setSharing(s)} className="w-8 h-8 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10" title="Share with colleagues">
+                                  <Share2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button type="button" onClick={() => setConfirmDelete(s.id)} className="w-8 h-8 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-500/10" title="Delete (you can restore it for 30 days)">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </span>
+                            <span className="shrink-0 inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+                              <span className={cn("w-1.5 h-1.5 rounded-full", st.tone === "live" ? "bg-sky-500 animate-pulse" : st.tone === "done" ? "bg-primary" : "bg-muted-foreground/40")} />
+                              {st.text}
+                            </span>
+                            <ArrowRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+                          </>
+                        )}
+                      </div>
                     </Detail>
                   );
                 })}
@@ -217,7 +284,11 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
               <SharedList variant="lite" />
             </section>
           )}
+          <div className="min-w-0 xl:col-start-1 xl:row-start-4">
+            <RecentlyDeleted variant="lite" refreshKey={binKey} onRestored={(s) => { putBack(s); setBinned(null); }} />
+          </div>
         </div>
+        {sharing && <ShareDialog sessionId={sharing.id} title={sharing.title} onClose={() => setSharing(null)} />}
       </main>
     </div>
   );

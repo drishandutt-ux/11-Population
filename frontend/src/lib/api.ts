@@ -73,7 +73,12 @@ export const api = {
       request("/sessions", { method: "POST", body: JSON.stringify({ title, query, ...(opts || {}) }) }),
     list: (scope: "mine" | "all" = "mine") => request<Session[]>(`/sessions${scope === "all" ? "?scope=all" : ""}`),
     get: (id: string) => request(`/sessions/${id}`),
+    /** Moves the session to the bin (Recently deleted): restorable for 30 days, then removed for good. */
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
+    trash: () => request<Session[]>("/sessions?scope=trash"),
+    restore: (id: string) => request<Session>(`/sessions/${id}/restore`, { method: "POST" }),
+    /** Only for a session already in the bin; cannot be undone. */
+    deleteForever: (id: string) => request(`/sessions/${id}/permanent`, { method: "DELETE" }),
     posts: (id: string) => request(`/sessions/${id}/posts`),
     opinions: (id: string, agentIds?: string[]) =>
       request<OpinionsResponse>(`/sessions/${id}/opinions`, {
@@ -447,6 +452,9 @@ export type Session = {
   is_mine?: boolean | null;
   /** The question's own dials (brief L3-04) — chosen by the model for this session. */
   dynamic_dials?: DynamicDial[] | null;
+  /** The bin (2026-10-22), on `trash()` rows only: when it was deleted, and when it goes for good. */
+  deleted_at?: string | null;
+  purge_at?: string | null;
 };
 
 // ── Peers, sharing and the shared chat (2026-10-20) ───────────────────────────

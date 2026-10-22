@@ -30,5 +30,8 @@ class AnalysisSession(Base):
     # Dynamic dials (brief L3-04): the question-specific dials the model chose for this session —
     # [{key, label, why, low, high}]. Every twin carries a 0-10 value per dial under dials["dynamic"].
     dynamic_dials: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
+    # The bin (2026-10-22): deleting a session only stamps this. It is hidden everywhere, can be
+    # restored for TRASH_DAYS, and is then removed for good by the daily purge (app/core/trash.py).
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

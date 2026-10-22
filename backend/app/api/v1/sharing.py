@@ -161,7 +161,7 @@ async def shared_sessions(user: AuthUser = Depends(get_current_user), db: AsyncS
     if not mine and not out_shares:
         return []
     ids = list({s.session_id for s in mine} | {s.session_id for s in out_shares})
-    sessions = {s.id: s for s in (await db.execute(select(AnalysisSession).where(AnalysisSession.id.in_(ids)))).scalars().all()}
+    sessions = {s.id: s for s in (await db.execute(select(AnalysisSession).where(AnalysisSession.id.in_(ids), AnalysisSession.deleted_at.is_(None)))).scalars().all()}
     all_shares = (await db.execute(select(SessionShare).where(SessionShare.session_id.in_(ids)).order_by(SessionShare.created_at))).scalars().all()
     people_ids = list({s.user_id for s in all_shares} | {s.user_id for s in sessions.values() if s.user_id})
     people = {_uid(p.id): p for p in (await db.execute(select(Profile).where(Profile.id.in_(people_ids)))).scalars().all()} if people_ids else {}

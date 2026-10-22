@@ -34,6 +34,9 @@ class SessionResponse(BaseModel):
     is_mine: Optional[bool] = None
     #: The question's dynamic dials (brief L3-04): [{key, label, why, low, high}], [] until chosen.
     dynamic_dials: Optional[list[dict]] = None
+    #: The bin (2026-10-22): set only on `?scope=trash` rows — when it was deleted and when it goes for good.
+    deleted_at: Optional[datetime] = None
+    purge_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -66,8 +69,23 @@ async def list_sessions(
     user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """The caller's sessions. Admins may pass `?scope=all` to see every user's, with owner_email."""
-    q = select(AnalysisSession).order_by(AnalysisSession.created_at.desc()).limit(200)
+    """The caller's sessions. Admins may pass `?scope=all` to see every user's, with owner_email.
+    `?scope=trash` lists the caller's own deleted sessions (the bin, 2026-10-22), newest deletion
+    first, each with `deleted_at` and `purge_at` (when it is removed for good)."""
+    if scope == "trash":
+        from app.core.trash import purge_at
+        q = select(AnalysisSession).where(AnalysisSession.deleted_at.is_not(None)).order_by(AnalysisSession.deleted_at.desc()).limit(200)
+        if not user.is_dev:
+            q = q.where(AnalysisSession.user_id == user.id)
+        rows = (await db.execute(q)).scalars().all()
+        return [
+            {
+                "id": r.id, "title": r.title, "query": r.query, "status": r.status, "agent_count": r.agent_count,
+                "created_at": r.created_at, "updated_at": r.updated_at, "deleted_at": r.deleted_at, "purge_at": purge_at(r.deleted_at),
+            }
+            for r in rows
+        ]
+    q = select(AnalysisSession).where(AnalysisSession.deleted_at.is_(None)).order_by(AnalysisSession.created_at.desc()).limit(200)
     everyone = scope == "all" and user.is_admin
     if not user.is_dev and not everyone:
         q = q.where(AnalysisSession.user_id == user.id)
@@ -223,11 +241,31 @@ async def generate_agent_opinions(
 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    session = await get_owned_session(session_id, user, db, strict=True)   # a colleague it was shared with cannot delete it
-    await db.delete(session)
+    """Move a session to the bin (2026-10-22): hidden everywhere, restorable for 30 days, then
+    purged for good. Owner only — a colleague it was shared with cannot delete it."""
+    session = await get_owned_session(session_id, user, db, strict=True)
+    session.deleted_at = datetime.utcnow()
+    db.add(session)
     await db.commit()
-    from app.services.knowledge_graph.lightrag_service import forget
-    forget(session_id)
+
+
+@router.post("/{session_id}/restore", response_model=SessionResponse)
+async def restore_session(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Take a session out of the bin, exactly as it was (shares included)."""
+    session = await get_owned_session(session_id, user, db, strict=True, deleted=True)
+    session.deleted_at = None
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+@router.delete("/{session_id}/permanent", status_code=204)
+async def delete_session_forever(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Remove a session already in the bin for good, now rather than after 30 days. Cannot be undone."""
+    from app.core.trash import hard_delete
+    session = await get_owned_session(session_id, user, db, strict=True, deleted=True)
+    await hard_delete(db, session)
 
 
 class ApplyPresetRequest(BaseModel):

@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useUiMode } from "@/lib/lite";
 import LiteHome, { ModeSwitch } from "@/components/lite/LiteHome";
 import ShareDialog from "@/components/sharing/ShareDialog";
+import RecentlyDeleted from "@/components/sessions/RecentlyDeleted";
 
 export default function HomePage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function HomePage() {
   const [autoResearch, setAutoResearch] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [binKey, setBinKey] = useState(0);   // reloads *Recently deleted* after a delete
   const { user, me, enabled: authOn, signOut } = useAuth();
   // Mine · Shared · All users (2026-10-20: *Shared* is the sessions colleagues shared, each opening the shared chat).
   const [scope, setScope] = useState<"mine" | "shared" | "all">("mine");
@@ -43,6 +45,7 @@ export default function HomePage() {
       await api.sessions.delete(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
       setConfirmDeleteId(null);
+      setBinKey((k) => k + 1);
     } catch (e) {
       console.error(e);
     } finally {
@@ -294,7 +297,7 @@ export default function HomePage() {
                         <div className="flex items-center gap-2 shrink-0" onClick={(e) => { if (isConfirming) e.stopPropagation(); }}>
                           {isConfirming ? (
                             <>
-                              <span className="text-xs text-red-400 font-medium">Delete?</span>
+                              <span className="text-xs text-red-400 font-medium" title="It goes to Recently deleted and can be restored for 30 days">Delete? (restorable 30 days)</span>
                               <button
                                 onClick={() => handleDelete(s.id)}
                                 disabled={isDeleting}
@@ -334,7 +337,7 @@ export default function HomePage() {
                               )}
                               <button
                                 onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }}
-                                title="Delete this session"
+                                title="Delete this session (restorable from Recently deleted for 30 days)"
                                 className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -346,6 +349,13 @@ export default function HomePage() {
                     </div>
                   );
                 })}
+                {scope === "mine" && (
+                  <RecentlyDeleted
+                    variant="pro"
+                    refreshKey={binKey}
+                    onRestored={(r) => setSessions((prev) => [...prev, r].sort((x, y) => y.created_at.localeCompare(x.created_at)))}
+                  />
+                )}
               </div>
             </div>
           )}
