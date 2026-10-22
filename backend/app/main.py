@@ -21,6 +21,8 @@ async def lifespan(app: FastAPI):
     try:
         await create_tables()
         SCHEMA_ERROR = None
+        from app.core.database import verify_pool
+        await verify_pool()
         print("[startup] Database tables ready.")
         try:
             from app.core.recovery import recover_interrupted
@@ -158,6 +160,7 @@ async def health():
         "auth_issuer": (project_url() + "/auth/v1") if auth_enabled() else None,
         "database": "sqlite" if _sqlite else "postgres",
         "database_ok": db_ok,
+        "database_pool": __import__("app.core.database", fromlist=["POOL_MODE"]).POOL_MODE,
         "database_error": db_error,
         "schema_ok": SCHEMA_ERROR is None,
         "schema_error": SCHEMA_ERROR,
