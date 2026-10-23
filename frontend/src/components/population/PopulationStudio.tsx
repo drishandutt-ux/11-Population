@@ -457,7 +457,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
             {build?.plan && !active && (
               <>
                 <button disabled={busy || regenerating.size > 0} onClick={approve} className="btn btn-primary w-full">
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {status === "complete" ? "Rebuild" : "Approve & build"} {keptCount} twins · {mode === "pro" ? "Pro" : "Fast"}
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {status === "complete" ? "Rebuild" : "Approve & build"} {keptCount} twins · {mode === "pro" ? "Advanced" : "Standard"}
                 </button>
                 <button disabled={busy} onClick={replan} className="btn btn-sm btn-secondary w-full">
                   <RefreshCw className="w-3.5 h-3.5" /> Re-plan with these dials
@@ -466,7 +466,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
                   {mode === "pro" ? `A few minutes for ${keptCount} twins, and real model spend.` : `About ${keptCount <= 60 ? "a minute" : keptCount <= 150 ? "two to three minutes" : "several minutes"} for ${keptCount} twins.`} Nothing runs until you press it.
                 </p>
                 {regenerating.size > 0 && <p className="text-[11px] text-muted-foreground/70 text-center">Waiting for {regenerating.size} replacement segment{regenerating.size === 1 ? "" : "s"}…</p>}
-                {mode === "pro" && keptCount > 150 && <p className="text-[11px] text-amber-300/90 text-center">Pro writes {keptCount} personas on Sonnet — several minutes and real API spend.</p>}
+                {mode === "pro" && keptCount > 150 && <p className="text-[11px] text-amber-300/90 text-center">Advanced writes {keptCount} personas on Sonnet — several minutes and real API spend.</p>}
               </>
             )}
             {(!build || (!active && status !== "clarifying")) && (

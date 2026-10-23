@@ -308,8 +308,8 @@ function ModeToggle({
   mode, onChange, compact = false,
 }: { mode: SimMode; onChange: (m: SimMode) => void; compact?: boolean }) {
   const opts: { key: SimMode; label: string; desc: string; icon: React.ReactNode }[] = [
-    { key: "fast", label: "Fast", desc: "Haiku for the whole session · instant spawn · quick posts", icon: <Rocket className="w-4 h-4" /> },
-    { key: "pro", label: "Pro", desc: "Sonnet for the whole session · curated agents · smarter posts", icon: <Brain className="w-4 h-4" /> },
+    { key: "fast", label: "Standard", desc: "Haiku for the whole session · instant spawn · quick posts", icon: <Rocket className="w-4 h-4" /> },
+    { key: "pro", label: "Advanced", desc: "Sonnet for the whole session · curated agents · smarter posts", icon: <Brain className="w-4 h-4" /> },
   ];
   return (
     <div className={`grid grid-cols-2 ${compact ? "gap-1.5" : "gap-2"}`}>

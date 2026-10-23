@@ -311,7 +311,7 @@ export default function ExperimentPanel({
             {(["fast", "pro"] as SimMode[]).map((m) => (
               <button key={m} onClick={() => setMode(m)}
                 className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${mode === m ? "border-primary text-primary bg-primary/10" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                {m === "fast" ? "Fast" : "Pro"}
+                {m === "fast" ? "Standard" : "Advanced"}
               </button>
             ))}
           </div>

@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 const KEY = "model_tier";
 
 export const TIER_TITLE: Record<SimMode, string> = {
-  fast: "Fast: Haiku for every part of the session. Cheapest.",
-  pro: "Pro: Sonnet for every part of the session. Richer, roughly 3× the cost.",
+  fast: "Standard: Haiku for every part of the session. Cheapest.",
+  pro: "Advanced: Sonnet for every part of the session. Richer, roughly 3× the cost.",
 };
 
 /** The tier new sessions are created with. `fast` until read, and when nothing is stored. */
@@ -31,10 +31,10 @@ export function TierSwitch({ tier, onChange, className }: { tier: SimMode; onCha
       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Model</span>
       <div className="seg" role="tablist" aria-label="Model tier for new sessions">
         <button type="button" role="tab" data-on={tier === "fast"} onClick={() => onChange("fast")} className="seg-item" title={TIER_TITLE.fast}>
-          <Zap className="w-3 h-3" /> Fast
+          <Zap className="w-3 h-3" /> Standard
         </button>
         <button type="button" role="tab" data-on={tier === "pro"} onClick={() => onChange("pro")} className="seg-item" title={TIER_TITLE.pro}>
-          <Brain className="w-3 h-3" /> Pro
+          <Brain className="w-3 h-3" /> Advanced
         </button>
       </div>
     </div>
@@ -65,7 +65,7 @@ export function TierBadge({ session, onChanged, editable = true }: { session: Se
       )}
     >
       {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : tier === "pro" ? <Brain className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
-      {tier === "pro" ? "Pro" : "Fast"}
+      {tier === "pro" ? "Advanced" : "Standard"}
     </button>
   );
 }
