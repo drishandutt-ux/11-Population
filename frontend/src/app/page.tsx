@@ -9,6 +9,7 @@ import { useUiMode } from "@/lib/lite";
 import LiteHome, { ModeSwitch } from "@/components/lite/LiteHome";
 import ShareDialog from "@/components/sharing/ShareDialog";
 import RecentlyDeleted from "@/components/sessions/RecentlyDeleted";
+import { TierSwitch, TierBadge, useNewSessionTier } from "@/components/sessions/TierSwitch";
 
 export default function HomePage() {
   const router = useRouter();
@@ -20,6 +21,8 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [autoResearch, setAutoResearch] = useState(true);
+  // Model tier for new sessions (2026-10-23): Fast = Haiku everywhere, Pro = Sonnet. Never Opus.
+  const [tier, setTier] = useNewSessionTier();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [binKey, setBinKey] = useState(0);   // reloads *Recently deleted* after a delete
@@ -59,7 +62,7 @@ export default function HomePage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const session = await api.sessions.create(title.trim(), query.trim(), { auto_research: autoResearch }) as Session;
+      const session = await api.sessions.create(title.trim(), query.trim(), { auto_research: autoResearch, model_tier: tier }) as Session;
       router.push(`/session/${session.id}`);
     } catch (err: any) {
       console.error(err);
@@ -76,6 +79,8 @@ export default function HomePage() {
         userEmail={authOn && user ? user.email : null}
         onSignOut={authOn ? () => { signOut().then(() => router.replace("/login")); } : undefined}
         onSwitchToPro={() => setUiMode("pro")}
+        tier={tier}
+        onTier={setTier}
       />
     );
   }
@@ -89,6 +94,7 @@ export default function HomePage() {
           <span className="text-base font-semibold text-foreground tracking-tight">11 Minds Population</span>
         </div>
         <div className="flex items-center gap-4">
+          <TierSwitch tier={tier} onChange={setTier} />
           <ModeSwitch mode="pro" onSimple={() => setUiMode("simple")} />
           <span className="text-xs text-muted-foreground">Synthetic population research</span>
           {authOn && user && (
@@ -287,6 +293,7 @@ export default function HomePage() {
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="font-medium text-foreground text-xs truncate">{s.title}</span>
                             <StatusDot status={s.status} />
+                            <TierBadge session={s} editable={s.is_mine ?? true} onChanged={(n) => setSessions((prev) => prev.map((x) => (x.id === n.id ? { ...x, model_tier: n.model_tier } : x)))} />
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{s.query}</p>
                           {scope === "all" && s.owner_email && (

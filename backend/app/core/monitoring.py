@@ -149,6 +149,9 @@ class SessionContextMiddleware:
             m = _SESSION_PATH.search(scope.get("path") or "")
             if m:
                 token = current_session_id.set(m.group(1))
+                from app.core import model_policy
+                if model_policy.cached_tier(m.group(1)) is None:
+                    asyncio.ensure_future(model_policy.session_tier(m.group(1)))   # warm it for the sync Vision paths
                 try:
                     return await self.app(scope, receive, send)
                 finally:
@@ -196,7 +199,13 @@ async def tracked_messages_create(client, *, session_id=None, label="", **create
     """Drop-in for `await client.messages.create(**kwargs)` that logs exact token usage to Pulse.
 
     Returns the Anthropic response unchanged. The log is fired off the request path so it
-    never adds latency, and a logging failure can never affect the LLM call's result."""
+    never adds latency, and a logging failure can never affect the LLM call's result.
+
+    The model is decided here, not by the caller (2026-10-23): the session's tier picks Haiku or
+    Sonnet for every call, and Opus is never sent (app/core/model_policy.py)."""
+    from app.core import model_policy
+    sid = session_id or current_session_id.get()
+    create_kwargs["model"] = model_policy.enforce(create_kwargs.get("model"), await model_policy.session_tier(sid))
     s = get_settings()
     started = time.time()
     status = "success"

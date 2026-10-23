@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useState, useEffect } from "react";
 import PersonaAvatar from "@/components/PersonaAvatar";
 import { useRouter } from "next/navigation";
@@ -307,8 +308,8 @@ function ModeToggle({
   mode, onChange, compact = false,
 }: { mode: SimMode; onChange: (m: SimMode) => void; compact?: boolean }) {
   const opts: { key: SimMode; label: string; desc: string; icon: React.ReactNode }[] = [
-    { key: "fast", label: "Fast", desc: "Instant spawn · pre-built agents · quick posts", icon: <Rocket className="w-4 h-4" /> },
-    { key: "pro", label: "Pro", desc: "Deeply curated agents · smarter posts · Sonnet", icon: <Brain className="w-4 h-4" /> },
+    { key: "fast", label: "Fast", desc: "Haiku for the whole session · instant spawn · quick posts", icon: <Rocket className="w-4 h-4" /> },
+    { key: "pro", label: "Pro", desc: "Sonnet for the whole session · curated agents · smarter posts", icon: <Brain className="w-4 h-4" /> },
   ];
   return (
     <div className={`grid grid-cols-2 ${compact ? "gap-1.5" : "gap-2"}`}>
@@ -358,7 +359,7 @@ export default function AgentDirectory({
 }: Props) {
   const router = useRouter();
   const [intensity, setIntensity] = useState(2);
-  const [mode, setMode] = useState<SimMode>("fast");
+  const [mode, setMode] = useSessionTier(sessionId);   // the session's model tier (2026-10-23)
   const [search, setSearch] = useState("");
   // The Population Studio is the Agents screen until a population exists; the roster can reopen it
   // to rebuild. It stays open through a build (agents streaming in must not flip the tab away

@@ -8,6 +8,7 @@
  *  instruments: the form comes from the instrument's declaration and the results page reads
  *  the comparison the backend computed — nothing here knows about purchase intent. */
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api, Agent, Experiment, ExperimentDesign, ExperimentEstimate, ExperimentRequest, Instrument, SimMode, DynamicDial } from "@/lib/api";
@@ -58,7 +59,7 @@ export default function ExperimentPanel({
   const [name, setName] = useState(initial?.name || "");
   const [question, setQuestion] = useState(initial?.probes?.[0]?.spec?.question || "");
   const [variants, setVariants] = useState<VariantDraft[]>([]);
-  const [mode, setMode] = useState<SimMode>("fast");
+  const [mode, setMode] = useSessionTier(sessionId);   // the session's model tier (2026-10-23)
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [estimate, setEstimate] = useState<ExperimentEstimate | null>(null);
   const [selected, setSelected] = useState<Experiment | null>(initial);
@@ -305,7 +306,7 @@ export default function ExperimentPanel({
         <WhoAnswers sessionId={sessionId} filters={filters} setFilters={setFilters} dynamicDials={dynamicDials} agentCount={agents.length} hint={false} />
 
         <div>
-          <label className="text-xs text-muted-foreground block mb-1.5">Model</label>
+          <label className="text-xs text-muted-foreground block mb-1.5" title="The session's model tier: Fast = Haiku, Pro = Sonnet, for every call this session makes">Model · whole session</label>
           <div className="flex gap-2">
             {(["fast", "pro"] as SimMode[]).map((m) => (
               <button key={m} onClick={() => setMode(m)}

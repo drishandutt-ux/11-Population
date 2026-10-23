@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, Session } from "@/lib/api";
+import { api, Session, SimMode } from "@/lib/api";
 import { autoTitle, classifyText, Dropped, friendlyStatus, fromFile, ingestDropped, proLinks } from "@/lib/lite";
 import Detail from "./Detail";
 import { Switch } from "@/components/population/controls";
@@ -15,14 +15,18 @@ import { ArrowRight, ArrowUpRight, FileText, Link2, Loader2, LogOut, Paperclip, 
 import SharedList from "@/components/sharing/SharedList";
 import ShareDialog from "@/components/sharing/ShareDialog";
 import RecentlyDeleted from "@/components/sessions/RecentlyDeleted";
+import { TierSwitch, TierBadge } from "@/components/sessions/TierSwitch";
 
 type Props = {
   userEmail?: string | null;
   onSignOut?: () => void;
   onSwitchToPro: () => void;
+  /** Model tier for new questions (2026-10-23): Fast = Haiku everywhere, Pro = Sonnet. */
+  tier: SimMode;
+  onTier: (t: SimMode) => void;
 };
 
-export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props) {
+export default function LiteHome({ userEmail, onSignOut, onSwitchToPro, tier, onTier }: Props) {
   useLiteRoot();
   const router = useRouter();
   const [question, setQuestion] = useState("");
@@ -67,7 +71,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
     setError(null);
     setCreating("Starting…");
     try {
-      const s = (await api.sessions.create((title || autoTitle(question)).trim(), question.trim(), { auto_research: research })) as Session;
+      const s = (await api.sessions.create((title || autoTitle(question)).trim(), question.trim(), { auto_research: research, model_tier: tier })) as Session;
       for (let i = 0; i < items.length; i++) {
         setCreating(`Adding ${i + 1} of ${items.length}…`);
         try { await ingestDropped(s.id, items[i]); } catch (err) { console.error("ingest failed", err); }
@@ -111,6 +115,7 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
         <span className="text-[14px] font-semibold tracking-tight">11 Minds Population</span>
         <span className="text-[12px] text-muted-foreground hidden sm:inline">Simple view</span>
         <div className="ml-auto flex items-center gap-2">
+          <TierSwitch tier={tier} onChange={onTier} />
           <ModeSwitch mode="simple" onPro={onSwitchToPro} />
           {userEmail && (
             <>
@@ -242,7 +247,10 @@ export default function LiteHome({ userEmail, onSignOut, onSwitchToPro }: Props)
                         className="w-full text-left lite-card px-4 py-3.5 hover:border-foreground/20 transition-colors flex items-center gap-4 cursor-pointer"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="text-[14.5px] font-medium text-foreground truncate">{s.title}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="text-[14.5px] font-medium text-foreground truncate">{s.title}</p>
+                            <TierBadge session={s} onChanged={(n) => setSessions((prev) => prev.map((x) => (x.id === n.id ? { ...x, model_tier: n.model_tier } : x)))} />
+                          </div>
                           <p className="text-[13px] text-muted-foreground truncate mt-0.5">{s.query}</p>
                         </div>
                         {confirmDelete === s.id ? (

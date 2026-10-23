@@ -69,10 +69,13 @@ export const api = {
     recommendations: (sessionId: string) => request<{ recommendations: any[] }>(`/sessions/${sessionId}/recommendations`),
   },
   sessions: {
-    create: (title: string, query: string, opts?: { auto_research?: boolean; research_sources?: string[] }) =>
+    create: (title: string, query: string, opts?: { auto_research?: boolean; research_sources?: string[]; model_tier?: SimMode }) =>
       request("/sessions", { method: "POST", body: JSON.stringify({ title, query, ...(opts || {}) }) }),
     list: (scope: "mine" | "all" = "mine") => request<Session[]>(`/sessions${scope === "all" ? "?scope=all" : ""}`),
     get: (id: string) => request(`/sessions/${id}`),
+    /** Fast = Haiku for every call the session makes, Pro = Sonnet (2026-10-23). */
+    setTier: (id: string, model_tier: SimMode) =>
+      request<Session>(`/sessions/${id}/tier`, { method: "PUT", body: JSON.stringify({ model_tier }) }),
     /** Moves the session to the bin (Recently deleted): restorable for 30 days, then removed for good. */
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
     trash: () => request<Session[]>("/sessions?scope=trash"),
@@ -446,6 +449,8 @@ export type Session = {
   query: string;
   status: string;
   agent_count: number;
+  /** Model tier (2026-10-23): "fast" = Haiku for every call, "pro" = Sonnet. Never Opus. */
+  model_tier?: SimMode;
   created_at: string;
   updated_at: string;
   owner_email?: string | null; // admins listing everyone's sessions

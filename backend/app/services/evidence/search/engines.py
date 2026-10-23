@@ -403,7 +403,8 @@ async def _anthropic(query: str, opts: dict) -> list[SearchResult]:
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
-    model = settings.model_fast
+    from app.core.model_policy import HAIKU
+    model = HAIKU   # the basic web_search tool works on Haiku and Sonnet, whichever the session tier swaps in
     tool: dict = {"type": web_search_tool_type(model), "name": "web_search", "max_uses": 1}
     c = _country(opts.get("region"))
     if c and c != "ALL":

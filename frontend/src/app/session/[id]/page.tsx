@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord, ReportStructure } from "@/lib/api";
@@ -59,7 +60,7 @@ export default function SessionPage() {
 
   // Simulation config
   const [intensity, setIntensity] = useState(2);
-  const [simMode, setSimMode] = useState<SimMode>("fast");
+  const [simMode, setSimMode] = useSessionTier(id);   // the session's model tier (2026-10-23)
   // If user clicks "Start" while ingestion is still running, queue the start
   const [pendingSim, setPendingSim] = useState<{ intensity: number; mode: SimMode } | null>(null);
 

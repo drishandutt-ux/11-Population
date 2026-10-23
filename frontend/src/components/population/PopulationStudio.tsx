@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, apiFetch, Agent, AgentPreset, Archetype, EvidenceItem, FrameCategory, PopulationBuild, PopulationConstraints, PopulationLogEntry, PopulationSegment, QuantSource, ResearchState, Session, SimMode, WSEvent } from "@/lib/api";
@@ -37,7 +38,7 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
   const [looseLog, setLooseLog] = useState<PopulationLogEntry[]>([]);   // log lines that arrive before a build exists (standalone searches)
   const [constraints, setConstraints] = useState<PopulationConstraints>(DEFAULT_CONSTRAINTS);
   const [count, setCount] = useState(50);
-  const [mode, setMode] = useState<SimMode>("fast");
+  const [mode, setMode] = useSessionTier(id);   // the session's model tier (2026-10-23)
   const [catalogue, setCatalogue] = useState<QuantSource[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [quantOnBuild, setQuantOnBuild] = useState(true);
@@ -77,7 +78,6 @@ export default function PopulationStudio({ sessionId: id, embedded = false, onVi
         seededRef.current = true;
         setConstraints({ ...DEFAULT_CONSTRAINTS, ...(b.constraints || {}) });
         setCount(b.target_count);
-        setMode(b.mode);
         if (b.sources?.quant_sources?.length) setSelectedSources(b.sources.quant_sources);
         if (typeof b.sources?.quant === "boolean") setQuantOnBuild(b.sources.quant);
       }

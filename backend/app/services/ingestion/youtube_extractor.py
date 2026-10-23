@@ -56,7 +56,8 @@ def _extract_sync(url: str) -> str:
 
     settings = get_settings()
     claude = anthropic_lib.Anthropic(api_key=settings.anthropic_api_key)
-    vision_model = getattr(settings, "model_orchestration", "claude-3-5-sonnet-20241022")
+    from app.core.model_policy import sync_model
+    vision_model = sync_model()   # the session's tier (Haiku on Fast, Sonnet on Pro); never Opus
 
     with tempfile.TemporaryDirectory() as tmpdir:
 

@@ -12,6 +12,7 @@
  *  experiment (one instrument, once per variant) — and the shell routes between them; the
  *  A/B tool is itself generic over instruments. */
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, Agent, Experiment, Instrument, Probe, ProbeAnswerRow, ProbeRequest, SimMode, DynamicDial } from "@/lib/api";
 import {
@@ -70,7 +71,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
   const [initialExperiment, setInitialExperiment] = useState<Experiment | null>(null);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
-  const [mode, setMode] = useState<SimMode>("fast");
+  const [mode, setMode] = useSessionTier(sessionId);   // the session's model tier (2026-10-23)
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [estimate, setEstimate] = useState<{ agent_count: number; estimated_cost_usd: number; model: string } | null>(null);
   const [probes, setProbes] = useState<Probe[]>([]);
@@ -382,7 +383,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
         <WhoAnswers sessionId={sessionId} filters={filters} setFilters={setFilters} dynamicDials={dynamicDials} agentCount={agents.length} />
 
         <div>
-          <label className="text-xs text-muted-foreground block mb-1.5">Model</label>
+          <label className="text-xs text-muted-foreground block mb-1.5" title="The session's model tier: Fast = Haiku, Pro = Sonnet, for every call this session makes">Model · whole session</label>
           <div className="flex gap-2">
             {(["fast", "pro"] as SimMode[]).map((m) => (
               <button

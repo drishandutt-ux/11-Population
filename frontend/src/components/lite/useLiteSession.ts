@@ -4,6 +4,7 @@
  *  reduced to what the wrapper needs to decide which screen to show. Every analysis still
  *  happens in the backend exactly as it does for the pro portal. */
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, Agent, OutcomeRecord, PopulationBuild, Post, ReportStructure, ResearchState, Session, WSEvent } from "@/lib/api";
 import { getSessionWS } from "@/lib/websocket";
@@ -23,6 +24,7 @@ function buildInFlight(b: PopulationBuild | null): boolean {
 }
 
 export function useLiteSession(id: string) {
+  const [tier] = useSessionTier(id);   // the session's model tier (2026-10-23): Fast = Haiku, Pro = Sonnet
   const [session, setSession] = useState<Session | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -256,13 +258,13 @@ export function useLiteSession(id: string) {
     const current = await refreshBuild();
     if (buildInFlight(current)) return;
     const b = await api.population.start(id, {
-      mode: LITE_DEFAULTS.mode,
+      mode: tier,
       count: LITE_DEFAULTS.count,
       constraints: {
         profile_query: profile.trim(),
         doc_context: docContext || "",
         skip_questions: true,
-        auto_run: { intensity: LITE_DEFAULTS.intensity, mode: LITE_DEFAULTS.mode },
+        auto_run: { intensity: LITE_DEFAULTS.intensity, mode: tier },
       },
       sources: { quant: true, quant_sources: [], quant_auto: true },
     });
@@ -271,7 +273,7 @@ export function useLiteSession(id: string) {
 
   /** People already exist (built in the pro portal, say) but nobody started the conversation. */
   async function startDebate() {
-    await api.simulation.start(id, LITE_DEFAULTS.intensity, LITE_DEFAULTS.mode);
+    await api.simulation.start(id, LITE_DEFAULTS.intensity, tier);
     refresh();
   }
 

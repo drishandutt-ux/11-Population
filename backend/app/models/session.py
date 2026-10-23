@@ -33,5 +33,8 @@ class AnalysisSession(Base):
     # The bin (2026-10-22): deleting a session only stamps this. It is hidden everywhere, can be
     # restored for TRASH_DAYS, and is then removed for good by the daily purge (app/core/trash.py).
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None, index=True)
+    # Model tier (2026-10-23): "fast" = Haiku for every LLM call made for this session, "pro" = Sonnet.
+    # Chosen on the main page and enforced for every call in app/core/model_policy.py; Opus is never used.
+    model_tier: Mapped[str] = mapped_column(String(8), default="fast", server_default="fast")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -173,6 +173,7 @@ async def _ensure_columns():
         "ALTER TABLE spawned_agents ADD COLUMN standing JSON",
         "ALTER TABLE simulation_posts ADD COLUMN footprint JSON",
         "ALTER TABLE analysis_sessions ADD COLUMN deleted_at DATETIME",
+        "ALTER TABLE analysis_sessions ADD COLUMN model_tier VARCHAR(8) DEFAULT 'fast'",
     ]
     for ddl in migrations:
         try:

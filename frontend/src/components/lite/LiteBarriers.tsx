@@ -6,6 +6,7 @@
  *  settled the tool runs by itself, and the answers come back as the same ranked list the pro
  *  Lab draws — one "See in detail" away from the full thing. */
 
+import { useSessionTier } from "@/components/sessions/TierSwitch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, Agent, ConfigureChatReply, Instrument, InstrumentInput, Probe, ProbeAnswerRow } from "@/lib/api";
 import { LITE_DEFAULTS, proLinks } from "@/lib/lite";
@@ -25,6 +26,7 @@ const stateKey = (sid: string) => `lite:barriers:state:${sid}`;
 type Props = { sessionId: string; agents: Agent[]; onBack: () => void };
 
 export default function LiteBarriers({ sessionId, agents, onBack }: Props) {
+  const [tier] = useSessionTier(sessionId);   // the session's model tier (2026-10-23)
   const [messages, setMessages] = useState<ChatItem[]>([]);
   const [settings, setSettings] = useState<Record<string, any>>({});
   const [inputs, setInputs] = useState<InstrumentInput[]>([]);
@@ -92,7 +94,7 @@ export default function LiteBarriers({ sessionId, agents, onBack }: Props) {
     openingAsked.current = true;
     setChatBusy(true);
     try {
-      const r = await api.lab.configureChat(sessionId, { instrument: INSTRUMENT, messages: [], settings: null, mode: LITE_DEFAULTS.mode });
+      const r = await api.lab.configureChat(sessionId, { instrument: INSTRUMENT, messages: [], settings: null, mode: tier });
       applyReply(r);
     } catch (e: any) {
       setMessages([{ role: "assistant", content: `I couldn't read the session just now. ${e?.message || ""}`.trim(), chips: ["Try again"] }]);
@@ -110,7 +112,7 @@ export default function LiteBarriers({ sessionId, agents, onBack }: Props) {
     if (missing.length) { setError(`Still to decide: ${missing.map((i) => i.label.toLowerCase()).join(", ")}.`); return; }
     setRunning(true); setError(null);
     try {
-      const p = await api.lab.run(sessionId, { instrument: INSTRUMENT, mode: LITE_DEFAULTS.mode, spec });
+      const p = await api.lab.run(sessionId, { instrument: INSTRUMENT, mode: tier, spec });
       setProbe(p);
       setStage("running");
     } catch (e: any) { setError(e?.message || "Could not ask them"); } finally { setRunning(false); }
@@ -168,7 +170,7 @@ export default function LiteBarriers({ sessionId, agents, onBack }: Props) {
     setMessages(history);
     setChatBusy(true);
     try {
-      const r = await api.lab.configureChat(sessionId, { instrument: INSTRUMENT, messages: history.slice(-MAX_HISTORY).map(({ role, content }) => ({ role, content })), settings: settingsRef.current, mode: LITE_DEFAULTS.mode });
+      const r = await api.lab.configureChat(sessionId, { instrument: INSTRUMENT, messages: history.slice(-MAX_HISTORY).map(({ role, content }) => ({ role, content })), settings: settingsRef.current, mode: tier });
       if (r.ready && !ready) autoRan.current = false;      // a fresh "ready" runs once
       applyReply(r);
     } catch (e: any) {

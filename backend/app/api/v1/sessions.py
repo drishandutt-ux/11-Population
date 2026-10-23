@@ -11,6 +11,7 @@ from app.models.session import AnalysisSession, SessionStatus
 from app.models.agent import SpawnedAgent, AgentStance
 from app.models.post import SimulationPost
 from app.core.auth import AuthUser, get_current_user, get_owned_session, owns
+from app.core import model_policy
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -20,6 +21,8 @@ class CreateSessionRequest(BaseModel):
     query: str
     auto_research: bool = True                 # start web + Reddit research immediately
     research_sources: Optional[list[str]] = None   # default ["web", "reddit"]
+    #: Model tier (2026-10-23): "fast" = Haiku for every call this session makes, "pro" = Sonnet.
+    model_tier: str = "fast"
 
 
 class SessionResponse(BaseModel):
@@ -28,6 +31,7 @@ class SessionResponse(BaseModel):
     query: str
     status: str
     agent_count: int
+    model_tier: str = "fast"
     created_at: datetime
     updated_at: datetime
     owner_email: Optional[str] = None   # only populated for admins listing ?scope=all
@@ -50,10 +54,12 @@ async def create_session(body: CreateSessionRequest, user: AuthUser = Depends(ge
         title=body.title,
         query=body.query,
         status=SessionStatus.CREATED,
+        model_tier=model_policy.normalise(body.model_tier),
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
+    model_policy.remember(session.id, session.model_tier)
     if body.auto_research:
         from app.services.evidence.loop import start_research
         try:
@@ -80,7 +86,7 @@ async def list_sessions(
         rows = (await db.execute(q)).scalars().all()
         return [
             {
-                "id": r.id, "title": r.title, "query": r.query, "status": r.status, "agent_count": r.agent_count,
+                "id": r.id, "title": r.title, "query": r.query, "status": r.status, "agent_count": r.agent_count, "model_tier": r.model_tier or "fast",
                 "created_at": r.created_at, "updated_at": r.updated_at, "deleted_at": r.deleted_at, "purge_at": purge_at(r.deleted_at),
             }
             for r in rows
@@ -96,7 +102,7 @@ async def list_sessions(
     owners = {str(p.id).replace("-", ""): p.email for p in (await db.execute(select(Profile))).scalars().all()}
     return [
         {
-            "id": r.id, "title": r.title, "query": r.query, "status": r.status, "agent_count": r.agent_count,
+            "id": r.id, "title": r.title, "query": r.query, "status": r.status, "agent_count": r.agent_count, "model_tier": r.model_tier or "fast",
             "created_at": r.created_at, "updated_at": r.updated_at,
             "owner_email": owners.get(str(r.user_id).replace("-", ""), None) if r.user_id else None,
             "is_mine": str(r.user_id).replace("-", "") == str(user.id).replace("-", "") if r.user_id else False,
@@ -108,6 +114,24 @@ async def list_sessions(
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     session = await get_owned_session(session_id, user, db)
+    return session
+
+
+class TierRequest(BaseModel):
+    model_tier: str
+
+
+@router.put("/{session_id}/tier", response_model=SessionResponse)
+async def set_tier(session_id: str, body: TierRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Switch a session between Fast (Haiku everywhere) and Pro (Sonnet everywhere). Takes effect
+    on the next LLM call, including calls of a job already running."""
+    if body.model_tier not in model_policy.TIERS:
+        raise HTTPException(422, "model_tier must be 'fast' or 'pro'")
+    session = await get_owned_session(session_id, user, db)
+    session.model_tier = body.model_tier
+    await db.commit()
+    await db.refresh(session)
+    model_policy.remember(session.id, session.model_tier)
     return session
 
 

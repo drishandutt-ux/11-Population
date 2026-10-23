@@ -309,8 +309,10 @@ def _parse_image_vision(content: bytes, filename: str) -> str:
 
     client = anthropic.Anthropic(api_key=api_key)
     _pulse_t0 = time.time()
+    from app.core.model_policy import sync_model
+    vision_model = sync_model()   # the session's tier (Haiku on Fast, Sonnet on Pro); never Opus
     message = client.messages.create(
-        model="claude-opus-4-5-20251101",
+        model=vision_model,
         max_tokens=2048,
         messages=[
             {
@@ -330,7 +332,7 @@ def _parse_image_vision(content: bytes, filename: str) -> str:
         ],
     )
 
-    record_usage_sync(response=message, model="claude-opus-4-5-20251101", label="doc_vision", started_at=_pulse_t0)
+    record_usage_sync(response=message, model=vision_model, label="doc_vision", started_at=_pulse_t0)
     analysis = message.content[0].text if message.content else "(no response)"
     return f"[Image Analysis — {filename}]\n\n{analysis}"
 

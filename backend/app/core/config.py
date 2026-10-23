@@ -73,11 +73,15 @@ class Settings(BaseSettings):
     #: 2026-10-20). Empty = any account Supabase lets in. Peers and sharing are always within a domain.
     allowed_email_domains: str = ""
 
+    # Both follow the tier models in app/core/model_policy.py (2026-10-23), not the MODEL_* env vars:
+    # an env override is how Opus reached production. The session's tier still has the last word
+    # on every call (tracked_messages_create).
     def agent_model(self, mode: str) -> str:
-        return self.model_pro_agents if mode == "pro" else self.model_agents
+        from app.core.model_policy import TIER_MODEL
+        return TIER_MODEL["pro" if mode == "pro" else "fast"]
 
     def orchestration_model(self, mode: str) -> str:
-        return self.model_pro_orchestration if mode == "pro" else self.model_orchestration
+        return self.agent_model(mode)
 
     def sim_concurrency(self, mode: str) -> int:
         return self.sim_concurrency_pro if mode == "pro" else self.sim_concurrency_fast
