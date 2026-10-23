@@ -53,3 +53,29 @@ def test_tracked_create_sends_the_session_tier_model():
 
     asyncio.run(go())
     assert c.messages.seen == [mp.HAIKU, mp.SONNET, mp.SONNET]
+
+
+def test_mechanical_work_runs_on_haiku_even_in_pro():
+    for label in ("search", "kg_extract", "probe:themes", "probe:themes:retry", "scope_check",
+                  "population_frame_target", "validation_judge", "doc_vision"):
+        assert mp.enforce("claude-sonnet-4-6", "pro", label) == mp.HAIKU, label
+        assert mp.enforce("claude-opus-4-5", None, label) == mp.HAIKU, label
+
+
+def test_quality_work_follows_the_tier():
+    for label in ("post", "probe:journey", "probe:journey:retry", "spawn:plan", "spawn:plan:repair",
+                  "report", "lab_brief", "validation_answers", "chat"):
+        assert mp.enforce("claude-haiku-4-5-20251001", "pro", label) == mp.SONNET, label
+        assert mp.enforce("claude-sonnet-4-6", "fast", label) == mp.HAIKU, label
+
+
+def test_tracked_create_uses_the_label():
+    c = _Client()
+    mp.remember("sess-pro2", "pro")
+
+    async def go():
+        await tracked_messages_create(c, session_id="sess-pro2", label="kg_extract", model="claude-sonnet-4-6", max_tokens=1, messages=[])
+        await tracked_messages_create(c, session_id="sess-pro2", label="post", model="claude-haiku-4-5-20251001", max_tokens=1, messages=[])
+
+    asyncio.run(go())
+    assert c.messages.seen == [mp.HAIKU, mp.SONNET]

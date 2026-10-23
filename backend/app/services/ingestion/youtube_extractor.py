@@ -57,7 +57,7 @@ def _extract_sync(url: str) -> str:
     settings = get_settings()
     claude = anthropic_lib.Anthropic(api_key=settings.anthropic_api_key)
     from app.core.model_policy import sync_model
-    vision_model = sync_model()   # the session's tier (Haiku on Fast, Sonnet on Pro); never Opus
+    vision_model = sync_model(label="youtube_vision")   # describing frames: Haiku on either tier, never Opus
 
     with tempfile.TemporaryDirectory() as tmpdir:
 

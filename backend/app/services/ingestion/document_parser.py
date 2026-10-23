@@ -310,7 +310,7 @@ def _parse_image_vision(content: bytes, filename: str) -> str:
     client = anthropic.Anthropic(api_key=api_key)
     _pulse_t0 = time.time()
     from app.core.model_policy import sync_model
-    vision_model = sync_model()   # the session's tier (Haiku on Fast, Sonnet on Pro); never Opus
+    vision_model = sync_model(label="doc_vision")   # describing an image: Haiku on either tier, never Opus
     message = client.messages.create(
         model=vision_model,
         max_tokens=2048,

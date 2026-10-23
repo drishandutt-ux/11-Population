@@ -69,7 +69,7 @@ def test_calls_land_in_the_ledger_tagged_by_context_session():
         try:
             await monitoring.tracked_messages_create(_client(), label="post", model="claude-haiku-4-5-20251001", max_tokens=10, messages=[])
             # a background task spawned inside the request inherits the session
-            await asyncio.create_task(monitoring.tracked_messages_create(_client(searches=2), label="search", model="claude-sonnet-4-6", max_tokens=10, messages=[]))
+            await asyncio.create_task(monitoring.tracked_messages_create(_client(searches=2), label="report", model="claude-sonnet-4-6", max_tokens=10, messages=[]))
             # an explicit session_id wins over the context
             await monitoring.tracked_messages_create(_client(), session_id=sid_explicit, label="chat", model="claude-haiku-4-5", max_tokens=10, messages=[])
         finally:
@@ -91,7 +91,7 @@ def test_calls_land_in_the_ledger_tagged_by_context_session():
             assert {m["model"] for m in row["models"]} == {"claude-haiku-4-5-20251001", "claude-sonnet-4-6"}
             assert row["title"] == "Deleted session"
             detail = await admin_usage_session(sid_ctx, days=0, admin=None, db=db)
-            assert {e["label"] for e in detail["executions"]} == {"post", "search"}
+            assert {e["label"] for e in detail["executions"]} == {"post", "report"}
             assert len(detail["recent"]) == 2
             await db.execute(delete(LlmUsage).where(LlmUsage.session_id.in_([sid_ctx, sid_explicit])))
             await db.commit()

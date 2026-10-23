@@ -205,7 +205,7 @@ async def tracked_messages_create(client, *, session_id=None, label="", **create
     Sonnet for every call, and Opus is never sent (app/core/model_policy.py)."""
     from app.core import model_policy
     sid = session_id or current_session_id.get()
-    create_kwargs["model"] = model_policy.enforce(create_kwargs.get("model"), await model_policy.session_tier(sid))
+    create_kwargs["model"] = model_policy.enforce(create_kwargs.get("model"), await model_policy.session_tier(sid), label)
     s = get_settings()
     started = time.time()
     status = "success"
