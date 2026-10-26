@@ -286,17 +286,30 @@ def analyse(instrument, design: str, variants: list[dict], arms: dict[str, dict[
 
 def compose_choice_spec(instrument, variants: list[dict], shared: dict, question: str, seed: int) -> dict:
     """One probe for the whole comparison: every variant's material, labelled, in one stimulus."""
+    from app.services.measurement import images as images_mod
     parts = []
+    images: list[dict] = []
+    setting = str(shared.get("setting") or "").strip()
     for v in variants:
-        material = str((v.get("spec") or {}).get(instrument.stimulus_key) or "").strip()
-        price = (v.get("spec") or {}).get("price")
-        currency = (v.get("spec") or {}).get("currency", "GBP")
+        vspec = v.get("spec") or {}
+        raw = vspec.get(instrument.stimulus_key)
+        material = raw.strip() if isinstance(raw, str) else ""
+        price = vspec.get("price")
+        currency = vspec.get("currency", "GBP")
         sym = {"GBP": "£", "USD": "$", "EUR": "€"}.get(currency, "")
         head = f"OPTION {v['key']} — {v.get('label') or v['key']}"
         if price:
             head += f" (price: {sym}{float(price):g})"
+        # A variant's images travel into the one probe tagged with their option, so the twin sees
+        # every option's picture under its own label and can name what it picked (the Visual Lab).
+        refs = images_mod.refs_in(vspec)
+        if refs:
+            images.extend({**r, "option": v["key"]} for r in refs)
+            material = (material + "\n" if material else "") + f"(image{'s' if len(refs) > 1 else ''} attached, labelled OPTION {v['key']})"
+        if not setting and isinstance(vspec.get("setting"), str):
+            setting = vspec["setting"].strip()
         parts.append(f"{head}\n{material}")
-    return {
+    out = {
         **{k: val for k, val in shared.items() if k not in ("price", "currency")},
         "stimulus": "\n\n".join(parts),
         "question": question or instrument.question,
@@ -304,6 +317,11 @@ def compose_choice_spec(instrument, variants: list[dict], shared: dict, question
         "option_labels": {v["key"]: (v.get("label") or v["key"]) for v in variants},
         "seed": seed,
     }
+    if images:
+        out[images_mod.IMAGES_KEY] = images
+    if setting:
+        out["setting"] = setting
+    return out
 
 
 def choice_results(variants: list[dict], probe: Probe) -> dict:

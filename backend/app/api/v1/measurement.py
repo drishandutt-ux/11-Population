@@ -42,11 +42,12 @@ _EST_TOKENS_IN = 2400
 _EST_TOKENS_OUT = 260
 
 
-def estimate_cost_usd(model: str, agents: int) -> float:
-    """What this probe will actually cost, from the resolved model id."""
+def estimate_cost_usd(model: str, agents: int, *, extra_tokens_in: int = 0) -> float:
+    """What this probe will actually cost, from the resolved model id. `extra_tokens_in` is what
+    each call carries on top of the text — the images a Visual Lab run shows every twin."""
     key = next((k for k in _PRICE_PER_MTOK if k in (model or "")), None)
     price_in, price_out = _PRICE_PER_MTOK.get(key, _FALLBACK_PRICE)
-    per_agent = (_EST_TOKENS_IN * price_in + _EST_TOKENS_OUT * price_out) / 1_000_000
+    per_agent = ((_EST_TOKENS_IN + max(0, int(extra_tokens_in))) * price_in + _EST_TOKENS_OUT * price_out) / 1_000_000
     return round(agents * per_agent, 4)
 
 
@@ -545,11 +546,14 @@ async def estimate_probe(
     chosen = probe_svc._select_agents(list(agents), spec, body.seed or 0)
     mode = "pro" if body.mode == "pro" else "fast"
     model = get_settings().agent_model(mode)
+    from app.services.measurement import images as images_mod
+    image_tokens = await images_mod.session_image_tokens(session_id, spec)
     return {
         "agent_count": len(chosen),
         "mode": mode,
         "model": model,
-        "estimated_cost_usd": estimate_cost_usd(model, len(chosen)),
+        "image_tokens": image_tokens,
+        "estimated_cost_usd": estimate_cost_usd(model, len(chosen), extra_tokens_in=image_tokens),
     }
 
 
@@ -875,13 +879,19 @@ async def estimate_experiment(
     mode = "pro" if body.mode == "pro" else "fast"
     model = get_settings().agent_model(mode)
     calls = len(chosen) * len(body.variants) if body.design == "within" else len(chosen)
+    # Images: a choose-between call carries every variant's pictures; the other designs carry one
+    # variant's per call, so the per-call average is the total over the variants.
+    from app.services.measurement import images as images_mod
+    per_variant = [await images_mod.session_image_tokens(session_id, v.spec or {}) for v in body.variants]
+    image_tokens = sum(per_variant) if body.design == "choice" else (sum(per_variant) // max(1, len(per_variant)))
     return {
         "agent_count": len(chosen),
         "variants": len(body.variants),
         "calls": calls,
         "mode": mode,
         "model": model,
-        "estimated_cost_usd": estimate_cost_usd(model, calls),
+        "image_tokens": image_tokens,
+        "estimated_cost_usd": estimate_cost_usd(model, calls, extra_tokens_in=image_tokens),
     }
 
 

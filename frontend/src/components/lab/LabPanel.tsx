@@ -221,6 +221,9 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     if (!instrument || !req) return;
     const missing = instrument.inputs.filter((f) => f.required && (Array.isArray(values[f.key]) ? values[f.key].length === 0 : !String(values[f.key] ?? "").trim()));
     if (missing.length) { setError(`${missing.map((f) => f.label).join(", ")} required.`); return; }
+    // An image stimulus is a list the backend validates; say so here rather than after the round trip.
+    const imgField = instrument.inputs.find((f) => f.type === "images");
+    if (imgField && !(Array.isArray(values[imgField.key]) && values[imgField.key].length)) { setError("Add at least one image for them to look at."); return; }
     setBusy(true); setError(null);
     try {
       const p = await api.lab.run(sessionId, req);
@@ -401,7 +404,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
           // The model comes from the backend's resolved config, not the tier label — and the
           // cost follows the real model.
           <p className="text-[11px] text-muted-foreground">
-            {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} will answer · about ${estimate.estimated_cost_usd.toFixed(2)}
+            {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} will answer · about ${estimate.estimated_cost_usd.toFixed(2)}{(estimate as any).image_tokens ? ` · ${(Array.isArray(values.images) && values.images.length > 1) ? "the images add" : "the image adds"} ~${Number((estimate as any).image_tokens).toLocaleString()} tokens a call` : ""}
             <br />
             <span className="opacity-70">{estimate.model}</span>
           </p>

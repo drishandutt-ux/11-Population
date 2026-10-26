@@ -1,4 +1,4 @@
-import { Beaker, ClipboardList, FlaskConical, LucideIcon, MessageCircleQuestion, Milestone, Route, ShoppingCart } from "lucide-react";
+import { Beaker, ClipboardList, FlaskConical, ImageIcon, LucideIcon, MessageCircleQuestion, Milestone, Route, ShoppingCart } from "lucide-react";
 
 /** Instrument key → the icon that stands for it in the picker and in past runs.
  *
@@ -11,6 +11,7 @@ const ICONS: Record<string, LucideIcon> = {
   ask: MessageCircleQuestion,
   barriers: Milestone,
   journey: Route,
+  visual: ImageIcon,
 };
 
 /** The A/B test is the shell's own second primitive, not an instrument. */

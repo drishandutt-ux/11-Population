@@ -7,28 +7,46 @@
  *  inputs requires no change here. */
 
 import { Instrument, InstrumentInput } from "@/lib/api";
+import ImagePicker from "./ImagePicker";
 
 interface Props {
   instrument: Instrument;
   values: Record<string, any>;
   onChange: (key: string, value: any) => void;
+  /** Needed by inputs that read session state — the image picker lists the session's images. */
+  sessionId?: string;
 }
 
 const CONTROL =
   "w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50";
 
-export default function InstrumentForm({ instrument, values, onChange }: Props) {
+export default function InstrumentForm({ instrument, values, onChange, sessionId }: Props) {
   return (
     <div className="space-y-4">
       {instrument.inputs.map((f) => (
-        <Field key={f.key} field={f} value={values[f.key]} onChange={(v) => onChange(f.key, v)} />
+        <Field key={f.key} field={f} value={values[f.key]} onChange={(v) => onChange(f.key, v)} sessionId={sessionId} />
       ))}
     </div>
   );
 }
 
-function Field({ field, value, onChange }: { field: InstrumentInput; value: any; onChange: (v: any) => void }) {
+function Field({ field, value, onChange, sessionId }: { field: InstrumentInput; value: any; onChange: (v: any) => void; sessionId?: string }) {
   if (field.type === "questions") return null; // rendered by the tool's own form (see forms/)
+  if (field.type === "images") {
+    // The Visual Lab's stimulus: pick from the session's images or upload new ones.
+    return (
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1.5">
+          {field.label}
+          <span className="text-primary/70"> *</span>
+        </label>
+        {sessionId
+          ? <ImagePicker sessionId={sessionId} value={Array.isArray(value) ? value : []} onChange={onChange} />
+          : <p className="text-[11px] text-muted-foreground">Open this tool inside a session to add images.</p>}
+        {field.help && <p className="text-[10px] text-muted-foreground/60 mt-1">{field.help}</p>}
+      </div>
+    );
+  }
   const label = (
     <label className="text-xs text-muted-foreground block mb-1.5">
       {field.label}
@@ -105,7 +123,7 @@ export function initialValues(instrument: Instrument, ctx: { session_query?: str
   for (const f of instrument.inputs) {
     if (f.default_from === "session_query" && ctx.session_query) out[f.key] = ctx.session_query;
     else if (f.default !== null && f.default !== undefined) out[f.key] = f.default;
-    else out[f.key] = f.type === "questions" ? [] : "";
+    else out[f.key] = f.type === "questions" || f.type === "images" ? [] : "";
   }
   return out;
 }

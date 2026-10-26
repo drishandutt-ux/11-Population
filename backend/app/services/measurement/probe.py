@@ -232,7 +232,7 @@ async def _agent_history(
 
 def _build_user_message(
     *, agent: SpawnedAgent, instrument, spec: dict, query: str, kg_context: str,
-    said: list[str], decided: list[str],
+    said: list[str], decided: list[str], images: Optional[list[dict]] = None,
 ) -> str:
     ctx = spec.get("context") or {}
     blocks = [f"THE TOPIC: {query}"]
@@ -259,7 +259,10 @@ def _build_user_message(
             f"YOUR GENERAL TENDENCIES (priors, NOT the answer to this): {priors}"
         )
 
-    stimulus = str(spec.get(instrument.stimulus_key) or "").strip()
+    # A stimulus is text. An instrument whose stimulus is the images themselves (the Visual Lab)
+    # names the images key here, and those are laid out as image blocks, not stringified.
+    raw_stimulus = spec.get(instrument.stimulus_key)
+    stimulus = raw_stimulus.strip() if isinstance(raw_stimulus, str) else ""
     if stimulus:
         price = spec.get("price")
         currency = spec.get("currency", "GBP")
@@ -286,6 +289,12 @@ def _build_user_message(
     if message and message.get("text"):
         from app.services.measurement import messaging as msg_mod
         blocks.append(msg_mod.message_block(message))
+
+    # Images attached to this message (the Visual Lab, 2026-10-26): tell the twin what they are
+    # and how to look at them. The blocks themselves are laid out by images.vision_content.
+    if images:
+        from app.services.measurement import images as images_mod
+        blocks.append(images_mod.looking_at_block(images, spec))
 
     anchor = _convictions_block(agent) if instrument.key == "survey" else ""
     if anchor:
@@ -409,10 +418,12 @@ def dont_know_block(rows: list[dict]) -> dict:
 async def answer_one(
     agent: SpawnedAgent, *, instrument, spec: dict, probe_id: str, session_id: str,
     query: str, kg_context: str, model: str, experiment_id: Optional[str] = None,
-    served: Optional[list[dict]] = None,
+    served: Optional[list[dict]] = None, images: Optional[list[dict]] = None,
 ) -> Optional[dict]:
     """Ask one agent the instrument's question and persist the typed answer. `served` (L6-05):
     the numbered knowledge items in `kg_context`, so the answer can say which it drew on.
+    `images` (the Visual Lab): the spec's images, loaded once per run, shown to the twin as
+    image blocks before the written message.
 
     Returns the answer dict, or None if the call failed (a failed agent is dropped from the
     denominator rather than filled with a default — a made-up answer would corrupt the share)."""
@@ -457,18 +468,24 @@ async def answer_one(
     async def _ask(st_spec: dict, label_suffix: str = "") -> Optional[dict]:
         user = _build_user_message(
             agent=agent, instrument=instrument, spec=st_spec, query=query,
-            kg_context=kg_context, said=said, decided=decided,
+            kg_context=kg_context, said=said, decided=decided, images=images,
         )
         schema = with_dont_know(instrument.schema_for(st_spec))
         if served:
             schema = with_sources(schema)
         label = f"probe:{instrument.key}{label_suffix}"
+        # With images the message is content blocks — each image under its caption, the written
+        # message last — so the model looks at the picture rather than reading about it.
+        messages = None
+        if images:
+            from app.services.measurement import images as images_mod
+            messages = [{"role": "user", "content": images_mod.vision_content(images, user)}]
         try:
-            return await analyze(schema, system, user, session_id=session_id, label=label, model=model, max_tokens=instrument.max_tokens)
+            return await analyze(schema, system, user, session_id=session_id, label=label, model=model, max_tokens=instrument.max_tokens, messages=messages)
         except LlmTruncated:
             # Short schemas rarely truncate; when they do, one retry with more room is enough.
             try:
-                return await analyze(schema, system, user, session_id=session_id, label=f"{label}:retry", model=model, max_tokens=instrument.max_tokens * 2)
+                return await analyze(schema, system, user, session_id=session_id, label=f"{label}:retry", model=model, max_tokens=instrument.max_tokens * 2, messages=messages)
             except (LlmError, Exception) as e:  # noqa: BLE001
                 print(f"[probe] {agent.id} failed after retry: {type(e).__name__}: {e}")
                 return None
@@ -606,6 +623,16 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
             await publish(session_channel(session_id), {"type": "probe_complete", "probe_id": probe_id, "status": "failed"})
             return
 
+        # The images this spec shows (the Visual Lab), loaded once for the whole run. A missing
+        # image fails the run: a twin asked about a poster it cannot see would answer from the label.
+        from app.services.measurement import images as images_mod
+        images, missing_images = await images_mod.for_prompt(session_id, spec)
+        if missing_images:
+            await _set_status(probe_id, status="failed", completed_at=datetime.utcnow(),
+                              error=f"{len(missing_images)} image(s) this run names are no longer in the session")
+            await publish(session_channel(session_id), {"type": "probe_complete", "probe_id": probe_id, "status": "failed"})
+            return
+
         # One KG snapshot for the whole probe: every agent answers the same question against
         # the same evidence, which is what makes the comparison between them meaningful.
         kg_context = await _probe_kg_context(session_id, query, spec)
@@ -648,7 +675,7 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
                     row = await answer_one(
                         agent, instrument=instrument, spec=spec, probe_id=probe_id,
                         session_id=session_id, query=query, kg_context=ctx, model=model,
-                        experiment_id=experiment_id, served=served,
+                        experiment_id=experiment_id, served=served, images=images or None,
                     )
                 except Exception as e:  # noqa: BLE001
                     # One twin's failure (a database hiccup saving its answer) counts as one

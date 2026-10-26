@@ -189,6 +189,9 @@ export default function ExperimentPanel({
     for (const v of variants) {
       const missing = base.inputs.filter((f) => f.required && !(design === "choice" && f.key === base.question_from) && !String(v.values[f.key] ?? "").trim());
       if (missing.length) { setError(`Variant ${v.label || v.key}: ${missing.map((f) => f.label).join(", ")} required.`); return; }
+      // An image stimulus is a list the backend validates; say so here rather than after the round trip.
+      const imgField = base.inputs.find((f) => f.type === "images");
+      if (imgField && !(Array.isArray(v.values[imgField.key]) && v.values[imgField.key].length)) { setError(`Variant ${v.label || v.key}: add at least one image.`); return; }
     }
     setBusy(true); setError(null);
     try {
@@ -274,6 +277,7 @@ export default function ExperimentPanel({
               instrument={design === "choice" && base.question_from ? { ...base, inputs: base.inputs.filter((f) => f.key !== base.question_from) } : base}
               values={v.values}
               onChange={(k, val) => updateVariant(i, { values: { ...v.values, [k]: val } })}
+              sessionId={sessionId}
             />
           </div>
         ))}
@@ -319,7 +323,7 @@ export default function ExperimentPanel({
 
         {estimate && (
           <p className="text-[11px] text-muted-foreground">
-            {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} × {design === "within" ? `${estimate.variants} variants` : design === "choice" ? "1 choice each" : "1 variant each"} = {estimate.calls} answers · about ${estimate.estimated_cost_usd.toFixed(2)}
+            {estimate.agent_count} agent{estimate.agent_count === 1 ? "" : "s"} × {design === "within" ? `${estimate.variants} variants` : design === "choice" ? "1 choice each" : "1 variant each"} = {estimate.calls} answers · about ${estimate.estimated_cost_usd.toFixed(2)}{estimate.image_tokens ? ` · images add ~${estimate.image_tokens.toLocaleString()} tokens a call` : ""}
             <br /><span className="opacity-70">{estimate.model}</span>
           </p>
         )}

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, Integer, Float, DateTime, JSON
+from sqlalchemy import String, Text, Integer, Float, DateTime, JSON, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -151,3 +151,30 @@ class LabBrief(Base):
     built_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SessionImage(Base):
+    """An image a session holds for the Visual Lab (2026-10-26): uploaded by the analyst (step 1)
+    or, later, generated from a brief. The bytes live on the row — the app's disk is wiped on every
+    deploy, and an image a probe was run on must outlive the container that ran it. Images are
+    resized at upload to the long edge the vision model reads best, so one row is a few hundred
+    kilobytes at most. `parent_id`, `brief`, `keep_list` and `check_result` are the hooks for the
+    remake step; nothing writes them yet."""
+    __tablename__ = "session_images"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), index=True)
+    label: Mapped[str] = mapped_column(String(200), default="")
+    filename: Mapped[str] = mapped_column(String(300), default="")
+    media_type: Mapped[str] = mapped_column(String(40), default="image/jpeg")
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    source: Mapped[str] = mapped_column(String(16), default="upload")      # upload | generated | remake
+    parent_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, default=None)
+    brief: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    keep_list: Mapped[list] = mapped_column(JSON, default=list)
+    check_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

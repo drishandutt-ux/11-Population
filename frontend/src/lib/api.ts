@@ -246,6 +246,29 @@ export const api = {
     send: (sessionId: string, content: string) =>
       request<{ message: SharedMessage; report_pending: boolean }>(`/sessions/${sessionId}/shared-chat`, { method: "POST", body: JSON.stringify({ content }) }),
   },
+  // Session images (the Visual Lab, 2026-10-26): what the Visuals tool and image A/B tests show the twins.
+  images: {
+    list: (sessionId: string) => request<{ images: SessionImage[] }>(`/sessions/${sessionId}/images`),
+    /** Multipart upload; the server downscales and re-encodes, so the stored size is what the twins see. */
+    upload: async (sessionId: string, file: File, label = ""): Promise<SessionImage> => {
+      const body = new FormData();
+      body.append("file", file, file.name);
+      if (label) body.append("label", label);
+      const res = await apiFetch(`/sessions/${sessionId}/images`, { method: "POST", body });
+      if (!res.ok) throw new Error((await res.text().catch(() => "")) || `Upload failed (${res.status})`);
+      return res.json();
+    },
+    rename: (sessionId: string, imageId: string, label: string) =>
+      request<SessionImage>(`/sessions/${sessionId}/images/${imageId}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+    /** 409 while a run in the session names the image. */
+    remove: (sessionId: string, imageId: string) => request(`/sessions/${sessionId}/images/${imageId}`, { method: "DELETE" }),
+    /** The bytes, fetched with the user's token (an <img src> cannot carry it); see lab/useImageUrl. */
+    blob: async (sessionId: string, imageId: string): Promise<Blob> => {
+      const res = await apiFetch(`/sessions/${sessionId}/images/${imageId}/file`);
+      if (!res.ok) throw new Error(`Image failed (${res.status})`);
+      return res.blob();
+    },
+  },
   lab: {
     instruments: () => request<{ instruments: Instrument[] }>("/lab/instruments"),
     /** The demographic and geography "who answers" filters this session's population offers. */
@@ -1039,7 +1062,7 @@ export type WSEvent =
  *  declares the inputs it needs, and the UI renders them. */
 export type InstrumentInput = {
   key: string;
-  type: "text" | "textarea" | "number" | "select" | "money" | "questions";
+  type: "text" | "textarea" | "number" | "select" | "money" | "questions" | "images";
   label: string;
   required: boolean;
   help: string;
@@ -1115,7 +1138,32 @@ export type ProbeRequest = {
   agent_filter?: ProbeSpec["agent_filter"];
 };
 
-export type ProbeEstimate = { agent_count: number; mode: SimMode; model: string; estimated_cost_usd: number };
+export type ProbeEstimate = { agent_count: number; mode: SimMode; model: string; estimated_cost_usd: number; image_tokens?: number };
+
+// ── Session images (the Visual Lab, 2026-10-26) ──────────────────────────────
+
+/** An image a session holds: uploaded by the analyst (step 1) or, later, generated. The bytes
+ *  come from `api.images.blob`; the list carries only what is needed to pick and caption it. */
+export type SessionImage = {
+  id: string;
+  session_id: string;
+  label: string;
+  filename: string;
+  media_type: string;
+  width: number;
+  height: number;
+  size_bytes: number;
+  source: "upload" | "generated" | "remake";
+  parent_id: string | null;
+  keep_list: any[];
+  /** What one showing of this image adds to a call, in input tokens. */
+  tokens_per_showing: number;
+  created_at: string | null;
+};
+
+/** How a spec names the images a twin is shown: `images: ImageRef[]`. `option` is set by the
+ *  choose-between design so each picture is captioned with its variant. */
+export type ImageRef = { id: string; label: string; option?: string };
 
 export type ProbeStatus = "queued" | "running" | "complete" | "failed" | "stopped";
 
@@ -1217,6 +1265,7 @@ export type ExperimentEstimate = {
   mode: SimMode;
   model: string;
   estimated_cost_usd: number;
+  image_tokens?: number;
 };
 
 /** A difference between two arms with its bootstrap interval. */

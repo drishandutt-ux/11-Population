@@ -8,8 +8,9 @@
  *  and where the effect holds by segment. Nothing here knows which instrument ran. */
 
 import { useState } from "react";
-import { Comparison, Experiment, Instrument, Preference, Probe } from "@/lib/api";
+import { Comparison, Experiment, ImageRef, Instrument, Preference, Probe } from "@/lib/api";
 import { CategoryBars, DeltaHero, FlowDiagram, HeatCell, LiftBar, fmtLevel, fmtLift, optionColor, pct } from "../Charts";
+import { ImageStrip } from "../ImagePicker";
 
 interface Props {
   instrument: Instrument;
@@ -52,14 +53,18 @@ export default function ExperimentPage({ instrument, experiment }: Props) {
         {experiment.variants.map((v, i) => {
           const p = probes[v.key];
           const a: any = p?.aggregates;
-          const summary = instrument.inputs.map((f) => v.spec?.[f.key]).filter(Boolean).join(" · ");
+          const summary = instrument.inputs.map((f) => v.spec?.[f.key]).filter((x) => typeof x === "string" && x).join(" · ");
+          const images: ImageRef[] = Array.isArray(v.spec?.images) ? v.spec.images : [];
           return (
             <div key={v.key} className="grid grid-cols-[2.2rem_8rem_1fr_5rem_3.5rem] items-center gap-3 px-3 py-2">
               <span className="text-[10px] font-medium rounded px-1.5 py-0.5 bg-primary/10 text-primary text-center">{v.key}</span>
               <span className="text-xs text-foreground truncate" title={v.label || v.key}>
                 {v.label || v.key}{i === 0 && <span className="text-muted-foreground"> · control</span>}
               </span>
-              <span className="text-[11px] text-muted-foreground truncate" title={summary}>{summary}</span>
+              <span className="text-[11px] text-muted-foreground truncate flex items-center gap-2 min-w-0" title={summary}>
+                {images.length > 0 && <ImageStrip sessionId={experiment.session_id} images={images} size={40} />}
+                <span className="truncate">{summary}</span>
+              </span>
               <span className="text-sm tabular-nums text-right text-foreground/90">
                 {r.design === "choice"
                   ? pct(r.preference?.find((x) => x.key === v.key)?.share || 0)
