@@ -37,6 +37,11 @@ create table if not exists public.session_images (
   data bytea not null,
   created_at timestamp not null default now()
 );
+-- Added in steps 2-3 (same day); harmless where the table was created with them.
+alter table public.session_images add column if not exists status varchar(16) not null default 'ready';
+alter table public.session_images add column if not exists error text;
+alter table public.session_images add column if not exists layout json;
+alter table public.session_images add column if not exists change_note text not null default '';
 create index if not exists ix_session_images_session_id on public.session_images(session_id);
 create index if not exists ix_session_images_status on public.session_images(status);
 create index if not exists ix_session_images_parent_id on public.session_images(parent_id);
