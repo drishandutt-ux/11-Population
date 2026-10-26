@@ -18,11 +18,12 @@ import { api, Experiment, ImageProposal, ImageRef, KeepCheck, KeepItem, Probe, S
 import { useSessionTier } from "@/components/sessions/TierSwitch";
 import {
   AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Eye, FlaskConical, ImagePlus, Loader2, Pencil, Plus, RefreshCw,
-  ShieldCheck, ShieldAlert, Sparkles, Trash2, Wand2, X,
+  ShieldCheck, ShieldAlert, Sparkles, Trash2, Wand2, X, Download, Maximize2,
 } from "lucide-react";
 import { InstrumentFormProps } from "./index";
 import { ago } from "./formUtils";
 import { forgetImageUrl, useImageUrl } from "../useImageUrl";
+import { Lightbox, imageFileName } from "../ImagePicker";
 import ExperimentPage from "../pages/ExperimentPage";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
@@ -387,6 +388,7 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
   const [proposal, setProposal] = useState<ImageProposal | null>(null);
   const [busy, setBusy] = useState<null | "propose" | "remake" | "check" | "read" | "keep">(null);
   const [confirm, setConfirm] = useState(false);
+  const [zoom, setZoom] = useState(false);
   useEffect(() => { setKeep(img.keep_list || []); setDraft(img.label); }, [img.keep_list, img.label]);
 
   const isShown = shown.findIndex((s) => s.id === img.id);
@@ -436,11 +438,14 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
   return (
     <div className={`rounded-xl border ${isShown >= 0 ? "border-primary/50" : "border-border/60"} bg-card/40 p-3`}>
       <div className="flex gap-3">
-        <div className="w-28 h-36 rounded-lg overflow-hidden bg-muted/40 shrink-0 border border-border/40 flex items-center justify-center">
+        <button type="button" onClick={() => url && setZoom(true)} disabled={!url} title={url ? "Open full size" : undefined}
+          className="w-28 h-36 rounded-lg overflow-hidden bg-muted/40 shrink-0 border border-border/40 flex items-center justify-center relative group/thumb cursor-zoom-in disabled:cursor-default">
           {forming ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             : img.status === "failed" ? <AlertTriangle className="w-5 h-5 text-red-400" />
             : url ? <img src={url} alt={img.label} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-muted/60" />}
-        </div>
+          {url && <span className="absolute bottom-1 right-1 rounded bg-background/80 p-1 opacity-0 group-hover/thumb:opacity-100 transition-opacity"><Maximize2 className="w-3 h-3" /></span>}
+        </button>
+        {zoom && <Lightbox sessionId={sessionId} image={{ id: img.id, label: img.label }} mediaType={img.media_type} onClose={() => setZoom(false)} />}
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             {renaming ? (
@@ -474,6 +479,7 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
           </p>
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <button type="button" onClick={() => onShow(img)} disabled={img.status !== "ready"} className={`btn btn-sm ${isShown >= 0 ? "btn-primary" : "btn-secondary"}`}><Eye className="w-3.5 h-3.5" /> {isShown >= 0 ? "In the run" : "Show"}</button>
+            {url && <a href={url} download={imageFileName(img.label, img.media_type)} className="btn btn-sm btn-secondary" title="Save the image to your computer"><Download className="w-3.5 h-3.5" /> Save</a>}
             <label className={`btn btn-sm btn-secondary cursor-pointer ${img.status !== "ready" ? "opacity-40 pointer-events-none" : ""}`}>
               <input type="checkbox" checked={ticked} onChange={() => onCompare(img.id)} className="accent-[hsl(var(--primary))]" /> Compare
             </label>
@@ -529,6 +535,7 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
         <div className="mt-3 rounded-lg border border-border/60 bg-background/40 p-3 text-[11px] space-y-2">
           {img.brief?.rationale && <p><span className="text-muted-foreground">Why it looks like this: </span>{img.brief.rationale}</p>}
           {img.brief?.note && <p><span className="text-muted-foreground">Note: </span>{img.brief.note}</p>}
+          {(img.brief?.render_error || img.brief?.hero_error) && <p className="text-red-300"><span className="text-muted-foreground">The image model refused: </span>{img.brief.render_error || img.brief.hero_error}</p>}
           {img.brief?.render && <p><span className="text-muted-foreground">How it was drawn: </span>{img.brief.render === "full" ? `the whole poster by the image model${(img.brief.render_attempts || 1) > 1 ? ` (${img.brief.render_attempts} attempts — the first got a line wrong)` : ""}${img.brief.reference_used ? ", starting from the original" : ""}` : "a picture plus the words set in type by the system"}</p>}
           {img.brief?.hero_prompt && <p><span className="text-muted-foreground">Picture brief: </span>{img.brief.hero_prompt} <span className="text-muted-foreground">· drawn by {img.brief.hero_provider === "none" ? "a placeholder (no provider key)" : img.brief.hero_provider}</span>{img.brief.hero_error ? <span className="text-amber-300"> · provider failed: {img.brief.hero_error}</span> : null}</p>}
           {img.layout ? (

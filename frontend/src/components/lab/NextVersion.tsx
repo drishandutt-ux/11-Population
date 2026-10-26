@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Eye, FlaskConical, Loader2, Sparkles, Wand2, X } from "lucide-react";
 import { api, ImageProposal, ImageRef, KeepItem, Probe, SessionImage } from "@/lib/api";
 import { useImageUrl } from "./useImageUrl";
+import { Lightbox, imageFileName } from "./ImagePicker";
 import { InstrumentPageProps } from "./pages/types";
 
 const BASIS: Record<string, { label: string; cls: string }> = {
@@ -215,8 +216,11 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
               <>
                 <p className="text-muted-foreground">
                   Ready{child.check_result ? <> · keep-list {child.check_result.passed ? "honoured" : `check: ${child.check_result.items.filter((i) => !i.ok).length} item(s) to look at`}</> : null}
-                  {child.brief?.hero_provider === "none" ? " · the picture is a placeholder (no image provider key on the server)" : ""}
+                  {child.brief?.hero_provider === "none" && !(child.brief?.render_error || child.brief?.hero_error) ? " · the picture is a placeholder (no image provider key on the server)" : ""}
                 </p>
+                {(child.brief?.render_error || child.brief?.hero_error) && (
+                  <p className="text-red-300">The image model refused, so this is the typed fallback: {child.brief.render_error || child.brief.hero_error}</p>
+                )}
                 <div className="flex flex-wrap gap-2 pt-0.5">
                   {onOpenTool ? (
                     <>
@@ -243,9 +247,13 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
 
 function Thumb({ sessionId, image, size }: { sessionId: string; image: ImageRef; size: number }) {
   const url = useImageUrl(sessionId, image.id);
+  const [zoom, setZoom] = useState(false);
   return (
-    <div className="rounded-md overflow-hidden border border-border/60 bg-muted/40 shrink-0" style={{ width: size, height: size }} title={image.label}>
-      {url ? <img src={url} alt={image.label || "image"} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-muted/60" />}
-    </div>
+    <>
+      <button type="button" onClick={() => url && setZoom(true)} className="rounded-md overflow-hidden border border-border/60 bg-muted/40 shrink-0 cursor-zoom-in" style={{ width: size, height: size }} title={url ? "Open full size" : image.label}>
+        {url ? <img src={url} alt={image.label || "image"} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-muted/60" />}
+      </button>
+      {zoom && <Lightbox sessionId={sessionId} image={image} onClose={() => setZoom(false)} />}
+    </>
   );
 }

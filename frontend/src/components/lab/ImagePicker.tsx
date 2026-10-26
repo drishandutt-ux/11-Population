@@ -9,7 +9,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, ImageRef, SessionImage } from "@/lib/api";
-import { AlertTriangle, Check, ImagePlus, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ImagePlus, Loader2, Pencil, Trash2, X, Download } from "lucide-react";
 import { forgetImageUrl, useImageUrl } from "./useImageUrl";
 
 interface Props {
@@ -246,7 +246,15 @@ function HeroThumb({ sessionId, image, onOpen }: { sessionId: string; image: Ima
   );
 }
 
-function Lightbox({ sessionId, image, onClose }: { sessionId: string; image: ImageRef; onClose: () => void }) {
+/** A file name for a saved image: the label, safe for a file system, with the right extension. */
+export function imageFileName(label: string, mediaType?: string): string {
+  const base = (label || "image").replace(/[^\w\-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "image";
+  return `${base}.${mediaType === "image/png" ? "png" : "jpg"}`;
+}
+
+/** Full-size view with Save (the bytes are a blob URL fetched with the user's token, so a plain
+ *  link cannot carry them — the download attribute on the blob does). Escape or a click closes. */
+export function Lightbox({ sessionId, image, mediaType, onClose }: { sessionId: string; image: ImageRef; mediaType?: string; onClose: () => void }) {
   const url = useImageUrl(sessionId, image.id);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -256,7 +264,15 @@ function Lightbox({ sessionId, image, onClose }: { sessionId: string; image: Ima
   return (
     <div className="fixed inset-0 z-50 bg-background/90 flex items-center justify-center p-6" onClick={onClose}>
       {url && <img src={url} alt={image.label || "image"} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />}
-      <button type="button" onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+      <div className="absolute top-4 right-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {url && (
+          <a href={url} download={imageFileName(image.label, mediaType)} className="btn btn-sm btn-secondary" title="Save the image to your computer">
+            <Download className="w-3.5 h-3.5" /> Save
+          </a>
+        )}
+        <button type="button" onClick={onClose} className="btn btn-sm btn-ghost" title="Close"><X className="w-4 h-4" /></button>
+      </div>
+      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">{image.label || "image"} · click anywhere or press Escape to close</p>
     </div>
   );
 }

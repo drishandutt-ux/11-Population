@@ -285,6 +285,15 @@ def provider_name() -> str:
     return p if p in ("openai", "google", "none") else "none"
 
 
+def _ext(data: bytes) -> str:
+    """The real format of stored bytes (uploads are normalised to JPEG unless they had transparency)."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return "jpg"
+
+
 async def _openai_render(prompt: str, *, quality: str = "medium", references: Optional[list[bytes]] = None) -> bytes:
     """One gpt-image-1 call. With reference images it is an *edit*: the first is the poster to remake
     (its photograph, composition and feel survive), the rest are the other posters the audience
@@ -298,14 +307,21 @@ async def _openai_render(prompt: str, *, quality: str = "medium", references: Op
             r = await client.post(
                 "https://api.openai.com/v1/images/edits", headers=headers,
                 data={"model": st.image_model_openai, "prompt": prompt, "n": "1", "size": "1024x1536", "quality": quality},
-                files=[(field, (f"reference{k + 1}.png", b, "image/png")) for k, b in enumerate(references[:16])],
+                files=[(field, (f"reference{k + 1}.{_ext(b)}", b, f"image/{_ext(b).replace('jpg', 'jpeg')}")) for k, b in enumerate(references[:16])],
             )
         else:
             r = await client.post(
                 "https://api.openai.com/v1/images/generations", headers=headers,
                 json={"model": st.image_model_openai, "prompt": prompt, "n": 1, "size": "1024x1536", "quality": quality},
             )
-        r.raise_for_status()
+        if r.status_code >= 400:
+            # OpenAI's own message is the diagnosis (a wrong model name, an unverified organisation,
+            # a moderation block, an unsupported parameter) — keep it, not just the status.
+            try:
+                msg = str((r.json().get("error") or {}).get("message") or r.text)
+            except Exception:  # noqa: BLE001
+                msg = r.text
+            raise RuntimeError(f"OpenAI {r.status_code} on {'edits' if references else 'generations'}: {msg[:300]}")
         data = r.json()["data"][0]
         if data.get("b64_json"):
             return base64.b64decode(data["b64_json"])
@@ -576,10 +592,10 @@ async def render_full(layout: dict, keep: list[dict], *, session_id: str, model:
         except Exception as e:  # noqa: BLE001
             record_image_call(model=st.image_model_openai, session_id=session_id, label="visual:poster", cost_usd=0.0,
                               elapsed_sec=time.monotonic() - started, status="error")
-            print(f"[visual_gen] full render failed on attempt {attempt}: {type(e).__name__}: {str(e)[:200]}")
+            print(f"[visual_gen] full render failed on attempt {attempt}: {type(e).__name__}: {str(e)[:300]}")
             if best:
                 break
-            return None
+            return {"error": f"{type(e).__name__}: {str(e)[:300]}"}
         norm = images_mod.normalise(raw, "poster.png")
         check = await check_image(session_id=session_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"],
                                   layout=None, keep=keep, model=model, label=str(layout.get("headline") or "poster"))
@@ -1017,7 +1033,8 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
     if render_mode() == "full":
         full = await render_full(layout, keep, session_id=session_id, model=model, change=change, references=references,
                                  story=story, other_posters=other_posters, facts=facts)
-        if full:
+        render_error = (full or {}).get("error")
+        if full and full.get("norm"):
             norm, check = full["norm"], full["check"]
             brief.update({**rationale_extra, "rationale": layout.get("rationale", ""), "hero_prompt": layout.get("hero_prompt", ""),
                           "hero_provider": "openai", "hero_error": None, "kept": layout.get("kept") or [],
@@ -1028,6 +1045,8 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
                        label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
             return
         print("[visual_gen] full render unavailable, falling back to the layered render")
+    else:
+        render_error = None
     pal = layout.get("palette") or {}
     accent = _hex(pal.get("accent"), (240, 160, 60))
     hero_bytes, provider, err = await generate_hero(str(layout.get("hero_prompt") or ""), session_id=session_id, size=(1024, 1366), accent=accent) \
@@ -1037,7 +1056,8 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
     check = await check_image(session_id=session_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"],
                               layout=layout, keep=keep, model=model, label=str(layout.get("headline") or "image"))
     brief.update({**rationale_extra, "rationale": layout.get("rationale", ""), "hero_prompt": layout.get("hero_prompt", ""),
-                  "hero_provider": provider, "hero_error": err, "kept": layout.get("kept") or [], "render": "layered", "reference_used": False})
+                  "hero_provider": provider, "hero_error": err, "kept": layout.get("kept") or [], "render": "layered", "reference_used": False,
+                  "render_error": render_error})
     await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
                sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,
                label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
