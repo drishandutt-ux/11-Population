@@ -308,7 +308,11 @@ def _model_candidates() -> list[str]:
 
 
 def _is_missing_model(err: str) -> bool:
-    return bool(re.search(r"does not exist|model_not_found|do(?:es)? not have access|unknown model|invalid model|not found", err, re.I))
+    """Errors that mean *try the next model*: the model is missing, retired or restricted for this
+    key, or it rejects a parameter the chain's known-good set sends (size, quality, edits)."""
+    return bool(re.search(r"does not exist|model_not_found|do(?:es)? not have access|unknown model|invalid model|not found|deprecated|retired|"
+                          r"unsupported model|not supported|unsupported parameter|unknown parameter|unsupported value|invalid value|"
+                          r"invalid size|invalid quality|is not a valid", err, re.I))
 
 
 async def openai_image_models() -> list[str]:

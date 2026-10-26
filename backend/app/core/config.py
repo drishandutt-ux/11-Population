@@ -78,11 +78,13 @@ class Settings(BaseSettings):
     image_provider: str = "auto"
     openai_api_key: str = ""
     google_api_key: str = ""
-    image_model_openai: str = "gpt-image-1"
-    #: Tried in order when the key cannot see the model above ("The model 'gpt-image-1' does not
-    #: exist" — an unverified organisation or a project that restricts models). DALL·E 3 is the last
-    #: resort: a generation only (no edit from the reference), 1024x1792, hd.
-    image_model_openai_fallbacks: str = "gpt-image-1.5,gpt-image-1-mini,dall-e-3"
+    #: 2026-10-26: Drishan's key lists gpt-image-1 … gpt-image-2.5 under /v1/models, yet the image
+    #: endpoints answered "The model 'gpt-image-1' does not exist" — the old name is no longer
+    #: served there. gpt-image-2 first, then the rest in order of preference; the chain also steps
+    #: past a model that rejects a parameter. DALL·E 3 is the last resort: a generation only (no
+    #: edit from the reference), 1024x1792, hd.
+    image_model_openai: str = "gpt-image-2"
+    image_model_openai_fallbacks: str = "gpt-image-2.5-sunburst,gpt-image-2.5-flare,gpt-image-1.5,gpt-image-1,gpt-image-1-mini,dall-e-3"
     image_model_google: str = "imagen-4.0-generate-001"
     #: How a generated or remade image is drawn (2026-10-26, after the first prod remake came back
     #: as a typed infographic): "full" — the provider draws the whole poster, photograph and words
