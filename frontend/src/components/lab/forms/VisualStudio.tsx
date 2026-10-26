@@ -529,6 +529,7 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
         <div className="mt-3 rounded-lg border border-border/60 bg-background/40 p-3 text-[11px] space-y-2">
           {img.brief?.rationale && <p><span className="text-muted-foreground">Why it looks like this: </span>{img.brief.rationale}</p>}
           {img.brief?.note && <p><span className="text-muted-foreground">Note: </span>{img.brief.note}</p>}
+          {img.brief?.render && <p><span className="text-muted-foreground">How it was drawn: </span>{img.brief.render === "full" ? `the whole poster by the image model${(img.brief.render_attempts || 1) > 1 ? ` (${img.brief.render_attempts} attempts — the first got a line wrong)` : ""}${img.brief.reference_used ? ", starting from the original" : ""}` : "a picture plus the words set in type by the system"}</p>}
           {img.brief?.hero_prompt && <p><span className="text-muted-foreground">Picture brief: </span>{img.brief.hero_prompt} <span className="text-muted-foreground">· drawn by {img.brief.hero_provider === "none" ? "a placeholder (no provider key)" : img.brief.hero_provider}</span>{img.brief.hero_error ? <span className="text-amber-300"> · provider failed: {img.brief.hero_error}</span> : null}</p>}
           {img.layout ? (
             <div>

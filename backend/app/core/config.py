@@ -80,8 +80,18 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     image_model_openai: str = "gpt-image-1"
     image_model_google: str = "imagen-4.0-generate-001"
-    #: List price per generated image, for the cost ledger (USD).
+    #: How a generated or remade image is drawn (2026-10-26, after the first prod remake came back
+    #: as a typed infographic): "full" — the provider draws the whole poster, photograph and words
+    #: together, from the authored layout, with the parent image as the reference on a remake and
+    #: one retry when the vision check finds an exact-text line wrong; "layered" — a hero picture
+    #: with the words set in type by the system (the only mode with no provider key). "auto" = full
+    #: with OpenAI, layered otherwise (Imagen's lettering is not reliable enough).
+    image_render: str = "auto"
+    #: gpt-image-1 quality for a full poster; text legibility needs "high".
+    image_quality_openai: str = "high"
+    #: List price per generated image, for the cost ledger (USD): a medium hero / a high full poster.
     image_cost_openai_usd: float = 0.07
+    image_cost_openai_full_usd: float = 0.25
     image_cost_google_usd: float = 0.04
 
     # Both follow the tier models in app/core/model_policy.py (2026-10-23), not the MODEL_* env vars:

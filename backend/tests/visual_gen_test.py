@@ -347,3 +347,81 @@ def test_next_version_reads_a_joint_run_picks_the_base_and_remakes_from_the_chos
     assert client.post(f"/api/v1/sessions/{sid}/images/{b_['id']}/remake", json={"proposal": prop, "selected": []}).status_code == 400
     # Both changes → numbered.
     assert vg.change_text(prop) == "1) Make the price the headline\n2) Name a local shelter and a phone number"
+
+
+# ── full render: the provider draws the whole poster ──────────────────────────
+
+def test_render_mode_follows_the_provider_and_the_setting(monkeypatch):
+    from app.core.config import get_settings
+    st = get_settings()
+    monkeypatch.setattr(st, "image_provider", "none"); monkeypatch.setattr(st, "openai_api_key", ""); monkeypatch.setattr(st, "image_render", "auto")
+    assert vg.render_mode() == "layered"
+    monkeypatch.setattr(st, "image_provider", "openai"); monkeypatch.setattr(st, "openai_api_key", "k")
+    assert vg.render_mode() == "full"
+    monkeypatch.setattr(st, "image_render", "layered")
+    assert vg.render_mode() == "layered"
+    monkeypatch.setattr(st, "image_render", "full"); monkeypatch.setattr(st, "image_provider", "google"); monkeypatch.setattr(st, "google_api_key", "g")
+    assert vg.render_mode() == "layered"                                     # Imagen never draws the words
+
+
+def test_full_render_draws_the_whole_poster_from_the_reference_and_retries_a_wrong_line(lab_db, monkeypatch):
+    Session, loop = lab_db
+    from app.core.config import get_settings
+    st = get_settings()
+    monkeypatch.setattr(st, "image_provider", "openai"); monkeypatch.setattr(st, "openai_api_key", "k"); monkeypatch.setattr(st, "image_render", "auto")
+    calls: list[dict] = []
+
+    async def fake_render(prompt, *, quality="medium", reference=None):
+        calls.append({"prompt": prompt, "quality": quality, "ref": reference is not None})
+        return _png(80, 100)
+    monkeypatch.setattr(vg, "_openai_render", fake_render)
+    checks: list[int] = []
+
+    async def fake_analyze(schema, system, user, **kw):
+        props = schema.get("properties") or {}
+        if "hero_prompt" in props and "visible_items" in props:          # read the uploaded parent
+            return {"description": "a poster", "headline": "Dog shelters need your help", "subline": "", "body_lines": [], "claim_lines": ["First box free"],
+                    "cta": "Adopt. Donate. Volunteer.", "small_print": "", "palette": {"bg": "#147850", "fg": "#ffffff", "accent": "#c81e1e"},
+                    "hero_prompt": "a dog behind bars", "hero_placement": "top", "visible_items": ["a dog"]}
+        if "hero_prompt" in props:                                           # the new layout
+            return {**LAYOUT, "headline": "Give a dog a brighter tomorrow", "claim_lines": ["First box free"], "cta": "Call Burnley Dogs Home on 01282 000000"}
+        if "items" in props:                                                 # the vision check: the exact line is wrong first time
+            checks.append(1)
+            ok = len(checks) > 1
+            return {"items": [{"index": "1", "ok": ok, "note": "legible" if ok else "it reads 'Frist box free'"}, {"index": "2", "ok": True, "note": "a dog is there"}]}
+        raise AssertionError(f"unexpected schema {list(props)}")
+    monkeypatch.setattr(vg, "analyze", fake_analyze)
+    sid = str(uuid.uuid4())
+
+    async def run():
+        norm = images_mod.normalise(_png(60, 40), "a.png")
+        async with Session() as db:
+            db.add(AnalysisSession(id=sid, title="t", query="q", status=SessionStatus.COMPLETE))
+            parent = SessionImage(session_id=sid, label="Sad dog", filename="a.png", media_type=norm["media_type"], width=norm["width"], height=norm["height"],
+                                  size_bytes=len(norm["data"]), sha256=norm["sha256"], data=norm["data"], keep_list=vg.normalise_keep_list(["First box free", {"type": "present", "value": "a dog"}]))
+            db.add(parent)
+            await db.commit()
+            pid = parent.id
+        async with Session() as db:
+            parent = await db.get(SessionImage, pid)
+        child = await vg.start_remake(sid, parent, change="Name a real local shelter and its phone number", keep_list=None, probe_id=None, proposal=None, mode="fast")
+        await vg.run_remake(child.id)
+        gen = await vg.start_generate(sid, note="a bus-stop poster", keep_list=["First box free"], mode="fast")
+        await vg.run_generate(gen.id)
+        async with Session() as db:
+            return await db.get(SessionImage, child.id), await db.get(SessionImage, gen.id)
+    child, gen = loop.run_until_complete(run())
+
+    # The remake: an edit from the uploaded parent, high quality, the whole poster asked for — and a second attempt that names the miss.
+    assert child.status == "ready", child.error
+    assert child.brief["render"] == "full" and child.brief["render_attempts"] == 2 and child.brief["reference_used"] is True and child.brief["hero_provider"] == "openai"
+    assert calls[0]["ref"] is True and calls[0]["quality"] == "high"
+    p1 = calls[0]["prompt"]
+    assert "Make the next version of the poster provided" in p1 and "Name a real local shelter" in p1
+    assert "NOT an infographic" in p1 and 'HEADLINE (largest): "Give a dog a brighter tomorrow"' in p1 and 'CALL TO ACTION (a clear button or band): "Call Burnley Dogs Home on 01282 000000"' in p1
+    assert 'must appear word for word: "First box free"' in p1 and "MUST SHOW: a dog" in p1
+    assert "The previous attempt got these wrong" in calls[1]["prompt"] and "Frist box free" in calls[1]["prompt"]
+    assert child.check_result["passed"] is True and all(i["how"] == "vision" for i in child.check_result["items"])
+    # A fresh generation: a generation (no reference), one attempt once the check passes.
+    assert gen.status == "ready" and gen.brief["render"] == "full" and gen.brief["render_attempts"] == 1 and gen.brief["reference_used"] is False
+    assert calls[2]["ref"] is False and "print-ready portrait poster" in calls[2]["prompt"]

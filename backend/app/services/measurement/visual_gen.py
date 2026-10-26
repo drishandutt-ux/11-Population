@@ -283,15 +283,24 @@ def provider_name() -> str:
     return p if p in ("openai", "google", "none") else "none"
 
 
-async def _openai_hero(prompt: str) -> bytes:
+async def _openai_render(prompt: str, *, quality: str = "medium", reference: Optional[bytes] = None) -> bytes:
+    """One gpt-image-1 call. With a reference image it is an *edit* (the new poster starts from the
+    old one — its photograph, composition and feel survive), else a generation."""
     import httpx
     st = get_settings()
-    async with httpx.AsyncClient(timeout=120) as client:
-        r = await client.post(
-            "https://api.openai.com/v1/images/generations",
-            headers={"Authorization": f"Bearer {st.openai_api_key}"},
-            json={"model": st.image_model_openai, "prompt": prompt, "n": 1, "size": "1024x1536", "quality": "medium"},
-        )
+    headers = {"Authorization": f"Bearer {st.openai_api_key}"}
+    async with httpx.AsyncClient(timeout=180) as client:
+        if reference:
+            r = await client.post(
+                "https://api.openai.com/v1/images/edits", headers=headers,
+                data={"model": st.image_model_openai, "prompt": prompt, "n": "1", "size": "1024x1536", "quality": quality},
+                files={"image": ("reference.png", reference, "image/png")},
+            )
+        else:
+            r = await client.post(
+                "https://api.openai.com/v1/images/generations", headers=headers,
+                json={"model": st.image_model_openai, "prompt": prompt, "n": 1, "size": "1024x1536", "quality": quality},
+            )
         r.raise_for_status()
         data = r.json()["data"][0]
         if data.get("b64_json"):
@@ -299,6 +308,10 @@ async def _openai_hero(prompt: str) -> bytes:
         img = await client.get(data["url"])
         img.raise_for_status()
         return img.content
+
+
+async def _openai_hero(prompt: str) -> bytes:
+    return await _openai_render(prompt, quality="medium")
 
 
 async def _google_hero(prompt: str) -> bytes:
@@ -375,6 +388,102 @@ async def generate_hero(prompt: str, *, session_id: str, size: tuple[int, int], 
         err = f"{name}: {type(e).__name__}: {str(e)[:200]}"
         print(f"[visual_gen] hero failed, placeholder used — {err}")
         return placeholder_hero(prompt, size, accent), "none", err
+
+
+# ── the whole poster drawn by the provider (full render, 2026-10-26) ──────────
+
+def render_mode() -> str:
+    """"full": the provider draws the whole poster, words included (OpenAI only — Imagen's lettering
+    is not reliable enough); "layered": a hero picture with the words set in type by the system."""
+    st = get_settings()
+    m = (st.image_render or "auto").strip().lower()
+    if m == "auto":
+        return "full" if provider_name() == "openai" else "layered"
+    if m == "full":
+        return "full" if provider_name() == "openai" else "layered"
+    return "layered"
+
+
+def poster_prompt(layout: dict, keep: list[dict], *, change: str = "", edit: bool = False, previous_issues: Optional[list[str]] = None) -> str:
+    """What the image model is asked for when it draws the whole poster: the photograph, the exact
+    words, the palette, the keep-list — and, on a remake from a reference, what to keep and what
+    to change. Never an infographic: that is what came back when the words were the picture."""
+    pal = layout.get("palette") or {}
+    words = []
+    if layout.get("headline"):
+        words.append(f'HEADLINE (largest): "{layout["headline"]}"')
+    if layout.get("subline"):
+        words.append(f'SUB-LINE: "{layout["subline"]}"')
+    for line in layout.get("body_lines") or []:
+        words.append(f'LINE: "{line}"')
+    for line in layout.get("claim_lines") or []:
+        words.append(f'CLAIM (prominent, in the accent colour): "{line}"')
+    if layout.get("cta"):
+        words.append(f'CALL TO ACTION (a clear button or band): "{layout["cta"]}"')
+    if layout.get("small_print"):
+        words.append(f'SMALL PRINT (small, legible, at the foot): "{layout["small_print"]}"')
+    must_show = [k["value"] for k in keep if k["type"] == "present"]
+    must_not = [k["value"] for k in keep if k["type"] == "absent"]
+    exact = [k["value"] for k in keep if k["type"] == "text"]
+    parts = []
+    if edit:
+        parts.append("Make the next version of the poster provided. Keep its photograph, subject, composition, colours and feel — it must read as the same campaign. "
+                     + (f"Make these changes and nothing else: {change}" if change else "Refresh it without changing what it says."))
+    else:
+        parts.append("A finished, print-ready portrait poster (3:4), art-directed like real campaign work.")
+    parts.append("STYLE: a real photograph as the main picture — real people or animals in a real place, natural light, editorial quality. "
+                 "NOT an infographic, NOT a diagram, NOT clip art or icon grids, NOT a stock-vector look, no watermark, no fake logos.")
+    parts.append("THE PICTURE: " + str(layout.get("hero_prompt") or "a photograph that makes the headline true")
+                 + (f" Place the picture at the {layout.get('hero_placement')} with the words beside or below it." if str(layout.get("hero_placement") or "top") in ("top", "left") else ""))
+    if words:
+        parts.append("THE WORDS — render every line below exactly as written, spelled exactly, in this order of prominence, and write NOTHING else on the poster:\n" + "\n".join(words))
+    parts.append(f"TYPOGRAPHY: clean, large, highly legible, strong contrast. COLOURS: background {pal.get('bg') or 'dark'}, text {pal.get('fg') or 'white'}, accent {pal.get('accent') or 'warm orange'}.")
+    if exact:
+        parts.append("These phrases must appear word for word: " + "; ".join(f'"{x}"' for x in exact))
+    if must_show:
+        parts.append("MUST SHOW: " + "; ".join(must_show))
+    if must_not:
+        parts.append("MUST NOT SHOW: " + "; ".join(must_not))
+    if previous_issues:
+        parts.append("The previous attempt got these wrong — fix them, change nothing else: " + "; ".join(previous_issues))
+    return "\n\n".join(parts)
+
+
+async def render_full(layout: dict, keep: list[dict], *, session_id: str, model: str, change: str = "", reference: Optional[bytes] = None) -> Optional[dict]:
+    """The provider draws the whole poster. Normalise → keep-list check by vision (there is no typed
+    layer to check mechanically) → if an exact-text item failed, one more attempt that names the
+    misses; the attempt with fewer failures is kept. None when the provider fails outright, so the
+    caller can fall back to the layered render."""
+    from app.core.monitoring import record_image_call
+    st = get_settings()
+    best = None
+    issues: list[str] = []
+    for attempt in (1, 2):
+        prompt = poster_prompt(layout, keep, change=change, edit=reference is not None, previous_issues=issues or None)
+        started = time.monotonic()
+        try:
+            raw = await _openai_render(prompt, quality=st.image_quality_openai, reference=reference)
+            record_image_call(model=st.image_model_openai, session_id=session_id, label="visual:poster", cost_usd=st.image_cost_openai_full_usd,
+                              elapsed_sec=time.monotonic() - started, status="success")
+        except Exception as e:  # noqa: BLE001
+            record_image_call(model=st.image_model_openai, session_id=session_id, label="visual:poster", cost_usd=0.0,
+                              elapsed_sec=time.monotonic() - started, status="error")
+            print(f"[visual_gen] full render failed on attempt {attempt}: {type(e).__name__}: {str(e)[:200]}")
+            if best:
+                break
+            return None
+        norm = images_mod.normalise(raw, "poster.png")
+        check = await check_image(session_id=session_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"],
+                                  layout=None, keep=keep, model=model, label=str(layout.get("headline") or "poster"))
+        failed = [i for i in check["items"] if not i["ok"]]
+        cand = {"norm": norm, "check": check, "attempts": attempt, "prompt": prompt}
+        if best is None or len(failed) < len([i for i in best["check"]["items"] if not i["ok"]]):
+            best = cand
+        text_misses = [f'"{i["value"]}" ({i["note"]})' for i in failed if i["type"] == "text"]
+        if not text_misses:
+            break
+        issues = [f"the words {m}" for m in text_misses]
+    return best
 
 
 # ── compositing the text layer ────────────────────────────────────────────────
@@ -789,12 +898,25 @@ async def start_remake(session_id: str, parent: SessionImage, *, change: str, ke
     return row
 
 
-async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: Optional[str], rationale_extra: dict, model: str) -> None:
+async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: Optional[str], rationale_extra: dict, model: str,
+                  change: str = "", reference: Optional[bytes] = None) -> None:
     async with _db.AsyncSessionLocal() as db:
         row = await db.get(SessionImage, row_id)
         if not row:
             return
         session_id, keep, brief = row.session_id, normalise_keep_list(row.keep_list), dict(row.brief or {})
+    if render_mode() == "full":
+        full = await render_full(layout, keep, session_id=session_id, model=model, change=change, reference=reference)
+        if full:
+            norm, check = full["norm"], full["check"]
+            brief.update({**rationale_extra, "rationale": layout.get("rationale", ""), "hero_prompt": layout.get("hero_prompt", ""),
+                          "hero_provider": "openai", "hero_error": None, "kept": layout.get("kept") or [],
+                          "render": "full", "render_attempts": full["attempts"], "reference_used": reference is not None, "poster_prompt": full["prompt"][:3000]})
+            await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
+                       sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,
+                       label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
+            return
+        print("[visual_gen] full render unavailable, falling back to the layered render")
     pal = layout.get("palette") or {}
     accent = _hex(pal.get("accent"), (240, 160, 60))
     hero_bytes, provider, err = await generate_hero(str(layout.get("hero_prompt") or ""), session_id=session_id, size=(1024, 1366), accent=accent) \
@@ -804,7 +926,7 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
     check = await check_image(session_id=session_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"],
                               layout=layout, keep=keep, model=model, label=str(layout.get("headline") or "image"))
     brief.update({**rationale_extra, "rationale": layout.get("rationale", ""), "hero_prompt": layout.get("hero_prompt", ""),
-                  "hero_provider": provider, "hero_error": err, "kept": layout.get("kept") or []})
+                  "hero_provider": provider, "hero_error": err, "kept": layout.get("kept") or [], "render": "layered", "reference_used": False})
     await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
                sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,
                label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
@@ -844,6 +966,8 @@ async def run_remake(image_id: str) -> None:
             probe = await db.get(Probe, brief["probe_id"]) if brief.get("probe_id") else None
             parent_layout = parent.layout
             parent_id = parent.id
+            # The parent's picture anchors the remake unless it was a placeholder drawn in code.
+            reference = bytes(parent.data) if (parent.source == "upload" or (parent.brief or {}).get("hero_provider") not in (None, "", "none")) else None
         if not parent_layout:
             async with _db.AsyncSessionLocal() as db:
                 parent = await db.get(SessionImage, parent_id)
@@ -855,7 +979,8 @@ async def run_remake(image_id: str) -> None:
         layout = await write_layout(session_id=session_id, note="", keep=keep, model=model, context=context,
                                     parent_layout=parent_layout, change=change, reactions=_reactions_block(probe))
         await _finish(image_id, layout=layout, hero_provider="", hero_error=None,
-                      rationale_extra={"from": "remake", "parent_id": parent_id, "reactions_probe_id": probe.id if probe else None}, model=model)
+                      rationale_extra={"from": "remake", "parent_id": parent_id, "reactions_probe_id": probe.id if probe else None}, model=model,
+                      change=change, reference=reference)
         print(f"[visual_gen] remade {image_id} from {parent_id}: {str(layout.get('headline'))[:60]}")
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
