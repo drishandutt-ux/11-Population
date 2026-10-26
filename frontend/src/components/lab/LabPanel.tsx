@@ -223,7 +223,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     if (missing.length) { setError(`${missing.map((f) => f.label).join(", ")} required.`); return; }
     // An image stimulus is a list the backend validates; say so here rather than after the round trip.
     const imgField = instrument.inputs.find((f) => f.type === "images");
-    if (imgField && !(Array.isArray(values[imgField.key]) && values[imgField.key].length)) { setError("Add at least one image for them to look at."); return; }
+    if (imgField && !(Array.isArray(values[imgField.key]) && values[imgField.key].length)) { setError("Nothing is in the run yet. Press Show on an image's card to put it in front of the population — the Compare ticks only feed the Compare button."); return; }
     setBusy(true); setError(null);
     try {
       const p = await api.lab.run(sessionId, req);

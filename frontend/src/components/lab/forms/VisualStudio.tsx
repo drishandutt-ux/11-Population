@@ -206,7 +206,7 @@ export default function VisualStudio({ instrument, values, onChange, sessionId =
             )}
             <div className="text-sm font-medium">Visuals</div>
             <p className="text-[11px] text-muted-foreground mt-0.5 max-w-2xl">
-              Upload or generate a poster, a pack, a page, an ad. Show it to the population, compare versions, and remake one from what they said — every version keeps the words that must stay.
+              Upload or generate a poster, a pack, a page, an ad. Two ways to ask: <span className="text-foreground/80">Show</span> one (or a set) and press <span className="text-foreground/80">Run visuals</span> to hear what the population makes of it; tick two or more and press <span className="text-foreground/80">Compare</span> to run the versions against each other. Remake any of them from what they said — every version keeps the words that must stay.
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
@@ -250,7 +250,7 @@ export default function VisualStudio({ instrument, values, onChange, sessionId =
         {/* Compare bar */}
         <div className="rounded-xl border border-border/60 bg-card/30 px-4 py-2.5 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs"><FlaskConical className="w-3.5 h-3.5 text-primary" /> Compare</div>
-          <span className="text-[11px] text-muted-foreground">{compare.length === 0 ? "Tick two to six images." : `${compare.length} ticked: ${compare.map((id) => byId.get(id)?.label || "image").join(" · ")}`}</span>
+          <span className="text-[11px] text-muted-foreground">{compare.length === 0 ? "Tick two to six images to run them against each other (to ask about one on its own, use Show instead)." : `${compare.length} ticked: ${compare.map((id) => byId.get(id)?.label || "image").join(" · ")}`}</span>
           <div className="ml-auto flex items-center gap-2">
             <div className="flex rounded-lg border border-border overflow-hidden">
               {([["choice", "Choose between"], ["within", "Rate each"]] as const).map(([k, l]) => (
@@ -274,7 +274,7 @@ export default function VisualStudio({ instrument, values, onChange, sessionId =
             </div>
             {experiment.error && <p className="text-[11px] text-red-400">{experiment.error}</p>}
             {experiment.results ? <ExperimentPage instrument={instrument} experiment={experiment} />
-              : <p className="text-[11px] text-muted-foreground">The population is looking at the options… the verdict lands here.</p>}
+              : <p className="text-[11px] text-muted-foreground">The population is looking at the options… the verdict lands here, usually within a few minutes. You can keep working meanwhile.</p>}
           </div>
         )}
 
