@@ -72,6 +72,25 @@ _buffer: deque = deque(maxlen=20000)   # thread-safe appends/pops; bounded so a 
 _writer_task: "asyncio.Task | None" = None
 
 
+def record_image_call(*, model: str, session_id, label: str, cost_usd: float, elapsed_sec: float, status: str) -> None:
+    """A generated image in the local ledger (2026-10-26): no tokens, a per-image list price, so the
+    Tokens & cost tab shows what the Visual Lab spent beside the Anthropic calls."""
+    try:
+        _buffer.append({
+            "created_at": datetime.utcnow(),
+            "session_id": session_id or current_session_id.get(),
+            "label": (label or "")[:80],
+            "model": (model or "image")[:80],
+            "input_tokens": 0, "output_tokens": 0, "cache_creation_tokens": 0, "cache_read_tokens": 0, "web_search_requests": 0,
+            "cost_usd": round(float(cost_usd or 0.0), 6),
+            "priced": 1 if cost_usd else 0,
+            "elapsed_sec": round(elapsed_sec, 2),
+            "status": status,
+        })
+    except Exception as e:  # noqa: BLE001 — the ledger never breaks a call
+        print(f"[usage] image ledger entry skipped: {type(e).__name__}: {e}")
+
+
 def _record_local(*, model, resp, session_id, label, elapsed_sec, status) -> None:
     try:
         from app.core.pricing import cost_usd

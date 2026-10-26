@@ -3,6 +3,7 @@ import { Instrument } from "@/lib/api";
 import InstrumentForm from "../InstrumentForm";
 import FormsStudio from "./FormsStudio";
 import JourneyBuilder from "./JourneyBuilder";
+import VisualStudio from "./VisualStudio";
 
 export interface InstrumentFormProps {
   instrument: Instrument;
@@ -25,6 +26,7 @@ export interface InstrumentFormProps {
 const FORMS: Record<string, ComponentType<InstrumentFormProps>> = {
   survey: FormsStudio,
   journey: JourneyBuilder,
+  visual: VisualStudio,
 };
 
 /** How a builder wants the screen while a run is being composed: `side` is the Lab's usual
@@ -32,6 +34,7 @@ const FORMS: Record<string, ComponentType<InstrumentFormProps>> = {
  *  shell's run controls to place itself (the Forms studio). */
 const LAYOUT: Record<string, "side" | "full"> = {
   survey: "full",
+  visual: "full",
 };
 
 export function formFor(key: string): ComponentType<InstrumentFormProps> {

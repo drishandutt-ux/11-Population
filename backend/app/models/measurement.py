@@ -172,8 +172,19 @@ class SessionImage(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str] = mapped_column(String(64), default="")
     source: Mapped[str] = mapped_column(String(16), default="upload")      # upload | generated | remake
-    parent_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, default=None)
+    #: generating | ready | failed — a generated or remade image is a row from the moment it is asked
+    #: for, so the page can show it forming; uploads are born ready.
+    status: Mapped[str] = mapped_column(String(16), default="ready", index=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    parent_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, default=None, index=True)
+    #: Why it looks the way it does: the note, the change asked for, the model's rationale, the hero
+    #: prompt and which provider drew it (steps 2–3).
     brief: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    #: The authored layout the text layer was composited from (generated / remade images), or the
+    #: vision read of an uploaded one (`read_from_image: true`).
+    layout: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    #: The change note a remake was made from.
+    change_note: Mapped[str] = mapped_column(Text, default="")
     keep_list: Mapped[list] = mapped_column(JSON, default=list)
     check_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     data: Mapped[bytes] = mapped_column(LargeBinary)

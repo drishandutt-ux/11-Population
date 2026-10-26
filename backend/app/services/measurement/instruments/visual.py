@@ -236,4 +236,6 @@ INSTRUMENT = register(VisualInstrument(
     stimulus_key=images_mod.IMAGES_KEY,
     question_from="question",
     postprocess=postprocess,
+    # The Visual Lab studio (steps 2-3): the whole Lab tab — the image tree, generate, remake, compare.
+    form="visual",
 ))

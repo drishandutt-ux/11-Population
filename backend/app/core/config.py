@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     #: Sign-in is limited to these email domains when set (comma-separated, e.g. "11-london.com";
     #: 2026-10-20). Empty = any account Supabase lets in. Peers and sharing are always within a domain.
     allowed_email_domains: str = ""
+    #: The Visual Lab's image provider (2026-10-26): "openai" (gpt-image-1), "google" (Imagen) or
+    #: "none" (a placeholder hero drawn in code, the text layer still composited); "auto" picks the
+    #: first with a key. The words on an image are never drawn by the provider — see visual_gen.
+    image_provider: str = "auto"
+    openai_api_key: str = ""
+    google_api_key: str = ""
+    image_model_openai: str = "gpt-image-1"
+    image_model_google: str = "imagen-4.0-generate-001"
+    #: List price per generated image, for the cost ledger (USD).
+    image_cost_openai_usd: float = 0.07
+    image_cost_google_usd: float = 0.04
 
     # Both follow the tier models in app/core/model_policy.py (2026-10-23), not the MODEL_* env vars:
     # an env override is how Opus reached production. The session's tier still has the last word

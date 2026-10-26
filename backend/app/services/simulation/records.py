@@ -253,6 +253,11 @@ def _label_for(instrument: str, spec: dict, agg: dict) -> str:
     if instrument == "journey":
         stages = agg.get("stages") or []
         return f"Where the population drops off on the way to: {str(stages[-1].get('label'))[:60]}" if stages else "Where the population drops off"
+    if instrument == "visual":
+        from app.services.measurement import images as images_mod
+        labels = [r.get("label") or "image" for r in images_mod.refs_in(spec)]
+        shown = ", ".join(labels[:3]) + ("…" if len(labels) > 3 else "")
+        return f"Shown {shown}: works on them" if shown else "Shown an image: works on them"
     q = str(spec.get("question") or "").strip()
     return q[:80] if q else str(instrument).replace("_", " ").title()
 
@@ -333,6 +338,8 @@ def record_from_probe(p: Any, *, evidence_mix: Optional[dict] = None, frame: Opt
                     if instrument == "journey" and (agg.get("amended") or {}).get("available") else {}),
         # The documents the twins drew on, by their own citation (L6-05); filled by the aggregator when it has the answers.
         "sources": list(agg.get("sources_used") or []),
+        # The images the twins were shown (the Visual Lab, 2026-10-26): the report embeds the winner from here.
+        "images": _images_of(spec),
         "refusals": refusals,
         "unanimity": unanimity,
         "weighted": weighted,
@@ -549,6 +556,11 @@ def record_from_commitment(c: dict) -> Optional[dict]:
     }
 
 
+def _images_of(spec: Any) -> list[dict]:
+    from app.services.measurement import images as images_mod
+    return [{"id": r["id"], "label": r.get("label", ""), **({"option": r["option"]} if r.get("option") else {})} for r in images_mod.refs_in(spec if isinstance(spec, dict) else {})]
+
+
 def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame: Optional[dict] = None) -> Optional[dict]:
     """One complete experiment → one record: the best variant's lift on the primary metric.
     A lever run (brief L7-04) is shaped by `record_from_lever`, a behaviour-targeting run
@@ -588,6 +600,9 @@ def record_from_experiment(e: Any, *, evidence_mix: Optional[dict] = None, frame
         "refusals": None,
         "unanimity": None,
         "weighted": None,
+        # The images each arm showed (the Visual Lab): the winning variant's first.
+        "images": [img for v in sorted((getattr(e, "variants", None) or []), key=lambda v: 0 if v.get("key") == best.get("variant") else 1)
+                   for img in [{**r, "option": v.get("key")} for r in _images_of(v.get("spec") or {})]],
         "provenance": {"model": str(getattr(e, "model", "") or ""), "seed": int(getattr(e, "seed", 0) or 0), "design": str(res.get("design") or ""),
                        "arms": res.get("arms") or [], "evidence_mix": evidence_mix or {}, "frame_level": frame_level or "none",
                        "created_at": created.isoformat() if isinstance(created, datetime) else None},
@@ -680,8 +695,10 @@ def records_block(records: list[dict]) -> tuple[str, dict[str, str]]:
         # A record type that is never cut by deprivation (a behaviour ranking, a message test) says
         # so; only a record that tried and found no levels says the population has none.
         eq_line = equity_mod.prompt_line(r["equity"]) if r.get("equity") is not None else "equity: not cut by deprivation for this kind of record (read the gap from the journey record instead)"
+        imgs = r.get("images") or []
+        img_line = ("; shown: " + ", ".join((f"option {i['option']} = " if i.get("option") else "") + (i.get("label") or "an image") for i in imgs[:6])) if imgs else ""
         bars = r.get("barriers") or []
-        bar_line = ("; barriers ranked: " + "; ".join(f"{k}. {b['theme']} ({b['count']} twins, weight {round(float(b.get('weight_mean') or 0))}/100)" for k, b in enumerate(bars[:7], 1))) if bars else ""
+        bar_line = img_line + (("; barriers ranked: " + "; ".join(f"{k}. {b['theme']} ({b['count']} twins, weight {round(float(b.get('weight_mean') or 0))}/100)" for k, b in enumerate(bars[:7], 1))) if bars else "")
         cands = r.get("candidates") or []
         if cands:
             bar_line += "; candidates ranked: " + "; ".join(

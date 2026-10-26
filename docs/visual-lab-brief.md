@@ -1,7 +1,7 @@
 # Visual Lab — build brief
 
 Drafted 2026-10-26 from a conversation with Drishan. Not from Matthew Hunt's brief; Drishan's own item.
-Status: **step 1 built 2026-10-26** (upload, show, compare — Pro view only; blueprint §11a.3). Steps 2 and 3 not started.
+Status: **steps 1–3 built 2026-10-26 on branch `visual-lab`, not deployed** (held until Drishan says go). Step 1 verified in the browser; steps 2–3 pass their tests and generate was verified in the browser; the remake / propose / compare chain in the studio is still to be hand-tested.
 
 ---
 

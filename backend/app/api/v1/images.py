@@ -6,16 +6,20 @@ from `/file` to the signed-in user; the list never carries them.
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthUser, get_current_user, get_owned_session
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.measurement import Experiment, Probe, SessionImage
 from app.services.measurement import images as images_mod
+from app.services.measurement import visual_gen
 
 router = APIRouter(prefix="/sessions", tags=["images"])
 
@@ -23,7 +27,31 @@ MAX_IMAGES_PER_SESSION = 200
 
 
 class RenameRequest(BaseModel):
-    label: str = ""
+    label: Optional[str] = None
+    keep_list: Optional[list[Any]] = None
+
+
+class GenerateRequest(BaseModel):
+    note: str = ""
+    keep_list: list[Any] = []
+    mode: str = "fast"
+
+
+class RemakeRequest(BaseModel):
+    change: str = ""
+    keep_list: Optional[list[Any]] = None       # None = inherit the parent's
+    probe_id: Optional[str] = None              # the Visuals run the change answers (else the latest on the parent)
+    proposal: Optional[dict] = None             # what /propose returned, kept on the brief
+    mode: str = "fast"
+
+
+class ProposeRequest(BaseModel):
+    probe_id: Optional[str] = None
+    mode: str = "fast"
+
+
+class ModeRequest(BaseModel):
+    mode: str = "fast"
 
 
 async def _owned_image(session_id: str, image_id: str, db: AsyncSession) -> SessionImage:
@@ -91,13 +119,93 @@ async def get_image_file(session_id: str, image_id: str, user: AuthUser = Depend
 
 
 @router.patch("/{session_id}/images/{image_id}")
-async def rename_image(session_id: str, image_id: str, body: RenameRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def update_image(session_id: str, image_id: str, body: RenameRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Rename, or set the keep-list (what every remake of this image must honour)."""
     await get_owned_session(session_id, user, db)
     img = await _owned_image(session_id, image_id, db)
-    img.label = (body.label or "").strip()[:200]
+    if body.label is not None:
+        img.label = body.label.strip()[:200]
+    if body.keep_list is not None:
+        img.keep_list = visual_gen.normalise_keep_list(body.keep_list)
     await db.commit()
     await db.refresh(img)
     return images_mod.payload(img)
+
+
+@router.post("/{session_id}/images/generate")
+async def generate_image(session_id: str, body: GenerateRequest, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Make an image from what the session knows plus the analyst's note (the Visual Lab, step 3).
+    Returns the row at once with status `generating`; the page polls the list until it is ready."""
+    await get_owned_session(session_id, user, db)
+    mode = "pro" if body.mode == "pro" else "fast"
+    row = await visual_gen.start_generate(session_id, note=body.note, keep_list=body.keep_list, mode=mode)
+    background_tasks.add_task(visual_gen.run_generate, row.id)
+    return images_mod.payload(row)
+
+
+@router.post("/{session_id}/images/{image_id}/remake")
+async def remake_image(session_id: str, image_id: str, body: RemakeRequest, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """A new version of this image with one change, honouring the keep-list; the parent is kept and
+    the child points at it (step 2). An uploaded parent is first read into a layout."""
+    await get_owned_session(session_id, user, db)
+    parent = await _owned_image(session_id, image_id, db)
+    if (parent.status or "ready") != "ready":
+        raise HTTPException(409, "This image is not ready yet.")
+    if not (body.change or "").strip() and not body.proposal:
+        raise HTTPException(400, "Say what to change.")
+    mode = "pro" if body.mode == "pro" else "fast"
+    change = (body.change or "").strip() or str((body.proposal or {}).get("change") or "")
+    row = await visual_gen.start_remake(session_id, parent, change=change, keep_list=body.keep_list, probe_id=body.probe_id,
+                                        proposal=body.proposal, mode=mode)
+    background_tasks.add_task(visual_gen.run_remake, row.id)
+    return images_mod.payload(row)
+
+
+@router.post("/{session_id}/images/{image_id}/propose")
+async def propose_change(session_id: str, image_id: str, body: ProposeRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The agent reads a Visuals run on this image and proposes the one change (step 3): the change,
+    what to keep, why, and the twins whose words drove it. Nothing is made until /remake is called."""
+    await get_owned_session(session_id, user, db)
+    img = await _owned_image(session_id, image_id, db)
+    probe = None
+    if body.probe_id:
+        probe = await db.get(Probe, body.probe_id)
+        if not probe or probe.session_id != session_id:
+            raise HTTPException(404, "Run not found")
+    else:
+        probe = await visual_gen.latest_visual_probe(session_id, image_id)
+    if not probe:
+        raise HTTPException(409, "Show this image to the population first — there is no Visuals run on it to read.")
+    mode = "pro" if body.mode == "pro" else "fast"
+    try:
+        return await visual_gen.propose_change(row=img, probe=probe, model=get_settings().agent_model(mode))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.post("/{session_id}/images/{image_id}/read")
+async def read_image(session_id: str, image_id: str, body: ModeRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """What the system sees on an uploaded image: its words, exactly, and the picture — stored as the
+    image's layout so a remake starts from what is actually there."""
+    await get_owned_session(session_id, user, db)
+    img = await _owned_image(session_id, image_id, db)
+    layout = await visual_gen.read_image(img, model=get_settings().agent_model("pro" if body.mode == "pro" else "fast"))
+    img.layout = layout
+    await db.commit()
+    return {"layout": layout}
+
+
+@router.post("/{session_id}/images/{image_id}/check")
+async def check_image(session_id: str, image_id: str, body: ModeRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Run (or re-run) the keep-list check on this image and store the result."""
+    await get_owned_session(session_id, user, db)
+    img = await _owned_image(session_id, image_id, db)
+    if (img.status or "ready") != "ready":
+        raise HTTPException(409, "This image is not ready yet.")
+    result = await visual_gen.recheck(img, model=get_settings().agent_model("pro" if body.mode == "pro" else "fast"))
+    img.check_result = result
+    await db.commit()
+    return result
 
 
 @router.delete("/{session_id}/images/{image_id}")
@@ -112,6 +220,9 @@ async def delete_image(session_id: str, image_id: str, user: AuthUser = Depends(
         + sum(1 for vs in experiments if images_mod.referenced_by(vs or [], image_id))
     if used:
         raise HTTPException(409, f"This image is part of {used} run{'s' if used != 1 else ''} in this session. Delete those runs first.")
+    children = (await db.execute(select(SessionImage.id).where(SessionImage.parent_id == image_id))).scalars().all()
+    if children:
+        raise HTTPException(409, f"{len(children)} remake{'s' if len(children) != 1 else ''} came from this image. Delete those first.")
     await db.delete(img)
     await db.commit()
     return {"deleted": image_id}

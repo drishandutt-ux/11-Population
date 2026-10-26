@@ -125,7 +125,9 @@ def payload(img: SessionImage) -> dict:
     return {
         "id": img.id, "session_id": img.session_id, "label": img.label, "filename": img.filename,
         "media_type": img.media_type, "width": img.width, "height": img.height, "size_bytes": img.size_bytes,
-        "source": img.source, "parent_id": img.parent_id, "keep_list": img.keep_list or [],
+        "source": img.source, "status": img.status or "ready", "error": img.error,
+        "parent_id": img.parent_id, "keep_list": img.keep_list or [],
+        "brief": img.brief, "layout": img.layout, "change_note": img.change_note or "", "check_result": img.check_result,
         "tokens_per_showing": tokens_for(img.width, img.height),
         "created_at": img.created_at.isoformat() if img.created_at else None,
     }
@@ -152,8 +154,8 @@ async def for_prompt(session_id: str, spec: dict) -> tuple[list[dict], list[str]
     images, missing = [], []
     for ref in refs:
         row = by_id.get(ref["id"])
-        if not row:
-            missing.append(ref["id"])
+        if not row or (row.status or "ready") != "ready":
+            missing.append(ref["id"])          # gone, still generating, or failed: never show a placeholder
             continue
         images.append({
             "id": row.id,

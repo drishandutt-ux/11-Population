@@ -260,6 +260,23 @@ export const api = {
     },
     rename: (sessionId: string, imageId: string, label: string) =>
       request<SessionImage>(`/sessions/${sessionId}/images/${imageId}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+    setKeepList: (sessionId: string, imageId: string, keep_list: KeepItem[]) =>
+      request<SessionImage>(`/sessions/${sessionId}/images/${imageId}`, { method: "PATCH", body: JSON.stringify({ keep_list }) }),
+    /** Make an image from what the session knows plus a note (step 3). Returns the row generating; poll `list`. */
+    generate: (sessionId: string, body: { note?: string; keep_list?: KeepItem[]; mode?: SimMode }) =>
+      request<SessionImage>(`/sessions/${sessionId}/images/generate`, { method: "POST", body: JSON.stringify(body) }),
+    /** A new version with one change, honouring the keep-list; the child points at its parent (step 2). */
+    remake: (sessionId: string, imageId: string, body: { change: string; keep_list?: KeepItem[] | null; probe_id?: string | null; proposal?: ImageProposal | null; mode?: SimMode }) =>
+      request<SessionImage>(`/sessions/${sessionId}/images/${imageId}/remake`, { method: "POST", body: JSON.stringify(body) }),
+    /** The agent reads a Visuals run on the image and proposes the one change (step 3). 409 with no run on it. */
+    propose: (sessionId: string, imageId: string, body: { probe_id?: string | null; mode?: SimMode } = {}) =>
+      request<ImageProposal>(`/sessions/${sessionId}/images/${imageId}/propose`, { method: "POST", body: JSON.stringify(body) }, 180_000),
+    /** What the system sees on an uploaded image, stored as its layout. */
+    read: (sessionId: string, imageId: string, mode: SimMode = "fast") =>
+      request<{ layout: Record<string, any> }>(`/sessions/${sessionId}/images/${imageId}/read`, { method: "POST", body: JSON.stringify({ mode }) }, 180_000),
+    /** Run (or re-run) the keep-list check. */
+    check: (sessionId: string, imageId: string, mode: SimMode = "fast") =>
+      request<KeepCheck>(`/sessions/${sessionId}/images/${imageId}/check`, { method: "POST", body: JSON.stringify({ mode }) }, 180_000),
     /** 409 while a run in the session names the image. */
     remove: (sessionId: string, imageId: string) => request(`/sessions/${sessionId}/images/${imageId}`, { method: "DELETE" }),
     /** The bytes, fetched with the user's token (an <img src> cannot carry it); see lab/useImageUrl. */
@@ -736,6 +753,8 @@ export type OutcomeRecord = {
   barriers?: BarrierItem[];
   /** The documents the answering twins cited for this record, by their own citation (L6-05), most cited first. */
   sources?: UsedUnit[];
+  /** The images the twins were shown (the Visual Lab): an experiment record lists the winning variant's first. */
+  images?: ImageRef[];
   outcome?: string;
   /** Journey (brief L7-01): the steps, the funnel and the ranked candidate outcomes; empty for every other record. */
   journey?: JourneyStage[];
@@ -1154,12 +1173,32 @@ export type SessionImage = {
   height: number;
   size_bytes: number;
   source: "upload" | "generated" | "remake";
+  /** A generated or remade image is a row from the moment it is asked for. */
+  status: "generating" | "ready" | "failed";
+  error: string | null;
   parent_id: string | null;
-  keep_list: any[];
+  /** What every remake must honour: exact text, things that must show, things that must not. */
+  keep_list: KeepItem[];
+  /** Why it looks the way it does: note / change, rationale, hero prompt, which provider drew the hero. */
+  brief: Record<string, any> | null;
+  /** The authored layout the text layer was set from, or the vision read of an uploaded image. */
+  layout: Record<string, any> | null;
+  change_note: string;
+  check_result: KeepCheck | null;
   /** What one showing of this image adds to a call, in input tokens. */
   tokens_per_showing: number;
   created_at: string | null;
 };
+
+export type KeepItem = { type: "text" | "present" | "absent"; value: string };
+export type KeepCheck = {
+  passed: boolean;
+  items: (KeepItem & { ok: boolean; how: "text" | "vision" | "none"; note: string })[];
+  checked_at: string;
+  model: string;
+};
+/** What the agent proposes after reading a Visuals run on an image (step 3). */
+export type ImageProposal = { change: string; keep: string[]; why: string; cites: string[]; expected: string; probe_id: string };
 
 /** How a spec names the images a twin is shown: `images: ImageRef[]`. `option` is set by the
  *  choose-between design so each picture is captioned with its variant. */

@@ -7,6 +7,7 @@ import {
   FileText, Send, Loader2, Bot, User,
   ChevronDown, ChevronRight, MessageCircle, Download, RefreshCw, X, Quote, Hash, AlertTriangle, GitCompare, Printer, Beaker } from "lucide-react";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+import { ImageStrip } from "@/components/lab/ImagePicker";
 
 interface Message {
   role: "user" | "assistant";
@@ -354,7 +355,7 @@ export default function ReportChat({
           />
         </div>
 
-        {openRecord && <RecordCard record={openRecord.record} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
+        {openRecord && <RecordCard record={openRecord.record} sessionId={sessionId} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
         {openSource && <SourceCard fact={openSource.fact} item={openSource.item} x={openSource.x} y={openSource.y} onClose={() => setOpenSource(null)} />}
         {cited && (
           <TwinTrace
@@ -413,7 +414,7 @@ export default function ReportChat({
         onCiteClick={handleCiteClick}
       />
 
-      {openRecord && <RecordCard record={openRecord.record} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
+      {openRecord && <RecordCard record={openRecord.record} sessionId={sessionId} x={openRecord.x} y={openRecord.y} onClose={() => setOpenRecord(null)} />}
         {openSource && <SourceCard fact={openSource.fact} item={openSource.item} x={openSource.x} y={openSource.y} onClose={() => setOpenSource(null)} />}
       {cited && (
         <TwinTrace
@@ -1772,7 +1773,7 @@ function EquityStrip({ records }: { records: OutcomeRecord[] }) {
   );
 }
 
-function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: number; y: number; onClose: () => void }) {
+function RecordCard({ record: r, sessionId, x, y, onClose }: { record: OutcomeRecord; sessionId: string; x: number; y: number; onClose: () => void }) {
   const left = Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 400);
   const top = Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 800) - 460);
   const splitKeys = Object.keys(r.splits || {}).filter((k) => k !== "deprivation" && (r.splits[k] || []).length >= 2).slice(0, 3);
@@ -1803,6 +1804,12 @@ function RecordCard({ record: r, x, y, onClose }: { record: OutcomeRecord; x: nu
             </div>
           )}
           {r.sentence && <p className="text-[11px] text-foreground/80 leading-snug">{r.sentence}</p>}
+          {(r.images || []).length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1">What the twins were shown{r.kind === "experiment" ? " · the winner first" : ""}</div>
+              <ImageStrip sessionId={sessionId} images={r.images || []} size={72} captions />
+            </div>
+          )}
           {r.weighted && r.weighted.weighted != null && (
             <p className="text-[10px] text-muted-foreground/80"><Term k="weighted">Weighted to the population</Term>: {r.weighted.format === "share" ? `${Math.round((r.weighted.weighted || 0) * 100)}%` : r.weighted.weighted} (<Term k="ess">effective sample {r.weighted.ess.toFixed(1)}</Term>)</p>
           )}

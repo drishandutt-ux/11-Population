@@ -1,4 +1,5 @@
-"""Session images (2026-10-26): the Visual Lab's image store — uploaded now, generated later.
+"""Session images (2026-10-26): the Visual Lab's image store — uploaded, generated and remade images,
+each with its layout, brief, keep-list and check.
 
 Revision ID: 0025_session_images
 Revises: 0024_session_model_tier
@@ -25,14 +26,20 @@ create table if not exists public.session_images (
   size_bytes integer not null default 0,
   sha256 varchar(64) not null default '',
   source varchar(16) not null default 'upload',
+  status varchar(16) not null default 'ready',
+  error text,
   parent_id varchar(36),
   brief json,
+  layout json,
+  change_note text not null default '',
   keep_list json not null default '[]'::json,
   check_result json,
   data bytea not null,
   created_at timestamp not null default now()
 );
 create index if not exists ix_session_images_session_id on public.session_images(session_id);
+create index if not exists ix_session_images_status on public.session_images(status);
+create index if not exists ix_session_images_parent_id on public.session_images(parent_id);
 """
 
 
@@ -41,4 +48,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("drop index if exists public.ix_session_images_parent_id")
+    op.execute("drop index if exists public.ix_session_images_status")
     op.execute("drop table if exists public.session_images")
