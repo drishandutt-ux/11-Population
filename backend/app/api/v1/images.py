@@ -42,11 +42,19 @@ class RemakeRequest(BaseModel):
     keep_list: Optional[list[Any]] = None       # None = inherit the parent's
     probe_id: Optional[str] = None              # the Visuals run the change answers (else the latest on the parent)
     proposal: Optional[dict] = None             # what /propose returned, kept on the brief
+    selected: Optional[list[int]] = None        # which of the proposal's changes to make (indexes); None = all
+    note: str = ""                              # the analyst's own addition to the proposal
     mode: str = "fast"
 
 
 class ProposeRequest(BaseModel):
     probe_id: Optional[str] = None
+    mode: str = "fast"
+
+
+class ProposeNextRequest(BaseModel):
+    probe_id: str
+    base_image_id: Optional[str] = None         # fix the image to build on; else the planner picks
     mode: str = "fast"
 
 
@@ -154,17 +162,43 @@ async def remake_image(session_id: str, image_id: str, body: RemakeRequest, back
     if not (body.change or "").strip() and not body.proposal:
         raise HTTPException(400, "Say what to change.")
     mode = "pro" if body.mode == "pro" else "fast"
-    change = (body.change or "").strip() or str((body.proposal or {}).get("change") or "")
+    change = (body.change or "").strip() or visual_gen.change_text(body.proposal or {}, body.selected, body.note)
+    if not change.strip():
+        raise HTTPException(400, "Pick at least one change to make.")
     row = await visual_gen.start_remake(session_id, parent, change=change, keep_list=body.keep_list, probe_id=body.probe_id,
-                                        proposal=body.proposal, mode=mode)
+                                        proposal=body.proposal, mode=mode, selected=body.selected, note=body.note)
     background_tasks.add_task(visual_gen.run_remake, row.id)
     return images_mod.payload(row)
 
 
+@router.post("/{session_id}/images/propose")
+async def propose_next(session_id: str, body: ProposeNextRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """From a finished Visuals run to the next version (step 4): the agent reads the whole run — what
+    most said, what few said that still matters, the verdict split — and proposes which image to
+    build on, the changes (headline first, then the hard-hitting ones) with who said each and how
+    many, what to keep, and what should move. Nothing is made until /{image_id}/remake is called
+    with the proposal."""
+    await get_owned_session(session_id, user, db)
+    probe = await db.get(Probe, body.probe_id)
+    if not probe or probe.session_id != session_id:
+        raise HTTPException(404, "Run not found")
+    if probe.status != "complete" or not (probe.aggregates or {}).get("n"):
+        raise HTTPException(409, "That run has not finished — there is nothing to read yet.")
+    images = await visual_gen.images_for_probe(session_id, probe)
+    if not images:
+        raise HTTPException(409, "That run did not show any image that is still in the session.")
+    mode = "pro" if body.mode == "pro" else "fast"
+    try:
+        return await visual_gen.propose_next(session_id=session_id, probe=probe, images=images, model=get_settings().agent_model(mode), base_id=body.base_image_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
 @router.post("/{session_id}/images/{image_id}/propose")
 async def propose_change(session_id: str, image_id: str, body: ProposeRequest, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """The agent reads a Visuals run on this image and proposes the one change (step 3): the change,
-    what to keep, why, and the twins whose words drove it. Nothing is made until /remake is called."""
+    """The agent reads a Visuals run on this image and proposes the next version built on it (step 3,
+    now the step-4 planner with the base fixed): the changes, what to keep, why, and the twins whose
+    words drove them. A run that showed this image among others counts. Nothing is made until /remake."""
     await get_owned_session(session_id, user, db)
     img = await _owned_image(session_id, image_id, db)
     probe = None

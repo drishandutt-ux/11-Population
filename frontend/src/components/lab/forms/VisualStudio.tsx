@@ -45,7 +45,7 @@ function buildTree(images: SessionImage[]): Node[] {
   return roots.sort(newest).map(node);
 }
 
-export default function VisualStudio({ instrument, values, onChange, sessionId = "", controls, aside, onBack }: InstrumentFormProps) {
+export default function VisualStudio({ instrument, values, onChange, sessionId = "", context, controls, aside, onBack }: InstrumentFormProps) {
   const [images, setImages] = useState<SessionImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +90,12 @@ export default function VisualStudio({ instrument, values, onChange, sessionId =
     return () => clearInterval(t);
   }, [load, forming]);
 
+  // Arriving from a results page with two images to compare (step 4): tick them once.
+  const seedCompare = (context?.compare || []).join(",");
+  useEffect(() => {
+    if (seedCompare) setCompare(seedCompare.split(",").filter(Boolean).slice(0, 6));
+  }, [seedCompare]);
+
   // Poll a running comparison until the verdict lands.
   useEffect(() => {
     if (!experiment || !(experiment.status === "queued" || experiment.status === "running")) return;
@@ -104,7 +110,8 @@ export default function VisualStudio({ instrument, values, onChange, sessionId =
     const out = new Map<string, Probe[]>();
     for (const p of probes) {
       const refs: ImageRef[] = Array.isArray(p.spec?.images) ? p.spec.images : [];
-      if (refs.length === 1 && !p.experiment_id) out.set(refs[0].id, [...(out.get(refs[0].id) || []), p]);
+      // A run that showed several images as one piece still read each of them (step 4 reads it too).
+      if (!p.experiment_id) for (const ref of refs) out.set(ref.id, [...(out.get(ref.id) || []), p]);
     }
     for (const [k, v] of out) out.set(k, v.sort((a, b) => ((a.created_at || "") < (b.created_at || "") ? 1 : -1)));
     return out;

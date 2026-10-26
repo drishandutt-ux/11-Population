@@ -112,8 +112,23 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     });
   }
 
+  // A results page can open a tool with inputs prefilled (step 4 of the Visual Lab hands a new
+  // version straight to Show or Compare). `studioSeed` carries what is not an input: Compare ticks.
+  const [studioSeed, setStudioSeed] = useState<{ compare?: string[] }>({});
+  const openTool = useCallback((key: string, seed?: { values?: Record<string, any>; compare?: string[] }) => {
+    const inst = instruments.find((i) => i.key === key);
+    if (!inst) return;
+    setInstrumentKey(key);
+    setValues({ ...initialValues(inst, { session_query: sessionQuery }), ...(seed?.values || {}) });
+    setStudioSeed(seed?.compare?.length ? { compare: seed.compare } : {});
+    setSelected(null);
+    setShowForm(true);
+    setError(null);
+  }, [instruments, sessionQuery]);
+
   // Choosing a tool resets to that tool's own declared inputs, prefilled from the session.
   function chooseInstrument(inst: Instrument) {
+    setStudioSeed({});
     setInstrumentKey(inst.key);
     setValues(initialValues(inst, { session_query: sessionQuery }));
     setSelected(null);
@@ -374,7 +389,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
     .filter((p) => !p.experiment_id && p.instrument === instrument.key)
     .sort((x, y) => ((x.created_at || "") < (y.created_at || "") ? 1 : (x.created_at || "") > (y.created_at || "") ? -1 : 0));
   const runTitle = (p: Probe) => ((p.spec as any)?.amendments ? "amended" : "");
-  const formContext = { pastOutcomes: probes.filter((p) => p.instrument === instrument.key && !p.experiment_id).map((p) => { const st = (p.aggregates as any)?.stages; return Array.isArray(st) && st.length ? String(st[st.length - 1]?.label || "") : ""; }).filter(Boolean) };
+  const formContext = { pastOutcomes: probes.filter((p) => p.instrument === instrument.key && !p.experiment_id).map((p) => { const st = (p.aggregates as any)?.stages; return Array.isArray(st) && st.length ? String(st[st.length - 1]?.label || "") : ""; }).filter(Boolean), compare: studioSeed.compare };
   const backToTools = () => { setInstrumentKey(""); setSelected(null); };
   // A builder may ask for the whole tab while a run is composed (`full`); the shell then hands
   // it the run controls and the tool's past runs to place itself. Results always render here.
@@ -677,7 +692,7 @@ export default function LabPanel({ sessionId, sessionQuery, agents, liveAnswers,
             {/* The tool's own results page. */}
             {selected.aggregates && selected.aggregates.n > 0 && (
               <>
-                <Page instrument={instrument} probe={selected} dynamicDials={dynamicDials} agentsById={agentsById} />
+                <Page instrument={instrument} probe={selected} dynamicDials={dynamicDials} agentsById={agentsById} onOpenTool={openTool} />
                 <p className="text-[10px] text-muted-foreground/70">
                   {selected.answer_count} answered
                   {selected.failed_count ? `, ${selected.failed_count} failed and are excluded from every number above` : ""}

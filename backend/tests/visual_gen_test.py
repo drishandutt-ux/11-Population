@@ -156,9 +156,18 @@ def _fake_layout(headline="Dinner, sorted.", claims=None, change_seen=None):
             return {**LAYOUT, "headline": headline, "claim_lines": list(claims or [])}
         if "items" in props:                                                 # check
             return {"items": [{"index": str(k + 1), "ok": True, "note": "seen"} for k in range(6)]}
-        if "change" in props:                                                # propose
-            return {"change": "Make the price the headline", "keep": ["the family photo"], "why": "most who said no were put off by small print",
-                    "cites": ["Anouk Park"], "expected": "the price-led segment moves"}
+        if "changes" in props and "base_image_id" in props:                 # propose (the next-version planner)
+            base = ""
+            for line in user.splitlines():                                  # the planner copies an id from the images block
+                if line.startswith("BUILD ON IMAGE id "):
+                    base = line.split("BUILD ON IMAGE id ", 1)[1].split(" ")[0]
+            if not base:
+                ids = [seg.split(")")[0] for seg in user.split("(id ")[1:]]
+                base = ids[-1] if ids else ""                                # with a free choice, the fake picks the last image shown
+            return {"base_image_id": base, "base_why": "it is the one the room warmed to",
+                    "changes": [{"change": "Make the price the headline", "basis": "most said", "share": "1 of 1 who named a change", "why": "most who said no were put off by small print", "cites": ["Anouk Park"]},
+                                {"change": "Name a local shelter and a phone number", "basis": "few said, hard-hitting", "share": "said once, by someone it did not work on", "why": "without it there is nowhere to send anyone", "cites": ["Anouk Park"]}],
+                    "keep": ["the family photo"], "expected": "the price-led segment moves"}
         raise AssertionError(f"unexpected schema {list(props)}")
     return fake_analyze
 
@@ -276,3 +285,65 @@ def test_image_generation_api_round_trip(api_client, monkeypatch):
     assert client.delete(f"/api/v1/sessions/{sid}/images/{child['id']}").status_code == 200
     # A re-check stores a fresh result.
     assert client.post(f"/api/v1/sessions/{sid}/images/{gen['id']}/check", json={}).json()["passed"] is True
+
+
+# ── step 4: from a finished run to the next version ───────────────────────────
+
+def test_next_version_reads_a_joint_run_picks_the_base_and_remakes_from_the_chosen_changes(api_client, monkeypatch):
+    client, Session = api_client
+    seen: list[str] = []
+    monkeypatch.setattr(vg, "analyze", _fake_layout(change_seen=seen))
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "image_provider", "none")
+    sid = client.post("/api/v1/sessions", json={"title": "Posters", "query": "Which poster lands?", "auto_research": False}).json()["id"]
+    a = client.post(f"/api/v1/sessions/{sid}/images", files={"file": ("a.png", _png(60, 40), "image/png")}, data={"label": "Sad dog"}).json()
+    b_ = client.post(f"/api/v1/sessions/{sid}/images", files={"file": ("b.png", _png(60, 40), "image/png")}, data={"label": "Happy dog"}).json()
+
+    async def seed():
+        async with Session() as db:
+            p = Probe(session_id=sid, instrument="visual", schema_id="visual.v1", status="complete", model="m", seed=1, agent_count=3, answer_count=3,
+                      spec={"images": [{"id": a["id"], "label": "Sad dog"}, {"id": b_["id"], "label": "Happy dog"}], "question": "Would you share this?"},
+                      aggregates={"n": 3, "sentence": "24% say it works", "verdict": [{"value": "mixed", "count": 2}, {"value": "no", "count": 1}],
+                                  "put_off": [{"value": "Missing shelter details", "count": 2}], "noticed": [{"value": "Happy dog", "count": 3}],
+                                  "changes": [{"name": "Anouk Park", "verdict": "no", "change_one": "add a local shelter name"},
+                                              {"name": "Ray Timmins", "verdict": "mixed", "change_one": "swap the stock dog for a real one"}],
+                                  "verbatims": {"no": [{"name": "Anouk Park", "reasoning": "Nowhere to send anyone.", "put_off": "no shelter named"}], "mixed": [], "yes": []}})
+            db.add(p)
+            await db.commit()
+            return p.id
+    pid = asyncio.run(seed())
+
+    # A run that has not finished, or a run id from nowhere, is refused.
+    assert client.post(f"/api/v1/sessions/{sid}/images/propose", json={"probe_id": str(uuid.uuid4())}).status_code == 404
+
+    # The planner reads the whole run, picks the base (the fake picks the last image shown) and proposes two changes.
+    r = client.post(f"/api/v1/sessions/{sid}/images/propose", json={"probe_id": pid})
+    assert r.status_code == 200, r.text
+    prop = r.json()
+    assert prop["base_image_id"] == b_["id"] and prop["base_label"] == "Happy dog" and prop["probe_id"] == pid
+    assert [c["basis"] for c in prop["changes"]] == ["most said", "few said, hard-hitting"]
+    assert prop["change"] == "Make the price the headline" and prop["cites"] == ["Anouk Park"]
+    # The analyst can fix the base; an image outside the run is refused.
+    assert client.post(f"/api/v1/sessions/{sid}/images/propose", json={"probe_id": pid, "base_image_id": a["id"]}).json()["base_image_id"] == a["id"]
+    assert client.post(f"/api/v1/sessions/{sid}/images/propose", json={"probe_id": pid, "base_image_id": str(uuid.uuid4())}).status_code == 409
+    # The per-image call still works after a run that showed the image among others, with the base fixed to it.
+    one = client.post(f"/api/v1/sessions/{sid}/images/{a['id']}/propose", json={})
+    assert one.status_code == 200, one.text
+    assert one.json()["base_image_id"] == a["id"]
+
+    # Make it: only the second change ticked, plus a note → the change note carries exactly that, and the run's reactions reach the layout call.
+    r = client.post(f"/api/v1/sessions/{sid}/images/{b_['id']}/remake", json={"proposal": prop, "selected": [1], "note": "keep it to one page", "probe_id": pid,
+                                                                             "keep_list": [{"type": "present", "value": "the happy dog"}]})
+    assert r.status_code == 200, r.text
+    child = next(i for i in client.get(f"/api/v1/sessions/{sid}/images").json()["images"] if i["id"] == r.json()["id"])
+    assert child["status"] == "ready" and child["parent_id"] == b_["id"]
+    assert child["change_note"] == "Name a local shelter and a phone number\nAlso: keep it to one page"
+    assert child["brief"]["proposal"]["changes"][1]["basis"] == "few said, hard-hitting"
+    assert child["brief"]["selected"] == [1] and child["brief"]["note"] == "keep it to one page"
+    assert child["keep_list"] == [{"type": "present", "value": "the happy dog"}]
+    layout_prompt = next(u for u in seen if "THE CHANGE TO MAKE" in u)
+    assert "Name a local shelter" in layout_prompt and "Missing shelter details" in layout_prompt and "Ray Timmins" not in layout_prompt or "Anouk Park" in layout_prompt
+    # Nothing ticked and no change typed → refused.
+    assert client.post(f"/api/v1/sessions/{sid}/images/{b_['id']}/remake", json={"proposal": prop, "selected": []}).status_code == 400
+    # Both changes → numbered.
+    assert vg.change_text(prop) == "1) Make the price the headline\n2) Name a local shelter and a phone number"

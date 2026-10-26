@@ -111,9 +111,13 @@ New:
 
 - **Step 1 — Upload, Show, Compare. Built 2026-10-26.** No generation yet. Image store, vision probe, A/B with image
   variants, the Visuals page as a flat list. Already useful: test existing creative on the population.
-- **Step 2 — Keep-list and Remake with user-typed change.** Generation behind one provider, authored text
+- **Step 2 — Keep-list and Remake with user-typed change. Built 2026-10-26.** Generation behind one provider, authored text
   layer, the check, parent links, the tree view.
-- **Step 3 — Generate from the session and agent-proposed Remake.** The brief writer, the remake planner,
+- **Step 3 — Generate from the session and agent-proposed Remake. Built 2026-10-26.** The brief writer, the remake planner,
   the report citation and embedded image.
+- **Step 4 — From the run to the next version. Built 2026-10-26.** Drishan's gap after the first prod run: the results page
+  had no way on. A *Next version* panel reads the whole run, proposes the changes in order (what most said, then what few
+  said that is still hard-hitting), lets the user tick, edit and add, makes the new version, and offers *Show it* and
+  *Compare it with the original* straight away.
 
 Each step is hand-testable on its own before the next starts.

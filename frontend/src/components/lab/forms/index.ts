@@ -12,7 +12,7 @@ export interface InstrumentFormProps {
   /** The session the tool runs in — a builder that asks the backend to propose its inputs needs it. */
   sessionId?: string;
   /** What this tool has been run on before in the session, so a builder can warn when a new run would not compare. */
-  context?: { pastOutcomes?: string[] };
+  context?: { pastOutcomes?: string[]; /** Visuals studio: images to arrive with ticked for Compare (step 4's "Compare it with the original"). */ compare?: string[] };
   /** Full-width builders only: the shell's run controls (who answers, model, estimate, Run) to place where the builder wants them. */
   controls?: ReactNode;
   /** Full-width builders only: the shell's list of this tool's past runs. */

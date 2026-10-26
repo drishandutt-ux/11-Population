@@ -10,4 +10,8 @@ export interface InstrumentPageProps {
   dynamicDials?: DynamicDial[];
   /** The roster by id, so an answer can carry its twin's confidence score (brief L3-05). */
   agentsById?: Record<string, Agent>;
+  /** Open another tool (or this one afresh) from a results page, with inputs prefilled and, for the
+   *  Visuals studio, images pre-ticked for Compare — how "Show it to the population" and "Compare it
+   *  with the original" hand a new version straight back into the loop (the Visual Lab, step 4). */
+  onOpenTool?: (key: string, seed?: { values?: Record<string, any>; compare?: string[] }) => void;
 }

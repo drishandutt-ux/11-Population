@@ -10,12 +10,13 @@ import { ImageRef } from "@/lib/api";
 import { CategoryBars, MeanStat, SegmentTable, ShareBar, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import { ImageHero } from "../ImagePicker";
+import NextVersion from "../NextVersion";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { InstrumentPageProps } from "./types";
 
 const VERDICT_LABEL: Record<string, string> = { yes: "Works on them", mixed: "Torn", no: "Does not work" };
 
-export default function VisualPage({ probe, dynamicDials = [], agentsById = {} }: InstrumentPageProps) {
+export default function VisualPage({ probe, dynamicDials = [], agentsById = {}, onOpenTool }: InstrumentPageProps) {
   const a: any = probe.aggregates;
   const images: ImageRef[] = Array.isArray(probe.spec?.images) ? probe.spec.images : [];
   const setting = typeof probe.spec?.setting === "string" ? probe.spec.setting : "";
@@ -41,6 +42,8 @@ export default function VisualPage({ probe, dynamicDials = [], agentsById = {} }
               <p className="text-xs text-foreground/70 mt-3 leading-relaxed">{a.sentence}</p>
             </div>
           )}
+
+          {probe.status === "complete" && images.length > 0 && <NextVersion probe={probe} onOpenTool={onOpenTool} />}
 
           <div className="grid grid-cols-3 gap-2">
             {a.open_to && (

@@ -266,11 +266,15 @@ export const api = {
     generate: (sessionId: string, body: { note?: string; keep_list?: KeepItem[]; mode?: SimMode }) =>
       request<SessionImage>(`/sessions/${sessionId}/images/generate`, { method: "POST", body: JSON.stringify(body) }),
     /** A new version with one change, honouring the keep-list; the child points at its parent (step 2). */
-    remake: (sessionId: string, imageId: string, body: { change: string; keep_list?: KeepItem[] | null; probe_id?: string | null; proposal?: ImageProposal | null; mode?: SimMode }) =>
+    remake: (sessionId: string, imageId: string, body: { change: string; keep_list?: KeepItem[] | null; probe_id?: string | null; proposal?: ImageProposal | null; selected?: number[]; note?: string; mode?: SimMode }) =>
       request<SessionImage>(`/sessions/${sessionId}/images/${imageId}/remake`, { method: "POST", body: JSON.stringify(body) }),
-    /** The agent reads a Visuals run on the image and proposes the one change (step 3). 409 with no run on it. */
+    /** The agent reads a Visuals run on the image and proposes the next version built on it (step 3). 409 with no run on it. */
     propose: (sessionId: string, imageId: string, body: { probe_id?: string | null; mode?: SimMode } = {}) =>
       request<ImageProposal>(`/sessions/${sessionId}/images/${imageId}/propose`, { method: "POST", body: JSON.stringify(body) }, 180_000),
+    /** Step 4: from a finished Visuals run to the next version — the agent reads the whole run, picks the base (or takes the one given),
+     *  proposes the changes (what most said first, then the hard-hitting ones few said) with who said each, what to keep, what should move. */
+    proposeNext: (sessionId: string, body: { probe_id: string; base_image_id?: string | null; mode?: SimMode }) =>
+      request<ImageProposal>(`/sessions/${sessionId}/images/propose`, { method: "POST", body: JSON.stringify(body) }, 180_000),
     /** What the system sees on an uploaded image, stored as its layout. */
     read: (sessionId: string, imageId: string, mode: SimMode = "fast") =>
       request<{ layout: Record<string, any> }>(`/sessions/${sessionId}/images/${imageId}/read`, { method: "POST", body: JSON.stringify({ mode }) }, 180_000),
@@ -1197,8 +1201,15 @@ export type KeepCheck = {
   checked_at: string;
   model: string;
 };
-/** What the agent proposes after reading a Visuals run on an image (step 3). */
-export type ImageProposal = { change: string; keep: string[]; why: string; cites: string[]; expected: string; probe_id: string };
+/** One change the planner proposes for the next version (step 4): what to do, on what basis, how many said it, who. */
+export type ProposedChange = { change: string; basis: "most said" | "few said, hard-hitting" | "from the numbers"; share: string; why: string; cites: string[] };
+/** What the agent proposes after reading a Visuals run (steps 3–4): which image to build on, the changes (headline first),
+ *  what to keep, what should move. `change` / `why` / `cites` repeat the first change for anything that reads the step-3 shape. */
+export type ImageProposal = {
+  probe_id: string; base_image_id: string; base_label: string; base_why: string;
+  changes: ProposedChange[]; keep: string[]; expected: string;
+  change: string; why: string; cites: string[];
+};
 
 /** How a spec names the images a twin is shown: `images: ImageRef[]`. `option` is set by the
  *  choose-between design so each picture is captioned with its variant. */

@@ -153,7 +153,7 @@ def enforce_keep_list(layout: dict, keep: list[dict]) -> dict:
     return layout
 
 
-def _reactions_block(probe: Optional[Probe]) -> str:
+def _reactions_block(probe: Optional[Probe], *, full: bool = False) -> str:
     """What the twins said about the parent image, from a Visuals run: the headline, what put them
     off, the one change each would make, and the words of those it did not work on."""
     if not probe:
@@ -162,6 +162,8 @@ def _reactions_block(probe: Optional[Probe]) -> str:
     if not agg.get("n"):
         return ""
     lines = ["WHAT THE AUDIENCE SAID ABOUT THE PREVIOUS VERSION (a Visuals run, " + str(agg.get("n")) + " twins):", str(agg.get("sentence") or "")]
+    if full and agg.get("verdict"):
+        lines.append("Verdict split: " + "; ".join(f"{v.get('value')} {v.get('count')}" for v in agg.get("verdict") or []))
     put_off = agg.get("put_off") or []
     if put_off:
         lines.append("What put them off: " + "; ".join(f"{p.get('value')} ({p.get('count')})" for p in put_off[:6]))
@@ -170,10 +172,10 @@ def _reactions_block(probe: Optional[Probe]) -> str:
         lines.append("What they noticed first: " + "; ".join(f"{p.get('value')} ({p.get('count')})" for p in noticed[:5]))
     changes = agg.get("changes") or []
     if changes:
-        lines.append("The one thing each would change:\n- " + "\n- ".join(f"{c.get('name')} ({c.get('verdict')}): {c.get('change_one')}" for c in changes[:10]))
+        lines.append("The one thing each would change:\n- " + "\n- ".join(f"{c.get('name')} ({c.get('verdict')}): {c.get('change_one')}" for c in changes[:(24 if full else 10)]))
     verbs = agg.get("verbatims") or {}
-    for bucket in ("no", "mixed"):
-        for v in (verbs.get(bucket) or [])[:3]:
+    for bucket in (("no", "mixed", "yes") if full else ("no", "mixed")):
+        for v in (verbs.get(bucket) or [])[:(4 if full else 3)]:
             lines.append(f"- {v.get('name')} ({bucket}): \"{clip(v.get('reasoning', ''), 220)}\"" + (f" — put off by: {v.get('put_off')}" if v.get("put_off") else ""))
     return "\n".join(x for x in lines if x)
 
@@ -584,50 +586,162 @@ async def check_image(*, session_id: str, data: bytes, media_type: str, width: i
 
 # ── proposing a change from a Visuals run (step 3) ────────────────────────────
 
-PROPOSE_SCHEMA = obj({
-    "change": s("The one change to make, in one or two sentences a designer could act on"),
-    "keep": arr(s("Something that is working and must stay"), "What to keep, from what the audience responded to", max_items=5),
-    "why": s("2-4 sentences: which reactions drove this, in plain words"),
-    "cites": arr(s("A twin's name whose reaction this rests on"), "The twins whose words drove the change", max_items=6),
-    "expected": s("What should move if the change works, in one sentence — the audience it is aimed at and what it gives up elsewhere, if anything"),
-})
+# ── from the reactions to the next version (step 4, 2026-10-26) ───────────────
 
-PROPOSE_SYSTEM = (
-    "You are a planner reading an audience's reactions to one image and proposing the single most useful change. "
-    "Read what put people off, what they noticed first, the one thing each would change and the words of those it did "
-    "not work on. Propose ONE change that answers the most common or most damaging reaction, name what to keep, and say "
-    "plainly who said what. Never propose removing anything on the keep-list. Record the answer with the tool."
+NEXT_BASES = ("most said", "few said, hard-hitting", "from the numbers")
+
+NEXT_SCHEMA = obj({
+    "base_image_id": s("The id of the image to build the next version on, copied exactly from THE IMAGES THEY SAW — the one closer to working, or the one the reactions point at"),
+    "base_why": s("One sentence: why build on that one"),
+    "changes": arr(obj({
+        "change": s("The change, in one or two sentences a designer could act on"),
+        "basis": enum(list(NEXT_BASES), "'most said' when it answers what the largest group asked for; 'few said, hard-hitting' when few raised it but it is the objection that would sink the piece or the gain that would carry it; 'from the numbers' when it comes from the verdict, strength or feeling split rather than anyone's words"),
+        "share": s("How many said it, in plain words — '17 of 24 who named a change', 'three of the people it did not work on', 'said once'"),
+        "why": s("One or two sentences: the reaction this answers and why it matters even if few said it"),
+        "cites": arr(s("A twin's name, as given"), "Who said it", max_items=6),
+    }, required=["change", "basis", "share", "why", "cites"]),
+        "The changes for the next version: the headline change first — what most people asked for — then up to three more that are relevant and hard-hitting even when few said them. Never more than four; never two that say the same thing.", max_items=4),
+    "keep": arr(s("Something that is working and must stay, in a few words"), "What the audience responded to and the next version must keep", max_items=5),
+    "expected": s("One sentence: what should move if these changes work, for whom, and what it risks elsewhere"),
+}, required=["base_image_id", "changes", "keep", "expected"])
+
+NEXT_SYSTEM = (
+    "You are a creative director reading an audience's reactions to an image (or to several shown together as one piece) "
+    "and deciding the next version. Read it all: what put people off and how many, where their eyes went first, the one "
+    "thing each would change, the words of those it did not work on, and the verdict split. Then propose the changes for "
+    "the next version: FIRST what most people asked for, THEN up to three more that are relevant and hard-hitting even if "
+    "only a few said them — the objection that would sink the piece with the audience it is for, the missing thing that "
+    "would make it actionable, the gain that would carry it. Weigh who said it, not only how many: a deciding objection from "
+    "the people it did not work on outranks a nicety from those it already works on. Each change must be concrete enough "
+    "for a designer to act on and must say in plain words how many said it and who. Name what is working and must stay. "
+    "Never propose removing anything on a keep-list. When several images were shown, pick the one to build on and say why. "
+    "Record the proposal with the tool."
 )
 
 
-async def propose_change(*, row: SessionImage, probe: Probe, model: str) -> dict:
-    reactions = _reactions_block(probe)
+def _images_block(images: list[SessionImage], *, together: bool) -> str:
+    lines = ["THE IMAGES THEY SAW TOGETHER AS ONE PIECE:" if together else "THE IMAGE THEY SAW:"]
+    for k, img in enumerate(images, 1):
+        lines.append(f"{k}. \"{img.label or img.filename or 'image'}\" (id {img.id})")
+        layout = img.layout or {}
+        words = [str(layout.get(f)) for f in ("headline", "subline", "cta") if layout.get(f)] + [str(x) for x in (layout.get("claim_lines") or [])]
+        if words:
+            lines.append("   words on it: " + " / ".join(words)[:400])
+        keep = normalise_keep_list(img.keep_list)
+        if keep:
+            lines.append("   keep-list: " + "; ".join(f"{item['type']}: {item['value']}" for item in keep))
+    return "\n".join(lines)
+
+
+async def propose_next(*, session_id: str, probe: Probe, images: list[SessionImage], model: str, base_id: Optional[str] = None) -> dict:
+    """Read a whole Visuals run and propose the next version: which image to build on, the headline
+    change (what most said), the hard-hitting changes few said, what to keep, and what should move.
+    Nothing is made here — the proposal goes to /remake as `proposal`."""
+    reactions = _reactions_block(probe, full=True)
     if not reactions:
         raise ValueError("That run has no answers to read.")
-    keep = normalise_keep_list(row.keep_list)
-    layout = row.layout or {}
-    blocks = [reactions]
-    if layout:
-        blocks.append("THE IMAGE'S LAYOUT:\n" + "\n".join(f"{k}: {layout.get(k)}" for k in ("headline", "subline", "body_lines", "claim_lines", "cta") if layout.get(k)))
-    blocks.append(_keep_block(keep))
-    blocks.append("Propose the one change with the tool.")
-    out = await analyze(PROPOSE_SCHEMA, PROPOSE_SYSTEM, "\n\n".join(blocks), session_id=row.session_id, label="visual:propose", model=model, max_tokens=900)
-    out["probe_id"] = probe.id
-    return out
+    if not images:
+        raise ValueError("That run's images are gone.")
+    ids = [i.id for i in images]
+    if base_id and base_id not in ids:
+        raise ValueError("That image was not in the run.")
+    blocks = [_images_block(images, together=len(images) > 1)]
+    q = str((probe.spec or {}).get("question") or "").strip()
+    if q:
+        blocks.append(f"THE QUESTION THEY WERE ASKED: {q}")
+    blocks.append(reactions)
+    if base_id:
+        blocks.append(f"BUILD ON IMAGE id {base_id} — the analyst has fixed the base; copy that id.")
+    elif len(images) == 1:
+        blocks.append(f"BUILD ON IMAGE id {ids[0]} — it is the only one; copy that id.")
+    blocks.append("Propose the next version with the tool.")
+    out = await analyze(NEXT_SCHEMA, NEXT_SYSTEM, "\n\n".join(blocks), session_id=session_id, label="visual:propose", model=model, max_tokens=1600)
+    picked = str(out.get("base_image_id") or "").strip()
+    base = base_id or (picked if picked in ids else ids[0])
+    changes = []
+    for c in (out.get("changes") or [])[:4]:
+        if not isinstance(c, dict) or not str(c.get("change") or "").strip():
+            continue
+        changes.append({
+            "change": str(c.get("change")).strip(),
+            "basis": c.get("basis") if c.get("basis") in NEXT_BASES else "most said",
+            "share": str(c.get("share") or "").strip(),
+            "why": str(c.get("why") or "").strip(),
+            "cites": [str(x).strip() for x in (c.get("cites") or []) if str(x).strip()][:6],
+        })
+    if not changes:
+        raise ValueError("The planner proposed no change.")
+    base_img = next(i for i in images if i.id == base)
+    cites: list[str] = []
+    for c in changes:
+        for n in c["cites"]:
+            if n not in cites:
+                cites.append(n)
+    return {
+        "probe_id": probe.id,
+        "base_image_id": base,
+        "base_label": base_img.label or base_img.filename or "image",
+        "base_why": str(out.get("base_why") or "").strip(),
+        "changes": changes,
+        "keep": [str(k).strip() for k in (out.get("keep") or []) if str(k).strip()][:5],
+        "expected": str(out.get("expected") or "").strip(),
+        # The first change on its own, for anything that still reads the step-3 shape.
+        "change": changes[0]["change"],
+        "why": changes[0]["why"],
+        "cites": cites,
+    }
+
+
+def change_text(proposal: dict, selected: Optional[list[int]] = None, note: str = "") -> str:
+    """The change note a remake gets from a proposal: the chosen changes, numbered when there are
+    several, plus the analyst's own note."""
+    items = [c for c in (proposal.get("changes") or []) if isinstance(c, dict) and str(c.get("change") or "").strip()]
+    if selected is not None:
+        items = [c for k, c in enumerate(items) if k in selected]
+    if not items and not proposal.get("changes") and str(proposal.get("change") or "").strip():
+        items = [{"change": proposal["change"]}]                             # the step-3 shape: one change
+    lines = [f"{k}) {str(c['change']).strip()}" for k, c in enumerate(items, 1)] if len(items) > 1 else [str(c["change"]).strip() for c in items]
+    if (note or "").strip():
+        lines.append(f"Also: {note.strip()}")
+    return "\n".join(lines)
+
+
+async def images_for_probe(session_id: str, probe: Probe) -> list[SessionImage]:
+    """The image rows a run showed, in the order the spec names them (missing ones skipped)."""
+    refs = images_mod.refs_in(probe.spec or {})
+    if not refs:
+        return []
+    async with _db.AsyncSessionLocal() as db:
+        rows = (await db.execute(select(SessionImage).where(SessionImage.session_id == session_id, SessionImage.id.in_([r["id"] for r in refs])))).scalars().all()
+    by_id = {r.id: r for r in rows}
+    return [by_id[r["id"]] for r in refs if r["id"] in by_id]
+
+
+async def propose_change(*, row: SessionImage, probe: Probe, model: str) -> dict:
+    """Step 3's per-image call: the same planner with the base fixed to this image."""
+    images = await images_for_probe(row.session_id, probe)
+    if not any(i.id == row.id for i in images):
+        images = [row] + images
+    return await propose_next(session_id=row.session_id, probe=probe, images=images, model=model, base_id=row.id)
 
 
 async def latest_visual_probe(session_id: str, image_id: str) -> Optional[Probe]:
-    """The newest complete Visuals run that showed this image on its own."""
+    """The newest complete Visuals run that showed this image — on its own if there is one, else
+    among others (a run that showed two posters as one piece still read this one)."""
     async with _db.AsyncSessionLocal() as db:
         rows = (await db.execute(
             select(Probe).where(Probe.session_id == session_id, Probe.instrument == "visual", Probe.status == "complete")
             .order_by(Probe.created_at.desc())
         )).scalars().all()
+    together = None
     for p in rows:
         refs = images_mod.refs_in(p.spec or {})
-        if len(refs) == 1 and refs[0]["id"] == image_id and (p.aggregates or {}).get("n"):
+        if not (p.aggregates or {}).get("n") or not any(r["id"] == image_id for r in refs):
+            continue
+        if len(refs) == 1:
             return p
-    return None
+        together = together or p
+    return together
 
 
 # ── the jobs ──────────────────────────────────────────────────────────────────
@@ -658,14 +772,15 @@ async def start_generate(session_id: str, *, note: str, keep_list: Any, mode: st
     return row
 
 
-async def start_remake(session_id: str, parent: SessionImage, *, change: str, keep_list: Any, probe_id: Optional[str], proposal: Optional[dict], mode: str) -> SessionImage:
+async def start_remake(session_id: str, parent: SessionImage, *, change: str, keep_list: Any, probe_id: Optional[str], proposal: Optional[dict], mode: str,
+                       selected: Optional[list[int]] = None, note: str = "") -> SessionImage:
     keep = normalise_keep_list(keep_list if keep_list is not None else parent.keep_list)
     model = get_settings().agent_model(mode)
     row = SessionImage(
         session_id=session_id, label=f"{parent.label or 'image'} · remake"[:200], filename="", media_type="image/png",
         width=1, height=1, size_bytes=len(PLACEHOLDER_PNG), sha256="", source="remake", status="generating", parent_id=parent.id,
         change_note=(change or "").strip(), keep_list=keep,
-        brief={"change": (change or "").strip(), "probe_id": probe_id, "proposal": proposal, "mode": mode, "model": model}, data=PLACEHOLDER_PNG,
+        brief={"change": (change or "").strip(), "probe_id": probe_id, "proposal": proposal, "selected": selected, "note": (note or "").strip(), "mode": mode, "model": model}, data=PLACEHOLDER_PNG,
     )
     async with _db.AsyncSessionLocal() as db:
         db.add(row)
