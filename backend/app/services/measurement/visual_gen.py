@@ -208,7 +208,7 @@ async def session_context(session_id: str) -> str:
 
 async def write_layout(
     *, session_id: str, note: str, keep: list[dict], model: str, context: str = "",
-    parent_layout: Optional[dict] = None, change: str = "", reactions: str = "",
+    parent_layout: Optional[dict] = None, change: str = "", reactions: str = "", facts: Optional[list[str]] = None,
 ) -> dict:
     """One structured call → a layout, then the keep-list enforced on it mechanically."""
     blocks = []
@@ -220,6 +220,8 @@ async def write_layout(
         blocks.append("THE PREVIOUS VERSION'S LAYOUT:\n" + "\n".join(f"{k}: {v}" for k, v in prev.items()))
     if reactions:
         blocks.append(reactions)
+    if facts:
+        blocks.append("FACTS THAT MUST NOT CHANGE — copy each word for word into the new layout; the change does not touch them:\n- " + "\n- ".join(facts))
     if change:
         blocks.append(f"THE CHANGE TO MAKE (keep everything else that was working): {change}")
     if note:
@@ -283,18 +285,20 @@ def provider_name() -> str:
     return p if p in ("openai", "google", "none") else "none"
 
 
-async def _openai_render(prompt: str, *, quality: str = "medium", reference: Optional[bytes] = None) -> bytes:
-    """One gpt-image-1 call. With a reference image it is an *edit* (the new poster starts from the
-    old one — its photograph, composition and feel survive), else a generation."""
+async def _openai_render(prompt: str, *, quality: str = "medium", references: Optional[list[bytes]] = None) -> bytes:
+    """One gpt-image-1 call. With reference images it is an *edit*: the first is the poster to remake
+    (its photograph, composition and feel survive), the rest are the other posters the audience
+    compared it with, sent as `image[]` so the model can see what was preferred. Else a generation."""
     import httpx
     st = get_settings()
     headers = {"Authorization": f"Bearer {st.openai_api_key}"}
     async with httpx.AsyncClient(timeout=180) as client:
-        if reference:
+        if references:
+            field = "image[]" if len(references) > 1 else "image"
             r = await client.post(
                 "https://api.openai.com/v1/images/edits", headers=headers,
                 data={"model": st.image_model_openai, "prompt": prompt, "n": "1", "size": "1024x1536", "quality": quality},
-                files={"image": ("reference.png", reference, "image/png")},
+                files=[(field, (f"reference{k + 1}.png", b, "image/png")) for k, b in enumerate(references[:16])],
             )
         else:
             r = await client.post(
@@ -390,6 +394,96 @@ async def generate_hero(prompt: str, *, session_id: str, size: tuple[int, int], 
         return placeholder_hero(prompt, size, accent), "none", err
 
 
+# ── what must survive a remake, and the story the image model is told ─────────
+
+_FACT_RE = re.compile(r"\d|£|€|\$|%|www\.|https?://|\.(?:org|com|co\.uk|uk|net|charity)\b|@", re.I)
+
+
+def protected_facts(layout: Optional[dict]) -> list[str]:
+    """The lines on the previous version that carry information — claims, small print, and any line
+    with a number, price, percentage, web address or handle. These must survive a remake word for
+    word unless the change explicitly replaces one."""
+    if not layout:
+        return []
+    out: list[str] = []
+    for line in layout.get("claim_lines") or []:
+        out.append(str(line))
+    if layout.get("small_print"):
+        out.append(str(layout["small_print"]))
+    for f in ("headline", "subline", "cta"):
+        if layout.get(f) and _FACT_RE.search(str(layout[f])):
+            out.append(str(layout[f]))
+    for line in layout.get("body_lines") or []:
+        if _FACT_RE.search(str(line)):
+            out.append(str(line))
+    seen: list[str] = []
+    for x in out:
+        x = " ".join(x.split()).strip()
+        if x and x not in seen:
+            seen.append(x)
+    return seen[:10]
+
+
+def change_touches(fact: str, change: str) -> bool:
+    """True when the change text names this fact — by a number, a web address or the fact itself —
+    so the fact is the thing being changed and must not be locked."""
+    c = (change or "").lower()
+    if not c:
+        return False
+    f = fact.lower()
+    if f in c:
+        return True
+    for tok in re.findall(r"\d[\d,.\s]{1,}\d|\d+|[a-z0-9.-]+\.(?:org|com|co\.uk|uk|net)\b", f):
+        tok = tok.strip()
+        if len(tok) >= 2 and tok in c:
+            return True
+    return False
+
+
+async def story_for_prompt(session_id: str, probe: Optional[Probe], proposal: Optional[dict], change: str) -> str:
+    """The whole story in a few hundred words: what the session asks, what the audience was asked and
+    said about the last version, and what is being changed and why — so the image model works from
+    the brief, not from a bare instruction."""
+    from app.models.session import AnalysisSession
+    parts: list[str] = []
+    async with _db.AsyncSessionLocal() as db:
+        sess = await db.get(AnalysisSession, session_id)
+    if sess and sess.query:
+        parts.append(f"The campaign question: {clip(str(sess.query), 300)}")
+    try:
+        from app.services.measurement import lab_brief
+        b_ = await lab_brief.get(session_id)
+        if b_ and b_.get("brief"):
+            parts.append("The brief: " + clip(lab_brief.brief_for_prompt(b_["brief"], 700), 700))
+    except Exception:  # noqa: BLE001 — the brief is a bonus
+        pass
+    agg = (probe.aggregates or {}) if probe else {}
+    if agg.get("n"):
+        q = str((probe.spec or {}).get("question") or "").strip()
+        where = str((probe.spec or {}).get("setting") or "").strip()
+        parts.append(f"{agg.get('n')} people were shown the last version" + (f" ({where})" if where else "") + (f" and asked: {q}" if q else "") + ".")
+        if agg.get("sentence"):
+            parts.append("What they said: " + clip(str(agg["sentence"]), 400))
+        put_off = agg.get("put_off") or []
+        if put_off:
+            parts.append("What put them off: " + "; ".join(f"{x.get('value')} ({x.get('count')})" for x in put_off[:4]))
+        noticed = agg.get("noticed") or []
+        if noticed:
+            parts.append("What they noticed first: " + "; ".join(f"{x.get('value')} ({x.get('count')})" for x in noticed[:3]))
+    if proposal and proposal.get("changes"):
+        lines = []
+        for c in proposal["changes"][:4]:
+            if isinstance(c, dict) and c.get("change"):
+                lines.append(f"- {c['change']}" + (f" — {c.get('why')}" if c.get("why") else "") + (f" ({c.get('share')})" if c.get("share") else ""))
+        if lines:
+            parts.append("The changes this version makes, and why:\n" + "\n".join(lines))
+        if proposal.get("expected"):
+            parts.append("What should move: " + clip(str(proposal["expected"]), 200))
+    elif change:
+        parts.append("The change this version makes: " + clip(change, 400))
+    return "\n".join(parts)
+
+
 # ── the whole poster drawn by the provider (full render, 2026-10-26) ──────────
 
 def render_mode() -> str:
@@ -404,10 +498,13 @@ def render_mode() -> str:
     return "layered"
 
 
-def poster_prompt(layout: dict, keep: list[dict], *, change: str = "", edit: bool = False, previous_issues: Optional[list[str]] = None) -> str:
-    """What the image model is asked for when it draws the whole poster: the photograph, the exact
-    words, the palette, the keep-list — and, on a remake from a reference, what to keep and what
-    to change. Never an infographic: that is what came back when the words were the picture."""
+def poster_prompt(layout: dict, keep: list[dict], *, change: str = "", edit: bool = False, previous_issues: Optional[list[str]] = None,
+                  story: str = "", other_posters: Optional[list[str]] = None, facts: Optional[list[str]] = None) -> str:
+    """What the image model is asked for when it draws the whole poster: the whole story (why the
+    poster exists, what the audience said, what is being changed and why), the photograph, the exact
+    words, the palette, the keep-list, the facts that must not change — and, on a remake, which of
+    the images provided is the base and what the others are for. Never an infographic: that is what
+    came back when the words were the picture."""
     pal = layout.get("palette") or {}
     words = []
     if layout.get("headline"):
@@ -427,10 +524,17 @@ def poster_prompt(layout: dict, keep: list[dict], *, change: str = "", edit: boo
     exact = [k["value"] for k in keep if k["type"] == "text"]
     parts = []
     if edit:
-        parts.append("Make the next version of the poster provided. Keep its photograph, subject, composition, colours and feel — it must read as the same campaign. "
+        parts.append(("Image 1 is the poster to remake. " if other_posters else "The image provided is the poster to remake. ")
+                     + "Make its next version: keep its photograph, subject, composition, colours and feel — it must read as the same campaign. "
                      + (f"Make these changes and nothing else: {change}" if change else "Refresh it without changing what it says."))
+        if other_posters:
+            parts.append("The other images provided are the posters the audience compared it with — "
+                         + "; ".join(f"image {k + 2} = \"{lbl}\"" for k, lbl in enumerate(other_posters))
+                         + ". They are reference only: take from them exactly what the changes ask for (a picture, a warmth, a layout idea the audience preferred) and nothing else; do not copy their words.")
     else:
         parts.append("A finished, print-ready portrait poster (3:4), art-directed like real campaign work.")
+    if story:
+        parts.append("THE STORY — why this poster exists and what the audience said about the last version:\n" + story)
     parts.append("STYLE: a real photograph as the main picture — real people or animals in a real place, natural light, editorial quality. "
                  "NOT an infographic, NOT a diagram, NOT clip art or icon grids, NOT a stock-vector look, no watermark, no fake logos.")
     parts.append("THE PICTURE: " + str(layout.get("hero_prompt") or "a photograph that makes the headline true")
@@ -438,8 +542,10 @@ def poster_prompt(layout: dict, keep: list[dict], *, change: str = "", edit: boo
     if words:
         parts.append("THE WORDS — render every line below exactly as written, spelled exactly, in this order of prominence, and write NOTHING else on the poster:\n" + "\n".join(words))
     parts.append(f"TYPOGRAPHY: clean, large, highly legible, strong contrast. COLOURS: background {pal.get('bg') or 'dark'}, text {pal.get('fg') or 'white'}, accent {pal.get('accent') or 'warm orange'}.")
-    if exact:
-        parts.append("These phrases must appear word for word: " + "; ".join(f'"{x}"' for x in exact))
+    locked = list(dict.fromkeys([*(facts or []), *exact]))
+    if locked:
+        parts.append("FACTS THAT MUST NOT CHANGE — render each exactly as written: " + "; ".join(f'"{x}"' for x in locked))
+    parts.append("Never invent a phone number, address, web address, price, date, statistic, name or logo that is not in THE WORDS above.")
     if must_show:
         parts.append("MUST SHOW: " + "; ".join(must_show))
     if must_not:
@@ -449,7 +555,8 @@ def poster_prompt(layout: dict, keep: list[dict], *, change: str = "", edit: boo
     return "\n\n".join(parts)
 
 
-async def render_full(layout: dict, keep: list[dict], *, session_id: str, model: str, change: str = "", reference: Optional[bytes] = None) -> Optional[dict]:
+async def render_full(layout: dict, keep: list[dict], *, session_id: str, model: str, change: str = "", references: Optional[list[bytes]] = None,
+                      story: str = "", other_posters: Optional[list[str]] = None, facts: Optional[list[str]] = None) -> Optional[dict]:
     """The provider draws the whole poster. Normalise → keep-list check by vision (there is no typed
     layer to check mechanically) → if an exact-text item failed, one more attempt that names the
     misses; the attempt with fewer failures is kept. None when the provider fails outright, so the
@@ -459,10 +566,11 @@ async def render_full(layout: dict, keep: list[dict], *, session_id: str, model:
     best = None
     issues: list[str] = []
     for attempt in (1, 2):
-        prompt = poster_prompt(layout, keep, change=change, edit=reference is not None, previous_issues=issues or None)
+        prompt = poster_prompt(layout, keep, change=change, edit=bool(references), previous_issues=issues or None,
+                               story=story, other_posters=other_posters, facts=facts)
         started = time.monotonic()
         try:
-            raw = await _openai_render(prompt, quality=st.image_quality_openai, reference=reference)
+            raw = await _openai_render(prompt, quality=st.image_quality_openai, references=references or None)
             record_image_call(model=st.image_model_openai, session_id=session_id, label="visual:poster", cost_usd=st.image_cost_openai_full_usd,
                               elapsed_sec=time.monotonic() - started, status="success")
         except Exception as e:  # noqa: BLE001
@@ -899,19 +1007,22 @@ async def start_remake(session_id: str, parent: SessionImage, *, change: str, ke
 
 
 async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: Optional[str], rationale_extra: dict, model: str,
-                  change: str = "", reference: Optional[bytes] = None) -> None:
+                  change: str = "", references: Optional[list[bytes]] = None, story: str = "", other_posters: Optional[list[str]] = None,
+                  facts: Optional[list[str]] = None) -> None:
     async with _db.AsyncSessionLocal() as db:
         row = await db.get(SessionImage, row_id)
         if not row:
             return
         session_id, keep, brief = row.session_id, normalise_keep_list(row.keep_list), dict(row.brief or {})
     if render_mode() == "full":
-        full = await render_full(layout, keep, session_id=session_id, model=model, change=change, reference=reference)
+        full = await render_full(layout, keep, session_id=session_id, model=model, change=change, references=references,
+                                 story=story, other_posters=other_posters, facts=facts)
         if full:
             norm, check = full["norm"], full["check"]
             brief.update({**rationale_extra, "rationale": layout.get("rationale", ""), "hero_prompt": layout.get("hero_prompt", ""),
                           "hero_provider": "openai", "hero_error": None, "kept": layout.get("kept") or [],
-                          "render": "full", "render_attempts": full["attempts"], "reference_used": reference is not None, "poster_prompt": full["prompt"][:3000]})
+                          "render": "full", "render_attempts": full["attempts"], "reference_used": bool(references), "references_used": len(references or []),
+                          "other_posters": list(other_posters or []), "locked_facts": list(facts or []), "poster_prompt": full["prompt"][:4000]})
             await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
                        sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,
                        label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
@@ -943,7 +1054,8 @@ async def run_generate(image_id: str) -> None:
             model = str(brief.get("model") or get_settings().agent_model("fast"))
         context = await session_context(session_id)
         layout = await write_layout(session_id=session_id, note=note, keep=keep, model=model, context=context)
-        await _finish(image_id, layout=layout, hero_provider="", hero_error=None, rationale_extra={"from": "session", "context_chars": len(context)}, model=model)
+        story = await story_for_prompt(session_id, None, None, note)
+        await _finish(image_id, layout=layout, hero_provider="", hero_error=None, rationale_extra={"from": "session", "context_chars": len(context)}, model=model, story=story)
         print(f"[visual_gen] generated {image_id}: {str(layout.get('headline'))[:60]}")
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
@@ -968,6 +1080,7 @@ async def run_remake(image_id: str) -> None:
             parent_id = parent.id
             # The parent's picture anchors the remake unless it was a placeholder drawn in code.
             reference = bytes(parent.data) if (parent.source == "upload" or (parent.brief or {}).get("hero_provider") not in (None, "", "none")) else None
+            proposal = brief.get("proposal") if isinstance(brief.get("proposal"), dict) else None
         if not parent_layout:
             async with _db.AsyncSessionLocal() as db:
                 parent = await db.get(SessionImage, parent_id)
@@ -975,12 +1088,30 @@ async def run_remake(image_id: str) -> None:
             await _set(parent_id, layout=parent_layout)
         if probe is None:
             probe = await latest_visual_probe(session_id, parent_id)
+        # Important information on the previous version survives unless the change names it.
+        facts = [f for f in protected_facts(parent_layout) if not change_touches(f, change)]
+        if facts:
+            keep = normalise_keep_list(keep + [{"type": "text", "value": f} for f in facts])
+            await _set(image_id, keep_list=keep)
+        # Every poster the audience saw in that run goes to the image model: the base first, the others as reference.
+        references: list[bytes] = [reference] if reference else []
+        other_posters: list[str] = []
+        if probe is not None:
+            for other in await images_for_probe(session_id, probe):
+                if other.id == parent_id or other.status not in (None, "", "ready"):
+                    continue
+                if other.source == "upload" or (other.brief or {}).get("hero_provider") not in (None, "", "none"):
+                    references.append(bytes(other.data))
+                    other_posters.append(other.label or other.filename or "poster")
+        if not reference:
+            references, other_posters = [], []                                 # no base picture → a generation, not an edit
+        story = await story_for_prompt(session_id, probe, proposal, change)
         context = await session_context(session_id)
         layout = await write_layout(session_id=session_id, note="", keep=keep, model=model, context=context,
-                                    parent_layout=parent_layout, change=change, reactions=_reactions_block(probe))
+                                    parent_layout=parent_layout, change=change, reactions=_reactions_block(probe), facts=facts)
         await _finish(image_id, layout=layout, hero_provider="", hero_error=None,
                       rationale_extra={"from": "remake", "parent_id": parent_id, "reactions_probe_id": probe.id if probe else None}, model=model,
-                      change=change, reference=reference)
+                      change=change, references=references, story=story, other_posters=other_posters, facts=facts)
         print(f"[visual_gen] remade {image_id} from {parent_id}: {str(layout.get('headline'))[:60]}")
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()

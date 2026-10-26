@@ -340,7 +340,8 @@ def test_next_version_reads_a_joint_run_picks_the_base_and_remakes_from_the_chos
     assert child["change_note"] == "Name a local shelter and a phone number\nAlso: keep it to one page"
     assert child["brief"]["proposal"]["changes"][1]["basis"] == "few said, hard-hitting"
     assert child["brief"]["selected"] == [1] and child["brief"]["note"] == "keep it to one page"
-    assert child["keep_list"] == [{"type": "present", "value": "the happy dog"}]
+    # The keeps chosen on the page, plus the claim read off the old poster, locked because the change did not name it.
+    assert child["keep_list"] == [{"type": "present", "value": "the happy dog"}, {"type": "text", "value": "First box free"}]
     layout_prompt = next(u for u in seen if "THE CHANGE TO MAKE" in u)
     assert "Name a local shelter" in layout_prompt and "Missing shelter details" in layout_prompt and "Ray Timmins" not in layout_prompt or "Anouk Park" in layout_prompt
     # Nothing ticked and no change typed → refused.
@@ -371,8 +372,8 @@ def test_full_render_draws_the_whole_poster_from_the_reference_and_retries_a_wro
     monkeypatch.setattr(st, "image_provider", "openai"); monkeypatch.setattr(st, "openai_api_key", "k"); monkeypatch.setattr(st, "image_render", "auto")
     calls: list[dict] = []
 
-    async def fake_render(prompt, *, quality="medium", reference=None):
-        calls.append({"prompt": prompt, "quality": quality, "ref": reference is not None})
+    async def fake_render(prompt, *, quality="medium", references=None):
+        calls.append({"prompt": prompt, "quality": quality, "ref": bool(references), "refs": len(references or [])})
         return _png(80, 100)
     monkeypatch.setattr(vg, "_openai_render", fake_render)
     checks: list[int] = []
@@ -380,15 +381,20 @@ def test_full_render_draws_the_whole_poster_from_the_reference_and_retries_a_wro
     async def fake_analyze(schema, system, user, **kw):
         props = schema.get("properties") or {}
         if "hero_prompt" in props and "visible_items" in props:          # read the uploaded parent
-            return {"description": "a poster", "headline": "Dog shelters need your help", "subline": "", "body_lines": [], "claim_lines": ["First box free"],
-                    "cta": "Adopt. Donate. Volunteer.", "small_print": "", "palette": {"bg": "#147850", "fg": "#ffffff", "accent": "#c81e1e"},
+            return {"description": "a poster", "headline": "Dog shelters need your help", "subline": "", "body_lines": ["Call 01282 000000"], "claim_lines": ["First box free"],
+                    "cta": "Adopt. Donate. Volunteer.", "small_print": "Registered charity 1234567", "palette": {"bg": "#147850", "fg": "#ffffff", "accent": "#c81e1e"},
                     "hero_prompt": "a dog behind bars", "hero_placement": "top", "visible_items": ["a dog"]}
         if "hero_prompt" in props:                                           # the new layout
             return {**LAYOUT, "headline": "Give a dog a brighter tomorrow", "claim_lines": ["First box free"], "cta": "Call Burnley Dogs Home on 01282 000000"}
         if "items" in props:                                                 # the vision check: the exact line is wrong first time
             checks.append(1)
             ok = len(checks) > 1
-            return {"items": [{"index": "1", "ok": ok, "note": "legible" if ok else "it reads 'Frist box free'"}, {"index": "2", "ok": True, "note": "a dog is there"}]}
+            # The numbered requirements travel in the vision message, not in `user`.
+            text = " \n".join(str(b.get("text", "")) for m in (kw.get("messages") or []) for b in (m.get("content") or []) if isinstance(b, dict))
+            n = len([l for l in text.splitlines() if l.strip()[:1].isdigit() and ". " in l])
+            items = [{"index": str(k + 1), "ok": True, "note": "seen"} for k in range(max(n, 2))]
+            items[0] = {"index": "1", "ok": ok, "note": "legible" if ok else "it reads 'Frist box free'"}
+            return {"items": items}
         raise AssertionError(f"unexpected schema {list(props)}")
     monkeypatch.setattr(vg, "analyze", fake_analyze)
     sid = str(uuid.uuid4())
@@ -399,12 +405,22 @@ def test_full_render_draws_the_whole_poster_from_the_reference_and_retries_a_wro
             db.add(AnalysisSession(id=sid, title="t", query="q", status=SessionStatus.COMPLETE))
             parent = SessionImage(session_id=sid, label="Sad dog", filename="a.png", media_type=norm["media_type"], width=norm["width"], height=norm["height"],
                                   size_bytes=len(norm["data"]), sha256=norm["sha256"], data=norm["data"], keep_list=vg.normalise_keep_list(["First box free", {"type": "present", "value": "a dog"}]))
-            db.add(parent)
+            other = SessionImage(session_id=sid, label="Happy dog", filename="b.png", media_type=norm["media_type"], width=norm["width"], height=norm["height"],
+                                 size_bytes=len(norm["data"]), sha256=norm["sha256"], data=norm["data"])
+            db.add(parent); db.add(other)
+            await db.flush()
+            # The run that showed both posters as one piece — its reactions and the other poster go to the image model.
+            probe = Probe(session_id=sid, instrument="visual", schema_id="visual.v1", status="complete", model="m", seed=1, agent_count=3, answer_count=3,
+                          spec={"images": [{"id": parent.id, "label": "Sad dog"}, {"id": other.id, "label": "Happy dog"}], "question": "Would you share this?", "setting": "a bus stop"},
+                          aggregates={"n": 3, "sentence": "24% say it works on them; the happy dog drew every eye.", "put_off": [{"value": "Missing shelter details", "count": 2}],
+                                      "noticed": [{"value": "Happy dog", "count": 3}], "changes": [], "verbatims": {"no": [], "mixed": [], "yes": []}})
+            db.add(probe)
             await db.commit()
-            pid = parent.id
+            pid, probe_id = parent.id, probe.id
         async with Session() as db:
             parent = await db.get(SessionImage, pid)
-        child = await vg.start_remake(sid, parent, change="Name a real local shelter and its phone number", keep_list=None, probe_id=None, proposal=None, mode="fast")
+        proposal = {"changes": [{"change": "Name a real local shelter and its phone number", "why": "nowhere to send anyone", "share": "2 of 3"}], "expected": "sharing moves"}
+        child = await vg.start_remake(sid, parent, change="Name a real local shelter and its phone number", keep_list=None, probe_id=probe_id, proposal=proposal, mode="fast")
         await vg.run_remake(child.id)
         gen = await vg.start_generate(sid, note="a bus-stop poster", keep_list=["First box free"], mode="fast")
         await vg.run_generate(gen.id)
@@ -415,13 +431,24 @@ def test_full_render_draws_the_whole_poster_from_the_reference_and_retries_a_wro
     # The remake: an edit from the uploaded parent, high quality, the whole poster asked for — and a second attempt that names the miss.
     assert child.status == "ready", child.error
     assert child.brief["render"] == "full" and child.brief["render_attempts"] == 2 and child.brief["reference_used"] is True and child.brief["hero_provider"] == "openai"
-    assert calls[0]["ref"] is True and calls[0]["quality"] == "high"
+    assert calls[0]["ref"] is True and calls[0]["refs"] == 2 and calls[0]["quality"] == "high"   # the base first, the compared poster after it
     p1 = calls[0]["prompt"]
-    assert "Make the next version of the poster provided" in p1 and "Name a real local shelter" in p1
+    assert "Image 1 is the poster to remake" in p1 and 'image 2 = "Happy dog"' in p1 and "Name a real local shelter" in p1
+    # The whole story goes with it: the campaign question, the run, what they said, the changes and why.
+    assert "THE STORY" in p1 and "The campaign question: q" in p1 and "3 people were shown the last version (a bus stop) and asked: Would you share this?" in p1
+    assert "the happy dog drew every eye" in p1 and "Missing shelter details (2)" in p1 and "- Name a real local shelter and its phone number — nowhere to send anyone (2 of 3)" in p1
+    # Facts on the old poster are locked unless the change names them by number or address: here none are named, so all stay.
+    assert "FACTS THAT MUST NOT CHANGE" in p1 and "Registered charity 1234567" in p1 and "Never invent a phone number" in p1
+    assert {"type": "text", "value": "Registered charity 1234567"} in child.keep_list
+    assert child.brief["locked_facts"] == ["First box free", "Registered charity 1234567", "Call 01282 000000"] and child.brief["other_posters"] == ["Happy dog"] and child.brief["references_used"] == 2
     assert "NOT an infographic" in p1 and 'HEADLINE (largest): "Give a dog a brighter tomorrow"' in p1 and 'CALL TO ACTION (a clear button or band): "Call Burnley Dogs Home on 01282 000000"' in p1
-    assert 'must appear word for word: "First box free"' in p1 and "MUST SHOW: a dog" in p1
+    assert '"First box free"' in p1 and "MUST SHOW: a dog" in p1
     assert "The previous attempt got these wrong" in calls[1]["prompt"] and "Frist box free" in calls[1]["prompt"]
     assert child.check_result["passed"] is True and all(i["how"] == "vision" for i in child.check_result["items"])
+    # The layout writer was told the locked facts too.
+    assert vg.change_touches("Call 01282 000000", "Name a real local shelter and its phone number") is False       # the number itself is not named…
+    assert vg.change_touches("Call 01282 000000", "replace 01282 000000 with the new line") is True
+    assert vg.change_touches("Registered charity 1234567", "Add a charity registration number") is False
     # A fresh generation: a generation (no reference), one attempt once the check passes.
     assert gen.status == "ready" and gen.brief["render"] == "full" and gen.brief["render_attempts"] == 1 and gen.brief["reference_used"] is False
     assert calls[2]["ref"] is False and "print-ready portrait poster" in calls[2]["prompt"]
