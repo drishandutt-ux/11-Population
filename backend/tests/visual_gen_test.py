@@ -452,3 +452,51 @@ def test_full_render_draws_the_whole_poster_from_the_reference_and_retries_a_wro
     # A fresh generation: a generation (no reference), one attempt once the check passes.
     assert gen.status == "ready" and gen.brief["render"] == "full" and gen.brief["render_attempts"] == 1 and gen.brief["reference_used"] is False
     assert calls[2]["ref"] is False and "print-ready portrait poster" in calls[2]["prompt"]
+
+
+# ── the OpenAI model chain ────────────────────────────────────────────────────
+
+def test_openai_render_falls_through_models_the_key_cannot_see_and_remembers_the_one_that_answers(monkeypatch):
+    from app.core.config import get_settings
+    st = get_settings()
+    monkeypatch.setattr(st, "image_provider", "openai"); monkeypatch.setattr(st, "openai_api_key", "k")
+    monkeypatch.setattr(st, "image_model_openai", "gpt-image-1"); monkeypatch.setattr(st, "image_model_openai_fallbacks", "gpt-image-1.5,gpt-image-1-mini,dall-e-3")
+    monkeypatch.setattr(vg, "_WORKING_MODEL", None)
+    tried: list[str] = []
+
+    async def fake_call(model, prompt, *, quality, references):
+        tried.append(model)
+        if model in ("gpt-image-1", "gpt-image-1.5"):
+            raise RuntimeError(f"OpenAI 400 on edits with {model}: The model '{model}' does not exist.")
+        vg._LAST.update({"model": model, "edit": bool(references)})
+        return b"png-bytes"
+    monkeypatch.setattr(vg, "_openai_call", fake_call)
+    logged: list[str] = []
+
+    async def fake_log(reason=""):
+        logged.append(reason)
+    monkeypatch.setattr(vg, "log_visible_image_models", fake_log)
+
+    assert asyncio.run(vg._openai_render("p", quality="high", references=[b"x"])) == b"png-bytes"
+    assert tried == ["gpt-image-1", "gpt-image-1.5", "gpt-image-1-mini"] and vg._WORKING_MODEL == "gpt-image-1-mini" and vg._LAST["model"] == "gpt-image-1-mini"
+    # Next time the working model goes first.
+    tried.clear()
+    asyncio.run(vg._openai_render("p", quality="high"))
+    assert tried == ["gpt-image-1-mini"] and logged == []
+
+    # A different error (a moderation block, a bad parameter) is raised at once — no further candidates.
+    async def refuse(model, prompt, *, quality, references):
+        tried.append(model)
+        raise RuntimeError(f"OpenAI 400 on generations with {model}: Your request was rejected by the safety system.")
+    monkeypatch.setattr(vg, "_openai_call", refuse); tried.clear()
+    with pytest.raises(RuntimeError, match="safety system"):
+        asyncio.run(vg._openai_render("p"))
+    assert tried == ["gpt-image-1-mini"]
+
+    # When no candidate answers, the models the key can see are logged for the diagnosis.
+    async def missing(model, prompt, *, quality, references):
+        raise RuntimeError(f"OpenAI 400 on generations with {model}: The model '{model}' does not exist.")
+    monkeypatch.setattr(vg, "_openai_call", missing); monkeypatch.setattr(vg, "_WORKING_MODEL", None)
+    with pytest.raises(RuntimeError, match="does not exist"):
+        asyncio.run(vg._openai_render("p"))
+    assert logged == [" (no candidate answered)"]

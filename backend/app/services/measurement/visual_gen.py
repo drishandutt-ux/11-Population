@@ -294,40 +294,107 @@ def _ext(data: bytes) -> str:
     return "jpg"
 
 
-async def _openai_render(prompt: str, *, quality: str = "medium", references: Optional[list[bytes]] = None) -> bytes:
-    """One gpt-image-1 call. With reference images it is an *edit*: the first is the poster to remake
-    (its photograph, composition and feel survive), the rest are the other posters the audience
-    compared it with, sent as `image[]` so the model can see what was preferred. Else a generation."""
+_WORKING_MODEL: Optional[str] = None          # the first OpenAI image model that answered, kept for the process
+_LAST: dict = {}                               # {"model", "edit"} of the last successful call, for the brief and the ledger
+
+
+def _model_candidates() -> list[str]:
+    st = get_settings()
+    out: list[str] = []
+    for m in ([_WORKING_MODEL] if _WORKING_MODEL else []) + [st.image_model_openai] + [x.strip() for x in (st.image_model_openai_fallbacks or "").split(",")]:
+        if m and m not in out:
+            out.append(m)
+    return out
+
+
+def _is_missing_model(err: str) -> bool:
+    return bool(re.search(r"does not exist|model_not_found|do(?:es)? not have access|unknown model|invalid model|not found", err, re.I))
+
+
+async def openai_image_models() -> list[str]:
+    """The image-capable models the configured key can see (GET /v1/models) — the diagnosis when a
+    model 'does not exist': an unverified organisation or a project that restricts models."""
+    import httpx
+    st = get_settings()
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {st.openai_api_key}"})
+        r.raise_for_status()
+        ids = [str(m.get("id")) for m in (r.json().get("data") or [])]
+    return sorted(i for i in ids if re.search(r"image|dall-e", i, re.I))
+
+
+async def log_visible_image_models(reason: str = "") -> None:
+    if provider_name() != "openai":
+        return
+    try:
+        models = await openai_image_models()
+        print(f"[visual_gen] image models visible to the OpenAI key{reason}: {', '.join(models) or 'none — verify the organisation at platform.openai.com/settings/organization/general, or lift the project model restriction'}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[visual_gen] could not list the OpenAI models{reason}: {type(e).__name__}: {str(e)[:200]}")
+
+
+async def _openai_call(model: str, prompt: str, *, quality: str, references: Optional[list[bytes]]) -> bytes:
+    """One call to one model. gpt-image-* models edit from references and take low/medium/high;
+    DALL·E 3 only generates (the reference is dropped) at 1024x1792, standard/hd."""
     import httpx
     st = get_settings()
     headers = {"Authorization": f"Bearer {st.openai_api_key}"}
+    dalle = model.lower().startswith("dall-e")
+    if dalle:
+        references = None
+    size = "1024x1792" if dalle else "1024x1536"
+    q = ("hd" if quality == "high" else "standard") if dalle else quality
     async with httpx.AsyncClient(timeout=180) as client:
         if references:
             field = "image[]" if len(references) > 1 else "image"
             r = await client.post(
                 "https://api.openai.com/v1/images/edits", headers=headers,
-                data={"model": st.image_model_openai, "prompt": prompt, "n": "1", "size": "1024x1536", "quality": quality},
+                data={"model": model, "prompt": prompt, "n": "1", "size": size, "quality": q},
                 files=[(field, (f"reference{k + 1}.{_ext(b)}", b, f"image/{_ext(b).replace('jpg', 'jpeg')}")) for k, b in enumerate(references[:16])],
             )
         else:
             r = await client.post(
                 "https://api.openai.com/v1/images/generations", headers=headers,
-                json={"model": st.image_model_openai, "prompt": prompt, "n": 1, "size": "1024x1536", "quality": quality},
+                json={"model": model, "prompt": prompt[:4000] if dalle else prompt, "n": 1, "size": size, "quality": q},
             )
         if r.status_code >= 400:
-            # OpenAI's own message is the diagnosis (a wrong model name, an unverified organisation,
-            # a moderation block, an unsupported parameter) — keep it, not just the status.
+            # OpenAI's own message is the diagnosis (a model the key cannot see, an unverified
+            # organisation, a moderation block, an unsupported parameter) — keep it, not just the status.
             try:
                 msg = str((r.json().get("error") or {}).get("message") or r.text)
             except Exception:  # noqa: BLE001
                 msg = r.text
-            raise RuntimeError(f"OpenAI {r.status_code} on {'edits' if references else 'generations'}: {msg[:300]}")
+            raise RuntimeError(f"OpenAI {r.status_code} on {'edits' if references else 'generations'} with {model}: {msg[:300]}")
         data = r.json()["data"][0]
+        _LAST.update({"model": model, "edit": bool(references)})
         if data.get("b64_json"):
             return base64.b64decode(data["b64_json"])
         img = await client.get(data["url"])
         img.raise_for_status()
         return img.content
+
+
+async def _openai_render(prompt: str, *, quality: str = "medium", references: Optional[list[bytes]] = None) -> bytes:
+    """gpt-image-1 by default; when the key cannot see a model, the next candidate is tried
+    (`IMAGE_MODEL_OPENAI_FALLBACKS`), the one that answers is remembered for the process, and the
+    models the key can actually see are logged once so the fix is visible in the logs."""
+    global _WORKING_MODEL
+    last: Optional[Exception] = None
+    for model in _model_candidates():
+        try:
+            data = await _openai_call(model, prompt, quality=quality, references=references)
+            if _WORKING_MODEL != model:
+                print(f"[visual_gen] OpenAI image model in use: {model}")
+                _WORKING_MODEL = model
+            return data
+        except RuntimeError as e:
+            last = e
+            if _is_missing_model(str(e)):
+                print(f"[visual_gen] {e} — trying the next image model")
+                continue
+            raise
+    await log_visible_image_models(" (no candidate answered)")
+    raise last or RuntimeError("no OpenAI image model answered")
 
 
 async def _openai_hero(prompt: str) -> bytes:
@@ -587,7 +654,7 @@ async def render_full(layout: dict, keep: list[dict], *, session_id: str, model:
         started = time.monotonic()
         try:
             raw = await _openai_render(prompt, quality=st.image_quality_openai, references=references or None)
-            record_image_call(model=st.image_model_openai, session_id=session_id, label="visual:poster", cost_usd=st.image_cost_openai_full_usd,
+            record_image_call(model=str(_LAST.get("model") or st.image_model_openai), session_id=session_id, label="visual:poster", cost_usd=st.image_cost_openai_full_usd,
                               elapsed_sec=time.monotonic() - started, status="success")
         except Exception as e:  # noqa: BLE001
             record_image_call(model=st.image_model_openai, session_id=session_id, label="visual:poster", cost_usd=0.0,
@@ -600,7 +667,7 @@ async def render_full(layout: dict, keep: list[dict], *, session_id: str, model:
         check = await check_image(session_id=session_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"],
                                   layout=None, keep=keep, model=model, label=str(layout.get("headline") or "poster"))
         failed = [i for i in check["items"] if not i["ok"]]
-        cand = {"norm": norm, "check": check, "attempts": attempt, "prompt": prompt}
+        cand = {"norm": norm, "check": check, "attempts": attempt, "prompt": prompt, "model": str(_LAST.get("model") or st.image_model_openai), "edit": bool(references) and bool(_LAST.get("edit", True))}
         if best is None or len(failed) < len([i for i in best["check"]["items"] if not i["ok"]]):
             best = cand
         text_misses = [f'"{i["value"]}" ({i["note"]})' for i in failed if i["type"] == "text"]
@@ -1038,7 +1105,8 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
             norm, check = full["norm"], full["check"]
             brief.update({**rationale_extra, "rationale": layout.get("rationale", ""), "hero_prompt": layout.get("hero_prompt", ""),
                           "hero_provider": "openai", "hero_error": None, "kept": layout.get("kept") or [],
-                          "render": "full", "render_attempts": full["attempts"], "reference_used": bool(references), "references_used": len(references or []),
+                          "render": "full", "render_attempts": full["attempts"], "reference_used": bool(full.get("edit")), "references_used": len(references or []) if full.get("edit") else 0,
+                          "image_model": full.get("model"),
                           "other_posters": list(other_posters or []), "locked_facts": list(facts or []), "poster_prompt": full["prompt"][:4000]})
             await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
                        sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,

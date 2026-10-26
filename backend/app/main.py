@@ -39,6 +39,11 @@ async def lifespan(app: FastAPI):
     start_usage_writer()
     from app.core.trash import purge_loop
     purge_task = asyncio.create_task(purge_loop())   # the bin: sessions deleted 30+ days ago go for good
+    try:
+        from app.services.measurement.visual_gen import log_visible_image_models
+        asyncio.create_task(log_visible_image_models(" at startup"))   # the Visual Lab: which image models the OpenAI key can see
+    except Exception as e:  # noqa: BLE001
+        print(f"[startup] image-model check skipped: {e}")
     yield
     purge_task.cancel()
     await stop_usage_writer()
