@@ -658,3 +658,102 @@ questions with known answers; what the tool said, what happened.
 social-proof arm (entry 5) measures it for a lineup; put the number on the validation page:
 how much this population's answers move when shown that others agreed. *First check:* after
 entry 5 exists, run it on one lineup; is the movement large enough to matter.
+
+---
+
+## 9. Two public tests to enter — SimBench grouped and Twin-2K-500 pricing
+
+*Chosen by Drishan, 2026-10-27, from the benchmark search: the only two tests with more than
+one published entrant that a population tool can enter and be compared on. OASIS and MiroFish
+never ran a shared test; vendor "benchmarks" are claims, not reproducible runs. These are
+the runs behind the accuracy card (entry 8.17) and the first thing a client can check.*
+
+**The idea in one line.** Score our twins on the two public tests other people have scored
+on, publish the numbers beside the published ones, and make the clean comparison the one a
+client can verify: our twins against the bare model we run on.
+
+### 9.1 SimBench, the grouped split — enter first
+
+**What it is.** SimBench (arXiv 2510.17516, 2025; code and data public) harmonises 20
+datasets of real human answers — surveys, moral dilemmas, economic games, psychological
+instruments — into one test of whether a model's simulated population reproduces the real
+answer distribution. The **grouped split** (6,343 test cases from five survey datasets)
+scores by **demographic subgroup**: given a group (age, gender, country, education …) and a
+question, produce the group's answer distribution; the score is one minus total variation
+distance from the real one, on 0–100. Published top: Claude 3.7 Sonnet 40.8; best open
+model DeepSeek-R1 34.5; 27 models on the board; the authors note the best predictions are
+still nearer to uniform than to the human truth, and that models struggle most on specific
+demographic groups.
+
+**Why first.** It is population-level and about segments — our product's claim. The bar is
+low enough that a real gain shows. And since we run on Claude, our result reads as *the
+twins, the frame and the grounding versus the model alone*, a number no competitor has and
+the only comparison a client can check.
+
+**How we would run it.** For each test case: build a lineup from the frame for that
+subgroup (the Studio's plan, Fast tier, 40–100 twins), put the question through Forms as a
+single question, take the share per option (or the mean probability if entry 8.1 exists),
+score it the benchmark's way. Alongside, the bare model's answer for the same case, in the
+benchmark's own prompt, for the "model alone" line. Both on the same model version.
+
+**Cost.** 6,343 cases × ~60 twins ≈ 380,000 Haiku calls, roughly $400–600 at today's prices;
+a stratified subset of 1,000 cases for a first reading at a tenth of that. Batch API halves
+either.
+
+**What to watch.** The datasets are global; our frame is UK-centric, so the lineup builder
+needs a fallback for countries without a kit (published distributions by country from the
+WVS itself). Score the subset first; if the twins are not above the bare model on it, the
+full run is not worth paying for.
+
+### 9.2 Twin-2K-500, the pricing study — enter second
+
+**What it is.** Twin-2K-500 (arXiv 2505.17479; Marketing Science database report; data on
+Hugging Face under `LLM-Digital-Twin/Twin-2K-500`, code on GitHub) holds 2,058 real people's
+answers to 500+ questions over four waves. The scored part is 88 held-out items in 17 tasks:
+16 cognitive-bias experiments and **a pricing study of 40 products with binary buy decisions
+at randomised prices**, which yields a demand curve per product. Scoring: binary items 1 for
+a match, numeric items 1 minus absolute error over the range, averaged within then across
+tasks. Published: best 71.9%; random 59.2%; human test-retest ceiling 81.7%; and the sobering
+line to beat, **demographics-only 74.6%**, statistically the same as the full persona.
+
+**Why second.** The pricing study is our purchase-intent tool under test conditions, scored
+against real buy decisions rather than stated prices (entry 8.5). The bias tasks are where
+every twin fails (entry 8.6), so a good score there would be rare and a bad one is expected.
+
+**How we would run it.** Two ways, both worth reporting:
+- *Population level* (the honest one for us): build twins from each respondent's
+  demographics and Wave 1–3 answers excluding the holdout, as the benchmark prescribes;
+  predict the holdout; score per person. This is our Agent Builder fed a survey — the
+  survey-curation path (§11a.4a) is most of it.
+- *Demand curves*: for the 40 products, the share who buy at each price from our lineup
+  against the real share; this is the number the purchase-intent page already draws.
+
+**Cost.** 2,058 people × 88 items; batched per person as one Forms run ≈ 2,058 Pro-tier
+calls, under $100 on Sonnet, far less on Haiku.
+
+**What to watch.** A twin built from a person's own answers is a different product from a
+frame-drawn twin; label which one scored. The thing a client should read is whether we clear
+74.6% — if a demographic card does as well as our full twin, entry 8.7 has its answer.
+
+### Publishing
+
+Both runs are repeated on every model change and every release, with the date, the model
+version, the lineup settings and the subset used, and the published scores beside ours.
+The accuracy card (8.17) is the page; a run that does not beat the bare model is still
+published, with the reason looked for.
+
+### Build order
+
+1. SimBench grouped on a 1,000-case stratified subset: the twins and the bare model, same
+   model version. Decide on that reading whether to run the whole split.
+2. Twin-2K-500: the pricing study first (demand curves against real buy decisions), then
+   the per-person holdout.
+3. The accuracy card page with both, dated.
+4. Later, on home turf with no leaderboard: a 2024 UK general election backtest by
+   constituency with the kits' segments (entry 8.18), and OASIS's own Twitter15/16 cascade
+   test once Spread (entry 6) exists.
+
+**Open questions.** Which tier runs the SimBench lineups (Fast is cheap but generic; Pro
+is the product); whether to publish a result below the bare model; whether the benchmark
+authors accept tool submissions or only model submissions — if only models, we publish our
+own reproducible run rather than a leaderboard entry.
