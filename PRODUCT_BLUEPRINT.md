@@ -1217,6 +1217,7 @@ The app runs Alembic at startup over the **asyncpg** driver, and asyncpg execute
 ├── docker-compose.yml               # local Postgres 16 + Redis 7 (Redis unused)
 ├── .env.example                     # root example env
 ├── PRODUCT_BLUEPRINT.md             # ← this document
+├── docs/FUTURE_UPGRADES.md          # ideas agreed but not yet built (Video Lab first)
 │
 ├── backend/                         # FastAPI service
 │   ├── app/
@@ -1485,4 +1486,6 @@ The app runs Alembic at startup over the **asyncpg** driver, and asyncpg execute
 
 - **2026-10-26** — **Visual Lab: gpt-image-2 by default.** The startup log showed Drishan's key sees `gpt-image-1`, `gpt-image-1.5`, `gpt-image-2`, `gpt-image-2.5-flare` / `-sunburst` (and `chatgpt-image-latest`), yet the image endpoints answered *The model 'gpt-image-1' does not exist* — the old name is no longer served there for this key. `IMAGE_MODEL_OPENAI` now defaults to `gpt-image-2`, the fallbacks to `gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-1.5, gpt-image-1, gpt-image-1-mini, dall-e-3`, and the chain also steps past a model that rejects a parameter (size, quality, edits), so a newer model with a different parameter set cannot strand a remake. Which model answered is on the brief (`image_model`) and in the log (*OpenAI image model in use*).
 
-*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-10-26.*
+- **2026-10-27** — **Future upgrades list (`docs/FUTURE_UPGRADES.md`).** A dated list of ideas agreed in spirit but not yet built, each with what it is in plain words, how it fits the current system, cost to design around and a build order; entries move to this Changelog when built. First entry: **the Video Lab** — paste a YouTube / TikTok / Instagram / X link, the population watches the clip (frames + transcript + on-screen text stored as a piece, like §6.15 images), with Watch (hook, drop-off curve, the one change), Compare through the A/B test, a thumbnail-and-title test, and a calibration step against real likes before the report may say *would get more likes*. Nothing built.
+
+*End of blueprint. For the precise behavior of any subsystem, the files above are authoritative; this document summarizes them as of 2026-10-27.*
