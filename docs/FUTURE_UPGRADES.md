@@ -8,7 +8,10 @@ delete it here.
 Related: `PRODUCT_BLUEPRINT.md` (what exists today), `docs/visual-lab-brief.md` (the
 image line this list extends), `docs/doorda-sources-analysis.md` (2026-10-27: what Doorda
 aggregates, which publishers sit underneath, and the open-data layer — spreadsheet reader,
-publisher APIs, new registry entries — we should build instead of buying it).
+publisher APIs, new registry entries — we should build instead of buying it),
+`docs/oasis-analysis.md` (2026-10-27: what the OASIS social-media simulator does and the six
+mechanics worth taking — a Spread tool, engage-or-scroll, drop-ins and forks, opinion over
+time, a per-twin feed, social-proof arms).
 
 ---
 
