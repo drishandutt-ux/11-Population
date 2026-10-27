@@ -47,13 +47,23 @@ async def purge_expired(now: datetime | None = None) -> int:
     return n
 
 
-async def purge_loop() -> None:
-    """Runs for the life of the server: purge on startup, then every PURGE_EVERY_SEC."""
-    while True:
+async def purge_loop(stop: "asyncio.Event | None" = None) -> None:
+    """Runs for the life of the server: purge on startup, then every PURGE_EVERY_SEC.
+
+    `stop` ends it at shutdown. A cancel alone is not enough: one that lands while a purge is
+    closing a pooled connection is swallowed by the database driver, the purge then fails as an
+    ordinary error, and the loop went back to sleep for hours with the server waiting on it."""
+    while not (stop and stop.is_set()):
         try:
             n = await purge_expired()
             if n:
                 print(f"[trash] purged {n} session(s) deleted more than {TRASH_DAYS} days ago")
         except Exception as e:  # noqa: BLE001
             print(f"[trash] purge failed: {type(e).__name__}: {e}")
-        await asyncio.sleep(PURGE_EVERY_SEC)
+        if stop is None:
+            await asyncio.sleep(PURGE_EVERY_SEC)
+            continue
+        try:
+            await asyncio.wait_for(stop.wait(), PURGE_EVERY_SEC)
+        except asyncio.TimeoutError:
+            pass

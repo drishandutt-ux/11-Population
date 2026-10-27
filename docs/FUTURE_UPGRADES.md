@@ -674,6 +674,13 @@ client can verify: our twins against the bare model we run on.
 
 ### 9.1 SimBench, the grouped split — enter first
 
+**Status (2026-10-27): step 1 built, not yet run.** The 1,000-case subset is cut (375 whole
+subgroups, stratified by survey and the traits that define each subgroup) and the runner is on
+the admin page under **Benchmarks**: a lineup per subgroup, the twins and the model alone on every
+case, resumable, with a 100-case pilot. The cost below was too low: writing 375 lineups is about
+half the bill, so the full subset is about $430 at 60 Haiku twins, or $287 at 40. See the
+blueprint §11a.9.
+
 **What it is.** SimBench (arXiv 2510.17516, 2025; code and data public) harmonises 20
 datasets of real human answers — surveys, moral dilemmas, economic games, psychological
 instruments — into one test of whether a model's simulated population reproduces the real

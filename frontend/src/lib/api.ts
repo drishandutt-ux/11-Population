@@ -55,6 +55,25 @@ export const api = {
     usage: (days = 0) => request<UsageOverview>(`/admin/usage?days=${days}`),
     usageSession: (sessionId: string, days = 0) =>
       request<UsageSessionDetail>(`/admin/usage/sessions/${sessionId}?days=${days}`),
+    simbench: () => request<SimBenchOverview>("/admin/benchmarks/simbench"),
+    simbenchEstimate: (cases: number, twins: number, mode: string) =>
+      request<SimBenchEstimate>(`/admin/benchmarks/simbench/estimate?cases=${cases}&twins=${twins}&mode=${mode}`),
+    simbenchStart: (body: { cases: number; twins: number; mode: string; bare: boolean; parallel_groups?: number }) =>
+      request<SimBenchRun>("/admin/benchmarks/simbench/runs", { method: "POST", body: JSON.stringify(body) }, 300_000),
+    simbenchRun: (runId: string) => request<SimBenchRun>(`/admin/benchmarks/simbench/runs/${runId}`),
+    simbenchStop: (runId: string) => request(`/admin/benchmarks/simbench/runs/${runId}/stop`, { method: "POST" }),
+    simbenchResume: (runId: string) => request<SimBenchRun>(`/admin/benchmarks/simbench/runs/${runId}/resume`, { method: "POST" }),
+    /** Every scored case as CSV — fetched with auth, handed to the browser as a download. */
+    simbenchCsv: async (runId: string) => {
+      const res = await apiFetch(`/admin/benchmarks/simbench/runs/${runId}/cases.csv`);
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `simbench-${runId.slice(0, 8)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
   },
   research: {
     state: (sessionId: string) => request<ResearchState>(`/sessions/${sessionId}/research`),
@@ -611,6 +630,54 @@ export type UsageSessionRow = UsageCounts & {
   last_at: string | null;
   models: UsageModel[];
 };
+// Public benchmarks (2026-10-27): SimBench grouped, run from the admin page.
+export type SimBenchStat = { mean: number | null; sem: number | null; n: number };
+export type SimBenchBlock = {
+  cases: number;
+  likelihood: SimBenchStat;
+  draws: SimBenchStat;
+  bare?: SimBenchStat;
+  twins_minus_bare?: { mean: number | null; sem: number | null; n: number; twins_ahead_share: number };
+};
+export type SimBenchSummary = {
+  overall: SimBenchBlock;
+  by_dataset: Record<string, SimBenchBlock>;
+  by_grouping: Record<string, SimBenchBlock>;
+  failed_cases: number;
+  refusal_share: number | null;
+  model: string | null;
+  twins: number;
+  published: Record<string, number>;
+  paper: string;
+};
+export type SimBenchEstimate = {
+  cases: number; groups: number; datasets?: string[]; twins?: number; model: string;
+  twin_calls: number; persona_batches: number; probes_usd: number; lineups_usd: number; total_usd: number;
+};
+export type SimBenchRun = {
+  id: string;
+  status: "queued" | "running" | "stopping" | "stopped" | "interrupted" | "complete" | "failed";
+  config: { case_count: number; group_count: number; twins: number; mode: string; bare: boolean; seed: number; parallel_groups: number; estimate: SimBenchEstimate };
+  progress: { cases_total: number; cases_done: number; cases_failed: number; groups_total: number; groups_built: number; groups_failed: number };
+  summary: SimBenchSummary | null;
+  cost_usd: number;
+  error: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  completed_at: string | null;
+  groups: { id: string; title?: string; status?: string; agents?: number; error?: string }[];
+};
+export type SimBenchOverview = {
+  subset: {
+    ready: boolean; reason?: string; cached?: boolean; stale?: boolean; n?: number; groups?: number; seed?: number; created?: string;
+    source?: { dataset: string; file: string; url: string; sha256: string; rows: number };
+    strata?: { key: string; dataset: string; grouping: string[]; cases: number; groups: number; of: number }[];
+    published?: Record<string, number>; paper?: string;
+  };
+  estimate: SimBenchEstimate;
+  runs: SimBenchRun[];
+};
+
 export type UsageOverview = {
   days: number;
   totals: UsageCounts & { sessions: number };

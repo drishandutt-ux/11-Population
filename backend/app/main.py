@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.database import create_tables
 from app.core.redis_client import subscribe, unsubscribe, session_channel
-from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement, population, scoping, archetypes, forms, kits, playbooks, sharing, images
+from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement, population, scoping, archetypes, forms, kits, playbooks, sharing, images, benchmarks
 
 
 #: Why the schema is not up to date, if it isn't. Surfaced on /health — a failed migration
@@ -38,13 +38,15 @@ async def lifespan(app: FastAPI):
     from app.core.monitoring import start_usage_writer, stop_usage_writer
     start_usage_writer()
     from app.core.trash import purge_loop
-    purge_task = asyncio.create_task(purge_loop())   # the bin: sessions deleted 30+ days ago go for good
+    purge_stop = asyncio.Event()
+    purge_task = asyncio.create_task(purge_loop(purge_stop))   # the bin: sessions deleted 30+ days ago go for good
     try:
         from app.services.measurement.visual_gen import log_visible_image_models
         asyncio.create_task(log_visible_image_models(" at startup"))   # the Visual Lab: which image models the OpenAI key can see
     except Exception as e:  # noqa: BLE001
         print(f"[startup] image-model check skipped: {e}")
     yield
+    purge_stop.set()
     purge_task.cancel()
     await stop_usage_writer()
 
@@ -94,6 +96,7 @@ app.include_router(playbooks.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
 app.include_router(sharing.router, prefix="/api/v1")
 app.include_router(images.router, prefix="/api/v1")
+app.include_router(benchmarks.router, prefix="/api/v1")
 
 
 @app.websocket("/ws/{session_id}")

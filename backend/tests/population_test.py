@@ -839,6 +839,7 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
     from app.models.evidence import ResearchRun
     from app.models.measurement import Experiment, Probe
     from app.models.population import PopulationBuild
+    from app.models.benchmark import BenchmarkRun
     from app.core.recovery import recover_interrupted
     client, Session, _ = api_client
     sid = client.post("/api/v1/sessions", json={"title": "t", "query": "q", "auto_research": False}).json()["id"]
@@ -855,11 +856,20 @@ def test_startup_marks_interrupted_runs_and_builds(api_client):
             db.add(Probe(id="p1", session_id=sid, instrument="journey", status="running", spec={"amendments": {"base_probe_id": "p0", "rules": []}}, agent_count=20, answer_count=7))
             db.add(Probe(id="p0", session_id=sid, instrument="journey", status="complete", spec={}, aggregates={"n": 20}))
             db.add(Experiment(id="e1", session_id=sid, instrument="verdict", status="running", variants=[], spec={}))
+            # a public-benchmark run (SimBench) is hours of work: marked interrupted so it can be resumed
+            db.add(BenchmarkRun(id="sb1", status="running", config={}, state={"cases": {"1": {"status": "complete"}}}))
+            db.add(BenchmarkRun(id="sb0", status="complete", config={}, state={}))
             await db.commit()
-        return await recover_interrupted()
+        out = await recover_interrupted()
+        async with Session() as db:
+            out["_sb"] = [(await db.get(BenchmarkRun, k)).status for k in ("sb1", "sb0")]
+            out["_sb_state"] = (await db.get(BenchmarkRun, "sb1")).state
+        return out
 
     counts = _a.new_event_loop().run_until_complete(seed())
-    assert counts == {"research_runs": 1, "population_builds": 2, "probes": 1, "experiments": 1}
+    assert counts.pop("_sb") == ["interrupted", "complete"]
+    assert counts.pop("_sb_state") == {"cases": {"1": {"status": "complete"}}}      # scored cases kept for resume
+    assert counts == {"research_runs": 1, "population_builds": 2, "probes": 1, "experiments": 1, "benchmark_runs": 1}
     p1 = client.get(f"/api/v1/sessions/{sid}/probes/p1").json()
     assert p1["status"] == "failed" and "server restart" in p1["error"] and p1["answer_count"] == 7
     assert client.get(f"/api/v1/sessions/{sid}/probes/p0").json()["status"] == "complete"

@@ -91,7 +91,8 @@ async def list_sessions(
             }
             for r in rows
         ]
-    q = select(AnalysisSession).where(AnalysisSession.deleted_at.is_(None)).order_by(AnalysisSession.created_at.desc()).limit(200)
+    # Benchmark lineups (kind "benchmark", 2026-10-27) are a run's working sessions, not the person's: listed under the run, never here.
+    q = select(AnalysisSession).where(AnalysisSession.deleted_at.is_(None), AnalysisSession.kind != "benchmark").order_by(AnalysisSession.created_at.desc()).limit(200)
     everyone = scope == "all" and user.is_admin
     if not user.is_dev and not everyone:
         q = q.where(AnalysisSession.user_id == user.id)

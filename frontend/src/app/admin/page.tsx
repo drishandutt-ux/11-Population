@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Coins, Loader2, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Coins, FlaskConical, Loader2, ShieldCheck, Users } from "lucide-react";
 import { api, AdminUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import UsageAnalyser from "@/components/admin/UsageAnalyser";
+import SimBenchPanel from "@/components/admin/SimBenchPanel";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"users" | "usage">("users");
+  const [tab, setTab] = useState<"users" | "usage" | "benchmarks">("users");
 
   async function load() {
     try {
@@ -68,6 +69,9 @@ export default function AdminPage() {
           <button onClick={() => setTab("usage")} className={`text-xs px-2.5 py-1 rounded flex items-center gap-1.5 ${tab === "usage" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
             <Coins className="w-3.5 h-3.5" /> Tokens &amp; cost
           </button>
+          <button onClick={() => setTab("benchmarks")} className={`text-xs px-2.5 py-1 rounded flex items-center gap-1.5 ${tab === "benchmarks" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            <FlaskConical className="w-3.5 h-3.5" /> Benchmarks
+          </button>
         </nav>
         {tab === "users" && <span className="ml-auto text-xs text-muted-foreground">{users.length} account{users.length === 1 ? "" : "s"} · {admins} admin{admins === 1 ? "" : "s"}</span>}
       </header>
@@ -75,6 +79,8 @@ export default function AdminPage() {
       <div className="flex-1 overflow-y-auto px-6 py-6">
         {tab === "usage" ? (
           <div className="max-w-6xl mx-auto"><UsageAnalyser /></div>
+        ) : tab === "benchmarks" ? (
+          <div className="max-w-6xl mx-auto"><SimBenchPanel /></div>
         ) : (
         <div className="max-w-3xl mx-auto space-y-4">
           <p className="text-xs text-muted-foreground">

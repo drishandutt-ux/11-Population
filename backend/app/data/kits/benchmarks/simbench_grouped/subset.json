@@ -1,0 +1,6514 @@
+{
+ "benchmark": "simbench_grouped",
+ "paper": "arXiv 2510.17516",
+ "source": {
+  "dataset": "pitehu/SimBench",
+  "file": "SimBenchGrouped.csv",
+  "url": "https://huggingface.co/datasets/pitehu/SimBench/resolve/main/SimBenchGrouped.csv",
+  "sha256": "944b25581271a7167c5bbd4fa65f8bcb568cd9216b1fdb9c474c152d7995604c",
+  "rows": 6343
+ },
+ "created": "2026-10-27",
+ "seed": 20261027,
+ "n": 1000,
+ "groups": 375,
+ "dataset_norms": {
+  "Afrobarometer": 0.510311,
+  "ESS": 0.326684,
+  "ISSP": 0.351711,
+  "LatinoBarometro": 0.247066,
+  "OpinionQA": 0.345182
+ },
+ "strata": [
+  {
+   "key": "Afrobarometer \u00d7 age_group+country",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "age_group",
+    "country"
+   ],
+   "cases": 33,
+   "groups": 12,
+   "of": 208
+  },
+  {
+   "key": "Afrobarometer \u00d7 country",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country"
+   ],
+   "cases": 16,
+   "groups": 7,
+   "of": 100
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+discuss_politics",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "discuss_politics"
+   ],
+   "cases": 35,
+   "groups": 12,
+   "of": 221
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+education",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "education"
+   ],
+   "cases": 19,
+   "groups": 6,
+   "of": 118
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+employment",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "employment"
+   ],
+   "cases": 34,
+   "groups": 14,
+   "of": 217
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+gender",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "gender"
+   ],
+   "cases": 31,
+   "groups": 10,
+   "of": 200
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+religion",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "religion"
+   ],
+   "cases": 16,
+   "groups": 7,
+   "of": 102
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+subjective_income",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "subjective_income"
+   ],
+   "cases": 28,
+   "groups": 12,
+   "of": 180
+  },
+  {
+   "key": "Afrobarometer \u00d7 country+urban_rural",
+   "dataset": "Afrobarometer",
+   "grouping": [
+    "country",
+    "urban_rural"
+   ],
+   "cases": 29,
+   "groups": 12,
+   "of": 185
+  },
+  {
+   "key": "ESS \u00d7 age_group+cntry",
+   "dataset": "ESS",
+   "grouping": [
+    "age_group",
+    "cntry"
+   ],
+   "cases": 46,
+   "groups": 20,
+   "of": 292
+  },
+  {
+   "key": "ESS \u00d7 cntry",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry"
+   ],
+   "cases": 16,
+   "groups": 8,
+   "of": 100
+  },
+  {
+   "key": "ESS \u00d7 cntry+domicil",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "domicil"
+   ],
+   "cases": 39,
+   "groups": 19,
+   "of": 247
+  },
+  {
+   "key": "ESS \u00d7 cntry+eisced",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "eisced"
+   ],
+   "cases": 33,
+   "groups": 13,
+   "of": 211
+  },
+  {
+   "key": "ESS \u00d7 cntry+gndr",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "gndr"
+   ],
+   "cases": 31,
+   "groups": 13,
+   "of": 198
+  },
+  {
+   "key": "ESS \u00d7 cntry+lrscale",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "lrscale"
+   ],
+   "cases": 16,
+   "groups": 7,
+   "of": 101
+  },
+  {
+   "key": "ESS \u00d7 cntry+maritalb",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "maritalb"
+   ],
+   "cases": 33,
+   "groups": 17,
+   "of": 208
+  },
+  {
+   "key": "ESS \u00d7 cntry+mnactic",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "mnactic"
+   ],
+   "cases": 29,
+   "groups": 12,
+   "of": 187
+  },
+  {
+   "key": "ESS \u00d7 cntry+rlgdgr",
+   "dataset": "ESS",
+   "grouping": [
+    "cntry",
+    "rlgdgr"
+   ],
+   "cases": 16,
+   "groups": 7,
+   "of": 99
+  },
+  {
+   "key": "ISSP \u00d7 country",
+   "dataset": "ISSP",
+   "grouping": [
+    "country"
+   ],
+   "cases": 16,
+   "groups": 12,
+   "of": 100
+  },
+  {
+   "key": "ISSP \u00d7 country+domicil",
+   "dataset": "ISSP",
+   "grouping": [
+    "country",
+    "domicil"
+   ],
+   "cases": 30,
+   "groups": 20,
+   "of": 192
+  },
+  {
+   "key": "ISSP \u00d7 country+marital_status",
+   "dataset": "ISSP",
+   "grouping": [
+    "country",
+    "marital_status"
+   ],
+   "cases": 27,
+   "groups": 16,
+   "of": 169
+  },
+  {
+   "key": "ISSP \u00d7 country+religion",
+   "dataset": "ISSP",
+   "grouping": [
+    "country",
+    "religion"
+   ],
+   "cases": 26,
+   "groups": 11,
+   "of": 162
+  },
+  {
+   "key": "ISSP \u00d7 country+topbot",
+   "dataset": "ISSP",
+   "grouping": [
+    "country",
+    "topbot"
+   ],
+   "cases": 20,
+   "groups": 14,
+   "of": 126
+  },
+  {
+   "key": "ISSP \u00d7 country+work_status",
+   "dataset": "ISSP",
+   "grouping": [
+    "country",
+    "work_status"
+   ],
+   "cases": 30,
+   "groups": 19,
+   "of": 191
+  },
+  {
+   "key": "LatinoBarometro \u00d7 age_group+country",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "age_group",
+    "country"
+   ],
+   "cases": 27,
+   "groups": 6,
+   "of": 171
+  },
+  {
+   "key": "LatinoBarometro \u00d7 city_size+country",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "city_size",
+    "country"
+   ],
+   "cases": 18,
+   "groups": 3,
+   "of": 114
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country"
+   ],
+   "cases": 16,
+   "groups": 3,
+   "of": 100
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+employment_status",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "employment_status"
+   ],
+   "cases": 17,
+   "groups": 3,
+   "of": 108
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+gender",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "gender"
+   ],
+   "cases": 31,
+   "groups": 6,
+   "of": 200
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+highest_education",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "highest_education"
+   ],
+   "cases": 14,
+   "groups": 3,
+   "of": 90
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+household_income",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "household_income"
+   ],
+   "cases": 24,
+   "groups": 5,
+   "of": 154
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+political_group",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "political_group"
+   ],
+   "cases": 6,
+   "groups": 1,
+   "of": 41
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+religion",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "religion"
+   ],
+   "cases": 20,
+   "groups": 3,
+   "of": 130
+  },
+  {
+   "key": "LatinoBarometro \u00d7 country+religiosity",
+   "dataset": "LatinoBarometro",
+   "grouping": [
+    "country",
+    "religiosity"
+   ],
+   "cases": 22,
+   "groups": 4,
+   "of": 137
+  },
+  {
+   "key": "OpinionQA \u00d7 AGE",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "AGE"
+   ],
+   "cases": 13,
+   "groups": 5,
+   "of": 80
+  },
+  {
+   "key": "OpinionQA \u00d7 CREGION",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "CREGION"
+   ],
+   "cases": 13,
+   "groups": 4,
+   "of": 80
+  },
+  {
+   "key": "OpinionQA \u00d7 EDUCATION",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "EDUCATION"
+   ],
+   "cases": 17,
+   "groups": 3,
+   "of": 109
+  },
+  {
+   "key": "OpinionQA \u00d7 INCOME",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "INCOME"
+   ],
+   "cases": 16,
+   "groups": 4,
+   "of": 100
+  },
+  {
+   "key": "OpinionQA \u00d7 MARITAL",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "MARITAL"
+   ],
+   "cases": 15,
+   "groups": 3,
+   "of": 96
+  },
+  {
+   "key": "OpinionQA \u00d7 POLIDEOLOGY",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "POLIDEOLOGY"
+   ],
+   "cases": 16,
+   "groups": 5,
+   "of": 100
+  },
+  {
+   "key": "OpinionQA \u00d7 POLPARTY",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "POLPARTY"
+   ],
+   "cases": 13,
+   "groups": 3,
+   "of": 80
+  },
+  {
+   "key": "OpinionQA \u00d7 RACE",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "RACE"
+   ],
+   "cases": 10,
+   "groups": 2,
+   "of": 65
+  },
+  {
+   "key": "OpinionQA \u00d7 RELIG",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "RELIG"
+   ],
+   "cases": 15,
+   "groups": 2,
+   "of": 94
+  },
+  {
+   "key": "OpinionQA \u00d7 RELIGATTEND",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "RELIGATTEND"
+   ],
+   "cases": 19,
+   "groups": 5,
+   "of": 120
+  },
+  {
+   "key": "OpinionQA \u00d7 SEX",
+   "dataset": "OpinionQA",
+   "grouping": [
+    "SEX"
+   ],
+   "cases": 6,
+   "groups": 1,
+   "of": 40
+  },
+  {
+   "key": "OpinionQA \u00d7 none",
+   "dataset": "OpinionQA",
+   "grouping": [],
+   "cases": 3,
+   "groups": 1,
+   "of": 20
+  }
+ ],
+ "cases": [
+  {
+   "id": 1,
+   "dataset": "OpinionQA",
+   "group_id": "fac12f6a47db",
+   "stratum": "OpinionQA \u00d7 none"
+  },
+  {
+   "id": 2,
+   "dataset": "OpinionQA",
+   "group_id": "fac12f6a47db",
+   "stratum": "OpinionQA \u00d7 none"
+  },
+  {
+   "id": 3,
+   "dataset": "OpinionQA",
+   "group_id": "fac12f6a47db",
+   "stratum": "OpinionQA \u00d7 none"
+  },
+  {
+   "id": 22,
+   "dataset": "OpinionQA",
+   "group_id": "101ec0e0f193",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 24,
+   "dataset": "OpinionQA",
+   "group_id": "53ea766d2966",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 27,
+   "dataset": "OpinionQA",
+   "group_id": "4d19ba3f1ec7",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 44,
+   "dataset": "OpinionQA",
+   "group_id": "e7daefe59dc9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 47,
+   "dataset": "OpinionQA",
+   "group_id": "7d6b786b58b7",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 49,
+   "dataset": "OpinionQA",
+   "group_id": "1590060009d6",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 58,
+   "dataset": "OpinionQA",
+   "group_id": "3b0f2306341d",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 67,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 70,
+   "dataset": "OpinionQA",
+   "group_id": "21a294f96bbf",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 74,
+   "dataset": "OpinionQA",
+   "group_id": "ba6f0cec1736",
+   "stratum": "OpinionQA \u00d7 SEX"
+  },
+  {
+   "id": 80,
+   "dataset": "OpinionQA",
+   "group_id": "783cb33606ba",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 85,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 86,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 94,
+   "dataset": "OpinionQA",
+   "group_id": "0e1019dd9ec0",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 97,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 99,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 100,
+   "dataset": "OpinionQA",
+   "group_id": "61363135aa23",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 115,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 118,
+   "dataset": "OpinionQA",
+   "group_id": "21a294f96bbf",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 122,
+   "dataset": "OpinionQA",
+   "group_id": "ba6f0cec1736",
+   "stratum": "OpinionQA \u00d7 SEX"
+  },
+  {
+   "id": 127,
+   "dataset": "OpinionQA",
+   "group_id": "783cb33606ba",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 131,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 133,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 134,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 142,
+   "dataset": "OpinionQA",
+   "group_id": "0e1019dd9ec0",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 145,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 147,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 148,
+   "dataset": "OpinionQA",
+   "group_id": "61363135aa23",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 162,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 165,
+   "dataset": "OpinionQA",
+   "group_id": "21a294f96bbf",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 169,
+   "dataset": "OpinionQA",
+   "group_id": "ba6f0cec1736",
+   "stratum": "OpinionQA \u00d7 SEX"
+  },
+  {
+   "id": 174,
+   "dataset": "OpinionQA",
+   "group_id": "783cb33606ba",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 178,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 180,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 181,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 189,
+   "dataset": "OpinionQA",
+   "group_id": "0e1019dd9ec0",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 192,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 194,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 209,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 212,
+   "dataset": "OpinionQA",
+   "group_id": "21a294f96bbf",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 216,
+   "dataset": "OpinionQA",
+   "group_id": "ba6f0cec1736",
+   "stratum": "OpinionQA \u00d7 SEX"
+  },
+  {
+   "id": 221,
+   "dataset": "OpinionQA",
+   "group_id": "783cb33606ba",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 225,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 227,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 228,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 236,
+   "dataset": "OpinionQA",
+   "group_id": "0e1019dd9ec0",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 239,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 241,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 269,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 274,
+   "dataset": "OpinionQA",
+   "group_id": "cc3566b6f9d9",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 283,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 288,
+   "dataset": "OpinionQA",
+   "group_id": "e4d1bdc598c8",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 296,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 303,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 319,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 324,
+   "dataset": "OpinionQA",
+   "group_id": "cc3566b6f9d9",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 333,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 338,
+   "dataset": "OpinionQA",
+   "group_id": "e4d1bdc598c8",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 346,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 353,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 369,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 374,
+   "dataset": "OpinionQA",
+   "group_id": "cc3566b6f9d9",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 383,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 388,
+   "dataset": "OpinionQA",
+   "group_id": "e4d1bdc598c8",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 396,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 403,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 419,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 424,
+   "dataset": "OpinionQA",
+   "group_id": "cc3566b6f9d9",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 433,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 438,
+   "dataset": "OpinionQA",
+   "group_id": "e4d1bdc598c8",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 446,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 453,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 469,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 483,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 496,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 503,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 519,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 533,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 546,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 553,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 569,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 583,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 596,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 603,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 619,
+   "dataset": "OpinionQA",
+   "group_id": "5f02aee2f2d9",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 633,
+   "dataset": "OpinionQA",
+   "group_id": "405a1411d5d9",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 646,
+   "dataset": "OpinionQA",
+   "group_id": "a0dfe8623788",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 653,
+   "dataset": "OpinionQA",
+   "group_id": "dfdcf1ed1cb0",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 654,
+   "dataset": "OpinionQA",
+   "group_id": "83f72e1142b4",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 657,
+   "dataset": "OpinionQA",
+   "group_id": "356dad8f15af",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 659,
+   "dataset": "OpinionQA",
+   "group_id": "44985fbed6fc",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 660,
+   "dataset": "OpinionQA",
+   "group_id": "8714c74ef040",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 664,
+   "dataset": "OpinionQA",
+   "group_id": "da5033c01028",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 673,
+   "dataset": "OpinionQA",
+   "group_id": "8207f8a64486",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 683,
+   "dataset": "OpinionQA",
+   "group_id": "b587c84ff361",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 688,
+   "dataset": "OpinionQA",
+   "group_id": "5741c69545bf",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 692,
+   "dataset": "OpinionQA",
+   "group_id": "731d9e83e0fc",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 693,
+   "dataset": "OpinionQA",
+   "group_id": "9967c0e1eee8",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 695,
+   "dataset": "OpinionQA",
+   "group_id": "fd7adec4bf62",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 697,
+   "dataset": "OpinionQA",
+   "group_id": "dc22993a17de",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 698,
+   "dataset": "OpinionQA",
+   "group_id": "72aa81a8d87b",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 700,
+   "dataset": "OpinionQA",
+   "group_id": "83f72e1142b4",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 705,
+   "dataset": "OpinionQA",
+   "group_id": "44985fbed6fc",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 706,
+   "dataset": "OpinionQA",
+   "group_id": "8714c74ef040",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 710,
+   "dataset": "OpinionQA",
+   "group_id": "da5033c01028",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 719,
+   "dataset": "OpinionQA",
+   "group_id": "8207f8a64486",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 729,
+   "dataset": "OpinionQA",
+   "group_id": "b587c84ff361",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 734,
+   "dataset": "OpinionQA",
+   "group_id": "5741c69545bf",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 738,
+   "dataset": "OpinionQA",
+   "group_id": "731d9e83e0fc",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 741,
+   "dataset": "OpinionQA",
+   "group_id": "fd7adec4bf62",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 743,
+   "dataset": "OpinionQA",
+   "group_id": "dc22993a17de",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 744,
+   "dataset": "OpinionQA",
+   "group_id": "72aa81a8d87b",
+   "stratum": "OpinionQA \u00d7 RACE"
+  },
+  {
+   "id": 746,
+   "dataset": "OpinionQA",
+   "group_id": "83f72e1142b4",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 751,
+   "dataset": "OpinionQA",
+   "group_id": "44985fbed6fc",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 752,
+   "dataset": "OpinionQA",
+   "group_id": "8714c74ef040",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 756,
+   "dataset": "OpinionQA",
+   "group_id": "da5033c01028",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 765,
+   "dataset": "OpinionQA",
+   "group_id": "8207f8a64486",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 775,
+   "dataset": "OpinionQA",
+   "group_id": "b587c84ff361",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 780,
+   "dataset": "OpinionQA",
+   "group_id": "5741c69545bf",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 784,
+   "dataset": "OpinionQA",
+   "group_id": "731d9e83e0fc",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 787,
+   "dataset": "OpinionQA",
+   "group_id": "fd7adec4bf62",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 789,
+   "dataset": "OpinionQA",
+   "group_id": "dc22993a17de",
+   "stratum": "OpinionQA \u00d7 POLIDEOLOGY"
+  },
+  {
+   "id": 794,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 797,
+   "dataset": "OpinionQA",
+   "group_id": "21a294f96bbf",
+   "stratum": "OpinionQA \u00d7 AGE"
+  },
+  {
+   "id": 801,
+   "dataset": "OpinionQA",
+   "group_id": "ba6f0cec1736",
+   "stratum": "OpinionQA \u00d7 SEX"
+  },
+  {
+   "id": 806,
+   "dataset": "OpinionQA",
+   "group_id": "783cb33606ba",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 811,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 813,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 814,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 822,
+   "dataset": "OpinionQA",
+   "group_id": "0e1019dd9ec0",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 825,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 827,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 842,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 849,
+   "dataset": "OpinionQA",
+   "group_id": "ba6f0cec1736",
+   "stratum": "OpinionQA \u00d7 SEX"
+  },
+  {
+   "id": 854,
+   "dataset": "OpinionQA",
+   "group_id": "783cb33606ba",
+   "stratum": "OpinionQA \u00d7 EDUCATION"
+  },
+  {
+   "id": 859,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 861,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 862,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 870,
+   "dataset": "OpinionQA",
+   "group_id": "0e1019dd9ec0",
+   "stratum": "OpinionQA \u00d7 RELIGATTEND"
+  },
+  {
+   "id": 873,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 875,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 890,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 907,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 909,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 910,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 921,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 923,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 938,
+   "dataset": "OpinionQA",
+   "group_id": "2f34da37f686",
+   "stratum": "OpinionQA \u00d7 CREGION"
+  },
+  {
+   "id": 955,
+   "dataset": "OpinionQA",
+   "group_id": "461f2c13163e",
+   "stratum": "OpinionQA \u00d7 MARITAL"
+  },
+  {
+   "id": 957,
+   "dataset": "OpinionQA",
+   "group_id": "9413da121f50",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 958,
+   "dataset": "OpinionQA",
+   "group_id": "6d64b15ef5c6",
+   "stratum": "OpinionQA \u00d7 RELIG"
+  },
+  {
+   "id": 969,
+   "dataset": "OpinionQA",
+   "group_id": "f7599559a972",
+   "stratum": "OpinionQA \u00d7 POLPARTY"
+  },
+  {
+   "id": 971,
+   "dataset": "OpinionQA",
+   "group_id": "470dbbdcb832",
+   "stratum": "OpinionQA \u00d7 INCOME"
+  },
+  {
+   "id": 993,
+   "dataset": "ESS",
+   "group_id": "44b3ad53c3f3",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1003,
+   "dataset": "ESS",
+   "group_id": "c755661be1ff",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1004,
+   "dataset": "ESS",
+   "group_id": "e3e798ad8a74",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1007,
+   "dataset": "ESS",
+   "group_id": "3a375fb041a6",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1012,
+   "dataset": "ESS",
+   "group_id": "90efe40a0c24",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1034,
+   "dataset": "ESS",
+   "group_id": "8a6f7e4f17be",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1046,
+   "dataset": "ESS",
+   "group_id": "c4c829fecf49",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1047,
+   "dataset": "ESS",
+   "group_id": "18776e4c4e3a",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1050,
+   "dataset": "ESS",
+   "group_id": "663193ad8006",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1057,
+   "dataset": "ESS",
+   "group_id": "547cd75361a6",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1058,
+   "dataset": "ESS",
+   "group_id": "2cf6752f1266",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1060,
+   "dataset": "ESS",
+   "group_id": "06a2b6685c51",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1062,
+   "dataset": "ESS",
+   "group_id": "b293dfd57d04",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1071,
+   "dataset": "ESS",
+   "group_id": "efe376762283",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1079,
+   "dataset": "ESS",
+   "group_id": "ebfe18a69bc9",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1081,
+   "dataset": "ESS",
+   "group_id": "1be0b6a3a03d",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1085,
+   "dataset": "ESS",
+   "group_id": "e4e1cde7db0e",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1086,
+   "dataset": "ESS",
+   "group_id": "c4642fda4bb2",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1095,
+   "dataset": "ESS",
+   "group_id": "2cc264388cd3",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1100,
+   "dataset": "ESS",
+   "group_id": "720e76ecdbe2",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1108,
+   "dataset": "ESS",
+   "group_id": "2a16019aae80",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1109,
+   "dataset": "ESS",
+   "group_id": "07f69db269ef",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1115,
+   "dataset": "ESS",
+   "group_id": "38a0ff3af7e6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1120,
+   "dataset": "ESS",
+   "group_id": "3fcf402d9caf",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1145,
+   "dataset": "ESS",
+   "group_id": "ecfba92ad857",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1150,
+   "dataset": "ESS",
+   "group_id": "2940f7831c30",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1151,
+   "dataset": "ESS",
+   "group_id": "efe376762283",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1162,
+   "dataset": "ESS",
+   "group_id": "822b07c46b59",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1165,
+   "dataset": "ESS",
+   "group_id": "089407a20647",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1169,
+   "dataset": "ESS",
+   "group_id": "c4642fda4bb2",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1179,
+   "dataset": "ESS",
+   "group_id": "2cc264388cd3",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1190,
+   "dataset": "ESS",
+   "group_id": "e25dd6a55c4c",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1193,
+   "dataset": "ESS",
+   "group_id": "46c906414f59",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1197,
+   "dataset": "ESS",
+   "group_id": "678be079ce51",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1203,
+   "dataset": "ESS",
+   "group_id": "be3f9c6fb54e",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1205,
+   "dataset": "ESS",
+   "group_id": "941f4dab5e3d",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1211,
+   "dataset": "ESS",
+   "group_id": "1a3b5f466fc6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1212,
+   "dataset": "ESS",
+   "group_id": "3fcf402d9caf",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1213,
+   "dataset": "ESS",
+   "group_id": "edd2c9eaefce",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1223,
+   "dataset": "ESS",
+   "group_id": "ce0cf2a6fe4d",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1243,
+   "dataset": "ESS",
+   "group_id": "0f474e75c77b",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1250,
+   "dataset": "ESS",
+   "group_id": "44b3ad53c3f3",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1256,
+   "dataset": "ESS",
+   "group_id": "089407a20647",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1263,
+   "dataset": "ESS",
+   "group_id": "e3e798ad8a74",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1268,
+   "dataset": "ESS",
+   "group_id": "3a375fb041a6",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1281,
+   "dataset": "ESS",
+   "group_id": "46c906414f59",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1290,
+   "dataset": "ESS",
+   "group_id": "be3f9c6fb54e",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1296,
+   "dataset": "ESS",
+   "group_id": "1a3b5f466fc6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1312,
+   "dataset": "ESS",
+   "group_id": "c4c829fecf49",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1323,
+   "dataset": "ESS",
+   "group_id": "547cd75361a6",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1327,
+   "dataset": "ESS",
+   "group_id": "0f474e75c77b",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1328,
+   "dataset": "ESS",
+   "group_id": "0fa4fc9be6ee",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1334,
+   "dataset": "ESS",
+   "group_id": "be22a68f2de3",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1345,
+   "dataset": "ESS",
+   "group_id": "68a4dfc889ee",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1350,
+   "dataset": "ESS",
+   "group_id": "1e1f2e63c0b3",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1352,
+   "dataset": "ESS",
+   "group_id": "3e6bdade02b9",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1366,
+   "dataset": "ESS",
+   "group_id": "43a42a2b0d42",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1384,
+   "dataset": "ESS",
+   "group_id": "8925544acb46",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1389,
+   "dataset": "ESS",
+   "group_id": "8aae92472c9c",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1392,
+   "dataset": "ESS",
+   "group_id": "79c8485211e7",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1409,
+   "dataset": "ESS",
+   "group_id": "04aea0feed81",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1414,
+   "dataset": "ESS",
+   "group_id": "b293dfd57d04",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1422,
+   "dataset": "ESS",
+   "group_id": "089407a20647",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1426,
+   "dataset": "ESS",
+   "group_id": "ebfe18a69bc9",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1428,
+   "dataset": "ESS",
+   "group_id": "1be0b6a3a03d",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1433,
+   "dataset": "ESS",
+   "group_id": "7832acddde81",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1434,
+   "dataset": "ESS",
+   "group_id": "b642ae4e09a9",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1441,
+   "dataset": "ESS",
+   "group_id": "d3f14cfa74a5",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1445,
+   "dataset": "ESS",
+   "group_id": "495b15dd08d4",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1448,
+   "dataset": "ESS",
+   "group_id": "46c906414f59",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1452,
+   "dataset": "ESS",
+   "group_id": "9a063e8f94ce",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1456,
+   "dataset": "ESS",
+   "group_id": "be3f9c6fb54e",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1457,
+   "dataset": "ESS",
+   "group_id": "07f69db269ef",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1463,
+   "dataset": "ESS",
+   "group_id": "1a3b5f466fc6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1470,
+   "dataset": "ESS",
+   "group_id": "dfab58ac4ba1",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1473,
+   "dataset": "ESS",
+   "group_id": "b70067dcd102",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1489,
+   "dataset": "ESS",
+   "group_id": "0f474e75c77b",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1496,
+   "dataset": "ESS",
+   "group_id": "b293dfd57d04",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1507,
+   "dataset": "ESS",
+   "group_id": "822b07c46b59",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1510,
+   "dataset": "ESS",
+   "group_id": "ebfe18a69bc9",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1512,
+   "dataset": "ESS",
+   "group_id": "67cdc42c4814",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1530,
+   "dataset": "ESS",
+   "group_id": "720e76ecdbe2",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1532,
+   "dataset": "ESS",
+   "group_id": "e25dd6a55c4c",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1534,
+   "dataset": "ESS",
+   "group_id": "b641eab87b74",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1535,
+   "dataset": "ESS",
+   "group_id": "ab65acf34285",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1539,
+   "dataset": "ESS",
+   "group_id": "2a16019aae80",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1542,
+   "dataset": "ESS",
+   "group_id": "07f69db269ef",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1545,
+   "dataset": "ESS",
+   "group_id": "13dd98635d93",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1548,
+   "dataset": "ESS",
+   "group_id": "38a0ff3af7e6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1559,
+   "dataset": "ESS",
+   "group_id": "5a9e2177c12d",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1579,
+   "dataset": "ESS",
+   "group_id": "92ad035a9157",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1582,
+   "dataset": "ESS",
+   "group_id": "31f401562add",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1593,
+   "dataset": "ESS",
+   "group_id": "29d8afba668f",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1600,
+   "dataset": "ESS",
+   "group_id": "0d254944071f",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1612,
+   "dataset": "ESS",
+   "group_id": "71d278bbeed5",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1622,
+   "dataset": "ESS",
+   "group_id": "1e7af09162f0",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1639,
+   "dataset": "ESS",
+   "group_id": "422d405ecd3a",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1641,
+   "dataset": "ESS",
+   "group_id": "7ffff3ebe0e1",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1644,
+   "dataset": "ESS",
+   "group_id": "7f67af62ce42",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1655,
+   "dataset": "ESS",
+   "group_id": "5245a99d7a1f",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1659,
+   "dataset": "ESS",
+   "group_id": "b1e24a70f58c",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1661,
+   "dataset": "ESS",
+   "group_id": "d4f0ad90754f",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1668,
+   "dataset": "ESS",
+   "group_id": "b293dfd57d04",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1681,
+   "dataset": "ESS",
+   "group_id": "089407a20647",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1685,
+   "dataset": "ESS",
+   "group_id": "ebfe18a69bc9",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1697,
+   "dataset": "ESS",
+   "group_id": "d3f14cfa74a5",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1707,
+   "dataset": "ESS",
+   "group_id": "720e76ecdbe2",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1710,
+   "dataset": "ESS",
+   "group_id": "46c906414f59",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1713,
+   "dataset": "ESS",
+   "group_id": "9a063e8f94ce",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1717,
+   "dataset": "ESS",
+   "group_id": "2a16019aae80",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1719,
+   "dataset": "ESS",
+   "group_id": "be3f9c6fb54e",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1720,
+   "dataset": "ESS",
+   "group_id": "07f69db269ef",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1726,
+   "dataset": "ESS",
+   "group_id": "38a0ff3af7e6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1730,
+   "dataset": "ESS",
+   "group_id": "1a3b5f466fc6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1738,
+   "dataset": "ESS",
+   "group_id": "dfab58ac4ba1",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1740,
+   "dataset": "ESS",
+   "group_id": "18776e4c4e3a",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1752,
+   "dataset": "ESS",
+   "group_id": "2cf6752f1266",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1759,
+   "dataset": "ESS",
+   "group_id": "0f474e75c77b",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1768,
+   "dataset": "ESS",
+   "group_id": "44b3ad53c3f3",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1774,
+   "dataset": "ESS",
+   "group_id": "822b07c46b59",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1777,
+   "dataset": "ESS",
+   "group_id": "67cdc42c4814",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1780,
+   "dataset": "ESS",
+   "group_id": "1be0b6a3a03d",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1783,
+   "dataset": "ESS",
+   "group_id": "e3e798ad8a74",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1802,
+   "dataset": "ESS",
+   "group_id": "e25dd6a55c4c",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1804,
+   "dataset": "ESS",
+   "group_id": "ab65acf34285",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1814,
+   "dataset": "ESS",
+   "group_id": "13dd98635d93",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1818,
+   "dataset": "ESS",
+   "group_id": "941f4dab5e3d",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 1825,
+   "dataset": "ESS",
+   "group_id": "edd2c9eaefce",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1828,
+   "dataset": "ESS",
+   "group_id": "5a9e2177c12d",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1836,
+   "dataset": "ESS",
+   "group_id": "ce0cf2a6fe4d",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1849,
+   "dataset": "ESS",
+   "group_id": "92ad035a9157",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1856,
+   "dataset": "ESS",
+   "group_id": "b293dfd57d04",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1862,
+   "dataset": "ESS",
+   "group_id": "822b07c46b59",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1865,
+   "dataset": "ESS",
+   "group_id": "844d2b06c1df",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1868,
+   "dataset": "ESS",
+   "group_id": "ebfe18a69bc9",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1887,
+   "dataset": "ESS",
+   "group_id": "e25dd6a55c4c",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1897,
+   "dataset": "ESS",
+   "group_id": "616b71db47a0",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1898,
+   "dataset": "ESS",
+   "group_id": "07f69db269ef",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1901,
+   "dataset": "ESS",
+   "group_id": "e4810cf7d104",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 1919,
+   "dataset": "ESS",
+   "group_id": "35b3f12d5b79",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1923,
+   "dataset": "ESS",
+   "group_id": "ed6246ac0d3e",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1933,
+   "dataset": "ESS",
+   "group_id": "80bc89b86907",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1934,
+   "dataset": "ESS",
+   "group_id": "978e4e0bca53",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1938,
+   "dataset": "ESS",
+   "group_id": "be22a68f2de3",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 1944,
+   "dataset": "ESS",
+   "group_id": "37336e7904d2",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1947,
+   "dataset": "ESS",
+   "group_id": "05b38815f9a4",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 1953,
+   "dataset": "ESS",
+   "group_id": "1e1f2e63c0b3",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1960,
+   "dataset": "ESS",
+   "group_id": "800bb7e531a4",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 1968,
+   "dataset": "ESS",
+   "group_id": "3d943e87d981",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 1980,
+   "dataset": "ESS",
+   "group_id": "8925544acb46",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 1985,
+   "dataset": "ESS",
+   "group_id": "8aae92472c9c",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 1997,
+   "dataset": "ESS",
+   "group_id": "cc816a2e857a",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 1998,
+   "dataset": "ESS",
+   "group_id": "d4514a28380e",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2003,
+   "dataset": "ESS",
+   "group_id": "8777bd928a66",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 2007,
+   "dataset": "ESS",
+   "group_id": "978e4e0bca53",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 2021,
+   "dataset": "ESS",
+   "group_id": "5e73a1dac904",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2025,
+   "dataset": "ESS",
+   "group_id": "3e6bdade02b9",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2026,
+   "dataset": "ESS",
+   "group_id": "3b0c63b20220",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2040,
+   "dataset": "ESS",
+   "group_id": "44b37d43484a",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2056,
+   "dataset": "ESS",
+   "group_id": "d1dff0efaf1e",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2057,
+   "dataset": "ESS",
+   "group_id": "4854a7a1a862",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2058,
+   "dataset": "ESS",
+   "group_id": "41ad783c456f",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2060,
+   "dataset": "ESS",
+   "group_id": "79c8485211e7",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2066,
+   "dataset": "ESS",
+   "group_id": "e04934097756",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2069,
+   "dataset": "ESS",
+   "group_id": "9a18188f83b0",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2074,
+   "dataset": "ESS",
+   "group_id": "cc816a2e857a",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2077,
+   "dataset": "ESS",
+   "group_id": "be22a68f2de3",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 2080,
+   "dataset": "ESS",
+   "group_id": "2b41f380b60f",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2083,
+   "dataset": "ESS",
+   "group_id": "0eb7e6eeccfd",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2090,
+   "dataset": "ESS",
+   "group_id": "05b38815f9a4",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2098,
+   "dataset": "ESS",
+   "group_id": "5e73a1dac904",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2100,
+   "dataset": "ESS",
+   "group_id": "1e1f2e63c0b3",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2103,
+   "dataset": "ESS",
+   "group_id": "800bb7e531a4",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2113,
+   "dataset": "ESS",
+   "group_id": "3d943e87d981",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2117,
+   "dataset": "ESS",
+   "group_id": "b9422a0d6d75",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2132,
+   "dataset": "ESS",
+   "group_id": "8925544acb46",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2142,
+   "dataset": "ESS",
+   "group_id": "8aae92472c9c",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2153,
+   "dataset": "ESS",
+   "group_id": "e04934097756",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2171,
+   "dataset": "ESS",
+   "group_id": "844d2b06c1df",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2179,
+   "dataset": "ESS",
+   "group_id": "7832acddde81",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2180,
+   "dataset": "ESS",
+   "group_id": "b642ae4e09a9",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2182,
+   "dataset": "ESS",
+   "group_id": "3a375fb041a6",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2191,
+   "dataset": "ESS",
+   "group_id": "495b15dd08d4",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2202,
+   "dataset": "ESS",
+   "group_id": "616b71db47a0",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2208,
+   "dataset": "ESS",
+   "group_id": "8a6f7e4f17be",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 2220,
+   "dataset": "ESS",
+   "group_id": "b70067dcd102",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2222,
+   "dataset": "ESS",
+   "group_id": "c4c829fecf49",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2223,
+   "dataset": "ESS",
+   "group_id": "35b3f12d5b79",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2225,
+   "dataset": "ESS",
+   "group_id": "663193ad8006",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2232,
+   "dataset": "ESS",
+   "group_id": "547cd75361a6",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2234,
+   "dataset": "ESS",
+   "group_id": "06a2b6685c51",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2239,
+   "dataset": "ESS",
+   "group_id": "b293dfd57d04",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 2241,
+   "dataset": "ESS",
+   "group_id": "efe376762283",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2249,
+   "dataset": "ESS",
+   "group_id": "15d12994c008",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2252,
+   "dataset": "ESS",
+   "group_id": "822b07c46b59",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2255,
+   "dataset": "ESS",
+   "group_id": "ebfe18a69bc9",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2257,
+   "dataset": "ESS",
+   "group_id": "c4642fda4bb2",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2267,
+   "dataset": "ESS",
+   "group_id": "2cc264388cd3",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2278,
+   "dataset": "ESS",
+   "group_id": "e25dd6a55c4c",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2285,
+   "dataset": "ESS",
+   "group_id": "7322289a28cb",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2289,
+   "dataset": "ESS",
+   "group_id": "07f69db269ef",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2292,
+   "dataset": "ESS",
+   "group_id": "941f4dab5e3d",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 2297,
+   "dataset": "ESS",
+   "group_id": "3fcf402d9caf",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2298,
+   "dataset": "ESS",
+   "group_id": "edd2c9eaefce",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2299,
+   "dataset": "ESS",
+   "group_id": "9a1f61ad8c27",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2308,
+   "dataset": "ESS",
+   "group_id": "ce0cf2a6fe4d",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2309,
+   "dataset": "ESS",
+   "group_id": "fdb5b8ca2c40",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2311,
+   "dataset": "ESS",
+   "group_id": "4300d427aaaf",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2332,
+   "dataset": "ESS",
+   "group_id": "efe376762283",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2344,
+   "dataset": "ESS",
+   "group_id": "089407a20647",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2348,
+   "dataset": "ESS",
+   "group_id": "c4642fda4bb2",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2352,
+   "dataset": "ESS",
+   "group_id": "f82d4cddbf25",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2355,
+   "dataset": "ESS",
+   "group_id": "3a375fb041a6",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2358,
+   "dataset": "ESS",
+   "group_id": "2cc264388cd3",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2361,
+   "dataset": "ESS",
+   "group_id": "d3f14cfa74a5",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2367,
+   "dataset": "ESS",
+   "group_id": "86dc9c89f7b6",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2370,
+   "dataset": "ESS",
+   "group_id": "46c906414f59",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2374,
+   "dataset": "ESS",
+   "group_id": "9a063e8f94ce",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2379,
+   "dataset": "ESS",
+   "group_id": "be3f9c6fb54e",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2383,
+   "dataset": "ESS",
+   "group_id": "1a3b5f466fc6",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 2384,
+   "dataset": "ESS",
+   "group_id": "3fcf402d9caf",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2392,
+   "dataset": "ESS",
+   "group_id": "dfab58ac4ba1",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2396,
+   "dataset": "ESS",
+   "group_id": "2e148554392a",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2397,
+   "dataset": "ESS",
+   "group_id": "c4c829fecf49",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2408,
+   "dataset": "ESS",
+   "group_id": "547cd75361a6",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2412,
+   "dataset": "ESS",
+   "group_id": "0f474e75c77b",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2422,
+   "dataset": "ESS",
+   "group_id": "15d12994c008",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2431,
+   "dataset": "ESS",
+   "group_id": "f82d4cddbf25",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2434,
+   "dataset": "ESS",
+   "group_id": "3a375fb041a6",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2444,
+   "dataset": "ESS",
+   "group_id": "86dc9c89f7b6",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2449,
+   "dataset": "ESS",
+   "group_id": "e25dd6a55c4c",
+   "stratum": "ESS \u00d7 cntry+eisced"
+  },
+  {
+   "id": 2455,
+   "dataset": "ESS",
+   "group_id": "7322289a28cb",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2460,
+   "dataset": "ESS",
+   "group_id": "e4810cf7d104",
+   "stratum": "ESS \u00d7 cntry+mnactic"
+  },
+  {
+   "id": 2470,
+   "dataset": "ESS",
+   "group_id": "2e148554392a",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2471,
+   "dataset": "ESS",
+   "group_id": "c4c829fecf49",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2472,
+   "dataset": "ESS",
+   "group_id": "fdb5b8ca2c40",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2474,
+   "dataset": "ESS",
+   "group_id": "4300d427aaaf",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2479,
+   "dataset": "ESS",
+   "group_id": "ed6246ac0d3e",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2483,
+   "dataset": "ESS",
+   "group_id": "547cd75361a6",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2490,
+   "dataset": "ESS",
+   "group_id": "80bc89b86907",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2500,
+   "dataset": "ESS",
+   "group_id": "7eff6c7029bd",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2501,
+   "dataset": "ESS",
+   "group_id": "262b3cda6913",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2505,
+   "dataset": "ESS",
+   "group_id": "91efeb8dfef0",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2508,
+   "dataset": "ESS",
+   "group_id": "518fe5044480",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2516,
+   "dataset": "ESS",
+   "group_id": "3e6bdade02b9",
+   "stratum": "ESS \u00d7 cntry+gndr"
+  },
+  {
+   "id": 2538,
+   "dataset": "ESS",
+   "group_id": "3a3d4ba20c4a",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 2540,
+   "dataset": "ESS",
+   "group_id": "50fb894b1b4a",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 2544,
+   "dataset": "ESS",
+   "group_id": "8bacb498ba72",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2552,
+   "dataset": "ESS",
+   "group_id": "79c8485211e7",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2555,
+   "dataset": "ESS",
+   "group_id": "af28d24acca3",
+   "stratum": "ESS \u00d7 cntry+domicil"
+  },
+  {
+   "id": 2560,
+   "dataset": "ESS",
+   "group_id": "9186c87f0225",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2566,
+   "dataset": "ESS",
+   "group_id": "0fa63a9a68c3",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 2570,
+   "dataset": "ESS",
+   "group_id": "e58553522710",
+   "stratum": "ESS \u00d7 cntry"
+  },
+  {
+   "id": 2572,
+   "dataset": "ESS",
+   "group_id": "29d8afba668f",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2579,
+   "dataset": "ESS",
+   "group_id": "0d254944071f",
+   "stratum": "ESS \u00d7 age_group+cntry"
+  },
+  {
+   "id": 2605,
+   "dataset": "ESS",
+   "group_id": "68363a34a074",
+   "stratum": "ESS \u00d7 cntry+rlgdgr"
+  },
+  {
+   "id": 2608,
+   "dataset": "ESS",
+   "group_id": "422d405ecd3a",
+   "stratum": "ESS \u00d7 cntry+lrscale"
+  },
+  {
+   "id": 2620,
+   "dataset": "ESS",
+   "group_id": "b1e24a70f58c",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2622,
+   "dataset": "ESS",
+   "group_id": "d4f0ad90754f",
+   "stratum": "ESS \u00d7 cntry+maritalb"
+  },
+  {
+   "id": 2627,
+   "dataset": "Afrobarometer",
+   "group_id": "68e9fc766d6a",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 2632,
+   "dataset": "Afrobarometer",
+   "group_id": "85b59e8343ca",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2634,
+   "dataset": "Afrobarometer",
+   "group_id": "e42bbb2764f5",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2638,
+   "dataset": "Afrobarometer",
+   "group_id": "b765b48524e0",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2651,
+   "dataset": "Afrobarometer",
+   "group_id": "e0625195256a",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2652,
+   "dataset": "Afrobarometer",
+   "group_id": "8b75f400d611",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2653,
+   "dataset": "Afrobarometer",
+   "group_id": "7c93e0d64929",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2660,
+   "dataset": "Afrobarometer",
+   "group_id": "29082c93270e",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 2665,
+   "dataset": "Afrobarometer",
+   "group_id": "e48358740e94",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 2677,
+   "dataset": "Afrobarometer",
+   "group_id": "6046ed14c68d",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 2683,
+   "dataset": "Afrobarometer",
+   "group_id": "7737f0ff9fc9",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2686,
+   "dataset": "Afrobarometer",
+   "group_id": "65b77d75fcbc",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2691,
+   "dataset": "Afrobarometer",
+   "group_id": "1738a98ca409",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2697,
+   "dataset": "Afrobarometer",
+   "group_id": "3aba146518ed",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2699,
+   "dataset": "Afrobarometer",
+   "group_id": "cc4fe0e82ab9",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2703,
+   "dataset": "Afrobarometer",
+   "group_id": "a9c1e36226d3",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2704,
+   "dataset": "Afrobarometer",
+   "group_id": "5ececaee64d9",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2705,
+   "dataset": "Afrobarometer",
+   "group_id": "90283669b0bd",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2716,
+   "dataset": "Afrobarometer",
+   "group_id": "f4131886297b",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2725,
+   "dataset": "Afrobarometer",
+   "group_id": "9201d1b008ba",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2760,
+   "dataset": "Afrobarometer",
+   "group_id": "bae1bb6d341b",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 2761,
+   "dataset": "Afrobarometer",
+   "group_id": "8bd9bb080e6c",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 2768,
+   "dataset": "Afrobarometer",
+   "group_id": "7737f0ff9fc9",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2771,
+   "dataset": "Afrobarometer",
+   "group_id": "958cb7f0236c",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2774,
+   "dataset": "Afrobarometer",
+   "group_id": "bb1745619722",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2778,
+   "dataset": "Afrobarometer",
+   "group_id": "3aba146518ed",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2780,
+   "dataset": "Afrobarometer",
+   "group_id": "fadb8fe7ec7d",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2782,
+   "dataset": "Afrobarometer",
+   "group_id": "344181c83914",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2791,
+   "dataset": "Afrobarometer",
+   "group_id": "800ae390f6f8",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2804,
+   "dataset": "Afrobarometer",
+   "group_id": "78b5cb997f62",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2805,
+   "dataset": "Afrobarometer",
+   "group_id": "f6952961a185",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2808,
+   "dataset": "Afrobarometer",
+   "group_id": "5245b02ad5a9",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2814,
+   "dataset": "Afrobarometer",
+   "group_id": "e3c764a27e32",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2821,
+   "dataset": "Afrobarometer",
+   "group_id": "16e19831845b",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 2833,
+   "dataset": "Afrobarometer",
+   "group_id": "bae1bb6d341b",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 2834,
+   "dataset": "Afrobarometer",
+   "group_id": "8bd9bb080e6c",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 2837,
+   "dataset": "Afrobarometer",
+   "group_id": "9de6c26cf654",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2841,
+   "dataset": "Afrobarometer",
+   "group_id": "25ace4a1ed16",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2851,
+   "dataset": "Afrobarometer",
+   "group_id": "fadb8fe7ec7d",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2854,
+   "dataset": "Afrobarometer",
+   "group_id": "9be68ccd824c",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2860,
+   "dataset": "Afrobarometer",
+   "group_id": "2b06826c84ce",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2861,
+   "dataset": "Afrobarometer",
+   "group_id": "800ae390f6f8",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 2869,
+   "dataset": "Afrobarometer",
+   "group_id": "42e9a7409af4",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2873,
+   "dataset": "Afrobarometer",
+   "group_id": "85113ca91420",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2876,
+   "dataset": "Afrobarometer",
+   "group_id": "b765b48524e0",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 2882,
+   "dataset": "Afrobarometer",
+   "group_id": "30d76afb9877",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2885,
+   "dataset": "Afrobarometer",
+   "group_id": "6585eeb91abb",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2888,
+   "dataset": "Afrobarometer",
+   "group_id": "e0625195256a",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2899,
+   "dataset": "Afrobarometer",
+   "group_id": "d33ca96bc392",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 2902,
+   "dataset": "Afrobarometer",
+   "group_id": "e48358740e94",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 2909,
+   "dataset": "Afrobarometer",
+   "group_id": "eba57cd3cacb",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 2915,
+   "dataset": "Afrobarometer",
+   "group_id": "491b27b1ae97",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2917,
+   "dataset": "Afrobarometer",
+   "group_id": "70fcd669aeb3",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2920,
+   "dataset": "Afrobarometer",
+   "group_id": "a5afc3b9177e",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2923,
+   "dataset": "Afrobarometer",
+   "group_id": "65b77d75fcbc",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2925,
+   "dataset": "Afrobarometer",
+   "group_id": "9d72be82e327",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2927,
+   "dataset": "Afrobarometer",
+   "group_id": "e3b9201c8a96",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2931,
+   "dataset": "Afrobarometer",
+   "group_id": "945872e64807",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2933,
+   "dataset": "Afrobarometer",
+   "group_id": "cc4fe0e82ab9",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 2961,
+   "dataset": "Afrobarometer",
+   "group_id": "5245b02ad5a9",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2966,
+   "dataset": "Afrobarometer",
+   "group_id": "30d76afb9877",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 2974,
+   "dataset": "Afrobarometer",
+   "group_id": "bd9911d53551",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 2978,
+   "dataset": "Afrobarometer",
+   "group_id": "4a8907b9c667",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 2990,
+   "dataset": "Afrobarometer",
+   "group_id": "9de6c26cf654",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 2992,
+   "dataset": "Afrobarometer",
+   "group_id": "491b27b1ae97",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3000,
+   "dataset": "Afrobarometer",
+   "group_id": "e3b9201c8a96",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3005,
+   "dataset": "Afrobarometer",
+   "group_id": "9be68ccd824c",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3014,
+   "dataset": "Afrobarometer",
+   "group_id": "ecbe2efe26b3",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3027,
+   "dataset": "Afrobarometer",
+   "group_id": "85113ca91420",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3030,
+   "dataset": "Afrobarometer",
+   "group_id": "bb0cbafcda93",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3035,
+   "dataset": "Afrobarometer",
+   "group_id": "b7fedba139b0",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3038,
+   "dataset": "Afrobarometer",
+   "group_id": "6585eeb91abb",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3043,
+   "dataset": "Afrobarometer",
+   "group_id": "bcc1bcdcdc52",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3053,
+   "dataset": "Afrobarometer",
+   "group_id": "d33ca96bc392",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3060,
+   "dataset": "Afrobarometer",
+   "group_id": "eba57cd3cacb",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3062,
+   "dataset": "Afrobarometer",
+   "group_id": "33ee47059602",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3084,
+   "dataset": "Afrobarometer",
+   "group_id": "945872e64807",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3099,
+   "dataset": "Afrobarometer",
+   "group_id": "f43cf6b6994f",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3100,
+   "dataset": "Afrobarometer",
+   "group_id": "685109819d77",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3112,
+   "dataset": "Afrobarometer",
+   "group_id": "006b5810a9a8",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3125,
+   "dataset": "Afrobarometer",
+   "group_id": "bd9911d53551",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3129,
+   "dataset": "Afrobarometer",
+   "group_id": "4c2199b0ebba",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3130,
+   "dataset": "Afrobarometer",
+   "group_id": "c300928c6890",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3133,
+   "dataset": "Afrobarometer",
+   "group_id": "4deffa5f678e",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3136,
+   "dataset": "Afrobarometer",
+   "group_id": "c5972c10e5e5",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3137,
+   "dataset": "Afrobarometer",
+   "group_id": "0d931797e69d",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3150,
+   "dataset": "Afrobarometer",
+   "group_id": "92fee64c732e",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3156,
+   "dataset": "Afrobarometer",
+   "group_id": "41270f865376",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3170,
+   "dataset": "Afrobarometer",
+   "group_id": "685109819d77",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3177,
+   "dataset": "Afrobarometer",
+   "group_id": "78b5cb997f62",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3178,
+   "dataset": "Afrobarometer",
+   "group_id": "f6952961a185",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3188,
+   "dataset": "Afrobarometer",
+   "group_id": "e3c764a27e32",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3190,
+   "dataset": "Afrobarometer",
+   "group_id": "8b75f400d611",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3191,
+   "dataset": "Afrobarometer",
+   "group_id": "7c93e0d64929",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3194,
+   "dataset": "Afrobarometer",
+   "group_id": "16e19831845b",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3197,
+   "dataset": "Afrobarometer",
+   "group_id": "29082c93270e",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3199,
+   "dataset": "Afrobarometer",
+   "group_id": "c300928c6890",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3203,
+   "dataset": "Afrobarometer",
+   "group_id": "4783b89d7f05",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3204,
+   "dataset": "Afrobarometer",
+   "group_id": "8158d10418e7",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3207,
+   "dataset": "Afrobarometer",
+   "group_id": "c5972c10e5e5",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3208,
+   "dataset": "Afrobarometer",
+   "group_id": "0d931797e69d",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3211,
+   "dataset": "Afrobarometer",
+   "group_id": "6046ed14c68d",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3220,
+   "dataset": "Afrobarometer",
+   "group_id": "25ace4a1ed16",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3224,
+   "dataset": "Afrobarometer",
+   "group_id": "1738a98ca409",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3231,
+   "dataset": "Afrobarometer",
+   "group_id": "a9c1e36226d3",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3232,
+   "dataset": "Afrobarometer",
+   "group_id": "5ececaee64d9",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3239,
+   "dataset": "Afrobarometer",
+   "group_id": "2b06826c84ce",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3242,
+   "dataset": "Afrobarometer",
+   "group_id": "f4131886297b",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3243,
+   "dataset": "Afrobarometer",
+   "group_id": "685109819d77",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3256,
+   "dataset": "Afrobarometer",
+   "group_id": "bb0cbafcda93",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3272,
+   "dataset": "Afrobarometer",
+   "group_id": "c300928c6890",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3273,
+   "dataset": "Afrobarometer",
+   "group_id": "4a8907b9c667",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3275,
+   "dataset": "Afrobarometer",
+   "group_id": "53d04688d64f",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3276,
+   "dataset": "Afrobarometer",
+   "group_id": "c5972c10e5e5",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3277,
+   "dataset": "Afrobarometer",
+   "group_id": "0d931797e69d",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3282,
+   "dataset": "Afrobarometer",
+   "group_id": "33ee47059602",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3290,
+   "dataset": "Afrobarometer",
+   "group_id": "af6aa150a5eb",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3305,
+   "dataset": "Afrobarometer",
+   "group_id": "35d50caf0a04",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3310,
+   "dataset": "Afrobarometer",
+   "group_id": "ecbe2efe26b3",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3311,
+   "dataset": "Afrobarometer",
+   "group_id": "b7cb042e69ee",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3322,
+   "dataset": "Afrobarometer",
+   "group_id": "42e9a7409af4",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3327,
+   "dataset": "Afrobarometer",
+   "group_id": "85b59e8343ca",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3329,
+   "dataset": "Afrobarometer",
+   "group_id": "78b5cb997f62",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3330,
+   "dataset": "Afrobarometer",
+   "group_id": "f6952961a185",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3333,
+   "dataset": "Afrobarometer",
+   "group_id": "5245b02ad5a9",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3336,
+   "dataset": "Afrobarometer",
+   "group_id": "30d76afb9877",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3339,
+   "dataset": "Afrobarometer",
+   "group_id": "e3c764a27e32",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3345,
+   "dataset": "Afrobarometer",
+   "group_id": "16e19831845b",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3363,
+   "dataset": "Afrobarometer",
+   "group_id": "491b27b1ae97",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3367,
+   "dataset": "Afrobarometer",
+   "group_id": "25ace4a1ed16",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3371,
+   "dataset": "Afrobarometer",
+   "group_id": "e3b9201c8a96",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3379,
+   "dataset": "Afrobarometer",
+   "group_id": "9be68ccd824c",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3382,
+   "dataset": "Afrobarometer",
+   "group_id": "90283669b0bd",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3384,
+   "dataset": "Afrobarometer",
+   "group_id": "2b06826c84ce",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3394,
+   "dataset": "Afrobarometer",
+   "group_id": "85113ca91420",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3398,
+   "dataset": "Afrobarometer",
+   "group_id": "006b5810a9a8",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3399,
+   "dataset": "Afrobarometer",
+   "group_id": "bb0cbafcda93",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3402,
+   "dataset": "Afrobarometer",
+   "group_id": "30d76afb9877",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3405,
+   "dataset": "Afrobarometer",
+   "group_id": "6585eeb91abb",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3419,
+   "dataset": "Afrobarometer",
+   "group_id": "d33ca96bc392",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3425,
+   "dataset": "Afrobarometer",
+   "group_id": "eba57cd3cacb",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3429,
+   "dataset": "Afrobarometer",
+   "group_id": "33ee47059602",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3432,
+   "dataset": "Afrobarometer",
+   "group_id": "491b27b1ae97",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3434,
+   "dataset": "Afrobarometer",
+   "group_id": "7737f0ff9fc9",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3438,
+   "dataset": "Afrobarometer",
+   "group_id": "92fee64c732e",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3442,
+   "dataset": "Afrobarometer",
+   "group_id": "e3b9201c8a96",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3444,
+   "dataset": "Afrobarometer",
+   "group_id": "3aba146518ed",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3446,
+   "dataset": "Afrobarometer",
+   "group_id": "945872e64807",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3462,
+   "dataset": "Afrobarometer",
+   "group_id": "8adf77f1156c",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3474,
+   "dataset": "Afrobarometer",
+   "group_id": "06ded8453333",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3478,
+   "dataset": "Afrobarometer",
+   "group_id": "30d76afb9877",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3488,
+   "dataset": "Afrobarometer",
+   "group_id": "bd9911d53551",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3503,
+   "dataset": "Afrobarometer",
+   "group_id": "9de6c26cf654",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3505,
+   "dataset": "Afrobarometer",
+   "group_id": "491b27b1ae97",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3515,
+   "dataset": "Afrobarometer",
+   "group_id": "e3b9201c8a96",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3533,
+   "dataset": "Afrobarometer",
+   "group_id": "68e9fc766d6a",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3542,
+   "dataset": "Afrobarometer",
+   "group_id": "e42bbb2764f5",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3561,
+   "dataset": "Afrobarometer",
+   "group_id": "494130520088",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3566,
+   "dataset": "Afrobarometer",
+   "group_id": "859c24ec6775",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3571,
+   "dataset": "Afrobarometer",
+   "group_id": "4783b89d7f05",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3572,
+   "dataset": "Afrobarometer",
+   "group_id": "8158d10418e7",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3585,
+   "dataset": "Afrobarometer",
+   "group_id": "e90d970f4d3a",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3590,
+   "dataset": "Afrobarometer",
+   "group_id": "958cb7f0236c",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3601,
+   "dataset": "Afrobarometer",
+   "group_id": "344181c83914",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3607,
+   "dataset": "Afrobarometer",
+   "group_id": "4f92752eb0af",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3612,
+   "dataset": "Afrobarometer",
+   "group_id": "872f58469a5a",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3616,
+   "dataset": "Afrobarometer",
+   "group_id": "f43cf6b6994f",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3617,
+   "dataset": "Afrobarometer",
+   "group_id": "ec95ef2b2f70",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3647,
+   "dataset": "Afrobarometer",
+   "group_id": "4deffa5f678e",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3659,
+   "dataset": "Afrobarometer",
+   "group_id": "70fcd669aeb3",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3662,
+   "dataset": "Afrobarometer",
+   "group_id": "86aff6ffab06",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3665,
+   "dataset": "Afrobarometer",
+   "group_id": "af6aa150a5eb",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3671,
+   "dataset": "Afrobarometer",
+   "group_id": "663479c33978",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3676,
+   "dataset": "Afrobarometer",
+   "group_id": "41270f865376",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3685,
+   "dataset": "Afrobarometer",
+   "group_id": "b7cb042e69ee",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3711,
+   "dataset": "Afrobarometer",
+   "group_id": "b7fedba139b0",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3718,
+   "dataset": "Afrobarometer",
+   "group_id": "bcc1bcdcdc52",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3724,
+   "dataset": "Afrobarometer",
+   "group_id": "4c2199b0ebba",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3733,
+   "dataset": "Afrobarometer",
+   "group_id": "8158d10418e7",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3737,
+   "dataset": "Afrobarometer",
+   "group_id": "53d04688d64f",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3752,
+   "dataset": "Afrobarometer",
+   "group_id": "958cb7f0236c",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3763,
+   "dataset": "Afrobarometer",
+   "group_id": "344181c83914",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3775,
+   "dataset": "Afrobarometer",
+   "group_id": "35d50caf0a04",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3778,
+   "dataset": "Afrobarometer",
+   "group_id": "c176cd547f66",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3781,
+   "dataset": "Afrobarometer",
+   "group_id": "85b59e8343ca",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3787,
+   "dataset": "Afrobarometer",
+   "group_id": "78b5cb997f62",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3788,
+   "dataset": "Afrobarometer",
+   "group_id": "f6952961a185",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3796,
+   "dataset": "Afrobarometer",
+   "group_id": "aaac01ddacd2",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3797,
+   "dataset": "Afrobarometer",
+   "group_id": "e3c764a27e32",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3804,
+   "dataset": "Afrobarometer",
+   "group_id": "67991398a933",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3806,
+   "dataset": "Afrobarometer",
+   "group_id": "16e19831845b",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3829,
+   "dataset": "Afrobarometer",
+   "group_id": "25ace4a1ed16",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3830,
+   "dataset": "Afrobarometer",
+   "group_id": "af6aa150a5eb",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 3835,
+   "dataset": "Afrobarometer",
+   "group_id": "958cb7f0236c",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 3843,
+   "dataset": "Afrobarometer",
+   "group_id": "90283669b0bd",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3845,
+   "dataset": "Afrobarometer",
+   "group_id": "344181c83914",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3850,
+   "dataset": "Afrobarometer",
+   "group_id": "2b06826c84ce",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3851,
+   "dataset": "Afrobarometer",
+   "group_id": "b7cb042e69ee",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3854,
+   "dataset": "Afrobarometer",
+   "group_id": "d9aa9ba4d1f8",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3856,
+   "dataset": "Afrobarometer",
+   "group_id": "68e9fc766d6a",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3861,
+   "dataset": "Afrobarometer",
+   "group_id": "85b59e8343ca",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3866,
+   "dataset": "Afrobarometer",
+   "group_id": "e42bbb2764f5",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3875,
+   "dataset": "Afrobarometer",
+   "group_id": "b7fedba139b0",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3881,
+   "dataset": "Afrobarometer",
+   "group_id": "bcc1bcdcdc52",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3885,
+   "dataset": "Afrobarometer",
+   "group_id": "a2a84630e581",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3889,
+   "dataset": "Afrobarometer",
+   "group_id": "4a8907b9c667",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 3891,
+   "dataset": "Afrobarometer",
+   "group_id": "133490107ff5",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 3923,
+   "dataset": "Afrobarometer",
+   "group_id": "90283669b0bd",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 3934,
+   "dataset": "Afrobarometer",
+   "group_id": "c176cd547f66",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3937,
+   "dataset": "Afrobarometer",
+   "group_id": "68e9fc766d6a",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 3938,
+   "dataset": "Afrobarometer",
+   "group_id": "85b59e8343ca",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3947,
+   "dataset": "Afrobarometer",
+   "group_id": "e42bbb2764f5",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 3952,
+   "dataset": "Afrobarometer",
+   "group_id": "b7fedba139b0",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3954,
+   "dataset": "Afrobarometer",
+   "group_id": "aaac01ddacd2",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 3960,
+   "dataset": "Afrobarometer",
+   "group_id": "bcc1bcdcdc52",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3964,
+   "dataset": "Afrobarometer",
+   "group_id": "67991398a933",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 3966,
+   "dataset": "Afrobarometer",
+   "group_id": "bd9911d53551",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 4001,
+   "dataset": "Afrobarometer",
+   "group_id": "90283669b0bd",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 4016,
+   "dataset": "Afrobarometer",
+   "group_id": "f43cf6b6994f",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 4019,
+   "dataset": "Afrobarometer",
+   "group_id": "85c0d943b2ca",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 4026,
+   "dataset": "Afrobarometer",
+   "group_id": "5245b02ad5a9",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 4029,
+   "dataset": "Afrobarometer",
+   "group_id": "bfc115893ad9",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 4031,
+   "dataset": "Afrobarometer",
+   "group_id": "30d76afb9877",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 4051,
+   "dataset": "Afrobarometer",
+   "group_id": "4deffa5f678e",
+   "stratum": "Afrobarometer \u00d7 country+urban_rural"
+  },
+  {
+   "id": 4056,
+   "dataset": "Afrobarometer",
+   "group_id": "069f02742471",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 4059,
+   "dataset": "Afrobarometer",
+   "group_id": "491b27b1ae97",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 4065,
+   "dataset": "Afrobarometer",
+   "group_id": "05fde1b29a95",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 4067,
+   "dataset": "Afrobarometer",
+   "group_id": "e3b9201c8a96",
+   "stratum": "Afrobarometer \u00d7 country+subjective_income"
+  },
+  {
+   "id": 4069,
+   "dataset": "Afrobarometer",
+   "group_id": "9be68ccd824c",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 4074,
+   "dataset": "Afrobarometer",
+   "group_id": "41270f865376",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 4078,
+   "dataset": "Afrobarometer",
+   "group_id": "c176cd547f66",
+   "stratum": "Afrobarometer \u00d7 country"
+  },
+  {
+   "id": 4084,
+   "dataset": "Afrobarometer",
+   "group_id": "42e9a7409af4",
+   "stratum": "Afrobarometer \u00d7 age_group+country"
+  },
+  {
+   "id": 4101,
+   "dataset": "Afrobarometer",
+   "group_id": "aaac01ddacd2",
+   "stratum": "Afrobarometer \u00d7 country+gender"
+  },
+  {
+   "id": 4108,
+   "dataset": "Afrobarometer",
+   "group_id": "494130520088",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 4109,
+   "dataset": "Afrobarometer",
+   "group_id": "67991398a933",
+   "stratum": "Afrobarometer \u00d7 country+education"
+  },
+  {
+   "id": 4114,
+   "dataset": "Afrobarometer",
+   "group_id": "859c24ec6775",
+   "stratum": "Afrobarometer \u00d7 country+religion"
+  },
+  {
+   "id": 4130,
+   "dataset": "Afrobarometer",
+   "group_id": "e90d970f4d3a",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 4133,
+   "dataset": "Afrobarometer",
+   "group_id": "5da5115615d7",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 4135,
+   "dataset": "Afrobarometer",
+   "group_id": "af6aa150a5eb",
+   "stratum": "Afrobarometer \u00d7 country+employment"
+  },
+  {
+   "id": 4149,
+   "dataset": "Afrobarometer",
+   "group_id": "4f92752eb0af",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 4155,
+   "dataset": "Afrobarometer",
+   "group_id": "b7cb042e69ee",
+   "stratum": "Afrobarometer \u00d7 country+discuss_politics"
+  },
+  {
+   "id": 4168,
+   "dataset": "ISSP",
+   "group_id": "6288716d7e06",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4175,
+   "dataset": "ISSP",
+   "group_id": "7a3225fcf79f",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4178,
+   "dataset": "ISSP",
+   "group_id": "8b8a5d93efd7",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4181,
+   "dataset": "ISSP",
+   "group_id": "bf497076f2cd",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4188,
+   "dataset": "ISSP",
+   "group_id": "71774d62e48f",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4197,
+   "dataset": "ISSP",
+   "group_id": "40adb99da950",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4211,
+   "dataset": "ISSP",
+   "group_id": "e7367e98d728",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4217,
+   "dataset": "ISSP",
+   "group_id": "9769f8c99b4c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4222,
+   "dataset": "ISSP",
+   "group_id": "7ba0d3a97790",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4228,
+   "dataset": "ISSP",
+   "group_id": "71774d62e48f",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4232,
+   "dataset": "ISSP",
+   "group_id": "0ee30d001d71",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4235,
+   "dataset": "ISSP",
+   "group_id": "2f254db3885f",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4236,
+   "dataset": "ISSP",
+   "group_id": "40adb99da950",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4251,
+   "dataset": "ISSP",
+   "group_id": "f98121c80285",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4254,
+   "dataset": "ISSP",
+   "group_id": "0395db0f7982",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4258,
+   "dataset": "ISSP",
+   "group_id": "8b8a5d93efd7",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4260,
+   "dataset": "ISSP",
+   "group_id": "9e8f564447c3",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4263,
+   "dataset": "ISSP",
+   "group_id": "141b7c41a8c1",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4278,
+   "dataset": "ISSP",
+   "group_id": "4c3ad56c24a9",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4301,
+   "dataset": "ISSP",
+   "group_id": "e7367e98d728",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4306,
+   "dataset": "ISSP",
+   "group_id": "f98121c80285",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4308,
+   "dataset": "ISSP",
+   "group_id": "9769f8c99b4c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4309,
+   "dataset": "ISSP",
+   "group_id": "8b8a5d93efd7",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4312,
+   "dataset": "ISSP",
+   "group_id": "9e8f564447c3",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4313,
+   "dataset": "ISSP",
+   "group_id": "7ba0d3a97790",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4321,
+   "dataset": "ISSP",
+   "group_id": "0ee30d001d71",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4329,
+   "dataset": "ISSP",
+   "group_id": "4574cf143e78",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4345,
+   "dataset": "ISSP",
+   "group_id": "8c8e44fea09e",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4350,
+   "dataset": "ISSP",
+   "group_id": "ff6221a5fed1",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4362,
+   "dataset": "ISSP",
+   "group_id": "c2184ad81bfe",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4370,
+   "dataset": "ISSP",
+   "group_id": "40adb99da950",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4382,
+   "dataset": "ISSP",
+   "group_id": "6288716d7e06",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4386,
+   "dataset": "ISSP",
+   "group_id": "7de50f154a68",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4387,
+   "dataset": "ISSP",
+   "group_id": "f98121c80285",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4391,
+   "dataset": "ISSP",
+   "group_id": "7a3225fcf79f",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4397,
+   "dataset": "ISSP",
+   "group_id": "9e8f564447c3",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4399,
+   "dataset": "ISSP",
+   "group_id": "bf497076f2cd",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4412,
+   "dataset": "ISSP",
+   "group_id": "4c3ad56c24a9",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4423,
+   "dataset": "ISSP",
+   "group_id": "a716eae30c7f",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4426,
+   "dataset": "ISSP",
+   "group_id": "2ed19d683179",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4429,
+   "dataset": "ISSP",
+   "group_id": "b4204b6711c8",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4455,
+   "dataset": "ISSP",
+   "group_id": "581feba98ece",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4457,
+   "dataset": "ISSP",
+   "group_id": "f1b9ae480f93",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4466,
+   "dataset": "ISSP",
+   "group_id": "3b513711a4a0",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4475,
+   "dataset": "ISSP",
+   "group_id": "40adb99da950",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4477,
+   "dataset": "ISSP",
+   "group_id": "c07e2ce4c4b5",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4480,
+   "dataset": "ISSP",
+   "group_id": "8c718e6c1fcf",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4484,
+   "dataset": "ISSP",
+   "group_id": "8775d8680173",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4485,
+   "dataset": "ISSP",
+   "group_id": "ac415b5240bb",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4486,
+   "dataset": "ISSP",
+   "group_id": "6427bc75de55",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4490,
+   "dataset": "ISSP",
+   "group_id": "6288716d7e06",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4494,
+   "dataset": "ISSP",
+   "group_id": "7de50f154a68",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4499,
+   "dataset": "ISSP",
+   "group_id": "7a3225fcf79f",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4518,
+   "dataset": "ISSP",
+   "group_id": "959792bc5433",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4525,
+   "dataset": "ISSP",
+   "group_id": "ec5f3f79c5c9",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4526,
+   "dataset": "ISSP",
+   "group_id": "effb76e9cb9a",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4541,
+   "dataset": "ISSP",
+   "group_id": "7dcc28747258",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4544,
+   "dataset": "ISSP",
+   "group_id": "bf497076f2cd",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4546,
+   "dataset": "ISSP",
+   "group_id": "a7790a5bc111",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4555,
+   "dataset": "ISSP",
+   "group_id": "19f307bf4f4b",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4560,
+   "dataset": "ISSP",
+   "group_id": "9072f48edbe2",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4563,
+   "dataset": "ISSP",
+   "group_id": "40adb99da950",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4577,
+   "dataset": "ISSP",
+   "group_id": "e7367e98d728",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4582,
+   "dataset": "ISSP",
+   "group_id": "5178d9e2501c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4584,
+   "dataset": "ISSP",
+   "group_id": "9769f8c99b4c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4585,
+   "dataset": "ISSP",
+   "group_id": "8b8a5d93efd7",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4589,
+   "dataset": "ISSP",
+   "group_id": "7ba0d3a97790",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4593,
+   "dataset": "ISSP",
+   "group_id": "71774d62e48f",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4596,
+   "dataset": "ISSP",
+   "group_id": "0ee30d001d71",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4601,
+   "dataset": "ISSP",
+   "group_id": "53f669fc6268",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4612,
+   "dataset": "ISSP",
+   "group_id": "56a7212976df",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4625,
+   "dataset": "ISSP",
+   "group_id": "610cc6ff2b4d",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4639,
+   "dataset": "ISSP",
+   "group_id": "46b7f2784962",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4641,
+   "dataset": "ISSP",
+   "group_id": "10f25cee79db",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4643,
+   "dataset": "ISSP",
+   "group_id": "4b88b28ceee6",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4647,
+   "dataset": "ISSP",
+   "group_id": "84fa7b7818de",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4654,
+   "dataset": "ISSP",
+   "group_id": "0677bbe167ce",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4682,
+   "dataset": "ISSP",
+   "group_id": "412224d42ea2",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4703,
+   "dataset": "ISSP",
+   "group_id": "1d0e40305890",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4705,
+   "dataset": "ISSP",
+   "group_id": "938713483eba",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4717,
+   "dataset": "ISSP",
+   "group_id": "c48ce2edda73",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4720,
+   "dataset": "ISSP",
+   "group_id": "4ef46d56afe0",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4727,
+   "dataset": "ISSP",
+   "group_id": "c27876a65934",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4729,
+   "dataset": "ISSP",
+   "group_id": "c9ae1e4eb8ca",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4731,
+   "dataset": "ISSP",
+   "group_id": "8c1742936762",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4734,
+   "dataset": "ISSP",
+   "group_id": "5149430bbaba",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4739,
+   "dataset": "ISSP",
+   "group_id": "03c6765d3348",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4744,
+   "dataset": "ISSP",
+   "group_id": "f112d0ae7b25",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4745,
+   "dataset": "ISSP",
+   "group_id": "a265b3a7d21c",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4749,
+   "dataset": "ISSP",
+   "group_id": "2ef7ca17c1f6",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4750,
+   "dataset": "ISSP",
+   "group_id": "9e6f5bec66f3",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4752,
+   "dataset": "ISSP",
+   "group_id": "453f1c2df851",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4756,
+   "dataset": "ISSP",
+   "group_id": "604ac8a695d9",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4757,
+   "dataset": "ISSP",
+   "group_id": "9e938e40bb56",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4760,
+   "dataset": "ISSP",
+   "group_id": "b73ecb55dcb2",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4769,
+   "dataset": "ISSP",
+   "group_id": "c273bd8b7dec",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4772,
+   "dataset": "ISSP",
+   "group_id": "0257add9436b",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4783,
+   "dataset": "ISSP",
+   "group_id": "aef156c389e0",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4789,
+   "dataset": "ISSP",
+   "group_id": "c7261bc7e72e",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4793,
+   "dataset": "ISSP",
+   "group_id": "b4cb96162814",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4800,
+   "dataset": "ISSP",
+   "group_id": "c9e35d7948d2",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4803,
+   "dataset": "ISSP",
+   "group_id": "387fac487539",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4806,
+   "dataset": "ISSP",
+   "group_id": "b4b600d65e06",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4816,
+   "dataset": "ISSP",
+   "group_id": "938713483eba",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4820,
+   "dataset": "ISSP",
+   "group_id": "dd2ab5f9f55c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4827,
+   "dataset": "ISSP",
+   "group_id": "e402318c2ce9",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4830,
+   "dataset": "ISSP",
+   "group_id": "ad6235cc82a2",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4833,
+   "dataset": "ISSP",
+   "group_id": "298b0da360a3",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4834,
+   "dataset": "ISSP",
+   "group_id": "26464f8524b6",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4841,
+   "dataset": "ISSP",
+   "group_id": "4ef5b58b5d37",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4848,
+   "dataset": "ISSP",
+   "group_id": "5149430bbaba",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4850,
+   "dataset": "ISSP",
+   "group_id": "95c6448510a5",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4857,
+   "dataset": "ISSP",
+   "group_id": "f112d0ae7b25",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4871,
+   "dataset": "ISSP",
+   "group_id": "7de50f154a68",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4881,
+   "dataset": "ISSP",
+   "group_id": "ff6221a5fed1",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4893,
+   "dataset": "ISSP",
+   "group_id": "4c3ad56c24a9",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4904,
+   "dataset": "ISSP",
+   "group_id": "8775d8680173",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4912,
+   "dataset": "ISSP",
+   "group_id": "e7367e98d728",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4916,
+   "dataset": "ISSP",
+   "group_id": "6288716d7e06",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4921,
+   "dataset": "ISSP",
+   "group_id": "9769f8c99b4c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4923,
+   "dataset": "ISSP",
+   "group_id": "7a3225fcf79f",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4924,
+   "dataset": "ISSP",
+   "group_id": "0395db0f7982",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4927,
+   "dataset": "ISSP",
+   "group_id": "7ba0d3a97790",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4931,
+   "dataset": "ISSP",
+   "group_id": "141b7c41a8c1",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4935,
+   "dataset": "ISSP",
+   "group_id": "0ee30d001d71",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 4943,
+   "dataset": "ISSP",
+   "group_id": "959792bc5433",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 4948,
+   "dataset": "ISSP",
+   "group_id": "4574cf143e78",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4949,
+   "dataset": "ISSP",
+   "group_id": "1b6db7aa1361",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4951,
+   "dataset": "ISSP",
+   "group_id": "a716eae30c7f",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 4957,
+   "dataset": "ISSP",
+   "group_id": "2ed19d683179",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4961,
+   "dataset": "ISSP",
+   "group_id": "bea9aa0374dd",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 4965,
+   "dataset": "ISSP",
+   "group_id": "5178d9e2501c",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4971,
+   "dataset": "ISSP",
+   "group_id": "8c8e44fea09e",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 4973,
+   "dataset": "ISSP",
+   "group_id": "ff6221a5fed1",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 4984,
+   "dataset": "ISSP",
+   "group_id": "f1b9ae480f93",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 5000,
+   "dataset": "ISSP",
+   "group_id": "3d3e649ddcc1",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 5001,
+   "dataset": "ISSP",
+   "group_id": "ac359657c38e",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 5009,
+   "dataset": "ISSP",
+   "group_id": "8c95644335be",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 5020,
+   "dataset": "ISSP",
+   "group_id": "6f45ad264f1f",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 5037,
+   "dataset": "ISSP",
+   "group_id": "db23cbd9ff57",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 5038,
+   "dataset": "ISSP",
+   "group_id": "9b5d897072e7",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 5039,
+   "dataset": "ISSP",
+   "group_id": "514082352f73",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 5044,
+   "dataset": "ISSP",
+   "group_id": "92dee63e874e",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 5045,
+   "dataset": "ISSP",
+   "group_id": "bcdeec7959df",
+   "stratum": "ISSP \u00d7 country+topbot"
+  },
+  {
+   "id": 5051,
+   "dataset": "ISSP",
+   "group_id": "a716eae30c7f",
+   "stratum": "ISSP \u00d7 country"
+  },
+  {
+   "id": 5055,
+   "dataset": "ISSP",
+   "group_id": "2ed19d683179",
+   "stratum": "ISSP \u00d7 country+work_status"
+  },
+  {
+   "id": 5071,
+   "dataset": "ISSP",
+   "group_id": "8b8a5d93efd7",
+   "stratum": "ISSP \u00d7 country+religion"
+  },
+  {
+   "id": 5072,
+   "dataset": "ISSP",
+   "group_id": "ff6221a5fed1",
+   "stratum": "ISSP \u00d7 country+marital_status"
+  },
+  {
+   "id": 5083,
+   "dataset": "ISSP",
+   "group_id": "f1b9ae480f93",
+   "stratum": "ISSP \u00d7 country+domicil"
+  },
+  {
+   "id": 5100,
+   "dataset": "LatinoBarometro",
+   "group_id": "bcfe7b4e8bd0",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5115,
+   "dataset": "LatinoBarometro",
+   "group_id": "3232d473eb77",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5132,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5138,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5142,
+   "dataset": "LatinoBarometro",
+   "group_id": "e025029acb5c",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5148,
+   "dataset": "LatinoBarometro",
+   "group_id": "fe7ff79138b3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5156,
+   "dataset": "LatinoBarometro",
+   "group_id": "bab4829ecda4",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5164,
+   "dataset": "LatinoBarometro",
+   "group_id": "bb99252de7ea",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5165,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5169,
+   "dataset": "LatinoBarometro",
+   "group_id": "4fb110809a5e",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5176,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5179,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5182,
+   "dataset": "LatinoBarometro",
+   "group_id": "656630bbd098",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5189,
+   "dataset": "LatinoBarometro",
+   "group_id": "9699342012e8",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5197,
+   "dataset": "LatinoBarometro",
+   "group_id": "86234991660a",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5198,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5203,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5207,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5210,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5212,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5223,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5225,
+   "dataset": "LatinoBarometro",
+   "group_id": "0ecbb5164c62",
+   "stratum": "LatinoBarometro \u00d7 country+political_group"
+  },
+  {
+   "id": 5229,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5233,
+   "dataset": "LatinoBarometro",
+   "group_id": "bcfe7b4e8bd0",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5234,
+   "dataset": "LatinoBarometro",
+   "group_id": "bb99252de7ea",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5237,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5249,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5253,
+   "dataset": "LatinoBarometro",
+   "group_id": "3232d473eb77",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5268,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5272,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5275,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5277,
+   "dataset": "LatinoBarometro",
+   "group_id": "e025029acb5c",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5278,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5280,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5285,
+   "dataset": "LatinoBarometro",
+   "group_id": "fe7ff79138b3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5291,
+   "dataset": "LatinoBarometro",
+   "group_id": "0ecbb5164c62",
+   "stratum": "LatinoBarometro \u00d7 country+political_group"
+  },
+  {
+   "id": 5296,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5302,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5310,
+   "dataset": "LatinoBarometro",
+   "group_id": "4ef8f3b23679",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5312,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5315,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5316,
+   "dataset": "LatinoBarometro",
+   "group_id": "656630bbd098",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5325,
+   "dataset": "LatinoBarometro",
+   "group_id": "9699342012e8",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5332,
+   "dataset": "LatinoBarometro",
+   "group_id": "86234991660a",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5337,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5339,
+   "dataset": "LatinoBarometro",
+   "group_id": "dea855822634",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5341,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5352,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5354,
+   "dataset": "LatinoBarometro",
+   "group_id": "0ecbb5164c62",
+   "stratum": "LatinoBarometro \u00d7 country+political_group"
+  },
+  {
+   "id": 5370,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5372,
+   "dataset": "LatinoBarometro",
+   "group_id": "1d81c3d91edd",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5388,
+   "dataset": "LatinoBarometro",
+   "group_id": "21ae9cbc642e",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5389,
+   "dataset": "LatinoBarometro",
+   "group_id": "b3794372239c",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5393,
+   "dataset": "LatinoBarometro",
+   "group_id": "dea855822634",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5406,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5409,
+   "dataset": "LatinoBarometro",
+   "group_id": "d34e155db37d",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5414,
+   "dataset": "LatinoBarometro",
+   "group_id": "bb99252de7ea",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5422,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5425,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5432,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5437,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5439,
+   "dataset": "LatinoBarometro",
+   "group_id": "69035e8733ea",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5445,
+   "dataset": "LatinoBarometro",
+   "group_id": "b3794372239c",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5455,
+   "dataset": "LatinoBarometro",
+   "group_id": "e025029acb5c",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5456,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5461,
+   "dataset": "LatinoBarometro",
+   "group_id": "fe7ff79138b3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5466,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5470,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5473,
+   "dataset": "LatinoBarometro",
+   "group_id": "bb99252de7ea",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5476,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5486,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5491,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5507,
+   "dataset": "LatinoBarometro",
+   "group_id": "21ae9cbc642e",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5512,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5519,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5521,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5523,
+   "dataset": "LatinoBarometro",
+   "group_id": "216e1bd3fb0e",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5530,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5533,
+   "dataset": "LatinoBarometro",
+   "group_id": "0ecbb5164c62",
+   "stratum": "LatinoBarometro \u00d7 country+political_group"
+  },
+  {
+   "id": 5535,
+   "dataset": "LatinoBarometro",
+   "group_id": "bab4829ecda4",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5538,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5541,
+   "dataset": "LatinoBarometro",
+   "group_id": "bcfe7b4e8bd0",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5550,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5552,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5555,
+   "dataset": "LatinoBarometro",
+   "group_id": "656630bbd098",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5558,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5560,
+   "dataset": "LatinoBarometro",
+   "group_id": "3232d473eb77",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5563,
+   "dataset": "LatinoBarometro",
+   "group_id": "9699342012e8",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5564,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5566,
+   "dataset": "LatinoBarometro",
+   "group_id": "a1165d7d1326",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5568,
+   "dataset": "LatinoBarometro",
+   "group_id": "86234991660a",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5582,
+   "dataset": "LatinoBarometro",
+   "group_id": "306e754211e3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5588,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5594,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5602,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5604,
+   "dataset": "LatinoBarometro",
+   "group_id": "4ef8f3b23679",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5607,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5610,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5612,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5620,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5628,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5633,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5635,
+   "dataset": "LatinoBarometro",
+   "group_id": "dea855822634",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5637,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5640,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5653,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5655,
+   "dataset": "LatinoBarometro",
+   "group_id": "0ecbb5164c62",
+   "stratum": "LatinoBarometro \u00d7 country+political_group"
+  },
+  {
+   "id": 5668,
+   "dataset": "LatinoBarometro",
+   "group_id": "9286499c714b",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5672,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5678,
+   "dataset": "LatinoBarometro",
+   "group_id": "1d81c3d91edd",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5681,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5688,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5702,
+   "dataset": "LatinoBarometro",
+   "group_id": "e025029acb5c",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5707,
+   "dataset": "LatinoBarometro",
+   "group_id": "fe7ff79138b3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5717,
+   "dataset": "LatinoBarometro",
+   "group_id": "d34e155db37d",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5735,
+   "dataset": "LatinoBarometro",
+   "group_id": "1d81c3d91edd",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5752,
+   "dataset": "LatinoBarometro",
+   "group_id": "21ae9cbc642e",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5753,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5760,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5776,
+   "dataset": "LatinoBarometro",
+   "group_id": "bab4829ecda4",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5779,
+   "dataset": "LatinoBarometro",
+   "group_id": "d34e155db37d",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5786,
+   "dataset": "LatinoBarometro",
+   "group_id": "bb99252de7ea",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5787,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5788,
+   "dataset": "LatinoBarometro",
+   "group_id": "bcfe7b4e8bd0",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 5796,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5801,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5805,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5807,
+   "dataset": "LatinoBarometro",
+   "group_id": "3232d473eb77",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5810,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5822,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 5828,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5830,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5844,
+   "dataset": "LatinoBarometro",
+   "group_id": "0ecbb5164c62",
+   "stratum": "LatinoBarometro \u00d7 country+political_group"
+  },
+  {
+   "id": 5846,
+   "dataset": "LatinoBarometro",
+   "group_id": "bab4829ecda4",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5849,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5857,
+   "dataset": "LatinoBarometro",
+   "group_id": "9286499c714b",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5862,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5877,
+   "dataset": "LatinoBarometro",
+   "group_id": "69035e8733ea",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 5881,
+   "dataset": "LatinoBarometro",
+   "group_id": "a1165d7d1326",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5882,
+   "dataset": "LatinoBarometro",
+   "group_id": "b3794372239c",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5894,
+   "dataset": "LatinoBarometro",
+   "group_id": "306e754211e3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5897,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5913,
+   "dataset": "LatinoBarometro",
+   "group_id": "cbca36dd9fe8",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5922,
+   "dataset": "LatinoBarometro",
+   "group_id": "1d81c3d91edd",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5924,
+   "dataset": "LatinoBarometro",
+   "group_id": "683644669a05",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 5939,
+   "dataset": "LatinoBarometro",
+   "group_id": "21ae9cbc642e",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 5949,
+   "dataset": "LatinoBarometro",
+   "group_id": "e025029acb5c",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 5955,
+   "dataset": "LatinoBarometro",
+   "group_id": "fe7ff79138b3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 5965,
+   "dataset": "LatinoBarometro",
+   "group_id": "d34e155db37d",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 5977,
+   "dataset": "LatinoBarometro",
+   "group_id": "4ef8f3b23679",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 5997,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6003,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 6005,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 6008,
+   "dataset": "LatinoBarometro",
+   "group_id": "306e754211e3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 6019,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 6034,
+   "dataset": "LatinoBarometro",
+   "group_id": "cbca36dd9fe8",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6037,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6040,
+   "dataset": "LatinoBarometro",
+   "group_id": "1d81c3d91edd",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6042,
+   "dataset": "LatinoBarometro",
+   "group_id": "656630bbd098",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6047,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6050,
+   "dataset": "LatinoBarometro",
+   "group_id": "9699342012e8",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 6051,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 6056,
+   "dataset": "LatinoBarometro",
+   "group_id": "86234991660a",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6086,
+   "dataset": "LatinoBarometro",
+   "group_id": "d34e155db37d",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 6096,
+   "dataset": "LatinoBarometro",
+   "group_id": "9286499c714b",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6102,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6106,
+   "dataset": "LatinoBarometro",
+   "group_id": "1d81c3d91edd",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6110,
+   "dataset": "LatinoBarometro",
+   "group_id": "656630bbd098",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6124,
+   "dataset": "LatinoBarometro",
+   "group_id": "86234991660a",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6134,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 6144,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 6151,
+   "dataset": "LatinoBarometro",
+   "group_id": "d34e155db37d",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 6152,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 6188,
+   "dataset": "LatinoBarometro",
+   "group_id": "21ae9cbc642e",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6196,
+   "dataset": "LatinoBarometro",
+   "group_id": "e025029acb5c",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 6198,
+   "dataset": "LatinoBarometro",
+   "group_id": "d0e642a831f8",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 6202,
+   "dataset": "LatinoBarometro",
+   "group_id": "fe7ff79138b3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 6203,
+   "dataset": "LatinoBarometro",
+   "group_id": "306e754211e3",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  },
+  {
+   "id": 6214,
+   "dataset": "LatinoBarometro",
+   "group_id": "0c8b8b6f6134",
+   "stratum": "LatinoBarometro \u00d7 city_size+country"
+  },
+  {
+   "id": 6219,
+   "dataset": "LatinoBarometro",
+   "group_id": "7144553d6b41",
+   "stratum": "LatinoBarometro \u00d7 country"
+  },
+  {
+   "id": 6226,
+   "dataset": "LatinoBarometro",
+   "group_id": "4ef8f3b23679",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6233,
+   "dataset": "LatinoBarometro",
+   "group_id": "c1fbd0adc860",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6251,
+   "dataset": "LatinoBarometro",
+   "group_id": "de05fb15f494",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6256,
+   "dataset": "LatinoBarometro",
+   "group_id": "6d95f69138a4",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 6259,
+   "dataset": "LatinoBarometro",
+   "group_id": "2011ccbfdc2b",
+   "stratum": "LatinoBarometro \u00d7 country+employment_status"
+  },
+  {
+   "id": 6262,
+   "dataset": "LatinoBarometro",
+   "group_id": "5e92a69dcd11",
+   "stratum": "LatinoBarometro \u00d7 country+religiosity"
+  },
+  {
+   "id": 6292,
+   "dataset": "LatinoBarometro",
+   "group_id": "8b6233f1a1eb",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6295,
+   "dataset": "LatinoBarometro",
+   "group_id": "eb1573652e54",
+   "stratum": "LatinoBarometro \u00d7 age_group+country"
+  },
+  {
+   "id": 6297,
+   "dataset": "LatinoBarometro",
+   "group_id": "656630bbd098",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6302,
+   "dataset": "LatinoBarometro",
+   "group_id": "29c73a559a22",
+   "stratum": "LatinoBarometro \u00d7 country+gender"
+  },
+  {
+   "id": 6308,
+   "dataset": "LatinoBarometro",
+   "group_id": "70c5dfda370c",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 6310,
+   "dataset": "LatinoBarometro",
+   "group_id": "69035e8733ea",
+   "stratum": "LatinoBarometro \u00d7 country+highest_education"
+  },
+  {
+   "id": 6313,
+   "dataset": "LatinoBarometro",
+   "group_id": "86234991660a",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6317,
+   "dataset": "LatinoBarometro",
+   "group_id": "b3794372239c",
+   "stratum": "LatinoBarometro \u00d7 country+household_income"
+  },
+  {
+   "id": 6338,
+   "dataset": "LatinoBarometro",
+   "group_id": "be1492489f62",
+   "stratum": "LatinoBarometro \u00d7 country+religion"
+  }
+ ]
+}

@@ -36,5 +36,9 @@ class AnalysisSession(Base):
     # Model tier (2026-10-23): "fast" = Haiku for every LLM call made for this session, "pro" = Sonnet.
     # Chosen on the main page and enforced for every call in app/core/model_policy.py; Opus is never used.
     model_tier: Mapped[str] = mapped_column(String(8), default="fast", server_default="fast")
+    # What the session is for (2026-10-27): "session" = a person's own work; "benchmark" = a subgroup
+    # lineup a public-benchmark run built (services/kits/simbench.py). Benchmark sessions stay out of
+    # the session list; they are read through the run that owns them.
+    kind: Mapped[str] = mapped_column(String(16), default="session", server_default="session")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

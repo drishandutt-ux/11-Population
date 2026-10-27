@@ -128,7 +128,7 @@ async def create_tables():
     Postgres (production): run Alembic migrations (`backend/alembic/`) — the schema is
     versioned and the Supabase project is stamped at the current head.
     SQLite (local dev / tests): create_all + the idempotent column adds below."""
-    import app.models.kg, app.models.profile, app.models.evidence, app.models.measurement, app.models.population, app.models.scoping, app.models.archetype, app.models.share, app.models.usage  # noqa: F401 — make sure every model is registered on Base
+    import app.models.kg, app.models.profile, app.models.evidence, app.models.measurement, app.models.population, app.models.scoping, app.models.archetype, app.models.share, app.models.usage, app.models.benchmark  # noqa: F401 — make sure every model is registered on Base
     if _sqlite:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -174,6 +174,7 @@ async def _ensure_columns():
         "ALTER TABLE simulation_posts ADD COLUMN footprint JSON",
         "ALTER TABLE analysis_sessions ADD COLUMN deleted_at DATETIME",
         "ALTER TABLE analysis_sessions ADD COLUMN model_tier VARCHAR(8) DEFAULT 'fast'",
+        "ALTER TABLE analysis_sessions ADD COLUMN kind VARCHAR(16) DEFAULT 'session'",
     ]
     for ddl in migrations:
         try:

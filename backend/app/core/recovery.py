@@ -30,7 +30,9 @@ async def recover_interrupted() -> dict:
     from app.models.measurement import Experiment, Probe
     from app.models.population import PopulationBuild
 
-    counts = {"research_runs": 0, "population_builds": 0, "probes": 0, "experiments": 0}
+    from app.models.benchmark import BenchmarkRun
+
+    counts = {"research_runs": 0, "population_builds": 0, "probes": 0, "experiments": 0, "benchmark_runs": 0}
     now = datetime.utcnow()
     async with dbm.AsyncSessionLocal() as db:
         runs = (await db.execute(select(ResearchRun).where(ResearchRun.status.in_(RESEARCH_IN_FLIGHT)))).scalars().all()
@@ -67,5 +69,12 @@ async def recover_interrupted() -> dict:
             e.error = LAB_INTERRUPTED
             e.completed_at = now
             counts["experiments"] += 1
+        # A public-benchmark run (SimBench, 2026-10-27) is hours of in-process work; it resumes from its
+        # state, so the row only has to say honestly that this attempt stopped.
+        for b in (await db.execute(select(BenchmarkRun).where(BenchmarkRun.status.in_(("queued", "running", "stopping"))))).scalars().all():
+            b.status = "interrupted"
+            b.error = "Interrupted by a server restart (a redeploy). Lineups and scored cases are kept; resume to continue."
+            b.updated_at = now
+            counts["benchmark_runs"] += 1
         await db.commit()
     return counts

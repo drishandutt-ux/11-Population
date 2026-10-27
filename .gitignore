@@ -25,6 +25,9 @@ backend/lightrag_data/
 # ── Generated test artifacts ─────────────────────────────
 backend/tests/artifacts/
 
+# ── Public benchmark data pulled at run time (CC BY-NC-SA, not ours to ship) ──
+backend/app/data/kits/benchmarks/simbench_grouped/cache/
+
 # ── Node / Next.js ───────────────────────────────────────
 node_modules/
 .next/
