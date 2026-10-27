@@ -366,3 +366,151 @@ measured on.
 in Spread; how the follow network is presented in the Studio (a map, or a sentence per
 group); whether Spread lands in the simple view as *Will this travel?* before or after the
 Video Lab's Watch.
+
+---
+
+## 7. The million-twin tier — Jev decides, Claude speaks for the few
+
+*Raised by Drishan, 2026-10-27, after the OASIS analysis: use a decision model (Jev) for
+large-scale runs — no reasoning or advice from the twins, only actions, which we analyse to
+work out the reasons; and manufacture a million twins with their sentiment dials and a much
+smaller system message. Extends entry 6 (Spread), which supplies the clock, the network and
+the feed. Nothing built; nothing calibrated.*
+
+**The idea in one line.** A million twins built from the sampling frame without a model,
+each one a short card; a decision model that returns probabilities instead of text decides
+what every twin does when it sees something; Claude writes only for the few who reply; the
+reasons come out of the numbers.
+
+### What Jev is
+
+TypeSafe AI's "decision model" (early access since September 2026; `typesafe/jev-1.14` on
+OpenRouter, also TypeSafe's own API and Python SDK). You send a **state** — text or a JSON
+object, up to 32k tokens with any one question, 64k per request — and any number of typed
+**questions**, answered together in one pass:
+
+- **choice** — pick one of a set of options; returns the chosen option, a probability for
+  every option and a confidence;
+- **noul** — a yes/no, returned as a probability 0–1;
+- **score** — a rating on up to ten described levels, returned as a probability-weighted
+  number.
+
+It never writes text. Input is $0.042 per million tokens, output is free, answers take about
+100 ms. Its own docs say it is weak on numbers, dates and adversarial text, and that
+thresholds should be set from your own labelled data. No published use for behavioural or
+social simulation yet; the REFLEX preprint uses it as the decision layer of an agent, with
+the strong model called only when words are needed — the same split proposed here.
+
+### Manufacturing a million twins
+
+- **Drawn, not written.** The frame already knows the published distributions. Draw a
+  million from its cells (segment × place × age × tenure …) by raking, which exists. Names
+  from lists. No model call per twin.
+- **Dials from the segment.** Pro spawning already gives each segment a dial profile; store
+  a centre and spread per dial per segment and draw each twin's dials from it with one
+  latent score so they cohere (the way kits draw beliefs). Only the four behaviour groups
+  (sentiment, motivation, friction, trust) need drawing; the rest lazily, if ever.
+- **A card instead of a system message.** Today's prompt is about 4,000 characters. The
+  card is a JSON object of about 60 tokens, built once at spawn and stored on the row:
+
+  ```json
+  {"age":34,"gender":"female","job":"nurse","tenure":"renter","place":"Hackney",
+   "segment":"Loyal National","anger":7,"anxiety":6,"trust_institutions":2,
+   "social_use":"heavy, evenings","follows":["local news","nurses","parents group"],
+   "seen_before":["shared the cycle-lane post"]}
+  ```
+
+  Because Jev is weak on numbers, keep a words form too (*angry*, *distrusts
+  institutions*) and test both.
+- **Two tiers.** A few thousand full twins as today — they write, reply, get interviewed —
+  and the million as cards that act. A card twin that needs to speak is **promoted on
+  demand**: its full persona generated from the card, then Haiku writes the post.
+
+### What a twin does when it sees something
+
+One Jev call per exposure, three questions on one state (the card, the post, where it was
+seen):
+
+1. **choice** — scroll past / like / share / reply / quote / mute. The whole distribution is
+   kept: a segment's share rate is the mean of its probabilities; the cascade samples an
+   action from it.
+2. **noul** — would this person stop and read it at all (the engage decision of entry 4).
+3. **score** — how angry it makes them, how much more or less they trust the source. **The
+   sentiment dials move during the run**: one cheap number per exposure, written back to the
+   card, so a twin that has seen three hostile posts is angrier by step four.
+
+A twin whose reply or quote probability clears a threshold goes to Claude for the words.
+Everything is stored: the probabilities, the sampled action, the dial deltas.
+
+### Where the reasons come from
+
+Not from the twins. From the numbers, in order of weight:
+
+- **the structure** — which dials and segments raise the share probability, with intervals,
+  and a small fitted model over the cards (*trust below 3 and renter is what moves it*);
+- **the same twins across variants** — seeds are deterministic, so each twin sees both
+  phrasings in two runs; paired comparison shows which feature of the post moved which
+  group;
+- **words from a sample afterwards** — a few hundred high-probability sharers and
+  scrollers interviewed with the full prompt, memory-free (entry 2's mechanism). The words
+  illustrate; the numbers come from the million.
+
+### Cost
+
+| | Figure |
+|---|---|
+| One pass, every twin decides on one post | ~300M input tokens, about $13 |
+| A 20-step Spread run, 10% awake per step | about $25 in Jev |
+| Haiku for the ~1% who reply | about $20 |
+| A whole million-twin Spread run | roughly $50 |
+| Time at 50 calls in flight, 100 ms each | about 35 minutes per full pass |
+
+At this price every twin decides for itself; no sample-and-extend model is needed.
+Storage is not the problem: a million rows with a card and four dial groups is a small
+Postgres table, written in batches of a few thousand.
+
+### What has to be proved before any number is quoted
+
+1. **Jev was built for software decisions, not for predicting a described person.** On the
+   same 1,000 twins and the same post: Jev on cards against the full Haiku twins — does the
+   action mix by segment match within a few points? If not, the card needs another line, or
+   Jev is the wrong tool for this and a fine-tuned small model (the LLM-as-Jev route) is the
+   fallback.
+2. **It is known to under-pick the fallback option.** The LLM-as-Jev paper reports
+   suppression of "none of these" and a yes bias. *Scroll past* is our fallback and the
+   most common real answer, so the thresholds come from labelled data, and the poll
+   benchmark (§11a.8) is the second check: does the share by segment track a real poll's
+   shape.
+3. **Numbers and dates.** Test the words form of the card against the numeric one.
+4. **A second provider.** All intelligence is Claude today, with OpenAI for images as the
+   precedent. The key must come from OpenRouter or TypeSafe directly; the write-ups warn
+   about clone services under the same name.
+
+### How it fits
+
+- The builder is a new path in the Population Studio (*build a million*): the frame, the
+  segment dial profiles, the card schema, batch inserts; the roster shows a sample and the
+  counts by cell, never a million rows on screen.
+- The decision call is a new tier in the model pipeline (§7.6) beside Fast and Pro:
+  **Mass**, Jev for decisions, Haiku for the speakers.
+- Spread (entry 6) runs on it unchanged in shape: clock, activity curve, feed, exposures
+  log; only the decision step changes.
+- The Lab's "who answers" draws a weighted sample from the million for any instrument that
+  needs words, so a million twins also mean finer cuts (a borough, an age band within a
+  segment) with enough people in each.
+- Live streaming, the per-post graph update and the verdict sidebar all assume the whole
+  population is on screen; at this scale they show a sample.
+
+### Build order
+
+1. The calibration first, before any product work: 1,000 card twins on Jev against the same
+   1,000 full twins on Haiku, plus the poll benchmark by segment. A week, mostly evaluation.
+2. The million builder: frame cells → rows → cards; a sample on the roster.
+3. The Mass tier: Jev decisions with the three questions, dial write-back, promotion to
+   Claude for speakers, the exposures log.
+4. Spread on the Mass tier; the structure and paired analyses; the interview sample.
+5. The Lab's weighted sampling from the million.
+
+**Open questions.** Whether the words-form card beats the numeric one; where the reply
+threshold sits; whether dial drift should decay back between steps; what the Simple view
+shows for a million (probably nothing new: the same screens, a note on the sample).
