@@ -514,3 +514,147 @@ Postgres table, written in batches of a few thousand.
 **Open questions.** Whether the words-form card beats the numeric one; where the reply
 threshold sits; whether dial drift should decay back between steps; what the Simple view
 shows for a million (probably nothing new: the same screens, a note on the sample).
+
+---
+
+## 8. Unjudged ideas from the October 2026 reading — judge before building
+
+*Drishan, 2026-10-27: add all of them with the note that they have not been judged yet; when
+one is picked up, first judge whether it is even worth it.*
+
+**Status of everything in this section: NOT JUDGED.** These came out of one day's reading —
+the OASIS code and paper, the Jev decision model, SimBench, Twin-2K-500, the GSS/WVS
+synthetic-users benchmark, the Stanford 1,000-person agents, the NIM review of 285
+silicon-to-human comparisons, PyMC Labs' Semantic Similarity Rating, and the vendor practices
+of Fairgen, Electric Twin and Outset. Nobody has weighed any of them against the roadmap,
+the cost of building, or what the product actually needs next. **The first step on any of
+them is a judgement, not a build:** is the finding real for our twins (test it on the poll
+benchmark or a 100-twin run), does it change a number a client reads, and is it cheaper than
+what we do now. Drop the ones that fail that; promote the ones that pass to their own entry
+above, with a build order. Each item below says where it comes from, what it is, how it
+would fit, and what the first check is.
+
+### Accuracy
+
+**8.1 Answer as a distribution, not a pick.** *From SimBench (instruction-tuned models
+collapse towards one answer) and Jev (calibrated probabilities by design).* Ask each twin for
+a probability over the options — *60% yes, 30% unsure, 10% no* — instead of one choice;
+shares are the mean of the probabilities. Smoother, better calibrated, same number of calls,
+and it attacks the variance compression every review reports. *Fits:* a schema change in the
+probe runner; aggregators read expected shares. *First check:* the poll benchmark with and
+without; does mean error fall and does the spread of answers widen towards the real one.
+
+**8.2 Score scales from words.** *From PyMC Labs' Semantic Similarity Rating: free text mapped
+onto the scale by similarity to anchor statements reached 90% of human retest reliability
+across 57 surveys.* For scale, NPS and grid questions in Forms, ask for a sentence and place
+it on the scale by similarity to the anchors, rather than asking the model for a number.
+*Fits:* Forms already codes free text into themes; one more post-process. *First check:*
+the benchmark's scale items, SSR against the direct number.
+
+**8.3 An over-split check, the mirror of the unanimity check.** *From the GSS/WVS benchmark:
+models inflate gaps between segments two to four times and invent splits that are not there,
+sending teams to the wrong segment half the time.* When a split the instrument computed is
+wider than the published gap for that dimension (the kits carry those), flag it and shrink it
+towards the published figure, showing the correction. *Fits:* beside `unanimity.py`, same
+place on the Lab page. *First check:* count how often our splits exceed the kit's published
+gaps on past runs.
+
+**8.4 Learned corrections from benchmarks.** *From "When can you trust your synthetic users":
+diagnose, trust the full sample, correct the subgroups — 83–94% bias reduction on Twin-2K-500
+pricing.* Every scored benchmark run already yields per-segment errors; store them as
+offsets and apply them, labelled, to later runs on the same population. *Fits:* the raking
+code is most of the machinery; the benchmark scorer writes the offsets. *First check:* do
+offsets learned on one poll reduce error on a second poll of the same population, or only on
+the one they were learned from.
+
+**8.5 Price from choices, not stated walk-away prices.** *From Twin-2K-500's pricing study:
+demand curves from binary buy decisions at randomised prices.* Run price arms between
+subjects and derive the curve from yes/no decisions; stated maximum prices stay as a
+secondary line. *Fits:* the A/B split design already exists; purchase intent gains a
+`price_arms` mode. *First check:* compare the two curves on one offer; which matches a real
+Gabor-Granger or the benchmark's pricing items.
+
+**8.6 Treat pricing and framing results as too rational.** *From the same consumer-panel
+paper: twins calibrate well on demographics, badly on cognitive-bias tasks (r 0.34–0.50).*
+Carry a warning on Van Westendorp, framing and message tools, and add two or three classic
+bias items (anchoring, framing, sunk cost) to the validation battery as a check on how human a
+lineup is. *Fits:* §7.12 battery; a label on three instruments. *First check:* run the three
+items on a lineup; if the twins show no bias at all, the warning is earned.
+
+**8.7 Shorter persona, same accuracy — or proof that ours is better.** *From Twin-2K-500:
+fourteen demographic variables scored the same as the full persona (74.6% vs 74.8%); what
+beat demographics was grounding in the person's own interview (Stanford, 85% of retest).*
+Test the current ~4,000-character prompt against a compact card on the poll benchmark. If
+the card scores the same, cut the prompt and the cost; if standing and evidence grounding
+score better, that difference goes on the accuracy card. *First check:* this *is* the check;
+one benchmark run each.
+
+### Usage and cost
+
+**8.8 Order the prompt for the cache.** *From how our phases work: every twin in a phase
+shares the same thread snapshot, graph context, brief and date block; only the persona
+differs.* Put the shared block first with cache control and the persona last; probes
+likewise (stimulus and directive shared). *First check:* read the token ledger (§12.5) for
+one phase and see how much is shared; confirm whether cache control is set today.
+
+**8.9 Jev as the judge and the coder.** *From Jev's price ($0.042 per million input tokens,
+output free) and shape (choice / yes-no / score).* The research pipeline scores every page
+and every Reddit post for relevance and on-topic with Haiku, and codes reasons into themes
+with another call; those are classifications. Keep Claude for quote extraction and anything
+needing words; move the scores to a decision model. *First check:* Jev against the Haiku
+judge on 200 already-judged pages; agreement rate and cost per page.
+
+**8.10 Batch API for runs nobody is watching.** *From Anthropic's batch pricing (half) and
+the fact that a 1,000-twin Pro probe or an overnight benchmark need not be live.* A *run
+overnight* option on the Lab and on benchmarks. *First check:* how many past probes took
+longer than ten minutes — the share of spend that could have gone through batch.
+
+**8.11 Stop when the interval is tight enough.** *From our own Wilson intervals.* Run probes
+in waves of fifty and stop when the primary metric's interval is narrower than the target
+the analyst set, instead of always asking everyone. *First check:* on past probes, at what
+n did the headline settle within two points of its final value.
+
+**8.12 No extended thinking for twins.** *From SimBench: simulation ability tracks knowledge,
+not inference-time compute.* Spend the strong model on the plan and the brief; never on the
+twins' answers. *First check:* confirm no twin path sets a thinking budget today; if one
+does, benchmark with it off.
+
+**8.13 Report effective sample size.** *From how the Fast bank samples above its size (with
+replacement, jittered).* Show the effective number of distinct people behind a lineup, so
+300 twins that are 150 people are read as 150. *First check:* count distinct bank ids on
+past Fast lineups above 500.
+
+### New features
+
+**8.14 Twins from real interviews.** *From Stanford's interview-grounded agents (85% of
+retest, versus 74% for demographic agents, with less bias across groups) and Outset's
+product.* Upload interview transcripts; one twin per interviewee, grounded in their own
+words; fits the Agent Builder and the survey-curation path. *First check:* does 11 London
+have transcripts it may use, and does a transcript-grounded twin score better than a
+frame-drawn one on a question the interviewee actually answered.
+
+**8.15 Boost a thin survey.** *From Fairgen (a 1,000-respondent survey raised to an
+effective 2,790 by filling thin cells).* Twins conditioned on the real respondents fill the
+thin cells; real rows kept, synthetic ones marked, a holdout score beside the boosted result.
+*First check:* take one real survey, hide half of a thin cell, boost, compare.
+
+**8.16 Holdout before go-live.** *From Electric Twin's practice on every client.* Hide
+twenty percent of the client's own survey questions, predict them, show the accuracy card.
+Reuses the benchmark scorer. *First check:* run it on the 11 London poll as if it were a
+client's; is the card readable by a non-analyst.
+
+**8.17 The accuracy card as a product page.** *From the public benchmarks (SimBench,
+Twin-2K-500's pricing task, our poll benchmarks) and the fact that competitors do not
+publish.* Run them on every release, published with the top published scores beside ours.
+*First check:* one SimBench run; is our score above the bare model's, and is the run
+reproducible.
+
+**8.18 A backtest library.** *From MiroFish's weakness: no prediction was ever scored
+against an outcome.* Run the tool on questions whose answers are known — past polls, past
+launches, the 2023 poll in the kits — and keep a dated list. *First check:* three past
+questions with known answers; what the tool said, what happened.
+
+**8.19 A herd index.** *From OASIS: LLM agents follow the crowd more than people do.* The
+social-proof arm (entry 5) measures it for a lineup; put the number on the validation page:
+how much this population's answers move when shown that others agreed. *First check:* after
+entry 5 exists, run it on one lineup; is the movement large enough to matter.
