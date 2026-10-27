@@ -6,7 +6,9 @@ build it in. When an entry is built, move its dated summary to the blueprint's C
 delete it here.
 
 Related: `PRODUCT_BLUEPRINT.md` (what exists today), `docs/visual-lab-brief.md` (the
-image line this list extends).
+image line this list extends), `docs/doorda-sources-analysis.md` (2026-10-27: what Doorda
+aggregates, which publishers sit underneath, and the open-data layer — spreadsheet reader,
+publisher APIs, new registry entries — we should build instead of buying it).
 
 ---
 
