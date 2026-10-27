@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     #: one retry when the vision check finds an exact-text line wrong; "layered" — a hero picture
     #: with the words set in type by the system (the only mode with no provider key). "auto" = full
     #: with OpenAI, layered otherwise (Imagen's lettering is not reliable enough).
+    #: After a remake is ready, re-show it to the same twins who judged its parent and count the
+    #: paired shift (2026-10-27). Off = remakes end with a picture; the Re-test button still works.
+    visual_auto_retest: bool = True
     image_render: str = "auto"
     #: gpt-image-1 quality for a full poster; text legibility needs "high".
     image_quality_openai: str = "high"

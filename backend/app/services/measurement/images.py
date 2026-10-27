@@ -128,6 +128,8 @@ def payload(img: SessionImage) -> dict:
         "source": img.source, "status": img.status or "ready", "error": img.error,
         "parent_id": img.parent_id, "keep_list": img.keep_list or [],
         "brief": img.brief, "layout": img.layout, "change_note": img.change_note or "", "check_result": img.check_result,
+        # The proof behind a remake (2026-10-27): the re-test's state and, when counted, the paired shift.
+        "retest": (img.brief or {}).get("retest"), "proof": (img.brief or {}).get("proof"),
         "tokens_per_showing": tokens_for(img.width, img.height),
         "created_at": img.created_at.isoformat() if img.created_at else None,
     }

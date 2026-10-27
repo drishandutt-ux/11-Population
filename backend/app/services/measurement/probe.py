@@ -430,6 +430,10 @@ async def answer_one(
     started = time.monotonic()
     amendments = spec.get("amendments") if isinstance(spec.get("amendments"), dict) else None
     hide: tuple[str, ...] = ("journey",) if amendments and amendments.get("rules") else ()
+    # A Visual Lab re-test (the proof behind a remake): the twin judges the new version blind to what
+    # it said about the old one, or the instruction not to contradict itself would pin it there.
+    if isinstance(spec.get("retest"), dict):
+        hide = hide + ("visual",)
     # A real poll's questionnaire (a benchmark) is answered as a fresh respondent would answer it:
     # the twin does not see its earlier Forms answers, or a re-run would be anchored to the last.
     if instrument.key == "survey":

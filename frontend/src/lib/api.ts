@@ -266,8 +266,11 @@ export const api = {
     generate: (sessionId: string, body: { note?: string; keep_list?: KeepItem[]; mode?: SimMode }) =>
       request<SessionImage>(`/sessions/${sessionId}/images/generate`, { method: "POST", body: JSON.stringify(body) }),
     /** A new version with one change, honouring the keep-list; the child points at its parent (step 2). */
-    remake: (sessionId: string, imageId: string, body: { change: string; keep_list?: KeepItem[] | null; probe_id?: string | null; proposal?: ImageProposal | null; selected?: number[]; note?: string; mode?: SimMode }) =>
+    remake: (sessionId: string, imageId: string, body: { change: string; keep_list?: KeepItem[] | null; probe_id?: string | null; proposal?: ImageProposal | null; selected?: number[]; note?: string; mode?: SimMode; retest?: boolean; segment?: { key: string; label: string; value: string } | null }) =>
       request<SessionImage>(`/sessions/${sessionId}/images/${imageId}/remake`, { method: "POST", body: JSON.stringify(body) }),
+    /** Re-show a ready remake to the same twins who judged its parent and count the paired shift (the proof). 409 with nothing to pair with. */
+    retest: (sessionId: string, imageId: string) =>
+      request<SessionImage>(`/sessions/${sessionId}/images/${imageId}/retest`, { method: "POST" }),
     /** The agent reads a Visuals run on the image and proposes the next version built on it (step 3). 409 with no run on it. */
     propose: (sessionId: string, imageId: string, body: { probe_id?: string | null; mode?: SimMode } = {}) =>
       request<ImageProposal>(`/sessions/${sessionId}/images/${imageId}/propose`, { method: "POST", body: JSON.stringify(body) }, 180_000),
@@ -1189,6 +1192,9 @@ export type SessionImage = {
   layout: Record<string, any> | null;
   change_note: string;
   check_result: KeepCheck | null;
+  /** The re-test's state and, when counted, the paired shift against the parent (2026-10-27). */
+  retest?: RetestState | null;
+  proof?: ImageProof | null;
   /** What one showing of this image adds to a call, in input tokens. */
   tokens_per_showing: number;
   created_at: string | null;
@@ -1208,7 +1214,32 @@ export type ProposedChange = { change: string; basis: "most said" | "few said, h
 export type ImageProposal = {
   probe_id: string; base_image_id: string; base_label: string; base_why: string;
   changes: ProposedChange[]; keep: string[]; expected: string;
+  /** One version per group the piece works least on, with the trade-off said out loud (2026-10-27). */
+  segments?: ProposalSegments | null;
+  /** What one call with no audience would have said, and where the twins depart from it (2026-10-27). */
+  contrast?: ProposalContrast | null;
   change: string; why: string; cites: string[];
+};
+export type SegmentVersion = { segment: string; key: string; label: string; n: number; share: number; change: string; why: string; cites: string[]; trade_off: string };
+export type ProposalSegments = { key: string; label: string; buckets: { value: string; n: number; yes: number; share: number }[]; versions: SegmentVersion[]; tension: string };
+export type ProposalContrast = {
+  generic: string[];
+  agree: { generic: string; population: string }[];
+  population_only: string[];
+  generic_only: { generic: string; what_twins_said: string }[];
+  sentence: string;
+};
+/** The re-test behind a remake: re-shown to the same twins who judged its parent (2026-10-27). */
+export type RetestState = { probe_id: string; parent_probe_id: string; status: "running" | "complete" | "failed"; agents: number; started_at?: string; finished_at?: string; error?: string };
+export type ImageProof = {
+  probe_id: string; parent_probe_id: string; image_id: string;
+  n_paired: number; before: Interval; after: Interval;
+  won: number; lost: number; held_yes: number; held_no: number; rejecters: number; believers: number;
+  lift: { mean: number; low: number; high: number; significant: boolean }; feeling_lift: { mean: number; low: number; high: number; significant: boolean }; strength_lift: { mean: number; low: number; high: number; significant: boolean };
+  verdict: "won" | "lost" | "flat";
+  by_segment: Record<string, { value: string; n: number; thin: boolean; before: number; after: number; won: number; lost: number; lift: number; low: number; high: number; significant: boolean }[]>;
+  movers: { agent_id: string; name: string; role: string; kind: "won" | "lost"; from: string; to: string; before_put_off: string; after_put_off: string; before_reasoning: string; after_reasoning: string; segments: Record<string, string> }[];
+  expected: string; sentence: string; trade_off: string; counted_at: string;
 };
 
 /** How a spec names the images a twin is shown: `images: ImageRef[]`. `option` is set by the

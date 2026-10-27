@@ -12,10 +12,11 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Eye, FlaskConical, Loader2, Sparkles, Wand2, X } from "lucide-react";
-import { api, ImageProposal, ImageRef, KeepItem, Probe, SessionImage } from "@/lib/api";
+import { api, ImageProposal, ImageRef, KeepItem, Probe, SegmentVersion, SessionImage } from "@/lib/api";
 import { useImageUrl } from "./useImageUrl";
 import { Lightbox, imageFileName } from "./ImagePicker";
 import { InstrumentPageProps } from "./pages/types";
+import ProofBlock, { ProofLine } from "./ProofBlock";
 
 const BASIS: Record<string, { label: string; cls: string }> = {
   "most said": { label: "most said", cls: "bg-primary/15 text-primary" },
@@ -35,24 +36,46 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
   const [ticked, setTicked] = useState<boolean[]>([]);
   const [keepOn, setKeepOn] = useState<boolean[]>([]);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<null | "propose" | "make">(null);
+  const [busy, setBusy] = useState<null | "propose" | "make" | string>(null);
   const [error, setError] = useState<string | null>(null);
   const [child, setChild] = useState<SessionImage | null>(null);
+  // The proof: re-show the new version to the same twins when it is ready (one more run's worth of calls).
+  const [retest, setRetest] = useState(true);
+  const [segChildren, setSegChildren] = useState<SessionImage[]>([]);
 
   useEffect(() => { api.images.list(sessionId).then((r) => setImages(r.images)).catch(() => undefined); }, [sessionId]);
 
-  // The new version forms in the background; poll it until it is ready or failed.
+  // The new version forms in the background, then its re-test runs; poll until both have landed.
+  const forming = [child, ...segChildren].some((c) => c && (c.status === "generating" || c.retest?.status === "running"));
   useEffect(() => {
-    if (!child || child.status !== "generating") return;
+    if (!forming) return;
     const t = setInterval(async () => {
       const r = await api.images.list(sessionId).catch(() => null);
       if (!r) return;
       setImages(r.images);
-      const fresh = r.images.find((i) => i.id === child.id);
-      if (fresh) setChild(fresh);
+      setChild((c) => (c ? r.images.find((i) => i.id === c.id) || c : c));
+      setSegChildren((cs) => cs.map((c) => r.images.find((i) => i.id === c.id) || c));
     }, 3000);
     return () => clearInterval(t);
-  }, [child, sessionId]);
+  }, [forming, sessionId]);
+
+  async function makeForSegment(v: SegmentVersion) {
+    if (!proposal) return;
+    const base = images.find((i) => i.id === proposal.base_image_id);
+    setBusy(`seg:${v.segment}`); setError(null);
+    try {
+      const row = await api.images.remake(sessionId, proposal.base_image_id, {
+        change: v.change, keep_list: base?.keep_list || [], probe_id: probe.id, retest,
+        proposal: { ...proposal, changes: [{ change: v.change, basis: "most said", share: `${v.n} twins · ${v.segment}`, why: v.why, cites: v.cites }], expected: `${v.segment} should move; ${v.trade_off}` },
+        segment: { key: v.key, label: v.label, value: v.segment },
+      });
+      setSegChildren((prev) => [...prev, row]);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function propose(baseId?: string) {
     setBusy("propose"); setError(null); setChild(null);
@@ -82,7 +105,7 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
     setBusy("make"); setError(null);
     try {
       const row = await api.images.remake(sessionId, proposal.base_image_id, {
-        change: lines.join("\n"), keep_list: keep, probe_id: probe.id, selected: chosenIdx, note: note.trim(),
+        change: lines.join("\n"), keep_list: keep, probe_id: probe.id, selected: chosenIdx, note: note.trim(), retest,
         proposal: { ...proposal, changes: proposal.changes.map((c, i) => ({ ...c, change: edits[i] })) },
       });
       setChild(row);
@@ -184,6 +207,70 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
 
           {proposal.expected && <p className="text-[11px] text-muted-foreground">Expected: <span className="text-foreground/80">{proposal.expected}</span></p>}
 
+          {/* Against a plain critique: what one call with no audience would say, and where the twins depart from it */}
+          {proposal.contrast && (
+            <div className="rounded-lg border border-border/60 bg-background/50 p-3 space-y-2">
+              <div className="text-[11px] font-medium">Against a plain critique</div>
+              <p className="text-[11px] text-muted-foreground">A reviewer with no audience data would say: {proposal.contrast.generic.map((g, i) => <span key={i} className="text-foreground/75">{i ? " · " : ""}{g}</span>)}</p>
+              {proposal.contrast.sentence && <p className="text-[11px] text-foreground/85">{proposal.contrast.sentence}</p>}
+              {proposal.contrast.generic_only.length > 0 && (
+                <ul className="space-y-1">
+                  {proposal.contrast.generic_only.map((g, i) => (
+                    <li key={i} className="text-[11px]"><span className="text-amber-300">Your twins disagree:</span> <span className="text-muted-foreground">“{g.generic}”</span> — {g.what_twins_said}</li>
+                  ))}
+                </ul>
+              )}
+              {proposal.contrast.population_only.length > 0 && (
+                <p className="text-[11px]"><span className="text-primary">Only the audience said:</span> {proposal.contrast.population_only.join(" · ")}</p>
+              )}
+              {proposal.contrast.agree.length > 0 && (
+                <p className="text-[10px] text-muted-foreground">Both agree on: {proposal.contrast.agree.map((a) => a.population).join(" · ")}</p>
+              )}
+            </div>
+          )}
+
+          {/* One version per group: the split is the insight, and a consensus version writes for nobody */}
+          {proposal.segments && proposal.segments.versions.length > 0 && (
+            <div className="rounded-lg border border-border/60 bg-background/50 p-3 space-y-2">
+              <div className="text-[11px] font-medium">Versions by {proposal.segments.label}</div>
+              {proposal.segments.tension && <p className="text-[11px] text-foreground/80">{proposal.segments.tension}</p>}
+              <p className="text-[10px] text-muted-foreground">
+                How it split: {proposal.segments.buckets.map((b) => `${b.value} ${Math.round(b.share * 100)}% (n=${b.n})`).join(" · ")}
+              </p>
+              <ul className="space-y-2">
+                {proposal.segments.versions.map((v) => {
+                  const made = segChildren.find((c) => c.brief?.segment?.value === v.segment);
+                  return (
+                    <li key={v.segment} className="rounded-lg border border-border/50 bg-background/40 p-2.5 text-[11px] space-y-1">
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div><span className="text-primary">For {v.segment}</span> <span className="text-muted-foreground">({Math.round(v.share * 100)}% said it works, n={v.n})</span>: <span className="text-foreground/90">{v.change}</span></div>
+                          {v.why && <div className="text-muted-foreground">{v.why}</div>}
+                          {v.trade_off && <div className="text-amber-300/90">Costs: {v.trade_off}</div>}
+                          {v.cites.length > 0 && <div className="text-[10px] text-muted-foreground">From: {v.cites.join(", ")}</div>}
+                        </div>
+                        {!made && (
+                          <button type="button" onClick={() => makeForSegment(v)} disabled={busy !== null} className="btn btn-sm btn-secondary shrink-0">
+                            {busy === `seg:${v.segment}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} Make this one
+                          </button>
+                        )}
+                      </div>
+                      {made && (
+                        <div className="flex items-center gap-2 pt-1">
+                          {made.status === "ready" ? <Thumb sessionId={sessionId} image={{ id: made.id, label: made.label }} size={48} /> : <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                          <div className="min-w-0">
+                            <div className="text-foreground/85">{made.label}{made.status === "failed" ? ` — did not finish: ${made.error || ""}` : made.status === "generating" ? " — forming…" : ""}</div>
+                            <ProofLine retest={made.retest} proof={made.proof} compact />
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           <div>
             <label className="text-[11px] text-muted-foreground block mb-1">Anything to add</label>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Your own change, in a line — keep it to one page · make the phone number the biggest thing on it" className={`${CONTROL} resize-y`} />
@@ -196,10 +283,15 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
             <button type="button" onClick={() => propose()} disabled={busy !== null} className="btn btn-sm btn-secondary">
               {busy === "propose" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} Propose again
             </button>
-            <span className="text-[10px] text-muted-foreground">Usually under a minute. The words are set in type by the system and checked against the keep-list.</span>
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer" title="When the new version is ready, show it to the same twins who judged this one and count who it won and lost. Costs one more run's worth of calls.">
+              <input type="checkbox" checked={retest} onChange={(e) => setRetest(e.target.checked)} className="accent-[hsl(var(--primary))]" /> Test it on the same {probe.answer_count || probe.agent_count} twins when ready
+            </label>
+            <span className="text-[10px] text-muted-foreground">Usually under a minute. Every line carries who asked for it; nothing nobody asked for is added.</span>
           </div>
         </div>
       )}
+
+      {child?.proof && <ProofBlock proof={child.proof} title="What the new version did to the same people" />}
 
       {child && (
         <div className="rounded-lg border border-border/60 bg-background/60 p-3 flex items-start gap-3">
@@ -221,6 +313,10 @@ export default function NextVersion({ probe, onOpenTool }: Props) {
                 {(child.brief?.render_error || child.brief?.hero_error) && (
                   <p className="text-red-300">The image model refused, so this is the typed fallback: {child.brief.render_error || child.brief.hero_error}</p>
                 )}
+                {(child.layout?.unsupported?.length ?? 0) > 0 && (
+                  <p className="text-muted-foreground">Left out because nobody asked for it: {(child.layout?.unsupported || []).map((u: any) => `“${u.text}”`).join(", ")}.</p>
+                )}
+                <ProofLine retest={child.retest} proof={child.proof} />
                 <div className="flex flex-wrap gap-2 pt-0.5">
                   {onOpenTool ? (
                     <>

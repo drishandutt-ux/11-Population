@@ -44,6 +44,8 @@ class RemakeRequest(BaseModel):
     proposal: Optional[dict] = None             # what /propose returned, kept on the brief
     selected: Optional[list[int]] = None        # which of the proposal's changes to make (indexes); None = all
     note: str = ""                              # the analyst's own addition to the proposal
+    retest: bool = True                         # re-show the new version to the same twins when ready (the proof)
+    segment: Optional[dict] = None              # {key, label, value}: a version for one group of the run
     mode: str = "fast"
 
 
@@ -166,9 +168,30 @@ async def remake_image(session_id: str, image_id: str, body: RemakeRequest, back
     if not change.strip():
         raise HTTPException(400, "Pick at least one change to make.")
     row = await visual_gen.start_remake(session_id, parent, change=change, keep_list=body.keep_list, probe_id=body.probe_id,
-                                        proposal=body.proposal, mode=mode, selected=body.selected, note=body.note)
+                                        proposal=body.proposal, mode=mode, selected=body.selected, note=body.note,
+                                        retest=body.retest, segment=body.segment)
     background_tasks.add_task(visual_gen.run_remake, row.id)
     return images_mod.payload(row)
+
+
+@router.post("/{session_id}/images/{image_id}/retest")
+async def retest_image(session_id: str, image_id: str, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Re-show a ready remake to the same twins who judged its parent and count the paired shift
+    (the proof, 2026-10-27). Runs automatically after a remake unless it was switched off; this
+    starts it by hand, or again."""
+    await get_owned_session(session_id, user, db)
+    img = await _owned_image(session_id, image_id, db)
+    if (img.status or "ready") != "ready":
+        raise HTTPException(409, "This image is not ready yet.")
+    if ((img.brief or {}).get("retest") or {}).get("status") == "running":
+        raise HTTPException(409, "A re-test is already running on this image.")
+    from app.services.measurement import visual_proof
+    pid = await visual_proof.start_retest(image_id)
+    if not pid:
+        raise HTTPException(409, "Nothing to pair with: this image was not remade from a run the population answered.")
+    background_tasks.add_task(visual_proof.run_retest, image_id, pid)
+    await db.refresh(img)
+    return images_mod.payload(img)
 
 
 @router.post("/{session_id}/images/propose")

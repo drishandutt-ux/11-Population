@@ -25,6 +25,7 @@ import { ago } from "./formUtils";
 import { forgetImageUrl, useImageUrl } from "../useImageUrl";
 import { Lightbox, imageFileName } from "../ImagePicker";
 import ExperimentPage from "../pages/ExperimentPage";
+import ProofBlock, { ProofLine } from "../ProofBlock";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 const KEEP_LABEL: Record<KeepItem["type"], string> = { text: "Must read exactly", present: "Must show", absent: "Must not show" };
@@ -386,7 +387,7 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
   const [change, setChange] = useState("");
   const [keep, setKeep] = useState<KeepItem[]>(img.keep_list || []);
   const [proposal, setProposal] = useState<ImageProposal | null>(null);
-  const [busy, setBusy] = useState<null | "propose" | "remake" | "check" | "read" | "keep">(null);
+  const [busy, setBusy] = useState<null | "propose" | "remake" | "check" | "read" | "keep" | "retest">(null);
   const [confirm, setConfirm] = useState(false);
   const [zoom, setZoom] = useState(false);
   useEffect(() => { setKeep(img.keep_list || []); setDraft(img.label); }, [img.keep_list, img.label]);
@@ -429,6 +430,10 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
   async function recheck() {
     setBusy("check");
     try { const r: KeepCheck = await api.images.check(sessionId, img.id, mode); onPatch({ ...img, check_result: r }); setPanel("details"); } catch (e: any) { onError(e?.message || String(e)); } finally { setBusy(null); }
+  }
+  async function retestNow() {
+    setBusy("retest");
+    try { onPatch(await api.images.retest(sessionId, img.id)); } catch (e: any) { onError(e?.message || String(e)); } finally { setBusy(null); }
   }
   async function read() {
     setBusy("read");
@@ -474,6 +479,7 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
               {img.keep_list.map((k, i) => <span key={i} className="text-[10px] rounded px-1.5 py-0.5 border border-border/60 text-muted-foreground" title={KEEP_LABEL[k.type]}>{k.type === "text" ? "“" : k.type === "present" ? "show: " : "no: "}{k.value}{k.type === "text" ? "”" : ""}</span>)}
             </div>
           )}
+          {(img.proof || img.retest) && <div><ProofLine retest={img.retest} proof={img.proof} compact /></div>}
           <p className="text-[11px] text-muted-foreground">
             {myRuns.length === 0 ? "Not shown to the population yet." : <>{myRuns.length} run{myRuns.length === 1 ? "" : "s"}{latest?.aggregates?.sentence ? <> · latest: <span className="text-foreground/80">{latest.aggregates.sentence}</span></> : latest ? ` · latest ${latest.status}` : ""}</>}
           </p>
@@ -487,6 +493,11 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
             <button type="button" onClick={propose} disabled={img.status !== "ready" || !latest || busy === "propose"} title={latest ? "Read the latest run on this image and propose the one change" : "Show it to the population first"} className="btn btn-sm btn-secondary">
               {busy === "propose" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} Suggest a change
             </button>
+            {img.source === "remake" && img.status === "ready" && img.retest?.status !== "running" && (
+              <button type="button" onClick={retestNow} disabled={busy === "retest"} title="Show this version to the same twins who judged the one it came from, and count who it won and lost" className="btn btn-sm btn-ghost">
+                {busy === "retest" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} {img.proof ? "Re-test again" : "Re-test"}
+              </button>
+            )}
             <button type="button" onClick={() => setPanel(panel === "keep" ? null : "keep")} className="btn btn-sm btn-ghost">Keep-list</button>
             <button type="button" onClick={() => setPanel(panel === "details" ? null : "details")} className="btn btn-sm btn-ghost">{panel === "details" ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />} Details</button>
             {confirm ? (
@@ -538,17 +549,24 @@ function ImageCard({ image: img, depth, sessionId, mode, shown, compare, runs, b
           {(img.brief?.render_error || img.brief?.hero_error) && <p className="text-red-300"><span className="text-muted-foreground">The image model refused: </span>{img.brief.render_error || img.brief.hero_error}</p>}
           {img.brief?.render && <p><span className="text-muted-foreground">How it was drawn: </span>{img.brief.render === "full" ? `the whole poster by the image model${(img.brief.render_attempts || 1) > 1 ? ` (${img.brief.render_attempts} attempts — the first got a line wrong)` : ""}${img.brief.reference_used ? ", starting from the original" : ""}` : "a picture plus the words set in type by the system"}</p>}
           {img.brief?.hero_prompt && <p><span className="text-muted-foreground">Picture brief: </span>{img.brief.hero_prompt} <span className="text-muted-foreground">· drawn by {img.brief.hero_provider === "none" ? "a placeholder (no provider key)" : img.brief.hero_provider}</span>{img.brief.hero_error ? <span className="text-amber-300"> · provider failed: {img.brief.hero_error}</span> : null}</p>}
+          {img.proof && <ProofBlock proof={img.proof} />}
           {img.layout ? (
             <div>
-              <div className="text-muted-foreground mb-0.5">{img.layout.read_from_image ? "What the system read on this image:" : "The words, as set:"}</div>
+              <div className="text-muted-foreground mb-0.5">{img.layout.read_from_image ? "What the system read on this image:" : "The words, as set — and who asked for each:"}</div>
               <ul className="space-y-0.5 text-foreground/85">
-                {img.layout.headline && <li className="font-medium">{img.layout.headline}</li>}
-                {img.layout.subline && <li>{img.layout.subline}</li>}
-                {(img.layout.body_lines || []).map((l: string, i: number) => <li key={`b${i}`}>{l}</li>)}
-                {(img.layout.claim_lines || []).map((l: string, i: number) => <li key={`c${i}`} className="text-primary/90">“{l}”</li>)}
-                {img.layout.cta && <li>→ {img.layout.cta}</li>}
-                {img.layout.small_print && <li className="text-muted-foreground">{img.layout.small_print}</li>}
+                {img.layout.headline && <li className="font-medium">{img.layout.headline}<Why layout={img.layout} element="headline" text={img.layout.headline} /></li>}
+                {img.layout.subline && <li>{img.layout.subline}<Why layout={img.layout} element="subline" text={img.layout.subline} /></li>}
+                {(img.layout.body_lines || []).map((l: string, i: number) => <li key={`b${i}`}>{l}<Why layout={img.layout} element="body" text={l} /></li>)}
+                {(img.layout.claim_lines || []).map((l: string, i: number) => <li key={`c${i}`} className="text-primary/90">“{l}”<Why layout={img.layout} element="claim" text={l} /></li>)}
+                {img.layout.cta && <li>→ {img.layout.cta}<Why layout={img.layout} element="cta" text={img.layout.cta} /></li>}
+                {img.layout.small_print && <li className="text-muted-foreground">{img.layout.small_print}<Why layout={img.layout} element="small_print" text={img.layout.small_print} /></li>}
+                {(img.layout.provenance || []).filter((e: any) => e.element === "picture" || e.element === "palette").map((e: any, i: number) => (
+                  <li key={`p${i}`} className="text-muted-foreground">{e.element === "picture" ? "The picture" : "The colours"}<Why layout={img.layout} element={e.element} text="" /></li>
+                ))}
               </ul>
+              {img.layout.unsupported?.length > 0 && (
+                <p className="text-muted-foreground mt-1">Left out because nobody asked for it: {img.layout.unsupported.map((u: any) => `“${u.text}”`).join(", ")}.</p>
+              )}
             </div>
           ) : img.source === "upload" ? (
             <button type="button" onClick={read} disabled={busy === "read"} className="btn btn-sm btn-secondary">{busy === "read" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />} Read what is on it</button>
@@ -615,5 +633,23 @@ export function KeepListEditor({ value, onChange, compact = false }: { value: Ke
         <button type="button" onClick={add} className="btn btn-sm btn-secondary"><Plus className="w-3.5 h-3.5" /></button>
       </div>
     </div>
+  );
+}
+
+/** Why a line is on the poster: who asked for it, or that nobody did. Reads the layout's provenance. */
+function Why({ layout, element, text }: { layout: any; element: string; text: string }) {
+  const norm = (t: string) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const entries: any[] = Array.isArray(layout?.provenance) ? layout.provenance : [];
+  const want = norm(text);
+  const e = entries.find((x) => x.element === element && want && (norm(x.text) === want || want.includes(norm(x.text)) || norm(x.text).includes(want)))
+    || entries.find((x) => x.element === element && (!x.text || !want));
+  if (!e) return null;
+  const basis = e.basis === "reactions" ? (e.share ? `${e.share} asked` : "the audience asked") : e.basis === "keep-list" ? "keep-list" : e.basis === "facts" ? "a fact that must not change"
+    : e.basis === "brief" ? "from the brief" : e.basis === "note" ? "your note" : "nobody asked";
+  return (
+    <span className={`ml-1.5 text-[10px] rounded px-1.5 py-0.5 ${e.basis === "reactions" ? "bg-primary/10 text-primary/90" : e.basis === "none" ? "bg-amber-500/10 text-amber-300" : "bg-muted text-muted-foreground"}`}
+      title={[e.because, e.cites?.length ? `From: ${e.cites.join(", ")}` : ""].filter(Boolean).join(" — ")}>
+      {basis}{e.cites?.length ? ` · ${e.cites.slice(0, 2).join(", ")}${e.cites.length > 2 ? "…" : ""}` : ""}
+    </span>
   );
 }

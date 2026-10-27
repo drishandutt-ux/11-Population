@@ -36,9 +36,12 @@ from sqlalchemy import select
 
 from app.core import database as _db
 from app.core.config import get_settings
-from app.models.measurement import Probe, SessionImage
+from app.models.agent import SpawnedAgent
+from app.models.measurement import Probe, ProbeAnswer, SessionImage
 from app.services.evidence.llm import analyze, arr, b, clip, enum, obj, s
 from app.services.measurement import images as images_mod
+from app.services.measurement import stats
+from app.services.measurement.probe import answered, segments_for, split_keys, split_label
 
 KEEP_TYPES = ("text", "present", "absent")
 MAX_KEEP = 12
@@ -92,7 +95,16 @@ LAYOUT_SCHEMA = obj({
     "hero_prompt": s("A 1-3 sentence description of the picture for an image model: subject, setting, mood, style. NO words, logos or text in the picture; name nothing on the must-not-show list"),
     "hero_placement": enum(["top", "left", "none"], "Where the picture sits: top (picture above the words), left (picture beside the words), none (type only)"),
     "kept": arr(s("One keep-list item this layout honours, repeated word for word"), "Every keep-list item, restated", max_items=MAX_KEEP),
-})
+    "provenance": arr(obj({
+        "element": enum(["headline", "subline", "body", "claim", "cta", "small_print", "picture", "palette"], "Which element this explains"),
+        "text": s("For a line: the line, word for word; '' for the picture or the palette"),
+        "basis": enum(["reactions", "keep-list", "facts", "brief", "note", "none"],
+                      "reactions = the audience asked for it (name who); keep-list / facts = it must stay; brief = what the session knows called for it; note = the analyst asked; none = nobody asked — you added it"),
+        "because": s("One short sentence: why this element is there"),
+        "cites": arr(s("A twin's name, as given"), "Who asked for it, when the basis is reactions", max_items=5),
+        "share": s("How many asked, in plain words, when the basis is reactions — '14 of 24', 'most who said no'; '' otherwise"),
+    }, required=["element", "text", "basis", "because", "cites", "share"]), "One entry per element on the poster — every line, the picture, the palette", max_items=14),
+}, required=["rationale", "headline", "subline", "body_lines", "claim_lines", "cta", "small_print", "palette", "hero_prompt", "hero_placement", "kept", "provenance"])
 
 LAYOUT_SYSTEM = (
     "You are a senior creative at a communications agency writing the layout of one poster-style piece. "
@@ -106,7 +118,11 @@ LAYOUT_SYSTEM = (
     "- The hero prompt describes a picture with NO words in it; the words are set separately.\n"
     "- Plain, specific language in the audience's register. Lead with what they said mattered. "
     "If a change is asked for, make that change and keep everything else that was working.\n"
-    "- Colours as #rrggbb with real contrast between bg and fg."
+    "- Colours as #rrggbb with real contrast between bg and fg.\n"
+    "- PROVENANCE: every element carries one entry saying why it is there. When the audience's reactions "
+    "are given, do not add a line, a panel or a call to action that no reaction, keep-list item, fact, brief "
+    "or note asked for — generic advice (\"add a call to action\", \"add three bullet points\") is exactly "
+    "what this piece must not become. An element you cannot attribute gets basis 'none' and is left out."
 )
 
 
@@ -150,6 +166,93 @@ def enforce_keep_list(layout: dict, keep: list[dict]) -> dict:
     for word in absent:
         prompt = re.sub(re.escape(word), "", prompt, flags=re.I)
     layout["hero_prompt"] = " ".join(prompt.split())
+    return layout
+
+
+PROV_ELEMENTS = ("headline", "subline", "body", "claim", "cta", "small_print", "picture", "palette")
+PROV_BASES = ("reactions", "keep-list", "facts", "brief", "note", "none")
+
+
+def _prov_entries(layout: dict) -> list[dict]:
+    out = []
+    for e in (layout.get("provenance") or []):
+        if not isinstance(e, dict):
+            continue
+        el = str(e.get("element") or "").strip()
+        if el not in PROV_ELEMENTS:
+            continue
+        out.append({"element": el, "text": str(e.get("text") or "").strip(), "basis": e.get("basis") if e.get("basis") in PROV_BASES else "none",
+                    "because": str(e.get("because") or "").strip(), "cites": [str(x).strip() for x in (e.get("cites") or []) if str(x).strip()][:5],
+                    "share": str(e.get("share") or "").strip()})
+    return out
+
+
+def _prov_for(entries: list[dict], element: str, text: str = "") -> Optional[dict]:
+    """The provenance entry for an element (a line matched by its words when several share the element)."""
+    want = _norm_text(text)
+    same = [e for e in entries if e["element"] == element]
+    if want:
+        for e in same:
+            t = _norm_text(e["text"])
+            if t and (t in want or want in t):
+                return e
+    for e in same:
+        if not e["text"] or not want:
+            return e
+    return same[0] if same and not want else None
+
+
+def enforce_provenance(layout: dict, keep: list[dict], *, remake: bool) -> dict:
+    """Every line carries its reason. On a remake, a body line or call to action that nobody asked
+    for (basis 'none' or no entry) is dropped unless the keep-list or the locked facts hold it — the mechanical end of the rule that a new version is built from the reactions,
+    not from a critic's reflexes. What was dropped is kept on the layout as `unsupported`, so the
+    card can say so."""
+    layout = dict(layout or {})
+    entries = _prov_entries(layout)
+    exact = [_norm_text(k["value"]) for k in keep if k["type"] == "text"]
+    unsupported: list[dict] = []
+    provenance: list[dict] = []
+    # A model that returned no provenance at all did not engage with the rule; dropping every line
+    # on that basis would wreck the poster, so then everything is kept and marked as unattributed.
+    remake = remake and bool(entries)
+
+    def protected(text: str) -> bool:
+        t = _norm_text(text)
+        return any(x and (x in t or t in x) for x in exact)
+
+    def keep_line(element: str, text: str) -> bool:
+        e = _prov_for(entries, element, text)
+        basis = e["basis"] if e else "none"
+        if protected(text):
+            provenance.append({"element": element, "text": text, "basis": "keep-list", "because": (e or {}).get("because") or "on the keep-list", "cites": (e or {}).get("cites") or [], "share": (e or {}).get("share") or ""})
+            return True
+        # Only body copy and the call to action are dropped: those are where a critic's reflexes land.
+        # Claims and small print carry over from the parent (facts, legal lines) and are marked, not cut.
+        if remake and basis == "none" and element in ("body", "cta"):
+            unsupported.append({"element": element, "text": text, "because": (e or {}).get("because") or "nobody asked for it"})
+            return False
+        provenance.append({"element": element, "text": text, "basis": basis, "because": (e or {}).get("because") or ("" if basis != "none" else "nobody asked for it"),
+                           "cites": (e or {}).get("cites") or [], "share": (e or {}).get("share") or ""})
+        return True
+
+    for element in ("headline", "subline"):
+        text = str(layout.get(element) or "").strip()
+        if text:
+            keep_line(element, text)       # never dropped: a poster has a headline; a bare subline is harmless
+    layout["body_lines"] = [ln for ln in (layout.get("body_lines") or []) if str(ln).strip() and keep_line("body", str(ln))]
+    layout["claim_lines"] = [ln for ln in (layout.get("claim_lines") or []) if str(ln).strip() and keep_line("claim", str(ln))]
+    cta = str(layout.get("cta") or "").strip()
+    if cta and not keep_line("cta", cta):
+        layout["cta"] = ""
+    small = str(layout.get("small_print") or "").strip()
+    if small and not keep_line("small_print", small):
+        layout["small_print"] = ""
+    for element in ("picture", "palette"):
+        e = _prov_for(entries, element)
+        if e:
+            provenance.append(e)
+    layout["provenance"] = provenance
+    layout["unsupported"] = unsupported
     return layout
 
 
@@ -229,8 +332,8 @@ async def write_layout(
     if not note and not change:
         blocks.append("THE ANALYST'S NOTE: none — write the piece the audience's own words call for.")
     blocks.append("Write the layout with the tool.")
-    out = await analyze(LAYOUT_SCHEMA, LAYOUT_SYSTEM, "\n\n".join(blocks), session_id=session_id, label="visual:layout", model=model, max_tokens=1400)
-    return enforce_keep_list(out, keep)
+    out = await analyze(LAYOUT_SCHEMA, LAYOUT_SYSTEM, "\n\n".join(blocks), session_id=session_id, label="visual:layout", model=model, max_tokens=2200)
+    return enforce_provenance(enforce_keep_list(out, keep), keep, remake=bool(parent_layout) and bool(reactions))
 
 
 # ── reading an uploaded image into a layout ───────────────────────────────────
@@ -907,7 +1010,15 @@ NEXT_SCHEMA = obj({
         "The changes for the next version: the headline change first — what most people asked for — then up to three more that are relevant and hard-hitting even when few said them. Never more than four; never two that say the same thing.", max_items=4),
     "keep": arr(s("Something that is working and must stay, in a few words"), "What the audience responded to and the next version must keep", max_items=5),
     "expected": s("One sentence: what should move if these changes work, for whom, and what it risks elsewhere"),
-}, required=["base_image_id", "changes", "keep", "expected"])
+    "segment_versions": arr(obj({
+        "segment": s("The group, exactly as named in HOW IT SPLIT"),
+        "change": s("The one change that version makes for this group, in a sentence a designer could act on"),
+        "why": s("What this group said that the consensus version does not answer"),
+        "cites": arr(s("A twin's name, as given"), "Who in this group said it", max_items=4),
+        "trade_off": s("What this version risks with the other groups, in a few words — or 'little' if nothing in the reactions suggests a cost"),
+    }, required=["segment", "change", "why", "cites", "trade_off"]), "When the split is given and real: one version per group the piece works least on (up to 3), each answering that group's own words. Empty when the groups agree.", max_items=3),
+    "tension": s("One sentence on the trade-off between the groups — what one wants that costs another; '' when the groups agree"),
+}, required=["base_image_id", "changes", "keep", "expected", "segment_versions", "tension"])
 
 NEXT_SYSTEM = (
     "You are a creative director reading an audience's reactions to an image (or to several shown together as one piece) "
@@ -919,8 +1030,112 @@ NEXT_SYSTEM = (
     "the people it did not work on outranks a nicety from those it already works on. Each change must be concrete enough "
     "for a designer to act on and must say in plain words how many said it and who. Name what is working and must stay. "
     "Never propose removing anything on a keep-list. When several images were shown, pick the one to build on and say why. "
-    "Record the proposal with the tool."
+    "When HOW IT SPLIT is given and the groups genuinely differ, also propose one version per group the piece works least on, "
+    "each built from that group's own words, and say plainly what each costs the other groups: the split is the insight, and "
+    "a single consensus version writes for nobody. Record the proposal with the tool."
 )
+
+
+CRITIQUE_SCHEMA = obj({
+    "suggestions": arr(s("One improvement, in a sentence a designer could act on"), "The three improvements a reviewer with no audience data would make", max_items=3),
+})
+CRITIQUE_SYSTEM = (
+    "You are a creative reviewer looking at a poster with NO audience data at all. Give the three improvements you "
+    "would make on craft and common sense alone. Record them with the tool."
+)
+
+CONTRAST_SCHEMA = obj({
+    "agree": arr(obj({"generic": s("The reviewer's suggestion"), "population": s("The population change that says the same")}), "Where the audience and the reviewer agree", max_items=4),
+    "population_only": arr(s("A population change the reviewer did not think of, with who asked in a few words"), "What only the audience said", max_items=4),
+    "generic_only": arr(obj({"generic": s("The reviewer's suggestion"), "what_twins_said": s("What in the reactions contradicts it or shows it does not matter to this audience — cite the reaction")}),
+                        "The reviewer's suggestions the audience's reactions contradict or do not support", max_items=3),
+    "sentence": s("One plain sentence: how far the audience departs from the reviewer, and the single most telling disagreement"),
+}, required=["agree", "population_only", "generic_only", "sentence"])
+CONTRAST_SYSTEM = (
+    "You compare what a reviewer with no audience data suggested for a poster with what the audience itself asked for. "
+    "Be fair: where they agree, say so. Where the reactions contradict the reviewer, cite the reaction. Do not invent "
+    "disagreement. Record the comparison with the tool."
+)
+
+
+async def plain_critique(base: SessionImage, *, model: str) -> list[str]:
+    """What one call with no audience would say about the image: the baseline the population is measured against."""
+    img = {"id": base.id, "label": base.label or "poster", "option": "", "media_type": base.media_type,
+           "data_b64": base64.b64encode(bytes(base.data)).decode("ascii"), "width": base.width, "height": base.height}
+    content = images_mod.vision_content([img], "Give your three improvements with the tool.")
+    out = await analyze(CRITIQUE_SCHEMA, CRITIQUE_SYSTEM, "Review the poster.", session_id=base.session_id, label="visual:critique", model=model,
+                        max_tokens=500, messages=[{"role": "user", "content": content}])
+    return [str(x).strip() for x in (out.get("suggestions") or []) if str(x).strip()][:3]
+
+
+async def contrast_with_critique(*, session_id: str, generic: list[str], changes: list[dict], reactions: str, model: str) -> dict:
+    blocks = ["WHAT A REVIEWER WITH NO AUDIENCE DATA SUGGESTED:\n" + "\n".join(f"- {g}" for g in generic),
+              "WHAT THE AUDIENCE'S REACTIONS LED TO:\n" + "\n".join(f"- {c['change']} ({c.get('share') or c.get('basis')}; {c.get('why')})" for c in changes),
+              reactions, "Compare them with the tool."]
+    out = await analyze(CONTRAST_SCHEMA, CONTRAST_SYSTEM, "\n\n".join(blocks), session_id=session_id, label="visual:contrast", model=model, max_tokens=900)
+    return {"generic": generic,
+            "agree": [a for a in (out.get("agree") or []) if isinstance(a, dict) and a.get("generic")][:4],
+            "population_only": [str(x).strip() for x in (out.get("population_only") or []) if str(x).strip()][:4],
+            "generic_only": [g for g in (out.get("generic_only") or []) if isinstance(g, dict) and g.get("generic")][:3],
+            "sentence": str(out.get("sentence") or "").strip()}
+
+
+def _is_nothing(text: str) -> bool:
+    t = " ".join(str(text or "").lower().split()).strip(" .!")
+    return t in ("", "nothing", "nothing really", "none", "no", "n/a", "nothing in particular", "nothing much")
+
+
+async def segment_split(session_id: str, probe: Probe) -> Optional[dict]:
+    """The split that matters most in this run: the segment key with the widest spread in 'works on
+    them' across solid buckets (population segments preferred), with each bucket's size, share, what
+    put it off and the changes its twins asked for — the material for one version per group."""
+    async with _db.AsyncSessionLocal() as db:
+        pairs = (await db.execute(
+            select(ProbeAnswer, SpawnedAgent).join(SpawnedAgent, SpawnedAgent.id == ProbeAnswer.agent_id, isouter=True)
+            .where(ProbeAnswer.probe_id == probe.id)
+        )).all()
+    rows = [{"agent_id": a.agent_id, "name": getattr(ag, "name", ""), "answer": a.answer or {}, "segments": segments_for(ag) if ag else {}}
+            for a, ag in pairs if answered({"answer": a.answer or {}})]
+    if len(rows) < 6:
+        return None
+    best_key, best_spread, best_buckets = None, -1.0, None
+    for key in split_keys(rows):
+        buckets: dict[str, list[dict]] = {}
+        for r in rows:
+            v = (r["segments"] or {}).get(key)
+            if v is not None:
+                buckets.setdefault(str(v), []).append(r)
+        solid = {k: v for k, v in buckets.items() if len(v) >= 3}
+        if len(solid) < 2:
+            continue
+        shares = {k: sum(1 for r in v if r["answer"].get("verdict") == "yes") / len(v) for k, v in solid.items()}
+        spread = max(shares.values()) - min(shares.values())
+        bonus = 0.15 if key == "segment" else 0.0                    # the population's own segments first, when they split at all
+        if spread + bonus > best_spread:
+            best_key, best_spread, best_buckets = key, spread + bonus, solid
+    if not best_key or not best_buckets:
+        return None
+    out_buckets = []
+    for value, members in sorted(best_buckets.items(), key=lambda kv: sum(1 for r in kv[1] if r["answer"].get("verdict") == "yes") / len(kv[1])):
+        yes = sum(1 for r in members if r["answer"].get("verdict") == "yes")
+        put = stats.distribution([r["answer"].get("put_off__theme") or r["answer"].get("put_off") for r in members
+                                  if not _is_nothing(r["answer"].get("put_off__theme") or r["answer"].get("put_off"))])
+        changes = [{"name": r["name"], "verdict": r["answer"].get("verdict"), "change": clip(str(r["answer"].get("change_one") or ""), 140)}
+                   for r in members if not _is_nothing(r["answer"].get("change_one"))][:4]
+        out_buckets.append({"value": value, "n": len(members), "yes": yes, "share": round(yes / len(members), 4),
+                            "put_off": [{"value": p["value"], "count": p["count"]} for p in put[:3]], "changes": changes})
+    return {"key": best_key, "label": split_label(best_key), "buckets": out_buckets}
+
+
+def _segment_block(split: Optional[dict]) -> str:
+    if not split:
+        return ""
+    lines = [f"HOW IT SPLIT BY {split['label'].upper()} (works on them, lowest first):"]
+    for b_ in split["buckets"]:
+        lines.append(f"- {b_['value']}: {b_['yes']} of {b_['n']} say it works" + (" · put off by: " + "; ".join(f"{p['value']} ({p['count']})" for p in b_["put_off"]) if b_["put_off"] else ""))
+        for c in b_["changes"][:3]:
+            lines.append(f"    {c['name']} ({c['verdict']}): {c['change']}")
+    return "\n".join(lines)
 
 
 def _images_block(images: list[SessionImage], *, together: bool) -> str:
@@ -954,6 +1169,14 @@ async def propose_next(*, session_id: str, probe: Probe, images: list[SessionIma
     if q:
         blocks.append(f"THE QUESTION THEY WERE ASKED: {q}")
     blocks.append(reactions)
+    split = None
+    try:
+        split = await segment_split(session_id, probe)
+    except Exception as e:  # noqa: BLE001 — the split is a bonus
+        print(f"[visual_gen] segment split skipped: {type(e).__name__}: {e}")
+    seg_block = _segment_block(split)
+    if seg_block:
+        blocks.append(seg_block)
     if base_id:
         blocks.append(f"BUILD ON IMAGE id {base_id} — the analyst has fixed the base; copy that id.")
     elif len(images) == 1:
@@ -981,6 +1204,31 @@ async def propose_next(*, session_id: str, probe: Probe, images: list[SessionIma
         for n in c["cites"]:
             if n not in cites:
                 cites.append(n)
+    # One version per group, when the run split (the trade-off said out loud).
+    known = {b_["value"] for b_ in (split or {}).get("buckets") or []}
+    # No version for the group the piece already works best on: a version is for a group it is losing.
+    top_share = max((b_["share"] for b_ in (split or {}).get("buckets") or []), default=1.0)
+    losing = {b_["value"] for b_ in (split or {}).get("buckets") or [] if b_["share"] < top_share}
+    versions = []
+    for v in (out.get("segment_versions") or [])[:3]:
+        if not isinstance(v, dict) or not str(v.get("change") or "").strip() or str(v.get("segment") or "").strip() not in known:
+            continue
+        if str(v["segment"]).strip() not in losing:
+            continue
+        bucket = next(b_ for b_ in split["buckets"] if b_["value"] == str(v["segment"]).strip())
+        versions.append({"segment": str(v["segment"]).strip(), "key": split["key"], "label": split["label"], "n": bucket["n"], "share": bucket["share"],
+                         "change": str(v["change"]).strip(), "why": str(v.get("why") or "").strip(),
+                         "cites": [str(x).strip() for x in (v.get("cites") or []) if str(x).strip()][:4], "trade_off": str(v.get("trade_off") or "").strip()})
+    segments = ({"key": split["key"], "label": split["label"], "buckets": [{k: b_[k] for k in ("value", "n", "yes", "share")} for b_ in split["buckets"]],
+                 "versions": versions, "tension": str(out.get("tension") or "").strip()} if split else None)
+    # Against a plain critique: what one call with no audience would say, and where the twins depart from it.
+    contrast = None
+    try:
+        generic = await plain_critique(base_img, model=model)
+        if generic:
+            contrast = await contrast_with_critique(session_id=session_id, generic=generic, changes=changes, reactions=reactions, model=model)
+    except Exception as e:  # noqa: BLE001 — the contrast is a bonus
+        print(f"[visual_gen] plain-critique contrast skipped: {type(e).__name__}: {e}")
     return {
         "probe_id": probe.id,
         "base_image_id": base,
@@ -989,6 +1237,8 @@ async def propose_next(*, session_id: str, probe: Probe, images: list[SessionIma
         "changes": changes,
         "keep": [str(k).strip() for k in (out.get("keep") or []) if str(k).strip()][:5],
         "expected": str(out.get("expected") or "").strip(),
+        "segments": segments,
+        "contrast": contrast,
         # The first change on its own, for anything that still reads the step-3 shape.
         "change": changes[0]["change"],
         "why": changes[0]["why"],
@@ -1077,14 +1327,16 @@ async def start_generate(session_id: str, *, note: str, keep_list: Any, mode: st
 
 
 async def start_remake(session_id: str, parent: SessionImage, *, change: str, keep_list: Any, probe_id: Optional[str], proposal: Optional[dict], mode: str,
-                       selected: Optional[list[int]] = None, note: str = "") -> SessionImage:
+                       selected: Optional[list[int]] = None, note: str = "", retest: bool = True, segment: Optional[dict] = None) -> SessionImage:
     keep = normalise_keep_list(keep_list if keep_list is not None else parent.keep_list)
     model = get_settings().agent_model(mode)
+    seg = {"key": str(segment.get("key") or ""), "label": str(segment.get("label") or ""), "value": str(segment.get("value") or "")} if isinstance(segment, dict) and segment.get("value") else None
     row = SessionImage(
-        session_id=session_id, label=f"{parent.label or 'image'} · remake"[:200], filename="", media_type="image/png",
+        session_id=session_id, label=(f"{parent.label or 'image'} · for {seg['value']}" if seg else f"{parent.label or 'image'} · remake")[:200], filename="", media_type="image/png",
         width=1, height=1, size_bytes=len(PLACEHOLDER_PNG), sha256="", source="remake", status="generating", parent_id=parent.id,
         change_note=(change or "").strip(), keep_list=keep,
-        brief={"change": (change or "").strip(), "probe_id": probe_id, "proposal": proposal, "selected": selected, "note": (note or "").strip(), "mode": mode, "model": model}, data=PLACEHOLDER_PNG,
+        brief={"change": (change or "").strip(), "probe_id": probe_id, "proposal": proposal, "selected": selected, "note": (note or "").strip(), "mode": mode, "model": model,
+               "retest_wanted": bool(retest), "segment": seg}, data=PLACEHOLDER_PNG,
     )
     async with _db.AsyncSessionLocal() as db:
         db.add(row)
@@ -1114,7 +1366,7 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
                           "other_posters": list(other_posters or []), "locked_facts": list(facts or []), "poster_prompt": full["prompt"][:4000]})
             await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
                        sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,
-                       label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
+                       label=_label_for(layout, brief))
             return
         print("[visual_gen] full render unavailable, falling back to the layered render")
     else:
@@ -1132,7 +1384,13 @@ async def _finish(row_id: str, *, layout: dict, hero_provider: str, hero_error: 
                   "render_error": render_error})
     await _set(row_id, data=norm["data"], media_type=norm["media_type"], width=norm["width"], height=norm["height"], size_bytes=len(norm["data"]),
                sha256=norm["sha256"], layout=layout, brief=brief, check_result=check, status="ready", error=None,
-               label=(str(layout.get("headline") or "").strip()[:80] or None) or "Generated")
+               label=_label_for(layout, brief))
+
+
+def _label_for(layout: dict, brief: dict) -> str:
+    head = str(layout.get("headline") or "").strip()[:80] or "Generated"
+    seg = brief.get("segment") if isinstance(brief.get("segment"), dict) else None
+    return f"{head} · for {seg['value']}"[:200] if seg and seg.get("value") else head
 
 
 async def run_generate(image_id: str) -> None:
@@ -1199,8 +1457,22 @@ async def run_remake(image_id: str) -> None:
             references, other_posters = [], []                                 # no base picture → a generation, not an edit
         story = await story_for_prompt(session_id, probe, proposal, change)
         context = await session_context(session_id)
+        seg = brief.get("segment") if isinstance(brief.get("segment"), dict) else None
+        reactions = _reactions_block(probe)
+        if seg and probe is not None:
+            # A version for one group: that group's own words lead, the rest of the room is context.
+            try:
+                split = await segment_split(session_id, probe)
+                bucket = next((b_ for b_ in (split or {}).get("buckets") or [] if b_["value"] == seg.get("value")), None)
+                if bucket:
+                    reactions = (f"THIS VERSION IS FOR ONE GROUP — {seg.get('label') or seg.get('key')}: {seg['value']} ({bucket['yes']} of {bucket['n']} said the last version works)."
+                                 + (" What put them off: " + "; ".join(f"{p['value']} ({p['count']})" for p in bucket["put_off"]) if bucket["put_off"] else "")
+                                 + ("\nWhat they would change:\n- " + "\n- ".join(f"{c['name']} ({c['verdict']}): {c['change']}" for c in bucket["changes"]) if bucket["changes"] else "")
+                                 + "\n\n" + reactions)
+            except Exception as e:  # noqa: BLE001
+                print(f"[visual_gen] segment words skipped: {type(e).__name__}: {e}")
         layout = await write_layout(session_id=session_id, note="", keep=keep, model=model, context=context,
-                                    parent_layout=parent_layout, change=change, reactions=_reactions_block(probe), facts=facts)
+                                    parent_layout=parent_layout, change=change, reactions=reactions, facts=facts)
         await _finish(image_id, layout=layout, hero_provider="", hero_error=None,
                       rationale_extra={"from": "remake", "parent_id": parent_id, "reactions_probe_id": probe.id if probe else None}, model=model,
                       change=change, references=references, story=story, other_posters=other_posters, facts=facts)
@@ -1208,6 +1480,16 @@ async def run_remake(image_id: str) -> None:
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         await _set(image_id, status="failed", error=f"{type(e).__name__}: {str(e)[:300]}")
+        return
+    # The proof: re-show the new version to the same twins and count the shift (2026-10-27).
+    if brief.get("retest_wanted", True) and get_settings().visual_auto_retest and probe is not None:
+        try:
+            from app.services.measurement import visual_proof
+            pid = await visual_proof.start_retest(image_id)
+            if pid:
+                await visual_proof.run_retest(image_id, pid)
+        except Exception as e:  # noqa: BLE001
+            print(f"[visual_gen] re-test failed to start: {type(e).__name__}: {e}")
 
 
 async def recheck(row: SessionImage, *, model: str) -> dict:

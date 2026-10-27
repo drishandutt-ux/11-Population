@@ -11,6 +11,7 @@ import { CategoryBars, MeanStat, SegmentTable, ShareBar, pct } from "../Charts";
 import { segmentLabel } from "../filters";
 import { ImageHero } from "../ImagePicker";
 import NextVersion from "../NextVersion";
+import ProofBlock from "../ProofBlock";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 import { InstrumentPageProps } from "./types";
 
@@ -21,9 +22,16 @@ export default function VisualPage({ probe, dynamicDials = [], agentsById = {}, 
   const images: ImageRef[] = Array.isArray(probe.spec?.images) ? probe.spec.images : [];
   const setting = typeof probe.spec?.setting === "string" ? probe.spec.setting : "";
   const question = probe.spec?.question;
+  const retest = probe.spec?.retest && typeof probe.spec.retest === "object" ? probe.spec.retest : null;
 
   return (
     <div className="space-y-5">
+      {retest && (
+        <p className="text-[11px] text-muted-foreground">
+          This is the re-test of a new version: the same twins who judged the version it came from, answering blind to what they said before.
+        </p>
+      )}
+      {a?.proof && <ProofBlock proof={a.proof} title="What this version did to the same people" />}
       {images.length > 0 && (
         <div className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-2">
           <div className="text-[11px] text-muted-foreground">

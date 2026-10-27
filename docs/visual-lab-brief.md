@@ -121,3 +121,14 @@ New:
   *Compare it with the original* straight away.
 
 Each step is hand-testable on its own before the next starts.
+
+## Addendum (2026-10-27) — what makes it more than chat
+
+Drishan's test: the remake read like a generic critique. The fix is to show what only a population can give.
+
+| | Before | Now |
+|---|---|---|
+| What a remake ends with | A picture. | A picture **and a result**: re-shown to the same twins, paired by twin — who it won, who it lost, the shift with its interval, where it paid and where it cost, the movers in their own words. |
+| Why a line is on the poster | Nothing. | Every line carries who asked for it and how many; a line nobody asked for is left out and the card says so. |
+| How it compares with a chatbot | Not shown. | Every proposal is set against one call with no audience data: where they agree, what only the twins said, what the reviewer would add that the twins contradict. |
+| One version for everyone | The consensus version. | One version per group the piece is losing, with the trade-off said out loud; the proof shows the trade-off by group. |
