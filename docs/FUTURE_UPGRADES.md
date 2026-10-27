@@ -757,3 +757,185 @@ published, with the reason looked for.
 is the product); whether to publish a result below the bare model; whether the benchmark
 authors accept tool submissions or only model submissions — if only models, we publish our
 own reproducible run rather than a leaderboard entry.
+
+---
+
+## 10. 11 City — a real neighbourhood with a clock, and a brand launch dropped into it
+
+*Raised by Drishan, 2026-10-27, as the next iteration of the product: not a panel that
+answers a question but a place where things happen. Decided the same day: the first city is
+a real one, and the first use is a brand launch. Extends entries 3 (drop-ins and forks),
+6 (Spread, which supplies the social map and the clock) and 7 (the decision model for the
+many), and uses the open-data layer in `docs/doorda-sources-analysis.md` for the real
+buildings and businesses. Nothing built; nothing calibrated.*
+
+**The idea in one line.** A real neighbourhood, built from the frame and open data, with a
+clock; a client drops a launch into it; the city runs for twelve weeks and the client sees
+what happened, what blocked them, what carried them, and what would have happened had they
+moved differently.
+
+### Why it is a different product
+
+11 Populations answers *what would people think*. 11 City answers *what would happen*.
+Today the twins are strangers in a room who hear everything and answer once. In a city
+they have an address, a weekly budget and a routine, and most of what happens to a plan
+comes not from opinion but from institutions: a landlord raising the rent, a supplier
+missing a week, the council deferring a licence, a competitor cutting price, a bad review
+travelling along the social map. None of those exist in the product today, and they are
+exactly the blockers and accelerators a launch team wants to see before spending.
+
+The edge over game-style city simulators is that nothing here is invented from scratch:
+the residents come from the sampling frame and published figures, the businesses from open
+data, the launch from the client. Every city digital twin on the market models pipes,
+traffic and buildings; none models minds.
+
+### What a city is made of
+
+Three layers, each run by a different engine, because the cost and the credibility
+problems differ:
+
+- **Numbers, run by code.** Money, footfall, prices, rents, stock, travel time, business
+  rates. Plain simulation, deterministic or lightly random, no model in the loop. A
+  household has a weekly budget by segment from the frame; a shop has a catchment from
+  where people live and commute; a supplier has a lead time. Fast, cheap, auditable.
+- **Mass decisions, run by the decision model.** Every resident deciding each week whether
+  to notice the new place, try it, come back, switch or complain. Entry 7's split:
+  probabilities for the many, no text.
+- **Words and institutions, run by Claude.** The few residents who speak, and a handful of
+  institutional twins with rules and a voice — the council, the landlord, one or two
+  suppliers, the main competitor, the local paper or community page. About ten per city,
+  so the richer model is affordable, and they are where the surprising consequences come
+  from.
+
+**Geography binds the three.** Where a resident lives decides what they can reach, how far
+their segment will travel, what sits next door, and how rent falls off with distance from
+the station. It also decides the social map Spread draws, since people know their
+neighbours. One neighbourhood with real streets is worth more than an invented city.
+
+### Two ways in: ask, or play
+
+Both run over the same world.
+
+- **Ask** is today's product: pose the question — *we open a plant-based bakery on Mare
+  Street in March, what happens by June?* — the city runs twelve weeks on its own, and the
+  result is a timeline, a blockers panel, a carriers panel and an answer.
+- **Play** is the gamified version: the clock stops every week, the client sees what
+  happened, makes a move (change the price, answer the review, apply for the licence
+  earlier, take the second unit), and the city responds. A fork at any week is the
+  counterfactual, side by side.
+
+The surface, in order of value:
+
+1. A map of the neighbourhood with the launch placed on it, residents shown by segment,
+   flows of people visible as the clock runs.
+2. A ticker of events, each one attributed: *week 4 — the council deferred the licence;
+   objections came from the residents' association*.
+3. Two standing panels, **what is blocking you** and **what is carrying you**, ranked by
+   how much each moved the outcome. This is the Barriers tool pointed at institutions and
+   logistics instead of attitudes.
+4. A scoreboard the client cares about: cash, reach, reputation, and whether the stated
+   goal was met by week twelve.
+5. Fork and compare from any week.
+
+*Example.* A drinks brand opens a tap room on a Hackney high street. Weeks 1–3: footfall
+from commuters only; residents over 50 never pass the door. Week 4: a community page post
+travels through young renters and footfall doubles. Week 5: the supplier's keg delivery
+slips and the weekend is lost. Week 7: the landlord's review raises the rent by a fifth.
+Week 9: the pub two doors down starts a happy hour. By week 12 the goal is missed by a
+third. The blockers panel ranks the rent and the supplier above the competitor; the
+carriers panel names the community page. The fork from week 5 with a second supplier meets
+the goal. Not a forecast, but the shape says where the risk sits and what to arrange first.
+
+### The first city: one street, five systems
+
+"Everything a city has" is infinite, so the first version is small on purpose:
+
+- **One real high street** — Mare Street, Hackney, or whichever the first client is on.
+- **Residents** from the Census-grounded frame for the surrounding wards, with standing
+  fields extended by an address (to the output area), income band, weekly budget by
+  category, a commute, and the shops they already use.
+- **The real businesses** on the street from open data (the FSA register, Companies House,
+  VOA rateable values, the local planning portal), each a card; the client's launch is one
+  more card.
+- **A clock** of twelve weeks, one tick a week.
+- **Five systems only:** footfall (who passes, from residence and commute), household
+  spend (budgets by segment, shares between competing places), word of mouth (Spread over
+  the social map, plus one local page), one supplier with a lead time and a failure rate,
+  and one council decision (a licence or planning application with a timetable and an
+  objection route).
+
+That is already enough to produce a blocker, a carrier and a fork, and it reuses nearly
+everything that exists or is queued.
+
+### How it fits
+
+| Exists or queued today | Becomes in the city |
+|---|---|
+| Twins with standing fields (§7.9) | Residents with an address, income, weekly budget, routine |
+| Spread and the social map (entry 6) | Word of mouth, local news, rumour |
+| Journey tool (§11a) | A customer's actual walk through the place |
+| Barriers tool (§11a) | The blockers panel, extended to institutions and logistics |
+| Drop-ins and forks (entry 3) | The weekly move and the counterfactual branch |
+| Opinion over time (entry 2) | The sentiment line on the scoreboard |
+| Visual Lab (`docs/visual-lab-brief.md`) | The shop front, the poster in the window |
+| Open-data layer (Doorda analysis) | The real buildings and businesses on the map |
+| The decision model (entry 7) | Everyone's weekly decisions |
+
+Three things are genuinely new: a **world state that persists between ticks** (a city is
+not a session; it is a place that takes many launches over time, so it needs its own
+tables — city, places, residents' addresses and budgets, institutions, ticks, events,
+forks); **institutional twins** with rules as well as a voice; and the **map**. Everything
+else is a rearrangement.
+
+A launch is still a session underneath: it has sources (the brand's plan), a population
+(the city's residents in scope), a run (the twelve weeks) and a report. The city is the
+thing that outlives it.
+
+### What it is not
+
+An economy simulation produces confident numbers whether or not it is calibrated, and a
+game skin makes numbers feel truer than they are. The rule from entry 7 carries over in
+full: every figure on screen is labelled **published**, **assumed** or **simulated**, and
+no revenue or footfall number is quoted to a client until the engine has been checked
+against a real launch on a real street with a known outcome (a chain's new-store footfall,
+a known opening's first-quarter trading, a council decision with a known timetable). The
+game is the interaction, never the epistemics. Until that check exists the honest reading
+is *the rent and the supplier are the bigger risks than the competitor, and the community
+page is the lever*, and the page says so.
+
+### Cost and limits
+
+- The numbers layer is free. The decision model at $0.042 per million input tokens makes
+  2,000 residents × 12 weeks ≈ 24,000 decisions negligible.
+- Claude for the ten institutional twins once a week each, plus the few residents who
+  speak: about 200 Sonnet calls per twelve-week run, a Pro debate's worth. A fork is a
+  second run from the branch point.
+- Building a city is the expensive part: the frame draw, the open-data pull, the social map
+  and the institutional cards. Build once, launch many times.
+- The map needs real geography (OS Open or OpenStreetMap for streets and buildings; output
+  areas for residents). Rendered in the browser, not drawn by a model.
+
+### Build order
+
+1. **World state.** The city tables, the tick loop, the event log, and a fork as a copy
+   from a tick. No map yet; a timeline is enough to prove the loop.
+2. **Residents with place.** Extend the frame draw with address, budget and commute; draw
+   the social map (entry 6, step 1) by place.
+3. **The five systems** in the order above, each one a code module with its inputs
+   labelled published / assumed; the decision model for the weekly resident decisions.
+4. **Institutional twins:** the council, the landlord, the supplier, the competitor, the
+   local page; rules first, voice second.
+5. **Ask mode:** the twelve-week run, the ticker, the blockers and carriers panels, the
+   scoreboard, in the Lab as an instrument before it has its own front door.
+6. **Play mode:** the weekly stop, the move, the fork and compare.
+7. **The map.**
+8. **A calibration case:** one real opening on the street with a known outcome, run
+   blind, published on the accuracy card (entry 8.17).
+
+**Open questions.** Whether the first client's street or a street we choose, and whether
+the city is built ahead of a client as a demo; how far a resident's address goes before it
+becomes a privacy question (output area, never a postcode); whether the institutional
+twins' rules are written by hand per city or drafted by the system from the open data;
+whether Play lands in the simple view at all, or stays in Pro until a client asks for it;
+and what the launch team's stated goal is measured in, since cash needs a price list and a
+cost base the client may not want to share.
