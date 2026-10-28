@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.core.monitoring import tracked_messages_create
 from app.services.agents.profiles import AgentProfile, AVATAR_COLORS
 from app.services.scoping import standing as standing_mod
+from app.services.measurement import answer_engines as engines_mod
 from app.services.knowledge_graph.lightrag_service import get_lightrag, query_rag
 import anthropic
 
@@ -762,6 +763,7 @@ Return a JSON array with exactly {n} objects. Each object MUST have ALL of these
   "geo_behavior": "2-3 sentence paragraph, addressed to the persona as 'you', on how their place shapes their take on THIS query",
   "humanity": <integer 0-100>,
   {standing_mod.SCHEMA_TEXT},
+  {engines_mod.ATTITUDES_SCHEMA_TEXT},
 {dyn_schema}  "dials": {DIALS_SCHEMA}
 }}
 
@@ -770,6 +772,8 @@ Return a JSON array with exactly {n} objects. Each object MUST have ALL of these
 {_GEO_INSTRUCTIONS}
 
 {standing_mod.INSTRUCTIONS}
+
+{engines_mod.ATTITUDES_INSTRUCTIONS}
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -796,6 +800,10 @@ def profile_from_dict(d: dict, session_id: str, color: str, segment: str = "") -
         demographics["frame"] = {str(k).strip(): str(v).strip()[:60] for k, v in d["frame"].items() if str(k).strip() and str(v or "").strip()}
     if isinstance(d.get("facets"), dict) and d["facets"]:
         demographics["facets"] = {str(k).strip(): str(v).strip()[:60] for k, v in d["facets"].items() if str(k).strip() and str(v or "").strip()}
+    attitudes = engines_mod.clean_attitudes(d.get("attitudes"))
+    if attitudes:
+        demographics["attitudes"] = attitudes   # the core attitudes the strict and map answer engines read
+        demographics["attitudes_from"] = "written"
     try:
         return AgentProfile(
             id=str(uuid.uuid4()),

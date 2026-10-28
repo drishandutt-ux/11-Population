@@ -235,7 +235,11 @@ def _build_user_message(
     said: list[str], decided: list[str], images: Optional[list[dict]] = None,
 ) -> str:
     ctx = spec.get("context") or {}
-    blocks = [f"THE TOPIC: {query}"]
+    from app.services.measurement import answer_engines as engines
+    strict = engines.engine_of(spec) == "strict"
+    # The strict engine drops the session's topic line: for a population it names the group
+    # ("…as seen by Catholics in Brazil"), and that is the cue the model answers its stereotype from.
+    blocks = [] if strict else [f"THE TOPIC: {query}"]
 
     if ctx.get("kg", True) and kg_context:
         blocks.append(f"WHAT YOU KNOW ABOUT IT:\n{clip(kg_context, 3500)}")
@@ -299,6 +303,8 @@ def _build_user_message(
     anchor = _convictions_block(agent) if instrument.key == "survey" else ""
     if anchor:
         blocks.append(anchor)
+    if strict:
+        blocks.append(engines.strict_block(agent))
     blocks.append("THE QUESTION: " + instrument.question_for(spec) + "\n\nRecord your answer with the tool.")
     return "\n\n".join(blocks)
 
@@ -419,6 +425,7 @@ async def answer_one(
     agent: SpawnedAgent, *, instrument, spec: dict, probe_id: str, session_id: str,
     query: str, kg_context: str, model: str, experiment_id: Optional[str] = None,
     served: Optional[list[dict]] = None, images: Optional[list[dict]] = None,
+    maps: Optional[dict] = None,
 ) -> Optional[dict]:
     """Ask one agent the instrument's question and persist the typed answer. `served` (L6-05):
     the numbered knowledge items in `kg_context`, so the answer can say which it drew on.
@@ -428,6 +435,12 @@ async def answer_one(
     Returns the answer dict, or None if the call failed (a failed agent is dropped from the
     denominator rather than filled with a default — a made-up answer would corrupt the share)."""
     started = time.monotonic()
+    from app.services.measurement import answer_engines as engines
+    engine = engines.engine_of(spec)
+    if engine == "map" and maps:
+        # The map engine: the twin's chances are calculated from its own facts — no model call.
+        answer = instrument.realise(engines.map_answer(maps, agent), spec, random.Random(f"{spec.get('seed', 0)}:{agent.id}"))
+        return await _persist_answer(agent, answer, probe_id=probe_id, session_id=session_id, started=started)
     amendments = spec.get("amendments") if isinstance(spec.get("amendments"), dict) else None
     hide: tuple[str, ...] = ("journey",) if amendments and amendments.get("rules") else ()
     # A Visual Lab re-test (the proof behind a remake): the twin judges the new version blind to what
@@ -466,7 +479,8 @@ async def answer_one(
         agent.dials = lever_mod.adjusted_dials(agent.dials, {"deltas": {str(nudge["dial"]): int(nudge.get("points") or 0)}, "bound": lever_mod.MAX_BOUND})
     try:
         # The question's own dials travel into the Lab too: the twin that argued is the twin measured.
-        system = _build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE + (SOURCES_RULE if served else "")
+        system = (_build_system_prompt(agent, task="probe", dynamic=await dyn_mod.for_session(session_id)) + instrument.directive + DONT_KNOW_RULE
+                  + (SOURCES_RULE if served else "") + (engines.STRICT_RULE if engine == "strict" else ""))
     finally:
         agent.dials = original_dials
     async def _ask(st_spec: dict, label_suffix: str = "") -> Optional[dict]:
@@ -477,6 +491,8 @@ async def answer_one(
         schema = with_dont_know(instrument.schema_for(st_spec))
         if served:
             schema = with_sources(schema)
+        if engine == "strict":
+            schema = engines.with_facts_used(schema)
         label = f"probe:{instrument.key}{label_suffix}"
         # With images the message is content blocks — each image under its caption, the written
         # message last — so the model looks at the picture rather than reading about it.
@@ -526,9 +542,17 @@ async def answer_one(
     if answer is None:
         return None
 
-    latency_ms = int((time.monotonic() - started) * 1000)
     if served is not None:
         answer = resolve_sources(answer, served)
+    if engine == "strict":
+        answer["_engine"] = "strict"
+    return await _persist_answer(agent, answer, probe_id=probe_id, session_id=session_id, started=started)
+
+
+async def _persist_answer(agent: SpawnedAgent, answer: dict, *, probe_id: str, session_id: str, started: float) -> dict:
+    """Store one twin's answer, tell the session, and return the row the run aggregates."""
+    latency_ms = int((time.monotonic() - started) * 1000)
+    segments = segments_for(agent)
     row = {
         "agent_id": agent.id,
         "agent": {"name": agent.name, "role": agent.role, "avatar_color": agent.avatar_color},
@@ -620,6 +644,28 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
             await _set_status(probe_id, status="failed", error=f"unknown instrument '{instrument_key}'")
             return
 
+        from app.services.measurement import answer_engines as engines
+        engine = engines.engine_of(spec)
+        maps = None
+        if engine in ("strict", "map") and instrument_key == "survey":
+            # Both engines answer from the twins' core attitudes; twins built before them get a set
+            # inferred once from their own written lives.
+            try:
+                if await engines.ensure_attitudes(session_id, context=query):
+                    async with AsyncSessionLocal() as db:
+                        agents = (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == session_id))).scalars().all()
+            except Exception as e:  # noqa: BLE001
+                print(f"[probe] core attitudes could not be filled: {type(e).__name__}: {e}")
+        if engine == "map" and instrument_key == "survey" and engines.map_ready(spec):
+            ec = spec.get("engine_context") if isinstance(spec.get("engine_context"), dict) else {}
+            try:
+                maps = await engines.maps_for_spec(spec, country=str(ec.get("country") or ""), year=str(ec.get("year") or ""),
+                                                   population=str(ec.get("population") or query), session_id=session_id, model=model)
+            except Exception as e:  # noqa: BLE001
+                await _set_status(probe_id, status="failed", error=f"response map failed: {type(e).__name__}: {str(e)[:200]}", completed_at=datetime.utcnow())
+                await publish(session_channel(session_id), {"type": "probe_complete", "probe_id": probe_id, "status": "failed"})
+                return
+
         chosen = _select_agents(list(agents), spec, seed)
         if not chosen:
             await _set_status(probe_id, status="failed", error="no agents matched the filter",
@@ -679,7 +725,7 @@ async def run_probe(probe_id: str, *, concurrency: int = PROBE_CONCURRENCY) -> N
                     row = await answer_one(
                         agent, instrument=instrument, spec=spec, probe_id=probe_id,
                         session_id=session_id, query=query, kg_context=ctx, model=model,
-                        experiment_id=experiment_id, served=served, images=images or None,
+                        experiment_id=experiment_id, served=served, images=images or None, maps=maps,
                     )
                 except Exception as e:  # noqa: BLE001
                     # One twin's failure (a database hiccup saving its answer) counts as one

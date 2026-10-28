@@ -700,7 +700,7 @@ def _stopped(run_id: str) -> bool:
 async def start(user_id: Optional[str], *, cases: int = DEFAULT_CASES, twins: int = DEFAULT_TWINS, mode: str = "fast",
                 seed: Optional[int] = None, parallel_groups: int = DEFAULT_PARALLEL_GROUPS, bare: bool = True,
                 groups_limit: int = 0, arm: str = "lineup", budget_usd: Optional[float] = None, country: str = "",
-                stats_minutes: int = 10) -> Any:
+                stats_minutes: int = 10, answer_engine: str = "persona") -> Any:
     """Create a run over the committed subset (its first `cases` cases, whole subgroups first) and
     start it in the background. `groups_limit` caps the subgroups for a smoke run.
 
@@ -742,7 +742,8 @@ async def start(user_id: Optional[str], *, cases: int = DEFAULT_CASES, twins: in
               "bare": bool(bare), "case_ids": [c["id"] for c in chosen], "dataset_norms": sub["dataset_norms"],
               "estimate": estimate(len(chosen), len(group_ids), max(10, min(200, int(twins))), "pro" if mode == "pro" else "fast"),
               "arm": "studio" if arm == "studio" else "lineup", "country": country.lower() or None,
-              "budget_usd": float(budget_usd) if budget_usd else None, "stats_minutes": max(1, min(60, int(stats_minutes)))}
+              "budget_usd": float(budget_usd) if budget_usd else None, "stats_minutes": max(1, min(60, int(stats_minutes))),
+              "answer_engine": answer_engine if answer_engine in ("persona", "strict", "map") else "persona"}
     run = BenchmarkRun(id=str(uuid.uuid4()), user_id=user_id, benchmark=BENCHMARK_ID, status="queued", config=config,
                        state={"groups": {}, "cases": {}}, progress=_progress(config, {}))
     async with dbm.AsyncSessionLocal() as db:
@@ -1151,6 +1152,11 @@ async def _run_probe(session_id: str, case: dict, run_id: str, config: dict) -> 
     if config.get("arm") == "studio":
         # The Studio arm answers with what the session knows: its knowledge graph and each twin's scoped sources.
         spec["context"] = {"kg": True, "own_posts": False, "prior_answers": False}
+    if config.get("answer_engine") in ("strict", "map"):
+        # How each twin's setup becomes its answer (services/measurement/answer_engines.py).
+        p = group_profile(case)
+        spec["answer_engine"] = config["answer_engine"]
+        spec["engine_context"] = {"country": p["country"], "year": p["year"], "population": group_title(case)}
     seed = (int(config.get("seed") or 1) * 1_000_003 + int(case["id"])) % (2 ** 31 - 1)
     spec["seed"] = seed
     p = Probe(session_id=session_id, instrument=inst.key, schema_id=inst.schema_id(), spec=spec, seed=seed,

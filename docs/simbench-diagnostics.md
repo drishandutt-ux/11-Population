@@ -218,12 +218,42 @@ insiders.
 **The numbers to beat.** Setup accuracy gain = thin↔real − full↔real = **+0.000** today; pooled
 shift full↔thin = **0.03**. A fix works when the first clearly rises above zero.
 
-## 8. Next step being worked on
+## 8. Two answer engines, compared (same six cases, gpt-4.1-mini, local)
 
-*Make a twin's answer follow its configuration, not the model's opinion of people like it.* Two
-answer engines, built behind a switch and compared with the test above and the benchmark:
-(a) **a response map** — once per question the model writes how each setup fact pushes each
-option, and every twin's chances are calculated from its own facts (no call per twin); (b) **a
-stricter prompt** — one call per twin, group-level cues removed, the twin's core facts placed beside
-the question, and the reasoning required to cite them. Tracked in the blueprint Changelog when
-built.
+Built 2026-10-28 (`services/measurement/answer_engines.py`, blueprint §11a.2). **Strict**: one call per
+twin, the group-naming topic dropped, the twin's own facts (demographics + ten core attitudes) beside
+the question, answer from them and name them. **Map**: one call per question writes the chances of a
+reference adult and how far each fact pulls each option; every twin's chances are calculated from its
+own facts. Round 1 used moderate attitudes and capped pulls; round 2 set a group's defining trait where
+real members sit and allowed realistic pull sizes.
+
+| Case | Group | Persona (today) | Strict | Map (round 2) | Model alone |
+|---|---|---|---|---|---|
+| 296 | US liberals | 71.5 | **73.5** | −14.3 | 27.9 |
+| 346 | US liberals (Biden approval) | 40.9 | 35.5 | **79.2** | 60.5 |
+| 5148 | Brazil Catholics | **34.7** | 12.4 | −46.7 | 17.1 |
+| 5285 | Brazil Catholics | 77.6 | **84.8** | 56.3 | 43.2 |
+| 4181 | Japan, never married | **14.4** | 9.4 | −33.3 | −24.8 |
+| 1334 | France | 60.7 | **83.6** | 57.1 | 31.3 |
+| **Mean** | | **50.0** | **49.9** | **16.4** | 25.9 |
+
+(Round 1: strict 48.2, map −2.1.) Six cases is a tiny sample, and on these six every engine beat the
+model alone, which the full 32 did not.
+
+**Reading.** Strict ties with today's engine, with bigger swings both ways. The map does what was
+asked — every answer comes from the twin's own setup — and is the best method of all where a core
+fact truly drives the answer (political leaning on a president's approval: 79), but badly wrong where
+none does. Both of its halves are still the model's guesses: the twins' attitudes are inferred by the
+model, the pulls are estimated by the model. **Making answers depend only on the setup does not help
+until the setup comes from data.** The map is the right structure for that: give twins real
+respondents' attitudes (ESS, British Social Attitudes, Understanding Society, a client's own survey)
+and *fit* the pulls on real answers instead of asking for them — then both halves are data and the
+model only writes the life around them.
+
+## 9. Next steps
+
+1. Data-backed twins: one real UK microdata source, respondents' attitudes on the twins, the map's
+   pulls fitted from the same data, the tested survey and wave held out (licences checked first).
+2. The Studio planner for survey populations: a representative slice of the public, not the people
+   involved in the topic (the State Senator in the "US liberals" lineup).
+3. Keep `persona` as the default; `strict` and `map` stay behind `spec.answer_engine`.

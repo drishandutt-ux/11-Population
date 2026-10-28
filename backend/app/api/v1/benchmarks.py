@@ -37,6 +37,7 @@ class SimBenchRunRequest(BaseModel):
     budget_usd: Optional[float] = None   # hard stop on all model spend from the run's start
     country: str = ""                    # "uk": that country's subgroups from the whole split
     stats_minutes: int = 10              # the Studio's statistics search is cut to this, per subgroup
+    answer_engine: str = "persona"       # persona | strict | map (services/measurement/answer_engines.py)
 
 
 def _clean_mode(mode: str) -> str:
@@ -70,7 +71,8 @@ async def simbench_start(body: SimBenchRunRequest, admin: AuthUser = Depends(req
     try:
         run = await simbench.start(None if admin.is_dev else admin.id, cases=body.cases, twins=body.twins, mode=_clean_mode(body.mode),
                                    seed=body.seed, parallel_groups=body.parallel_groups, bare=body.bare, groups_limit=body.groups_limit,
-                                   arm=body.arm, budget_usd=body.budget_usd, country=body.country, stats_minutes=body.stats_minutes)
+                                   arm=body.arm, budget_usd=body.budget_usd, country=body.country, stats_minutes=body.stats_minutes,
+                                   answer_engine=body.answer_engine)
     except ValueError as e:
         raise HTTPException(409, str(e))
     except OSError as e:
