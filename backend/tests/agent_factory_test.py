@@ -243,3 +243,34 @@ def test_spawn_output_budget_stays_under_the_sdk_non_streaming_ceiling():
     (60 * 60 * max_tokens / 128_000 > 600, i.e. above ~21,333)."""
     from app.services.agents import agent_factory
     assert 12000 < agent_factory._SPAWN_MAX_TOKENS <= 21333
+
+
+def test_parse_report_says_which_persona_failed_and_why():
+    from app.services.agents.agent_factory import parse_report
+    raw = '[{"name": "A", "age": 30}, {"name": "B", "background": "she said "no" twice", "age": 41}, {"name": "C", "age'
+    line = parse_report(raw)
+    assert line.startswith("1 objects parsed, 2 unparseable")
+    assert "no" in line
+
+
+def test_duplicate_repair_asks_in_batches_the_writer_can_finish(monkeypatch):
+    """Ten clones once went to the writer in one call and hit the output cap."""
+    asyncio, agent_factory, calls = _stub_plan_writer(monkeypatch, short_by=0)
+    real = agent_factory.tracked_messages_create
+
+    async def clones_first(client, *, label="", **kw):
+        resp = await real(client, label=label, **kw)
+        if label == "spawn:plan":   # every first-round persona is the same person
+            import json
+            people = json.loads(resp.content[0].text)
+            for k, p in enumerate(people):
+                p.update(name=f"Clone {k}", role="Same Job", age=40)
+            resp.content[0].text = json.dumps(people)
+        return resp
+
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", clones_first)
+    seg = {"id": "a", "name": "Seg A", "count": 12, "stance": "neutral", "demographics": {}, "sentiment": {}}
+    asyncio.new_event_loop().run_until_complete(agent_factory.generate_agents_from_plan("s", "q", [seg], {}, mode="fast"))
+    repairs = [n for label, n in calls if label.startswith("spawn:plan:repair")]
+    assert sum(repairs) == 11, repairs                                  # twelve clones: one kept, eleven rewritten
+    assert max(repairs) <= agent_factory._PLAN_BATCH_SIZE, repairs

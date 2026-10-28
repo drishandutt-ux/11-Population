@@ -452,9 +452,24 @@ def _parse_agents_json(raw: str) -> list[dict]:
         return _salvage_objects(raw)
 
 
-def _salvage_objects(raw: str) -> list[dict]:
+def parse_report(raw: str) -> str:
+    """One line on why a reply yielded fewer personas than it should: how many objects it
+    held, how many would not parse and where, and whether it ended mid-object."""
+    errors: list[str] = []
+    try:
+        json.loads((raw or "").strip())
+        return "reply parses whole"
+    except Exception:  # noqa: BLE001
+        pass
+    objs = _salvage_objects(raw or "", errors)
+    return f"{len(objs)} objects parsed, {len(errors)} unparseable" + (f": {errors[0]}" if errors else "")
+
+
+def _salvage_objects(raw: str, errors: Optional[list[str]] = None) -> list[dict]:
     """Walk the string and json.loads each balanced top-level {...} block, skipping
-    a truncated final object. Quote/escape aware so braces inside strings are ignored."""
+    a truncated final object. Quote/escape aware so braces inside strings are ignored.
+    `errors`, when given, collects why each complete block failed to parse (and a
+    final line if the text ended mid-object)."""
     objs: list[dict] = []
     depth = 0
     start = None
@@ -483,9 +498,13 @@ def _salvage_objects(raw: str) -> list[dict]:
                         obj = json.loads(raw[start:idx + 1])
                         if isinstance(obj, dict):
                             objs.append(obj)
-                    except Exception:
-                        pass
+                    except Exception as e:  # noqa: BLE001
+                        if errors is not None:
+                            block, pos = raw[start:idx + 1], getattr(e, "pos", 0) or 0
+                            errors.append(f"{str(e)[:60]} near {block[max(0, pos - 60):pos + 20]!r}")
                     start = None
+    if errors is not None and depth > 0:
+        errors.append("text ended inside an object")
     return objs
 
 
@@ -869,7 +888,8 @@ async def generate_agents_from_plan(
         # playbook values the missing ones were drawn.
         got = sum(1 for d in out if isinstance(d, dict) and d.get("name"))
         if got < n and not label.endswith(":topup"):
-            print(f"[agent_factory] plan batch returned {got}/{n} ({seg.get('name')}, stop={getattr(response, 'stop_reason', None)}) — topping up {n - got}")
+            print(f"[agent_factory] plan batch returned {got}/{n} ({seg.get('name')}, stop={getattr(response, 'stop_reason', None)}; "
+                  f"{parse_report(response.content[0].text)}) — topping up {n - got}")
             out += await _batch(seg, n - got, taken + out, label + ":topup", seed, slots=slots[got:] if slots else None)
         return out
 
@@ -1069,7 +1089,9 @@ async def generate_agents_from_plan(
             if not seg:
                 return []
             try:
-                repl = await _batch(seg, len(ds), snapshot, "spawn:plan:repair")
+                # In batches the writer can finish: ten clones asked for in one call hit the cap (pilot, 2026-10-28).
+                chunks = [ds[k:k + _PLAN_BATCH_SIZE] for k in range(0, len(ds), _PLAN_BATCH_SIZE)]
+                repl = [d for part in await asyncio.gather(*[_batch(seg, len(c), snapshot, "spawn:plan:repair") for c in chunks]) for d in part]
                 finalise_segment_dicts(seg, repl)
                 pb_mod.apply_links(playbook, repl)
                 return repl
