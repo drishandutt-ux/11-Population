@@ -186,9 +186,44 @@ cut, twins + answers ~$1. A 1,000-case reading would cost well over $1,000 at th
 
 ---
 
-## 7. Next step being worked on
+## 7. Does a twin's setup drive its answer? (the setup-sensitivity test)
 
-*Make a twin's answer follow its configuration, not the model's opinion of people like it* (§6
-item 1, the part that needs no new data): measure how much of each answer comes from the twin's
-own profile (swap profiles between twins and see whether answers move), then change how the
-answer is produced so the profile drives it. Tracked in the blueprint Changelog when built.
+Run the same day on six cases of the local Studio lineups (gpt-4.1-mini, 70–73 twins each, about
+$1): every twin answered each case twice — **FULL**, its whole setup exactly as the benchmark asked
+it, and **THIN**, demographics only (name, age, gender, place, job, income, education; no
+background, dials, character, standing). Distances are the benchmark's own (0 = identical).
+
+| Case | Group | Twins differ (full / thin) | Pooled answer full↔thin | Full ↔ real people | Thin ↔ real people |
+|---|---|---|---|---|---|
+| 296 | US liberals | 0.13 / 0.12 | 0.02 | 0.16 | 0.18 |
+| 346 | US liberals | 0.09 / 0.06 | 0.03 | 0.20 | 0.17 |
+| 5148 | Brazil Catholics | 0.26 / 0.19 | 0.06 | 0.18 | **0.12** |
+| 5285 | Brazil Catholics | 0.13 / 0.13 | 0.02 | 0.02 | 0.04 |
+| 4181 | Japan, never married | 0.29 / 0.22 | 0.03 | 0.29 | 0.31 |
+| 1334 | France | 0.13 / 0.12 | 0.03 | 0.13 | 0.16 |
+| **Mean** | | **0.17 / 0.14** | **0.03** | **0.161** | **0.162** |
+
+**Reading.** The detailed setup makes twins about a quarter more different from each other, but
+it moves the pooled answer by only 0.03 and leaves accuracy exactly where demographics alone put
+it (0.161 v 0.162). In the one case where it moved the answer most (5148) it moved it *away* from
+reality. Everything the persona writer adds beyond demographics — background, 112 dials,
+character, standing — currently contributes nothing measurable to accuracy.
+
+**A second cause, seen in the twins themselves.** The "US liberals" lineup contains a
+Massachusetts State Senator in a segment called *Democratic Politicians and Staff Nationwide*:
+the Studio plans segments around people involved in the topic (it was built for stakeholder
+debates), so a population meant to be a representative slice of the public is tilted towards
+insiders.
+
+**The numbers to beat.** Setup accuracy gain = thin↔real − full↔real = **+0.000** today; pooled
+shift full↔thin = **0.03**. A fix works when the first clearly rises above zero.
+
+## 8. Next step being worked on
+
+*Make a twin's answer follow its configuration, not the model's opinion of people like it.* Two
+answer engines, built behind a switch and compared with the test above and the benchmark:
+(a) **a response map** — once per question the model writes how each setup fact pushes each
+option, and every twin's chances are calculated from its own facts (no call per twin); (b) **a
+stricter prompt** — one call per twin, group-level cues removed, the twin's core facts placed beside
+the question, and the reasoning required to cite them. Tracked in the blueprint Changelog when
+built.
