@@ -875,7 +875,8 @@ async def generate_agents_from_plan(
                 )
                 if response is None:
                     return []
-                out = dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic)
+                # A model that writes more people than asked (gpt-4.1-mini did, 70 for 60) is held to the count.
+                out = [d for d in dyn_mod.attach_all(_parse_agents_json(response.content[0].text), dynamic) if isinstance(d, dict) and d.get("name")][:n]
                 pb_mod.pin(playbook, seg, slots, out)
                 for d in out:
                     if isinstance(d, dict):

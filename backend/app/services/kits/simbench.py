@@ -69,6 +69,8 @@ csv.field_size_limit(10 ** 9)
 
 _stop: dict[str, bool] = {}
 _tasks: dict[str, asyncio.Task] = {}
+_group_tasks: dict[str, list] = {}
+BUDGET_CHECK_SEC = 10
 
 
 # ── the data ──────────────────────────────────────────────────────────────────
@@ -432,6 +434,62 @@ def persona_constraints(case: dict) -> dict:
             "dynamic_dials": []}
 
 
+# ── the Studio arm: the whole product builds each subgroup (2026-10-28) ────────
+# Drishan: "run groups in Studio, use all features of ours as advantages, then benchmark". Each
+# subgroup is a normal session: web research → knowledge graph → the Studio (detect, statistics,
+# frame, plan) → approve → spawn with scoping, then the cases through Forms with the session's
+# knowledge switched on. The validation battery is skipped (it scores twins, never changes an
+# answer). A run carries a hard budget: past it everything in flight is cancelled.
+
+STUDIO_PUBLISHER_MARKS = ("europeansocialsurvey", "afrobarometer", "latinobarometro", "issp.org", "gesis.org", "pewresearch", "ropercenter")
+UK_MARKS = ("united kingdom", "great britain")
+
+
+def is_country(case: dict, marks: tuple[str, ...]) -> bool:
+    t = (group_profile(case)["country"] + " " + (case.get("group_text") or "")).lower()
+    return any(m in t for m in marks)
+
+
+def country_groups(cases: list[dict], subset_group_ids: set, marks: tuple[str, ...] = UK_MARKS) -> list[list[dict]]:
+    """Every subgroup of one country in the whole split: the committed subset's first, then the ones
+    with the most cases (so each lineup and its research serve as many cases as possible)."""
+    by: dict[str, list[dict]] = {}
+    for c in cases:
+        if is_country(c, marks):
+            by.setdefault(c["group_id"], []).append(c)
+    order = sorted(by, key=lambda g: (g not in subset_group_ids, -len(by[g]), g))
+    return [by[g] for g in order]
+
+
+def studio_question(case: dict) -> str:
+    """The session's question (and so the research's): the group's life and outlook. The survey is
+    never named, so web search is not sent looking for the published answers."""
+    p = group_profile(case)
+    who = (p["text"].replace("You are", "people who are").replace("The year is", "in")
+           .replace("you", "they").replace("Your", "Their").replace("your", "their"))
+    return (f"Everyday life, society, economy, politics, religion and values in {p['country'] or 'their country'}"
+            + (f" in {p['year']}" if p["year"] else "") + f", as lived and seen by {who}")
+
+
+def studio_constraints(case: dict) -> dict:
+    """The Studio's dials for the subgroup: who they are as hard demographics, the other traits in
+    the audience profile, no clarifying questions, no validation battery."""
+    p = group_profile(case)
+    demo: dict[str, Any] = {"regions": [p["country"]] if p["country"] else []}
+    if p["age"]:
+        demo["age_min"], demo["age_max"] = p["age"][0], min(p["age"][1], 90)
+    if p["gender"] in ("female", "male"):
+        f = 100 if p["gender"] == "female" else 0
+        demo["gender"] = {"female": f, "male": 100 - f, "other": 0}
+    traits = "; ".join(f"{k} — {v}" for k, v in p["traits"])
+    profile = (f"Everyone in this population matches this exactly: {p['text']}"
+               + (f" Every person also has: {traits}." if traits else "")
+               + f" They are ordinary members of the public of {p['country'] or 'the country'}"
+               + (f" as it was in {p['year']}" if p["year"] else "")
+               + ", a representative slice of that subgroup: varied jobs, towns, incomes, households and outlooks.")
+    return {"skip_questions": True, "skip_validation": True, "profile_query": profile, "demographics": demo}
+
+
 # ── the question, as Forms asks it ────────────────────────────────────────────
 
 def question_stem(question: str) -> str:
@@ -641,9 +699,15 @@ def _stopped(run_id: str) -> bool:
 
 async def start(user_id: Optional[str], *, cases: int = DEFAULT_CASES, twins: int = DEFAULT_TWINS, mode: str = "fast",
                 seed: Optional[int] = None, parallel_groups: int = DEFAULT_PARALLEL_GROUPS, bare: bool = True,
-                groups_limit: int = 0) -> Any:
+                groups_limit: int = 0, arm: str = "lineup", budget_usd: Optional[float] = None, country: str = "",
+                stats_minutes: int = 10) -> Any:
     """Create a run over the committed subset (its first `cases` cases, whole subgroups first) and
-    start it in the background. `groups_limit` caps the subgroups for a smoke run."""
+    start it in the background. `groups_limit` caps the subgroups for a smoke run.
+
+    `arm="studio"` builds each subgroup through the whole product instead of the bare lineup;
+    `country="uk"` takes that country's subgroups from the whole split (subset ones first, then the
+    largest), up to `cases` / `groups_limit`; `budget_usd` is a hard stop on every model call made
+    on prod from the run's start (all of the ledger, so nothing unattributed slips past)."""
     from app.core import database as dbm
     from app.models.benchmark import BenchmarkRun
     sub = load_subset()
@@ -656,7 +720,18 @@ async def start(user_id: Optional[str], *, cases: int = DEFAULT_CASES, twins: in
     if len(all_cases) != sub["n"]:
         raise ValueError(f"The cached data does not match the subset ({len(all_cases)} of {sub['n']} cases found) — refetch it.")
     by_id = {c["id"]: c for c in all_cases}
-    chosen = [by_id[r["id"]] for r in first_refs(sub["cases"], cases, groups_limit, seed=int(sub.get("seed") or DEFAULT_SEED))]
+    if country:
+        marks = {"uk": UK_MARKS}.get(country.lower())
+        if not marks:
+            raise ValueError(f"Unknown country filter {country!r} (known: uk)")
+        whole = await asyncio.to_thread(load_cases, src)
+        chosen = []
+        for i, grp in enumerate(country_groups(whole, {c["group_id"] for c in all_cases}, marks)):
+            if (groups_limit and i >= groups_limit) or len(chosen) >= cases:
+                break
+            chosen.extend(grp)
+    else:
+        chosen = [by_id[r["id"]] for r in first_refs(sub["cases"], cases, groups_limit, seed=int(sub.get("seed") or DEFAULT_SEED))]
     group_ids = []
     for c in chosen:
         if c["group_id"] not in group_ids:
@@ -665,7 +740,9 @@ async def start(user_id: Optional[str], *, cases: int = DEFAULT_CASES, twins: in
               "case_count": len(chosen), "group_count": len(group_ids), "twins": max(10, min(200, int(twins))), "mode": "pro" if mode == "pro" else "fast",
               "seed": int(seed) if seed is not None else random.randint(1, 2 ** 31 - 1), "parallel_groups": max(1, min(8, int(parallel_groups))),
               "bare": bool(bare), "case_ids": [c["id"] for c in chosen], "dataset_norms": sub["dataset_norms"],
-              "estimate": estimate(len(chosen), len(group_ids), max(10, min(200, int(twins))), "pro" if mode == "pro" else "fast")}
+              "estimate": estimate(len(chosen), len(group_ids), max(10, min(200, int(twins))), "pro" if mode == "pro" else "fast"),
+              "arm": "studio" if arm == "studio" else "lineup", "country": country.lower() or None,
+              "budget_usd": float(budget_usd) if budget_usd else None, "stats_minutes": max(1, min(60, int(stats_minutes)))}
     run = BenchmarkRun(id=str(uuid.uuid4()), user_id=user_id, benchmark=BENCHMARK_ID, status="queued", config=config,
                        state={"groups": {}, "cases": {}}, progress=_progress(config, {}))
     async with dbm.AsyncSessionLocal() as db:
@@ -755,13 +832,16 @@ async def _run(run_id: str) -> None:
         for c in chosen:
             by_group.setdefault(c["group_id"], []).append(c)
         sem = asyncio.Semaphore(int(config.get("parallel_groups") or DEFAULT_PARALLEL_GROUPS))
+        started_at = datetime.utcnow()
+        guard = asyncio.create_task(_budget_guard(run_id, config, started_at)) if config.get("budget_usd") else None
+        ensure = _ensure_studio if config.get("arm") == "studio" else _ensure_lineup
 
         async def one_group(gid: str, group: list[dict]) -> None:
             async with sem:
                 if _stopped(run_id):
                     return
                 try:
-                    session_id = await _ensure_lineup(run_id, run.user_id, config, state, gid, group[0])
+                    session_id = await ensure(run_id, run.user_id, config, state, gid, group[0])
                 except asyncio.CancelledError:
                     if _stopped(run_id):
                         return
@@ -777,7 +857,11 @@ async def _run(run_id: str) -> None:
                         return
                     await _ensure_case(run_id, config, state, session_id, c)
 
-        await asyncio.gather(*(one_group(gid, grp) for gid, grp in by_group.items()))
+        groups_t = [asyncio.create_task(one_group(gid, grp)) for gid, grp in by_group.items()]
+        _group_tasks[run_id] = groups_t
+        await asyncio.gather(*groups_t, return_exceptions=True)
+        if guard:
+            guard.cancel()
         run = await _load_run(run_id)
         summary = summarise(run.config or {}, run.state or {})
         final = "stopped" if _stopped(run_id) else "complete"
@@ -788,6 +872,7 @@ async def _run(run_id: str) -> None:
     finally:
         _tasks.pop(run_id, None)
         _stop.pop(run_id, None)
+        _group_tasks.pop(run_id, None)
 
 
 async def _ensure_lineup(run_id: str, user_id: Optional[str], config: dict, state: dict, gid: str, case: dict) -> str:
@@ -827,6 +912,153 @@ async def _ensure_lineup(run_id: str, user_id: Optional[str], config: dict, stat
     if n == 0:
         raise RuntimeError("the persona writer returned no twins")
     await _update(run_id, group=(gid, {"status": "ready", "agents": n, "build_sec": round(time.monotonic() - started, 1)}))
+    return session_id
+
+
+async def spent_since(started_at: datetime) -> float:
+    """Every model call on this deployment since `started_at`, priced by the ledger. Deliberately the
+    whole ledger, not the run's sessions: some calls (web search) carry no session."""
+    from sqlalchemy import func, select
+    from app.core import database as dbm
+    from app.models.usage import LlmUsage
+    async with dbm.AsyncSessionLocal() as db:
+        return float((await db.execute(select(func.coalesce(func.sum(LlmUsage.cost_usd), 0.0)).where(LlmUsage.created_at >= started_at))).scalar_one() or 0.0)
+
+
+async def _budget_guard(run_id: str, config: dict, started_at: datetime) -> None:
+    budget = float(config["budget_usd"])
+    while not _stopped(run_id):
+        await asyncio.sleep(BUDGET_CHECK_SEC)
+        try:
+            spent = await spent_since(started_at)
+        except Exception:  # noqa: BLE001 — a failed read must not kill the guard
+            continue
+        if spent >= budget:
+            print(f"[simbench] run {run_id[:8]} reached its budget (${spent:.2f} of ${budget:.2f}) — stopping everything in flight")
+            await _update(run_id, status="stopping", error=f"Budget reached: ${spent:.2f} of ${budget:.2f}")
+            await hard_stop(run_id)
+            return
+
+
+async def hard_stop(run_id: str) -> None:
+    """Stop now and cancel what is in flight: research, Studio builds (their tasks, so the persona
+    writer's calls are dropped), running probes, and the run's own group tasks."""
+    from sqlalchemy import update
+    from app.core import database as dbm
+    from app.models.measurement import Probe
+    from app.services.evidence import loop as research
+    from app.services.population import builder
+    _stop[run_id] = True
+    run = await _load_run(run_id)
+    sids = [g.get("session_id") for g in ((run.state or {}).get("groups") or {}).values() if g.get("session_id")] if run else []
+    for sid in sids:
+        try:
+            await research.stop_research(sid)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            bld = await builder.latest_build(sid)
+            if bld and bld.status in builder.ACTIVE:
+                builder._stop[bld.id] = True
+                t = builder._tasks.pop(bld.id, None)
+                if t and not t.done():
+                    t.cancel()
+                await builder._save(bld.id, status="stopped")
+        except Exception:  # noqa: BLE001
+            pass
+    if sids:
+        async with dbm.AsyncSessionLocal() as db:
+            await db.execute(update(Probe).where(Probe.session_id.in_(sids), Probe.status.in_(["queued", "running"])).values(status="stopped"))
+            await db.commit()
+    for t in _group_tasks.get(run_id, []):
+        if not t.done():
+            t.cancel()
+
+
+async def _wait_for(check, *, run_id: str, every: float = 5, limit: float = 1800):
+    """Poll `check()` (async, returns a value or None) until it returns something, the run is
+    stopped, or `limit` seconds pass. Returns the value, or None."""
+    t0 = time.monotonic()
+    while not _stopped(run_id) and time.monotonic() - t0 < limit:
+        v = await check()
+        if v is not None:
+            return v
+        await asyncio.sleep(every)
+    return None
+
+
+async def _ensure_studio(run_id: str, user_id: Optional[str], config: dict, state: dict, gid: str, case: dict) -> str:
+    """The subgroup built by the whole product: research, then the Studio to approval, then the spawn."""
+    from sqlalchemy import func, select
+    from app.core import database as dbm
+    from app.core import model_policy
+    from app.models.agent import SpawnedAgent
+    from app.models.evidence import Evidence
+    from app.models.session import AnalysisSession, SessionStatus
+    from app.services.evidence import loop as research
+    from app.services.population import builder
+    existing = ((state.get("groups") or {}).get(gid) or {})
+    if existing.get("status") == "ready" and existing.get("session_id"):
+        return existing["session_id"]
+    mode = config.get("mode") or "fast"
+    session_id = str(uuid.uuid4())
+    question = studio_question(case)
+    async with dbm.AsyncSessionLocal() as db:
+        db.add(AnalysisSession(id=session_id, user_id=user_id, title=f"SimBench Studio · {group_title(case)}"[:255], query=question,
+                               status=SessionStatus.READY, model_tier=model_policy.normalise(mode), kind="benchmark"))
+        await db.commit()
+    model_policy.remember(session_id, mode)
+    started = time.monotonic()
+    await _update(run_id, group=(gid, {"session_id": session_id, "status": "researching", "title": group_title(case), "group_text": case["group_text"]}))
+    await research.start_research(session_id, question, ["web", "reddit"])
+
+    async def research_done():
+        r = await research.latest_run(session_id)
+        return r if r and r.status in ("complete", "stopped", "error", "interrupted") else None
+    if await _wait_for(research_done, run_id=run_id, every=10, limit=1200) is None and not _stopped(run_id):
+        await research.stop_research(session_id)
+    if _stopped(run_id):
+        raise asyncio.CancelledError("stopped during research")
+    async with dbm.AsyncSessionLocal() as db:
+        ev = (await db.execute(select(Evidence.source_ref).where(Evidence.session_id == session_id))).scalars().all()
+    leaks = sum(1 for ref in ev if any(m in (ref or "").lower() for m in STUDIO_PUBLISHER_MARKS))
+    await _update(run_id, group=(gid, {"status": "planning", "evidence": len(ev), "publisher_sources": leaks}))
+
+    bld = await builder.start_build(session_id, mode=mode, count=int(config["twins"]), constraints=studio_constraints(case),
+                                    sources={"quant": True, "quant_sources": [], "quant_auto": True})
+    stats_cap = 60 * int(config.get("stats_minutes") or 10)
+    t_build = time.monotonic()
+    capped = False
+
+    async def reviewable():
+        nonlocal capped
+        b = await builder.latest_build(session_id)
+        if not b:
+            return None
+        if b.status in ("detecting", "gathering") and not capped and time.monotonic() - t_build > stats_cap:
+            capped = True   # Stop during statistics = "plan with what is on file" (builder.stop_build)
+            await builder.stop_build(session_id)
+        return b if b.status in ("awaiting_review", "complete", "error", "stopped") else None
+    b = await _wait_for(reviewable, run_id=run_id, every=10, limit=2400)
+    if _stopped(run_id):
+        raise asyncio.CancelledError("stopped during the Studio plan")
+    if not b or b.status != "awaiting_review":
+        raise RuntimeError(f"the Studio ended {b.status if b else 'timed out'}: {(b.error if b else '') or ''}"[:200])
+    await _update(run_id, group=(gid, {"status": "spawning", "stats_capped": capped,
+                                       "segments": [s.get("name") for s in ((b.plan or {}).get("segments") or [])][:8]}))
+    await builder.approve(b.id)
+
+    async def built():
+        x = await builder.latest_build(session_id)
+        return x if x and x.status in ("complete", "error", "stopped") else None
+    b = await _wait_for(built, run_id=run_id, every=10, limit=2400)
+    if _stopped(run_id):
+        raise asyncio.CancelledError("stopped while writing the twins")
+    async with dbm.AsyncSessionLocal() as db:
+        n = (await db.execute(select(func.count(SpawnedAgent.id)).where(SpawnedAgent.session_id == session_id))).scalar_one()
+    if not b or b.status != "complete" or not n:
+        raise RuntimeError(f"the Studio build ended {b.status if b else 'timed out'} with {n} twins")
+    await _update(run_id, group=(gid, {"status": "ready", "agents": int(n), "build_sec": round(time.monotonic() - started, 1)}))
     return session_id
 
 
@@ -916,6 +1148,9 @@ async def _run_probe(session_id: str, case: dict, run_id: str, config: dict) -> 
     from app.services.measurement import instruments
     inst = instruments.get("survey")
     spec = probe_spec(case, run_id)
+    if config.get("arm") == "studio":
+        # The Studio arm answers with what the session knows: its knowledge graph and each twin's scoped sources.
+        spec["context"] = {"kg": True, "own_posts": False, "prior_answers": False}
     seed = (int(config.get("seed") or 1) * 1_000_003 + int(case["id"])) % (2 ** 31 - 1)
     spec["seed"] = seed
     p = Probe(session_id=session_id, instrument=inst.key, schema_id=inst.schema_id(), spec=spec, seed=seed,

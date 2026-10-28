@@ -274,3 +274,21 @@ def test_duplicate_repair_asks_in_batches_the_writer_can_finish(monkeypatch):
     repairs = [n for label, n in calls if label.startswith("spawn:plan:repair")]
     assert sum(repairs) == 11, repairs                                  # twelve clones: one kept, eleven rewritten
     assert max(repairs) <= agent_factory._PLAN_BATCH_SIZE, repairs
+
+
+def test_a_batch_that_writes_more_people_than_asked_is_held_to_the_count(monkeypatch):
+    """gpt-4.1-mini returned extra personas and a 60-twin lineup came out at 70 (2026-10-28)."""
+    asyncio, agent_factory, calls = _stub_plan_writer(monkeypatch, short_by=0)
+    real = agent_factory.tracked_messages_create
+
+    async def generous(client, *, label="", **kw):
+        import json
+        import re
+        n = int(re.search(r"Create (\d+) distinct personas", kw["messages"][0]["content"]).group(1))
+        kw["messages"][0]["content"] = kw["messages"][0]["content"].replace(f"Create {n} distinct", f"Create {n + 3} distinct", 1)
+        return await real(client, label=label, **kw)
+
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", generous)
+    seg = {"id": "a", "name": "Seg A", "count": 10, "stance": "neutral", "demographics": {}, "sentiment": {}}
+    profiles = asyncio.new_event_loop().run_until_complete(agent_factory.generate_agents_from_plan("s", "q", [seg], {}, mode="fast"))
+    assert len(profiles) == 10

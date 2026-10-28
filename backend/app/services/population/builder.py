@@ -1736,7 +1736,10 @@ async def _spawn(build_id: str):
         # Behavioural validation (brief L3-05) runs on its own, after the build: every twin is
         # put through the battery and carries a confidence score wherever it speaks. It must
         # never hold up the build or break it, so it is a detached task with its own logging.
-        asyncio.create_task(_validate_population(build_id, session_id))
+        # `constraints.skip_validation` (the SimBench Studio arm) leaves it out: it scores the twins,
+        # never changes an answer, and would spend a benchmark's budget.
+        if not (bld.constraints or {}).get("skip_validation"):
+            asyncio.create_task(_validate_population(build_id, session_id))
         # Every twin records what it was written from and can see (scoping, L1-04 wired end to end).
         from app.services.scoping import auto as scoping_auto
         asyncio.create_task(scoping_auto.annotate_agents(session_id, question, reason="build"))

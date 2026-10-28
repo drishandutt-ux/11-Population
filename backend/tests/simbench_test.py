@@ -333,3 +333,65 @@ def test_stop_reaches_the_persona_writer_and_resume_rewrites_the_cut_lineup(data
 
 
 from tests.measurement_test import api_client  # noqa: E402,F401
+
+
+# ── the Studio arm (2026-10-28) ───────────────────────────────────────────────
+
+def _uk_cases(tmp_path):
+    rows = []
+    groups = [("United Kingdom", "female", 1), ("United Kingdom", "male", 3), ("Great Britain", "female", 2), ("Poland", "male", 3)]
+    for country, sex, n in groups:
+        for q in range(n):
+            rows.append(_row("ESS", f"The year is 2016. You are from {country}.\nYour gender is: {{gndr}}.", {"gndr": sex},
+                             f"Question {q} for {country} {sex}?", {"A": "Yes", "B": "No"}, {"A": 60.0, "B": 40.0}, ["cntry", "gndr"]))
+    path = tmp_path / "uk.csv"
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    return sb.load_cases(str(path))
+
+
+def test_country_groups_takes_the_subset_first_then_the_largest(tmp_path):
+    cases = _uk_cases(tmp_path)
+    by_title = {}
+    for c in cases:
+        by_title.setdefault(c["group_id"], c)
+    uk_f = next(g for g, c in by_title.items() if "United Kingdom" in c["group_text"] and "female" in c["group_text"])
+    groups = sb.country_groups(cases, {uk_f})
+    assert [len(g) for g in groups] == [1, 3, 2]            # the subset's group, then by size; Poland left out
+    assert all(sb.is_country(g[0], sb.UK_MARKS) for g in groups)
+
+
+def test_studio_question_and_constraints_never_name_the_survey(tmp_path):
+    case = _uk_cases(tmp_path)[1]
+    q = sb.studio_question(case)
+    assert "ESS" not in q and "survey" not in q.lower() and "United Kingdom" in q and "2016" in q
+    c = sb.studio_constraints(case)
+    assert c["skip_questions"] and c["skip_validation"]
+    assert c["demographics"]["regions"] and c["demographics"]["gender"]["male"] == 100
+    assert "exactly" in c["profile_query"]
+
+
+def test_budget_guard_stops_everything_once_spend_reaches_the_budget(monkeypatch):
+    calls = []
+
+    async def spent(_started):
+        return 25.5
+
+    async def fake_update(run_id, **fields):
+        calls.append(("update", fields.get("status"), fields.get("error")))
+
+    async def fake_hard_stop(run_id):
+        calls.append(("hard_stop", run_id))
+
+    monkeypatch.setattr(sb, "spent_since", spent)
+    monkeypatch.setattr(sb, "_update", fake_update)
+    monkeypatch.setattr(sb, "hard_stop", fake_hard_stop)
+    monkeypatch.setattr(sb, "BUDGET_CHECK_SEC", 0.01)
+    sb._stop["r1"] = False
+    from datetime import datetime
+    asyncio.new_event_loop().run_until_complete(asyncio.wait_for(sb._budget_guard("r1", {"budget_usd": 20}, datetime.utcnow()), 2))
+    assert ("hard_stop", "r1") in calls
+    assert any(c[0] == "update" and c[1] == "stopping" and "Budget reached" in (c[2] or "") for c in calls)
+    sb._stop.pop("r1", None)
