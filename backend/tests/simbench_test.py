@@ -283,4 +283,53 @@ def test_a_run_builds_lineups_scores_every_case_and_reports(data, api_client, mo
     assert body.splitlines()[0].startswith("case_id,dataset,group") and len(body.splitlines()) == 7
 
 
+def test_stop_reaches_the_persona_writer_and_resume_rewrites_the_cut_lineup(data, api_client, monkeypatch):
+    """Stop must abandon the lineups being written (2026-10-28: they kept calling the model for
+    minutes), and a lineup cut short must be rewritten on resume, in the same session."""
+    from app.services.agents.profiles import AgentProfile
+    client, Session = api_client
+    sb.build_subset(n=6, seed=3)
+    calls = []
+
+    async def slow_writer(session_id, query, segments, constraints, *, mode="fast", should_stop=None, **kw):
+        calls.append(session_id)
+        assert should_stop is not None
+        for _ in range(100):                       # a long build that only Stop can end
+            if should_stop():
+                return []
+            await asyncio.sleep(0.05)
+        seg = segments[0]
+        return [AgentProfile(id=str(uuid.uuid4()), session_id=session_id, name=f"P{k}", age=40, role="r", background="b",
+                             stance="neutral", correlation="c", personality=["x"], debate_style="d") for k in range(seg["count"])]
+    monkeypatch.setattr("app.services.agents.agent_factory.generate_agents_from_plan", slow_writer)
+
+    async def fake_analyze(schema, system, user, **kw):
+        return {"reasoning": "r", "q": {"o1": 50, "o2": 30, "o3": 20}, "can_answer": "yes"}
+    monkeypatch.setattr("app.services.measurement.probe.analyze", fake_analyze)
+
+    run = client.post("/api/v1/admin/benchmarks/simbench/runs", json={"cases": 6, "twins": 10, "parallel_groups": 2, "bare": False}).json()
+    time.sleep(0.5)
+    assert client.post(f"/api/v1/admin/benchmarks/simbench/runs/{run['id']}/stop").status_code == 200
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        got = client.get(f"/api/v1/admin/benchmarks/simbench/runs/{run['id']}").json()
+        if got["status"] == "stopped":
+            break
+        time.sleep(0.1)
+    assert got["status"] == "stopped" and got["progress"]["cases_done"] == 0
+    assert {g["status"] for g in got["groups"]} == {"stopped"}
+    first_sessions = {g["session_id"] for g in got["groups"]}
+
+    assert client.post(f"/api/v1/admin/benchmarks/simbench/runs/{run['id']}/resume").status_code == 200
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        again = client.get(f"/api/v1/admin/benchmarks/simbench/runs/{run['id']}").json()
+        if again["status"] == "complete":
+            break
+        time.sleep(0.2)
+    assert again["status"] == "complete" and again["progress"]["cases_done"] == 6
+    assert {g["session_id"] for g in again["groups"]} == first_sessions          # rewritten in place, nothing orphaned
+    assert all(g["agents"] == 10 for g in again["groups"])
+
+
 from tests.measurement_test import api_client  # noqa: E402,F401

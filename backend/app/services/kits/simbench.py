@@ -762,6 +762,10 @@ async def _run(run_id: str) -> None:
                     return
                 try:
                     session_id = await _ensure_lineup(run_id, run.user_id, config, state, gid, group[0])
+                except asyncio.CancelledError:
+                    if _stopped(run_id):
+                        return
+                    raise
                 except Exception as e:  # noqa: BLE001
                     traceback.print_exc()
                     await _update(run_id, group=(gid, {"status": "failed", "error": f"{type(e).__name__}: {str(e)[:200]}"}))
@@ -794,29 +798,39 @@ async def _ensure_lineup(run_id: str, user_id: Optional[str], config: dict, stat
     from app.models.agent import SpawnedAgent
     from app.models.session import AnalysisSession, SessionStatus
     existing = ((state.get("groups") or {}).get(gid) or {})
-    if existing.get("session_id"):
-        async with dbm.AsyncSessionLocal() as db:
-            n = (await db.execute(select(func.count(SpawnedAgent.id)).where(SpawnedAgent.session_id == existing["session_id"]))).scalar_one()
-        if n >= max(10, int(config["twins"]) // 2):
-            await _update(run_id, group=(gid, {"status": "ready", "agents": int(n)}))
-            return existing["session_id"]
     mode = config.get("mode") or "fast"
-    session_id = str(uuid.uuid4())
-    async with dbm.AsyncSessionLocal() as db:
-        db.add(AnalysisSession(id=session_id, user_id=user_id, title=f"SimBench · {group_title(case)}"[:255], query=session_query(case),
-                               status=SessionStatus.READY, model_tier=model_policy.normalise(mode), kind="benchmark"))
-        await db.commit()
+    session_id = existing.get("session_id")
+    if session_id:
+        async with dbm.AsyncSessionLocal() as db:
+            n = (await db.execute(select(func.count(SpawnedAgent.id)).where(SpawnedAgent.session_id == session_id))).scalar_one()
+            # Only a lineup that finished writing is reused; one cut short by Stop or a restart is rewritten
+            # in the same session, so a resumed run never measures a half-written lineup.
+            if existing.get("status") == "ready" and n >= max(10, int(config["twins"]) // 2):
+                await _update(run_id, group=(gid, {"status": "ready", "agents": int(n)}))
+                return session_id
+            for a in (await db.execute(select(SpawnedAgent).where(SpawnedAgent.session_id == session_id))).scalars().all():
+                await db.delete(a)
+            await db.commit()
+    else:
+        session_id = str(uuid.uuid4())
+        async with dbm.AsyncSessionLocal() as db:
+            db.add(AnalysisSession(id=session_id, user_id=user_id, title=f"SimBench · {group_title(case)}"[:255], query=session_query(case),
+                                   status=SessionStatus.READY, model_tier=model_policy.normalise(mode), kind="benchmark"))
+            await db.commit()
     model_policy.remember(session_id, mode)
     await _update(run_id, group=(gid, {"session_id": session_id, "status": "building", "title": group_title(case), "group_text": case["group_text"]}))
     started = time.monotonic()
-    n = await build_lineup(session_id, case, int(config["twins"]), mode)
+    n = await build_lineup(session_id, case, int(config["twins"]), mode, should_stop=lambda: _stopped(run_id))
+    if _stopped(run_id):
+        await _update(run_id, group=(gid, {"status": "stopped", "agents": n}))
+        raise asyncio.CancelledError("stopped while writing the lineup")
     if n == 0:
         raise RuntimeError("the persona writer returned no twins")
     await _update(run_id, group=(gid, {"status": "ready", "agents": n, "build_sec": round(time.monotonic() - started, 1)}))
     return session_id
 
 
-async def build_lineup(session_id: str, case: dict, twins: int, mode: str) -> int:
+async def build_lineup(session_id: str, case: dict, twins: int, mode: str, should_stop=None) -> int:
     """Write the subgroup's twins with the Studio's own persona writer and store them on the session.
     The build's side jobs (validation battery, scoping annotation, frame weights) are not run: the
     benchmark measures the twins as written, and those would multiply the bill."""
@@ -826,7 +840,9 @@ async def build_lineup(session_id: str, case: dict, twins: int, mode: str) -> in
     from app.models.session import AnalysisSession
     from app.services.agents.agent_factory import generate_agents_from_plan
     seg = segment_for(case, twins)
-    profiles = await generate_agents_from_plan(session_id, session_query(case), [seg], persona_constraints(case), mode=mode)
+    # `should_stop`: Stop abandons the writer's in-flight calls at once (2026-10-28 — without it the
+    # three lineups being written kept calling the model for minutes after Stop).
+    profiles = await generate_agents_from_plan(session_id, session_query(case), [seg], persona_constraints(case), mode=mode, should_stop=should_stop)
     async with dbm.AsyncSessionLocal() as db:
         db.add_all([
             SpawnedAgent(
