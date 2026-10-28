@@ -59,7 +59,7 @@ PUBLISHED = {"Claude 3.7 Sonnet (both splits averaged)": 40.8, "GPT-4.1": 34.55,
 DEFAULT_CASES = 1000
 DEFAULT_TWINS = 60
 DEFAULT_SEED = 20261027
-# The lineups a run builds at once. Each builds in batches of ten (spawn_concurrency bounds those)
+# The lineups a run builds at once. Each builds in batches of six (spawn_concurrency bounds those)
 # and then answers its cases at `PROBE_PARALLEL` twins at a time, so three groups ≈ 48 twin calls in flight.
 DEFAULT_PARALLEL_GROUPS = 3
 PROBE_PARALLEL = 16

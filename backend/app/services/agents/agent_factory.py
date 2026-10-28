@@ -31,6 +31,16 @@ _BATCH_SIZE = 10
 # 6 of 7 batches cut off). Five per call leaves room; a card that still comes back missing
 # is asked for once more on its own batch.
 _KIT_BATCH_SIZE = 5
+# Studio plan and archetype batches. A persona with the full dial schema, standing and geo
+# fields runs ~1,200 output tokens on Sonnet and more on Haiku, so ten per call hit the 12k
+# cap and lost the tail (prod 2026-10-22: 9 of 13 Sonnet spawn:plan calls at exactly 12,000;
+# local 2026-10-28: 4 of 4 Haiku calls, one lineup left at 8 of 10). Six fits with room, and
+# smaller batches run side by side, so a build is no slower. A batch that still comes back
+# short is topped up once with a call for just the missing personas.
+_PLAN_BATCH_SIZE = 6
+# Output budget for every persona-writing call. Haiku 4.5 and Sonnet 4.6 both allow far more;
+# this stays under the SDK's ~21k ceiling for a non-streaming request. Unused tokens cost nothing.
+_SPAWN_MAX_TOKENS = 16000
 
 _SYSTEM_PROMPT = """You are an expert behavioral psychologist and simulation designer. You create deeply realistic
 human personas for multi-agent debate simulations. Each agent gets a full psychological dial profile (112 values, all integers 0-10)
@@ -333,7 +343,7 @@ name, a different job title, a different angle. Do not produce a variation of an
                     session_id=session_id,
                     label=label,
                     model=gen_model,
-                    max_tokens=12000,
+                    max_tokens=_SPAWN_MAX_TOKENS,
                     system=_spawn_system(),
                     messages=[{"role": "user", "content": _build_prompt(bcount, d, i, n, h) + _taken_block(taken)}],
                 )
@@ -771,7 +781,7 @@ async def generate_agents_from_plan(
 ) -> list[AgentProfile]:
     """Build the roster segment by segment from an approved Population Studio plan.
 
-    Each segment's `count` is generated in batches of ≤10 on the mode's orchestration model
+    Each segment's `count` is generated in batches of ≤6 (kit cards ≤5) on the mode's orchestration model
     (Fast = Haiku, Pro = Sonnet), every batch told who is already in the roster. `on_progress`
     (async, optional) is called as `(segment_name, done_in_segment, segment_count, done_total)`
     after every batch so the Studio log can narrate the build."""
@@ -829,16 +839,17 @@ async def generate_agents_from_plan(
             raise
         return task.result()
 
-    async def _batch(seg: dict, n: int, taken: list[dict], label: str, seed: str = "0") -> list[dict]:
+    async def _batch(seg: dict, n: int, taken: list[dict], label: str, seed: str = "0", slots: Optional[list[dict]] = None) -> list[dict]:
         if should_stop and should_stop():
             return []  # the analyst stopped the build: batches not yet started are skipped, finished ones are kept
         scoped_block = await _segment_knowledge(seg)
         seg_knowledge = scoped_block or kg_summary
-        slots = pb_mod.draw_slots(playbook, seg, n, f"{label}:{seed}") if playbook else []
+        if slots is None:
+            slots = pb_mod.draw_slots(playbook, seg, n, f"{label}:{seed}") if playbook else []
         async with sem:
             try:
                 response = await _call(
-                    label=label, model=gen_model, max_tokens=12000,
+                    label=label, model=gen_model, max_tokens=_SPAWN_MAX_TOKENS,
                     system=_spawn_system(),
                     messages=[{"role": "user", "content": _plan_prompt(query, seg, n, constraints, seg_knowledge, evidence_text, taken, dyn_mod, dynamic,
                                                                        extra=pb_mod.context_block(playbook, seg) + pb_mod.slots_block(playbook, slots))}],
@@ -850,10 +861,17 @@ async def generate_agents_from_plan(
                 for d in out:
                     if isinstance(d, dict):
                         d["_written_from"] = "scoped" if scoped_block else "shared"   # recorded on the twin (item 6, 2026-10-20)
-                return out
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] plan batch failed ({seg.get('name')}, {n}): {type(e).__name__}: {e}")
                 return []
+        # A batch cut off at the output cap keeps the personas it finished; ask once more for the
+        # rest (outside the semaphore, so a top-up never waits on its own slot), handing on the
+        # playbook values the missing ones were drawn.
+        got = sum(1 for d in out if isinstance(d, dict) and d.get("name"))
+        if got < n and not label.endswith(":topup"):
+            print(f"[agent_factory] plan batch returned {got}/{n} ({seg.get('name')}, stop={getattr(response, 'stop_reason', None)}) — topping up {n - got}")
+            out += await _batch(seg, n - got, taken + out, label + ":topup", seed, slots=slots[got:] if slots else None)
+        return out
 
     async def _cast_batch(seg: dict, arch: dict, slots: list[dict], taken: list[dict], label: str, seed: str = "0") -> list[dict]:
         """One batch cast from an archetype: the facts are drawn already, the model writes texture,
@@ -876,7 +894,7 @@ async def generate_agents_from_plan(
         async with sem:
             try:
                 response = await _call(
-                    label=label, model=gen_model, max_tokens=12000,
+                    label=label, model=gen_model, max_tokens=_SPAWN_MAX_TOKENS,
                     system=_spawn_system(), messages=[{"role": "user", "content": prompt}],
                 )
                 if response is None:
@@ -885,11 +903,18 @@ async def generate_agents_from_plan(
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] cast batch failed ({seg.get('name')}, {len(slots)}): {type(e).__name__}: {e}")
                 return []
-        cast = [arch_mod.enforce_archetype(arch, slot, d) for slot, d in arch_mod.pair_slots(slots, raw)]
+        paired = arch_mod.pair_slots(slots, raw)
+        cast = [arch_mod.enforce_archetype(arch, slot, d) for slot, d in paired]
         pb_mod.pin(playbook, seg, pb_slots, cast)
         for d in cast:
             if isinstance(d, dict):
                 d["_written_from"] = cast_written_from.get(str(d.get("region") or ""), "scoped" if "scoped" in cast_written_from.values() else "shared")
+        # Slots a truncated batch never reached are cast once more on their own.
+        done = {slot["slot"] for slot, _ in paired}
+        missing = [s_ for s_ in slots if s_["slot"] not in done]
+        if missing and not label.endswith(":topup"):
+            print(f"[agent_factory] cast batch returned {len(cast)}/{len(slots)} ({seg.get('name')}) — topping up {len(missing)}")
+            cast += await _cast_batch(seg, arch, missing, taken + cast, label + ":topup", seed)
         return cast
 
     progress_lock = asyncio.Lock()
@@ -905,7 +930,7 @@ async def generate_agents_from_plan(
         async with sem:
             try:
                 response = await _call(
-                    label=label, model=gen_model, max_tokens=12000,
+                    label=label, model=gen_model, max_tokens=_SPAWN_MAX_TOKENS,
                     system=_spawn_system(), messages=[{"role": "user", "content": prompt}],
                 )
                 if response is None:
@@ -914,13 +939,12 @@ async def generate_agents_from_plan(
             except Exception as e:  # noqa: BLE001
                 print(f"[agent_factory] kit batch failed ({seg.get('name')}, {len(cards)}): {type(e).__name__}: {e}")
                 return []
-        out = [kit_cast.enforce(kseg, card, d) for card, d in kit_cast.pair(cards, raw)]
-        got = {d.get("slot") for d in raw if isinstance(d, dict)}
-        missing = [c for c in cards if c["slot"] not in got] if len(out) < len(cards) else []
+        paired = kit_cast.pair(cards, raw)
+        out = [kit_cast.enforce(kseg, card, d) for card, d in paired]
+        done_slots = {c["slot"] for c, _ in paired}
+        missing = [c for c in cards if c["slot"] not in done_slots]
         if missing and not label.endswith(":retry"):
             print(f"[agent_factory] kit batch returned {len(out)}/{len(cards)} ({seg.get('name')}) — retrying {len(missing)}")
-            done_slots = {c["slot"] for c, _ in kit_cast.pair(cards, raw)}
-            missing = [c for c in cards if c["slot"] not in done_slots]
             out += await _kit_batch(seg, kseg, missing, taken + out, label + ":retry")
         return out
 
@@ -964,7 +988,7 @@ async def generate_agents_from_plan(
         arch = archetypes.get(seg.get("archetype_id") or "")
         if arch:
             return await _cast_segment(seg, arch, count)
-        sizes = [_BATCH_SIZE] * (count // _BATCH_SIZE) + ([count % _BATCH_SIZE] if count % _BATCH_SIZE else [])
+        sizes = [_PLAN_BATCH_SIZE] * (count // _PLAN_BATCH_SIZE) + ([count % _PLAN_BATCH_SIZE] if count % _PLAN_BATCH_SIZE else [])
         seg_dicts: list[dict] = []
 
         async def _note():
@@ -998,7 +1022,7 @@ async def generate_agents_from_plan(
         nonlocal done_total
         slots = arch_mod.sample_attributes(seg, frame, count)
         seg_dicts: list[dict] = []
-        batches = [slots[k:k + _BATCH_SIZE] for k in range(0, len(slots), _BATCH_SIZE)]
+        batches = [slots[k:k + _PLAN_BATCH_SIZE] for k in range(0, len(slots), _PLAN_BATCH_SIZE)]
 
         async def _note():
             nonlocal done_total

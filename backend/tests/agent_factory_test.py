@@ -160,3 +160,86 @@ def test_same_trade_a_generation_apart_still_survives():
         _p("Gordon Baird", "Print Shop Owner / Committed Cyclist and DIY Mechanic", 57),
     ])
     assert len(kept) == 2 and not dupes
+
+
+# ── a batch cut off at the output cap is topped up ────────────────────────────
+# Local SimBench run 2026-10-28: a Haiku spawn:plan call asked for 10 personas, stopped at
+# exactly max_tokens, the salvage parser kept the finished ones and the lineup ended at 8.
+
+def _stub_plan_writer(monkeypatch, short_by: int):
+    """Stub the persona writer: a first call returns `short_by` fewer personas than it was
+    asked for, plus a half-written one (the shape of a max_tokens cut); top-ups are whole."""
+    import asyncio
+    import json
+    import re
+    from app.services.agents import agent_factory
+
+    async def fake_rag(session_id):
+        return session_id
+
+    async def fake_query(rag, query, mode="hybrid"):
+        return "kg"
+
+    calls: list[tuple[str, int]] = []
+
+    async def fake_create(client, *, session_id=None, label="", **kw):
+        n = int(re.search(r"Create (\d+) distinct personas", kw["messages"][0]["content"]).group(1))
+        calls.append((label, n))
+        give = n if label.endswith(":topup") else max(0, n - short_by)
+        people = [{"name": f"Person {len(calls)}-{k}", "age": 30 + k, "role": f"Job {len(calls)}-{k}", "background": "b",
+                   "stance": "neutral", "humanity": 30, "gender": "female", "region": "Leeds", "dials": {}} for k in range(give)]
+        text = json.dumps(people)
+        stop = "end_turn"
+        if give < n:
+            text = text[:-1] + ', {"name": "Cut Off", "age": 4'   # the tail a truncated reply ends on
+            stop = "max_tokens"
+
+        class R:
+            content = [type("T", (), {"text": text})()]
+            stop_reason = stop
+        return R()
+
+    monkeypatch.setattr(agent_factory, "get_lightrag", fake_rag)
+    monkeypatch.setattr(agent_factory, "query_rag", fake_query)
+    monkeypatch.setattr(agent_factory, "tracked_messages_create", fake_create)
+    return asyncio, agent_factory, calls
+
+
+def test_truncated_plan_batch_is_topped_up_to_the_count_asked(monkeypatch):
+    asyncio, agent_factory, calls = _stub_plan_writer(monkeypatch, short_by=2)
+    seg = {"id": "a", "name": "Seg A", "count": 10, "stance": "neutral", "demographics": {}, "sentiment": {}}
+    profiles = asyncio.new_event_loop().run_until_complete(
+        agent_factory.generate_agents_from_plan("s", "q", [seg], {}, mode="fast"))
+    assert len(profiles) == 10
+    assert "Cut Off" not in {p.name for p in profiles}
+    assert len({p.name for p in profiles}) == 10
+    # Batches of six and four, each two short, each topped up with exactly the two missing.
+    first = [n for label, n in calls if label == "spawn:plan"]
+    topups = [n for label, n in calls if label == "spawn:plan:topup"]
+    assert sorted(first) == [4, 6] and max(first) <= agent_factory._PLAN_BATCH_SIZE
+    assert topups == [2, 2]
+
+
+def test_a_top_up_is_asked_for_once_not_in_a_loop(monkeypatch):
+    """If the top-up also comes back short the build moves on with what it has."""
+    asyncio, agent_factory, calls = _stub_plan_writer(monkeypatch, short_by=2)
+    from app.services.agents import agent_factory as af
+
+    real = af.tracked_messages_create
+
+    async def always_short(client, *, label="", **kw):
+        return await real(client, label=label.replace(":topup", ""), **kw)   # top-ups truncate too
+
+    monkeypatch.setattr(af, "tracked_messages_create", always_short)
+    seg = {"id": "a", "name": "Seg A", "count": 6, "stance": "neutral", "demographics": {}, "sentiment": {}}
+    profiles = asyncio.new_event_loop().run_until_complete(
+        af.generate_agents_from_plan("s", "q", [seg], {}, mode="fast"))
+    assert len(calls) == 2           # the batch and one top-up, no third call
+    assert len(profiles) == 4        # 4 from the batch; the 2-slot top-up lost both to the same cut
+
+
+def test_spawn_output_budget_stays_under_the_sdk_non_streaming_ceiling():
+    """The SDK refuses a non-streaming request whose max_tokens implies more than 10 minutes
+    (60 * 60 * max_tokens / 128_000 > 600, i.e. above ~21,333)."""
+    from app.services.agents import agent_factory
+    assert 12000 < agent_factory._SPAWN_MAX_TOKENS <= 21333

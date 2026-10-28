@@ -169,7 +169,7 @@ def test_stop_drops_calls_in_flight_and_keeps_finished_batches(monkeypatch):
     profiles = asyncio.new_event_loop().run_until_complete(
         agent_factory.generate_agents_from_plan("s", "q", [seg], {}, mode="fast", should_stop=lambda: stop["now"]))
     assert time.time() - started < 5
-    assert len(profiles) == 10
+    assert len(profiles) == agent_factory._PLAN_BATCH_SIZE   # the first batch, finished before Stop
 
 
 def test_quant_chunk_and_prompt_carry_the_source():
