@@ -452,6 +452,36 @@ def _parse_agents_json(raw: str) -> list[dict]:
         return _salvage_objects(raw)
 
 
+def repair_inner_quotes(block: str) -> str:
+    """Escape quote marks a model left bare inside a string value — Haiku writes nicknames as
+    `"name": "Margaret "Maggie" Aitken"`, which is invalid JSON, and the whole persona was dropped
+    (prod 2026-10-28: a UK lineup lost every persona this way). A quote inside a string is taken as
+    the string's end only when the next non-space character is one JSON allows after a string
+    (`,` `}` `]` `:`); any other quote there is escaped."""
+    out: list[str] = []
+    in_str = esc = False
+    n = len(block)
+    for i, ch in enumerate(block):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                j = i + 1
+                while j < n and block[j] in " \t\r\n":
+                    j += 1
+                if j >= n or block[j] in ",}]:":
+                    in_str = False
+                else:
+                    out.append('\\"')
+                    continue
+        elif ch == '"':
+            in_str = True
+        out.append(ch)
+    return "".join(out)
+
+
 def parse_report(raw: str) -> str:
     """One line on why a reply yielded fewer personas than it should: how many objects it
     held, how many would not parse and where, and whether it ended mid-object."""
@@ -494,14 +524,21 @@ def _salvage_objects(raw: str, errors: Optional[list[str]] = None) -> list[dict]
             if depth > 0:
                 depth -= 1
                 if depth == 0 and start is not None:
+                    block = raw[start:idx + 1]
+                    obj, err = None, None
                     try:
-                        obj = json.loads(raw[start:idx + 1])
-                        if isinstance(obj, dict):
-                            objs.append(obj)
+                        obj = json.loads(block)
                     except Exception as e:  # noqa: BLE001
-                        if errors is not None:
-                            block, pos = raw[start:idx + 1], getattr(e, "pos", 0) or 0
-                            errors.append(f"{str(e)[:60]} near {block[max(0, pos - 60):pos + 20]!r}")
+                        err = e
+                        try:
+                            obj = json.loads(repair_inner_quotes(block))
+                        except Exception:  # noqa: BLE001
+                            obj = None
+                    if isinstance(obj, dict):
+                        objs.append(obj)
+                    elif err is not None and errors is not None:
+                        pos = getattr(err, "pos", 0) or 0
+                        errors.append(f"{str(err)[:60]} near {block[max(0, pos - 60):pos + 20]!r}")
                     start = None
     if errors is not None and depth > 0:
         errors.append("text ended inside an object")

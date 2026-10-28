@@ -247,10 +247,10 @@ def test_spawn_output_budget_stays_under_the_sdk_non_streaming_ceiling():
 
 def test_parse_report_says_which_persona_failed_and_why():
     from app.services.agents.agent_factory import parse_report
-    raw = '[{"name": "A", "age": 30}, {"name": "B", "background": "she said "no" twice", "age": 41}, {"name": "C", "age'
+    raw = '[{"name": "A", "age": 30}, {"name": "B" "age": 41}, {"name": "C", "age'
     line = parse_report(raw)
     assert line.startswith("1 objects parsed, 2 unparseable")
-    assert "no" in line
+    assert "delimiter" in line and "\"name\": \"B\"" in line
 
 
 def test_duplicate_repair_asks_in_batches_the_writer_can_finish(monkeypatch):
@@ -292,3 +292,15 @@ def test_a_batch_that_writes_more_people_than_asked_is_held_to_the_count(monkeyp
     seg = {"id": "a", "name": "Seg A", "count": 10, "stance": "neutral", "demographics": {}, "sentiment": {}}
     profiles = asyncio.new_event_loop().run_until_complete(agent_factory.generate_agents_from_plan("s", "q", [seg], {}, mode="fast"))
     assert len(profiles) == 10
+
+
+def test_a_nickname_in_bare_quotes_no_longer_loses_the_persona():
+    """Prod 2026-10-28: Haiku wrote "name": "Margaret "Maggie" Aitken" and every such persona was
+    dropped; one UK lineup ended with no twins at all."""
+    from app.services.agents.agent_factory import _parse_agents_json, repair_inner_quotes
+    raw = ('[{\n    "name": "Margaret "Maggie" Aitken",\n    "age": 67,\n    "background": "Says \\"never again\\" about the pit closures",\n'
+           '    "dials": {"sentiment": {"joy": 3}}\n  },\n  {"name": "Tom Reid", "age": 40, "role": "Bus "driver"", "dials": {}}]')
+    people = _parse_agents_json(raw)
+    assert [p["name"] for p in people] == ['Margaret "Maggie" Aitken', "Tom Reid"]
+    assert people[0]["dials"]["sentiment"]["joy"] == 3 and people[1]["role"] == 'Bus "driver"'
+    assert repair_inner_quotes('{"a": "x", "b": "y"}') == '{"a": "x", "b": "y"}'      # valid JSON is left alone
