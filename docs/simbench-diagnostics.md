@@ -35,6 +35,7 @@ number with the published leaderboard is not fair unless the cases are the same 
 | Plain-twins pilot (`ac5d7995`, stopped) | local | Haiku | persona writer only, one block of 60 per group | 9 | 26 | **36.0** ±7.4 | **33.2** ±8.0 | $13.87 |
 | Full-Studio arm | local | gpt-4.1-mini (through a scratch shim; the Claude key was at its monthly cap) | research → knowledge graph → Studio plan → spawn, 60 per group | 10 | 32 | **33.7** ±6.8 | **32.9** ±7.7 | $7.08 |
 | Full-Studio arm, UK (`e47192cf`, stopped) | **prod** | Haiku | the same, on Railway with Claude web search; 40 per group | 3 (1 more failed) | 8 | **49.2** | **48.3** | $18.25 |
+| Full-Studio arm, UK, repeat (`5deca923` + `7a75cec7`, 2026-11-03) | **prod** | Haiku | the same, statistics capped at 4 min; 40 per group | 3 (1 failed first time, retried) | 8 | **52.4** | **55.9** | $16.35 |
 
 Published reference points (the paper's averages over thousands of cases, all five surveys):
 Claude 3.7 Sonnet 40.8, GPT-4.1 34.6, DeepSeek-R1 34.5.
@@ -250,7 +251,37 @@ respondents' attitudes (ESS, British Social Attitudes, Understanding Society, a 
 and *fit* the pulls on real answers instead of asking for them — then both halves are data and the
 model only writes the life around them.
 
-## 9. Next steps
+## 9. The 3 November UK repeat
+
+Same three UK groups as the 28 October prod run, built again on prod (Haiku, 40 twins, Studio arm,
+statistics capped at 4 minutes, hard budget). Two runs: `5deca923` (3 groups; "Great Britain, no
+religion" failed with 0 twins: the plan had no segments and the persona writer returned nothing
+parseable) and `7a75cec7` (that group retried, plus "never married" built a second time).
+
+| Question | Populations | Model alone |
+|---|---|---|
+| GB never married · husband earns (4260) | 67.3 | 64.8 |
+| GB never married · God concerns Himself (4312) | 56.2 | 75.4 |
+| GB never married · heaven (4397) | 63.6 | 80.6 |
+| GB no religion · husband earns (4251) | 66.1 | 71.4 |
+| GB no religion · God concerns Himself (4306) | 47.4 | 29.8 |
+| GB no religion · heaven (4387) | 38.6 | 28.4 |
+| UK 2016 never married · political action (1933) | 43.1 | 29.8 |
+| UK 2016 never married · mother's work at 14 (2490) | 37.0 | 67.4 |
+| **Average** | **52.4** | **55.9** |
+
+Gap −3.5 ±6.1 (twins ahead on 4 of 8); picks-only 49.7. The same group built three times
+(28 Oct, today ×2) averaged 68.0, 62.4 and 59.4 while the model alone stayed at 73.6: build-to-build
+swing (up to 14 points on one question) is larger than any edge. Published reference: the paper's
+full-benchmark scores (Claude 3.7 Sonnet 40.8, GPT-4.1 34.6) are not comparable to UK cases. No
+synthetic-respondent vendor publishes a SimBench score (Aaru reports TVD 7.6 points on its own
+questions; ours here is 16.4, model alone 15.2).
+
+Found on the way: the statistics step sends ONS-style queries (mid-year estimates, deprivation
+indices) to pollster and trade sites (Savanta, SMMT, BRC), mostly off-topic; NatCen PDFs over 100
+pages are refused. Cost about $3.50–4 per UK group end to end.
+
+## 10. Next steps
 
 1. Data-backed twins: one real UK microdata source, respondents' attitudes on the twins, the map's
    pulls fitted from the same data, the tested survey and wave held out (licences checked first).
