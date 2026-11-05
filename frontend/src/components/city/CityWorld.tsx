@@ -97,6 +97,19 @@ export default function CityWorld({ plan, answers, seed, onBack, note }: Props) 
   });
 
   const select = useCallback((p: Pick) => { setSelected(p); engineRef.current?.select(p); }, []);
+  // Keys: + / − zoom, 0 sees everything, Esc lets go of whoever is selected.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest?.("input,textarea")) return;
+      const eng = engineRef.current; if (!eng) return;
+      if (e.key === "+" || e.key === "=") eng.zoomBy(0.6);
+      else if (e.key === "-" || e.key === "_") eng.zoomBy(1.6);
+      else if (e.key === "0") { select(null); eng.flyToAll(); }
+      else if (e.key === "Escape") select(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [select]);
   const launch = () => {
     finishedRef.current = false;
     city.launch(levers);
@@ -220,6 +233,13 @@ export default function CityWorld({ plan, answers, seed, onBack, note }: Props) 
             )}
           </>
         )}
+      </div>
+
+      {/* Zoom */}
+      <div className="city-zoom">
+        <button className="city-pill" onClick={() => engineRef.current?.zoomBy(0.6)} title="Zoom in (+)">＋</button>
+        <button className="city-pill" onClick={() => engineRef.current?.zoomBy(1.6)} title="Zoom out (−)">－</button>
+        <button className="city-pill" onClick={() => { select(null); engineRef.current?.flyToAll(); }} title="See everything (0)">⤢</button>
       </div>
 
       {/* Funnel */}

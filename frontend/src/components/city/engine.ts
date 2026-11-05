@@ -104,7 +104,7 @@ export class CityEngine {
     this.scene.fog = new THREE.Fog("#E9E2D6", 160, 420);
     this.camera = new THREE.PerspectiveCamera(32, w / h, 0.5, 1500);
     this.controls = new MapControls(this.camera, this.renderer.domElement);
-    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.08, screenSpacePanning: false, minDistance: 14, maxDistance: 420, maxPolarAngle: Math.PI * 0.42, minPolarAngle: Math.PI * 0.12 });
+    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.08, screenSpacePanning: false, minDistance: 8, maxDistance: 1200, zoomSpeed: 1.6, zoomToCursor: true, maxPolarAngle: Math.PI * 0.42, minPolarAngle: Math.PI * 0.12 });
     this.hemi = new THREE.HemisphereLight("#fff6ea", "#b9a58a", 0.9);
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight("#fff1dc", 2.2);
@@ -143,6 +143,10 @@ export class CityEngine {
     const allSpan = city.towns.length ? city.towns[city.towns.length - 1].ox + city.towns[city.towns.length - 1].span - first.ox : 100;
     const cx = first ? first.ox + allSpan / 2 : 0;
     this.camera.position.set(cx + allSpan * 0.55, allSpan * 0.75 + 60, allSpan * 0.75 + 60);
+    // Far enough out to see every town at once, whatever the plan.
+    this.controls.maxDistance = Math.max(400, allSpan * 2.2 + 200);
+    // The reader takes the camera back the moment they scroll, drag or pinch: no glide fighting them.
+    this.controls.addEventListener("start", () => { this.glide = null; });
     this.controls.target.set(cx, 0, 0);
     this.camera.lookAt(this.controls.target);
 
@@ -523,6 +527,14 @@ export class CityEngine {
   flyTo(target: THREE.Vector3, dist = 60, dur = 1.2) {
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.glide = { t: 0, dur, fromP: this.camera.position.clone(), fromT: this.controls.target.clone(), toT: target.clone(), toP: target.clone().add(dir.multiplyScalar(dist)) };
+  }
+
+  /** Zoom by a factor toward the current target (buttons and keys): < 1 closer, > 1 further. */
+  zoomBy(factor: number) {
+    const dir = this.camera.position.clone().sub(this.controls.target);
+    const d = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, dir.length() * factor));
+    const to = this.controls.target.clone().add(dir.setLength(d));
+    this.glide = { t: 0, dur: 0.35, fromP: this.camera.position.clone(), fromT: this.controls.target.clone(), toT: this.controls.target.clone(), toP: to };
   }
 
   flyToTown(id: string) {
