@@ -10,14 +10,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, Agent, LabBriefState, Probe } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { ArrowUp, BookOpen, ChevronLeft, Construction, ListChecks, Loader2, MessageCircle, RefreshCw, Route, X } from "lucide-react";
+import { ArrowUp, BookOpen, Building2, ChevronLeft, Construction, ListChecks, Loader2, MessageCircle, RefreshCw, Route, X } from "lucide-react";
 import LiteForms from "./LiteForms";
 import LiteBarriers from "./LiteBarriers";
 import LiteJourney from "./LiteJourney";
+import LiteCity from "./LiteCity";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Md, ago } from "@/components/lab/forms/formUtils";
 
-type Tool = "menu" | "survey" | "barriers" | "journey";
+type Tool = "menu" | "survey" | "barriers" | "journey" | "city";
 type ChatItem = { role: "user" | "assistant"; content: string; chips?: string[] };
 const MAX_HISTORY = 24;
 const toolKey = (sid: string) => `lite:tools:tool:${sid}`;
@@ -28,6 +29,7 @@ const TOOLS: { key: Tool; title: string; lead: string; icon: typeof ListChecks }
   { key: "survey", title: "Ask a few questions", lead: "A short form everyone fills in as themselves. Have it written, bring your own, or talk it through.", icon: ListChecks },
   { key: "barriers", title: "What stands in the way", lead: "Each person names the one thing stopping an outcome for them and what would remove it. Grouped and ranked.", icon: Construction },
   { key: "journey", title: "Where people drop off", lead: "The steps to the outcome, proposed for you. Each person says how far they get and what stops them; then try a change and see what moves.", icon: Route },
+  { key: "city", title: "11 Minds City", lead: "A living 3D town built around the question. The people live, work, eat and talk in it; launch what might move them and watch who acts, when and why.", icon: Building2 },
 ];
 
 type Props = { sessionId: string; agents: Agent[]; onBack: () => void };
@@ -36,7 +38,7 @@ export default function LiteTools({ sessionId, agents, onBack }: Props) {
   const [tool, setToolState] = useState<Tool>("menu");
   const [initialGoal, setInitialGoal] = useState("");
   const setTool = (t: Tool) => { setToolState(t); try { sessionStorage.setItem(toolKey(sessionId), t); } catch { /* private mode */ } };
-  useEffect(() => { try { const t = sessionStorage.getItem(toolKey(sessionId)) as Tool | null; if (t === "survey" || t === "barriers" || t === "journey") setToolState(t); } catch { /* private mode */ } }, [sessionId]);
+  useEffect(() => { try { const t = sessionStorage.getItem(toolKey(sessionId)) as Tool | null; if (t === "survey" || t === "barriers" || t === "journey" || t === "city") setToolState(t); } catch { /* private mode */ } }, [sessionId]);
 
   const [brief, setBrief] = useState<LabBriefState | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
@@ -108,6 +110,7 @@ export default function LiteTools({ sessionId, agents, onBack }: Props) {
 
   if (tool === "survey") return <ErrorBoundary label="Forms"><LiteForms sessionId={sessionId} agents={agents} onBack={() => setTool("menu")} initialGoal={initialGoal} /></ErrorBoundary>;
   if (tool === "barriers") return <ErrorBoundary label="Barriers"><LiteBarriers sessionId={sessionId} agents={agents} onBack={() => setTool("menu")} /></ErrorBoundary>;
+  if (tool === "city") return <ErrorBoundary label="11 Minds City"><LiteCity sessionId={sessionId} agents={agents} onBack={() => setTool("menu")} /></ErrorBoundary>;
   if (tool === "journey") return <ErrorBoundary label="Journey"><LiteJourney sessionId={sessionId} agents={agents} onBack={() => setTool("menu")} /></ErrorBoundary>;
 
   const challenges = brief?.brief?.challenges || [];
@@ -169,7 +172,7 @@ export default function LiteTools({ sessionId, agents, onBack }: Props) {
                 <h1 className="text-[26px] sm:text-[30px] font-semibold tracking-tight">Lab tools</h1>
                 <p className="lite-lead mt-2">{n > 0 ? `Put a question to the ${n} people in a structured way. Pick a tool, or talk it through on the left.` : "Make the people first, then come back here."}</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {TOOLS.map((t) => (
                   <button key={t.key} type="button" onClick={() => (t.key === "survey" ? openSurvey("") : setTool(t.key))} disabled={n === 0}
                     className="lite-card p-6 text-left transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 group">

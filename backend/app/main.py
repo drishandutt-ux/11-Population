@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.database import create_tables
 from app.core.redis_client import subscribe, unsubscribe, session_channel
-from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement, population, scoping, archetypes, forms, kits, playbooks, sharing, images, benchmarks
+from app.api.v1 import sessions, ingestion, simulation, agents, reports, presets, users, research, measurement, population, scoping, archetypes, forms, kits, playbooks, sharing, images, benchmarks, city
 
 
 #: Why the schema is not up to date, if it isn't. Surfaced on /health — a failed migration
@@ -97,6 +97,7 @@ app.include_router(forms.router, prefix="/api/v1")
 app.include_router(sharing.router, prefix="/api/v1")
 app.include_router(images.router, prefix="/api/v1")
 app.include_router(benchmarks.router, prefix="/api/v1")
+app.include_router(city.router, prefix="/api/v1")
 
 
 @app.websocket("/ws/{session_id}")

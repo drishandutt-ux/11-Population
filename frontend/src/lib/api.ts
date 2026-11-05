@@ -382,6 +382,9 @@ export const api = {
       request<ConfigureChatReply>(`/sessions/${sessionId}/lab/configure/chat`, { method: "POST", body: JSON.stringify(body) }),
     formsChat: (sessionId: string, body: { messages: FormsChatMessage[]; form: FormDraftInput | null }) =>
       request<FormsChatReply>(`/sessions/${sessionId}/forms/chat`, { method: "POST", body: JSON.stringify({ ...body, mode: "pro" }) }, 180_000),
+    /** 11 Minds City (2026-11-05): one turn of the brainstorm that drafts the city plan. Building it is `run` with instrument "city" and the plan as the spec. */
+    cityChat: (sessionId: string, body: { messages: FormsChatMessage[]; plan: CityPlan | null; mode?: SimMode }) =>
+      request<CityChatReply>(`/sessions/${sessionId}/city/chat`, { method: "POST", body: JSON.stringify(body) }, 180_000),
     journeySuggest: (sessionId: string, question?: string) =>
       request<JourneySuggestion>(`/sessions/${sessionId}/journey/suggest`, { method: "POST", body: JSON.stringify({ question: question || null, mode: "pro" }) }),
     estimate: (sessionId: string, body: ProbeRequest) =>
@@ -1651,6 +1654,16 @@ export type FormDraft = {
   grounded?: boolean;
   filename?: string;
 };
+
+// ── 11 Minds City (2026-11-05) ───────────────────────────────────────────────
+export type CityPlace = { kind: string; name: string };
+export type CityTown = { id: string; name: string; character: string; size: "small" | "medium" | "large"; blurb: string; places: CityPlace[] };
+export type CityLever = { id: string; label: string; kind: string; building: string; detail: string; why: string };
+export type CityPlan = {
+  title: string; goal: string; outcome_label: string; outcome_building: string; outcome_detail: string;
+  outcome_price: number; open_from: number; open_to: number; cities: CityTown[]; levers: CityLever[]; days: number;
+};
+export type CityChatReply = { reply: string; chips: string[]; plan: CityPlan | null; ready: boolean; missing: string[] };
 
 export type FormsChatMessage = { role: "user" | "assistant"; content: string };
 /** One turn of setting up a tool by chat: what the colleague said, the setting it is asking about with its recommended value, every setting settled so far, and whether the tool can run. */

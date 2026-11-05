@@ -569,3 +569,68 @@ html.lite-root, html.lite-root body { background: hsl(40 20% 99%); color-scheme:
   .conjure-pop, .conjure-ring, .conjure-label { animation: none; }
   .conjure-ring { display: none; }
 }
+
+/* ── 11 Minds City (2026-11-05): the world-builder "sketch" dashboard over the 3D town ── */
+.city-root{--paper:#F6F1E6;--paper-2:#EDE4D3;--ink:#2B2522;--muted:#887B6E;--accent:#E8452C;--hand:'Pangolin','Segoe Print','Comic Sans MS',cursive;
+  background:#E9E2D6;color:var(--ink);font-size:12px;overflow:hidden}
+.city-root canvas{display:block;cursor:grab}
+.city-card{position:absolute;z-index:10;background:var(--paper);border:2px solid var(--ink);border-radius:16px;box-shadow:0 3px 0 var(--ink);color:var(--ink)}
+.city-title{font-family:var(--hand);font-size:17px;line-height:1.15}
+.city-muted{color:var(--muted)}
+.city-topbar{top:10px;left:10px;right:10px;height:54px;display:flex;align-items:center;gap:10px;padding:0 12px}
+.city-logo{width:24px;height:24px;border-radius:7px;background:var(--accent);border:2px solid var(--ink);transform:rotate(-4deg);flex:none}
+.city-clock{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+.city-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border:1.6px solid var(--ink);border-radius:10px;background:var(--paper);box-shadow:0 2px 0 var(--ink);white-space:nowrap;transition:transform .25s cubic-bezier(.3,1.5,.5,1);font-size:12px}
+.city-pill:hover{transform:translateY(-1px)} .city-pill:active{transform:scale(.96)}
+.city-pill.on{background:var(--accent);color:#fff}
+.city-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border:1.6px solid var(--ink);border-radius:12px;background:var(--paper);box-shadow:0 2px 0 var(--ink);font-weight:600}
+.city-btn:disabled{opacity:.5}
+.city-btn-quiet{padding:4px 10px;font-size:16px}
+.city-cta{width:100%;padding:10px;border-radius:12px;border:2px solid var(--ink);background:var(--accent);color:#fff;font-weight:700;box-shadow:0 3px 0 var(--ink);transition:transform .25s cubic-bezier(.3,1.5,.5,1)}
+.city-cta:hover{transform:translateY(-1px)}
+.city-link{color:var(--accent);font-weight:600}
+.city-x{width:24px;height:24px;border-radius:8px;border:1.5px solid var(--ink);flex:none;font-size:11px}
+.city-kpis{position:absolute;z-index:10;top:76px;left:10px;display:flex;gap:8px;max-width:calc(100vw - 360px);overflow-x:auto;padding-bottom:4px}
+.city-kpi{position:relative;display:flex;gap:9px;align-items:center;padding:8px 12px;min-width:150px}
+.city-kpi-ico{width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,var(--accent) 16%,transparent);display:grid;place-items:center;font-size:15px;flex:none}
+.city-feed{position:absolute;z-index:10;top:160px;left:10px;width:280px;flex-direction:column;gap:8px}
+.city-post{position:relative;display:grid;grid-template-columns:30px 1fr;gap:4px 9px;padding:9px 11px;animation:city-pop .45s cubic-bezier(.3,1.5,.5,1)}
+.city-av{width:30px;height:30px;border-radius:50%;border:1.6px solid var(--ink);display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+.city-av-lg{width:44px;height:44px;font-size:14px;flex:none}
+.city-side{top:76px;right:10px;width:330px;max-height:calc(100vh - 96px);overflow:auto;padding:14px}
+.city-lever{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1.5px solid rgba(43,37,34,.25);border-radius:12px;cursor:pointer;background:var(--paper)}
+.city-lever.on{border-color:var(--ink);background:color-mix(in srgb,var(--accent) 9%,var(--paper))}
+.city-lever input{margin-top:3px;accent-color:var(--accent)}
+.city-row{display:grid;grid-template-columns:1fr 150px;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(43,37,34,.12);font-size:11.5px}
+.city-meter{position:relative;display:block;flex:1;height:9px;border:1.5px solid var(--ink);border-radius:5px;background:var(--paper);overflow:hidden;min-width:60px}
+.city-meter i{display:block;height:100%;background:repeating-linear-gradient(-45deg,var(--c,var(--accent)) 0 4px,color-mix(in srgb,var(--c,var(--accent)) 70%,#000) 4px 6px);transition:width .6s cubic-bezier(.3,1.5,.5,1)}
+.city-meter em{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.city-meter-sm{height:7px;min-width:70px}
+.city-tile{padding:6px 8px;border-radius:10px;background:var(--paper-2);border:1.5px solid rgba(43,37,34,.15)}
+.city-chip-sm{display:inline-flex;align-items:center;padding:1px 7px;border-radius:7px;background:var(--paper-2);border:1px solid rgba(43,37,34,.15);font-size:11px}
+.city-status{padding:6px 9px;border-radius:10px;background:var(--paper-2);font-size:12px;font-weight:600}
+.city-status.ok{background:color-mix(in srgb,#4E8A36 18%,var(--paper))} .city-status.warn{background:color-mix(in srgb,#C98A1B 20%,var(--paper))}
+.city-quote{font-family:var(--hand);font-size:15px;line-height:1.3}
+.city-funnel{left:10px;bottom:10px;width:min(520px,44vw);padding:10px 14px}
+.city-steps{display:flex;gap:6px;margin-top:8px}
+.city-step{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--muted)}
+.city-step b{color:var(--ink);font-size:14px}
+.city-step-bar{width:100%;height:38px;border:1.5px solid var(--ink);border-radius:8px;position:relative;overflow:hidden;background:var(--paper)}
+.city-step-bar i{position:absolute;left:0;right:0;bottom:0;transition:height .8s cubic-bezier(.3,1.5,.5,1)}
+.city-runrow{padding:6px 8px;border-radius:10px;border:1.5px solid rgba(43,37,34,.18)}
+.city-hours{display:flex;align-items:flex-end;gap:2px;height:46px;margin-top:4px;border-bottom:1.5px solid var(--ink)}
+.city-hours i{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-height:1px}
+.city-tip{position:absolute;z-index:20;pointer-events:none;padding:8px 10px;min-width:170px;border-radius:12px}
+.city-chip{display:inline-flex;gap:4px;align-items:center;padding:2px 7px;border-radius:8px;background:var(--paper,#F6F1E6);border:1.5px solid #2B2522;box-shadow:0 2px 0 #2B2522;font:600 11px Inter,system-ui,sans-serif;color:#2B2522;white-space:nowrap;transform:translateY(-6px)}
+.city-chip-outcome{background:#E8452C;color:#fff;font-size:12px}
+.city-chip-ad{background:#FFF4D6;font-weight:500}
+.city-townname{font:400 28px 'Pangolin','Segoe Print',cursive;color:#2B2522;text-shadow:0 2px 0 #F6F1E6,0 -2px 0 #F6F1E6,2px 0 0 #F6F1E6,-2px 0 0 #F6F1E6;white-space:nowrap}
+.city-bubble{font-size:16px;animation:city-pop .3s cubic-bezier(.3,1.5,.5,1);transform:translateY(-8px)}
+.city-pin{animation:city-bob 1.6s ease-in-out infinite;transform:translateY(-26px)}
+@keyframes city-pop{from{opacity:0;transform:scale(.9) translateY(6px)}}
+@keyframes city-bob{50%{transform:translateY(-32px)}}
+@media (max-width:760px){
+  .city-kpis{top:72px;right:10px;max-width:none}
+  .city-side{top:auto;bottom:10px;left:10px;right:10px;width:auto;max-height:46vh}
+  .city-topbar{height:50px}
+}
