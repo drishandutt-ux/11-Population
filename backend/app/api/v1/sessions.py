@@ -136,6 +136,49 @@ async def set_tier(session_id: str, body: TierRequest, user: AuthUser = Depends(
     return session
 
 
+@router.get("/{session_id}/cost")
+async def get_session_cost(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """What this session has spent so far (2026-11-13), for the live cost chip in its header:
+    every LLM call, web search and image on the ledger, plus calls not yet flushed to it."""
+    from datetime import timedelta
+    from sqlalchemy import case, func
+    from app.core.monitoring import pending_usage
+    from app.models.usage import LlmUsage as U
+    from app.services.evidence.search.provider import SEARCH_CAP_PER_BUILD, SEARCH_CAP_WINDOW_MIN, searches_used
+    await get_owned_session(session_id, user, db)
+    minute_ago = datetime.utcnow() - timedelta(seconds=60)
+    rows = (await db.execute(
+        select(U.model, func.count().label("calls"), func.coalesce(func.sum(U.cost_usd), 0.0).label("usd"),
+               func.coalesce(func.sum(U.web_search_requests), 0).label("searches"),
+               func.coalesce(func.sum(case((U.created_at >= minute_ago, U.cost_usd), else_=0.0)), 0.0).label("last_min"),
+               func.max(U.created_at).label("last"))
+        .where(U.session_id == session_id).group_by(U.model)
+    )).all()
+    by_model: dict[str, float] = {r.model: float(r.usd or 0) for r in rows}
+    calls = sum(int(r.calls or 0) for r in rows)
+    searches = sum(int(r.searches or 0) for r in rows)
+    last_min = sum(float(r.last_min or 0) for r in rows)
+    last = max((r.last for r in rows if r.last), default=None)
+    for p in pending_usage(session_id):
+        usd = float(p.get("cost_usd") or 0)
+        by_model[p.get("model") or "unknown"] = by_model.get(p.get("model") or "unknown", 0.0) + usd
+        calls += 1
+        searches += int(p.get("web_search_requests") or 0)
+        last_min += usd
+        if p.get("created_at") and (last is None or p["created_at"] > last):
+            last = p["created_at"]
+    return {
+        "session_id": session_id,
+        "cost_usd": round(sum(by_model.values()), 4),
+        "calls": calls,
+        "web_searches": searches,
+        "last_minute_usd": round(last_min, 4),
+        "last_call_at": last,
+        "by_model": [{"model": m, "cost_usd": round(v, 4)} for m, v in sorted(by_model.items(), key=lambda x: -x[1])],
+        "search_cap": {"used": searches_used(session_id), "limit": SEARCH_CAP_PER_BUILD, "window_min": SEARCH_CAP_WINDOW_MIN},
+    }
+
+
 @router.get("/{session_id}/kg")
 async def get_kg(session_id: str, user: AuthUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from app.services.knowledge_graph.lightrag_service import get_kg_data, get_lightrag

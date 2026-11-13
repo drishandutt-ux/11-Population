@@ -95,6 +95,8 @@ export const api = {
     /** Fast = Haiku for every call the session makes, Pro = Sonnet (2026-10-23). */
     setTier: (id: string, model_tier: SimMode) =>
       request<Session>(`/sessions/${id}/tier`, { method: "PUT", body: JSON.stringify({ model_tier }) }),
+    /** What the session has spent so far, live (2026-11-13). */
+    cost: (id: string) => request<SessionCost>(`/sessions/${id}/cost`, undefined, 15_000),
     /** Moves the session to the bin (Recently deleted): restorable for 30 days, then removed for good. */
     delete: (id: string) => request(`/sessions/${id}`, { method: "DELETE" }),
     trash: () => request<Session[]>("/sessions?scope=trash"),
@@ -510,6 +512,18 @@ export const api = {
     list: () => request<Archetype[]>("/archetypes"),
     delete: (id: string) => request(`/archetypes/${id}`, { method: "DELETE" }),
   },
+};
+
+/** A session's spend so far (2026-11-13), from the usage ledger plus calls not yet written to it. */
+export type SessionCost = {
+  session_id: string;
+  cost_usd: number;
+  calls: number;
+  web_searches: number;
+  last_minute_usd: number;
+  last_call_at: string | null;
+  by_model: { model: string; cost_usd: number }[];
+  search_cap: { used: number; limit: number; window_min: number };
 };
 
 export type Session = {

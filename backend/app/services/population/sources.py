@@ -39,6 +39,7 @@ from app.services.evidence.fetch_page import fetch_page
 from app.services.evidence.llm import analyze, arr, b, i, obj, s
 from app.services.evidence.loop import evidence_payload
 from app.services.evidence.search import get_search_provider
+from app.services.evidence.search.provider import SearchBudgetSpent
 
 QUANT_MAX_PAGES = int(os.environ.get("QUANT_MAX_PAGES", 16))
 QUANT_RESULTS_PER_SOURCE = int(os.environ.get("QUANT_RESULTS_PER_SOURCE", 5))
@@ -603,6 +604,7 @@ async def _search_sources(query: str, keys: list[str], *, region: Optional[str],
     provider = get_search_provider()
     featured = featured if featured is not None else set(keys)
     gate = asyncio.Semaphore(max(1, QUANT_SEARCH_CONCURRENCY))
+    capped: list[str] = []
 
     async def one(key: str) -> list[tuple[dict, object]]:
         src = _BY_KEY[key]
@@ -611,6 +613,9 @@ async def _search_sources(query: str, keys: list[str], *, region: Optional[str],
         async with gate:
             try:
                 results = await provider.search(q, {"max_results": want, "region": region})
+            except SearchBudgetSpent as e:
+                capped.append(str(e))
+                return []
             except Exception as e:  # noqa: BLE001
                 await log("warn", f"{src['label']}: search failed", str(e)[:200])
                 return []
@@ -631,6 +636,8 @@ async def _search_sources(query: str, keys: list[str], *, region: Optional[str],
                 continue
             urls.add(r.url)
             out.append((src, r))
+    if capped:
+        await log("warn", f"Skipped {len(capped)} publisher search(es) for “{query}”: {capped[0]}", "The build carries on with the pages already found.")
     return out
 
 

@@ -65,7 +65,7 @@ function LiteSession() {
   const title = s.session?.title || "";
   // The step rail is navigation: Ask (the question and what was added), People, the Conversation, the Report, the Tools (Forms).
   const goStep = (st: LiteStep) => setView(st === "ask" ? "ask" : st === "people" ? "people" : st === "report" ? "report" : st === "tools" ? "lab" : st === "chat" ? "chat" : "flow");
-  const shell = { title, onStep: goStep };
+  const shell = { title, onStep: goStep, sessionId: id };
 
   if (s.notFound) {
     return (

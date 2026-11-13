@@ -111,6 +111,17 @@ def _record_local(*, model, resp, session_id, label, elapsed_sec, status) -> Non
         pass
 
 
+def pending_usage(session_id: str) -> list[dict]:
+    """Ledger rows for this session still in the buffer (written within ~3 s), so a live cost
+    readout can include calls the database has not seen yet."""
+    for _ in range(3):
+        try:
+            return [r for r in list(_buffer) if r.get("session_id") == session_id]
+        except RuntimeError:   # a thread appended mid-copy; try again
+            continue
+    return []
+
+
 async def flush_usage() -> int:
     """Bulk-insert whatever is buffered. Returns rows written."""
     rows = []

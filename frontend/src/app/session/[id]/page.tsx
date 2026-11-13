@@ -1,6 +1,7 @@
 "use client";
 
 import { useSessionTier } from "@/components/sessions/TierSwitch";
+import SessionCost from "@/components/sessions/SessionCost";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, apiFetch, Session, Agent, Post, WSEvent, SimMode, ResearchState, EvidenceItem, OutcomeRecord, ReportStructure } from "@/lib/api";
@@ -499,6 +500,7 @@ export default function SessionPage() {
           </button>
           <span className="text-sm font-semibold text-foreground truncate tracking-tight">{session?.title || "Loading…"}</span>
           {session && <StatusDot status={session.status} />}
+          <SessionCost sessionId={id} />
         </div>
         <nav className="seg mx-auto shrink-0" aria-label="Session sections">
           {tabs.map((t) => (

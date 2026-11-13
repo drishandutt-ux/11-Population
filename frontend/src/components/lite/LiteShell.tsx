@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLiteRoot } from "@/lib/lite";
+import SessionCost from "@/components/sessions/SessionCost";
 
 export type LiteStep = "ask" | "people" | "debate" | "report" | "tools" | "chat";
 const STEPS: { key: LiteStep; label: string }[] = [
@@ -21,6 +22,8 @@ const STEPS: { key: LiteStep; label: string }[] = [
 
 type Props = {
   title?: string;
+  /** When set, the header shows the session's live cost chip. */
+  sessionId?: string;
   backHref?: string;
   /** The current step; steps before it are shown as done. */
   step?: LiteStep;
@@ -34,7 +37,7 @@ type Props = {
   children: React.ReactNode;
 };
 
-export default function LiteShell({ title, backHref = "/", step, proHref, onStep, right, layout = "page", children }: Props) {
+export default function LiteShell({ title, sessionId, backHref = "/", step, proHref, onStep, right, layout = "page", children }: Props) {
   useLiteRoot();
   const router = useRouter();
   const idx = step ? STEPS.findIndex((s) => s.key === step) : -1;
@@ -61,6 +64,7 @@ export default function LiteShell({ title, backHref = "/", step, proHref, onStep
           </nav>
         )}
         <div className={cn("flex items-center gap-2", !step && "ml-auto")}>
+          {sessionId && <SessionCost sessionId={sessionId} variant="lite" />}
           {right}
           {proHref && (
             <Link href={proHref} className="lite-pill hover:text-primary hover:border-primary/40 transition-colors" title="Open the full portal, where everything is analysed in detail">

@@ -41,6 +41,42 @@ class SearchProvider:
     composite: bool = False
 
 
+#: Spend cap (2026-11-13): a session may run at most this many web searches in any rolling
+#: SEARCH_CAP_WINDOW_MIN minutes — about one build's worth. A population build fans every query
+#: out to each publisher and ran 330–700 paid searches (~$8–17) per build before the cap; past it
+#: a search fails at once and the build carries on with what it found. 0 turns the cap off.
+SEARCH_CAP_PER_BUILD = int(os.environ.get("SEARCH_CAP_PER_BUILD", 150))
+SEARCH_CAP_WINDOW_MIN = int(os.environ.get("SEARCH_CAP_WINDOW_MIN", 60))
+_searches_by_session: dict[str, list[float]] = {}
+
+
+class SearchBudgetSpent(RuntimeError):
+    """The session has used its web searches for this window."""
+
+
+def _take_search() -> None:
+    """Count one search against the current session, or raise SearchBudgetSpent."""
+    if SEARCH_CAP_PER_BUILD <= 0:
+        return
+    try:
+        from app.core.monitoring import current_session_id
+        key = current_session_id.get() or "none"
+    except Exception:  # noqa: BLE001
+        key = "none"
+    now = time.time()
+    recent = [t for t in _searches_by_session.get(key, []) if now - t < SEARCH_CAP_WINDOW_MIN * 60]
+    if len(recent) >= SEARCH_CAP_PER_BUILD:
+        _searches_by_session[key] = recent
+        raise SearchBudgetSpent(f"search limit reached ({SEARCH_CAP_PER_BUILD} web searches per {SEARCH_CAP_WINDOW_MIN} min for this session)")
+    recent.append(now)
+    _searches_by_session[key] = recent
+
+
+def searches_used(session_id: Optional[str]) -> int:
+    now = time.time()
+    return len([t for t in _searches_by_session.get(session_id or "none", []) if now - t < SEARCH_CAP_WINDOW_MIN * 60])
+
+
 COOLDOWN_MS = int(os.environ.get("SEARCH_COOLDOWN_MS", 120_000))
 API_COOLDOWN_MS = int(os.environ.get("SEARCH_API_COOLDOWN_MS", 15_000))
 CHAIN_RETRY_MS = int(os.environ.get("SEARCH_CHAIN_RETRY_MS", 10_000))
@@ -110,6 +146,7 @@ def chain_of(providers: list[SearchProvider]) -> SearchProvider:
         raise RuntimeError("no search providers configured")
 
     async def search(query: str, opts: dict) -> list[SearchResult]:
+        _take_search()   # before any engine: past the cap nothing is sent, paid or free
         reasons: list[str] = []
         for pass_no in (1, 2):
             for p in providers:

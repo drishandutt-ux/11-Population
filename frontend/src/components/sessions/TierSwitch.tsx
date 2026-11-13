@@ -16,13 +16,15 @@ export const TIER_TITLE: Record<SimMode, string> = {
   pro: "Advanced: Sonnet for every part of the session. Richer, roughly 3× the cost.",
 };
 
-/** The tier new sessions are created with. `fast` until read, and when nothing is stored. */
+/** The tier new sessions are created with. Always starts on Standard (2026-11-13): picking
+ *  Advanced applies to the sessions started from this page visit only, it is not remembered, so a
+ *  past choice can never quietly put new sessions on Sonnet. */
 export function useNewSessionTier(): [SimMode, (t: SimMode) => void] {
   const [tier, setTier] = useState<SimMode>("fast");
   useEffect(() => {
-    try { if (localStorage.getItem(KEY) === "pro") setTier("pro"); } catch {}
+    try { localStorage.removeItem(KEY); } catch {}
   }, []);
-  return [tier, (t) => { try { localStorage.setItem(KEY, t); } catch {} setTier(t); }];
+  return [tier, setTier];
 }
 
 export function TierSwitch({ tier, onChange, className }: { tier: SimMode; onChange: (t: SimMode) => void; className?: string }) {
